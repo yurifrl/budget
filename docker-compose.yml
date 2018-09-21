@@ -1,0 +1,13 @@
+version: '3.5'
+services:
+  test: &base
+    image: node:alpine
+    command: npm run test
+    working_dir: /usr/local/src
+    volumes:
+      - .:/usr/local/src
+      - node_modules:/usr/local/src/node_modules
+    env_file:
+      - ./secrets/values.env
+volumes:
+  node_modules: {}
