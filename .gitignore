@@ -1,3 +1,5 @@
 secrets/
 dist-newstyle/
 .ghc.*
+.stack-work/
+.hpc/
