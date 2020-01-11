@@ -1,4 +1,5 @@
 module Main where
+import Budget
 
 main :: IO ()
-main = putStrLn "Hy from here"
+main = putStrLn $ show $ Budget.double 4

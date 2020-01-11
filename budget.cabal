@@ -28,22 +28,22 @@ executable budget
   main-is:             Main.hs
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.1 && <4.14
-  -- hs-source-dirs:
+  build-depends:       base >=4.1 && <4.14,
+                       budget -any,
   default-language:    Haskell2010
 
 test-suite tests
    hs-source-dirs:      src tests
-   main-is:             Spec.hs
+   main-is:             Tests.hs
    default-language:    Haskell2010
    type:                exitcode-stdio-1.0
    other-modules:
      Budget
-     BudgetSpec
    build-depends:       base -any,
                         budget -any,
+                        tasty,
+                        tasty-hunit,
                         hspec ==2.*,
                         hspec-discover ==2.*,
                         HUnit -any,
                         QuickCheck -any
-   ghc-options: -fhpc -Wall -Werror
