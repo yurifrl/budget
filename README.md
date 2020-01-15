@@ -14,3 +14,4 @@
 - https://gist.github.com/tfausak/cdcc2e33c9c418278262650eb96b7b05#file-main-hs
 - https://hoogle.haskell.org/
 - https://github.com/tfausak/rocket-league-api/blob/master/rocket-league-api.hs
+- http://wiki.haskell.org/Name_clashes_in_record_fields

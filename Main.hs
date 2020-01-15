@@ -7,10 +7,11 @@ import Budget
 
 import System.Envy (FromEnv, decodeEnv)
 import GHC.Generics (Generic)
+import Data.Text (Text)
 
 data NBConfig = NBConfig {
-  nbLogin    :: String
-, nbPassword :: String
+  nbLogin    :: Text,
+  nbPassword :: Text
 } deriving (Generic, Show)
 
 instance FromEnv NBConfig
@@ -20,4 +21,5 @@ main = do
   nbConfig <- decodeEnv :: IO (Either String NBConfig)
   case nbConfig of
     Left l -> fail $ show l
-    Right r -> print r
+    -- Right r -> getQrCode ( Just (nbLogin r) ) ( Just (nbPassword r) )
+    Right r -> getQrCode
