@@ -15,3 +15,7 @@
 - https://hoogle.haskell.org/
 - https://github.com/tfausak/rocket-league-api/blob/master/rocket-league-api.hs
 - http://wiki.haskell.org/Name_clashes_in_record_fields
+- QrCode
+  - https://github.com/txkaduo/weixin-mp-sdk/blob/master/WeiXin/PublicPlatform/Utils.hs
+  - https://github.com/Rufflewind/ascii-art/blob/master/Main.hs
+  - https://github.com/alexkazik/qrcode/tree/master/qrcode-juicypixels
