@@ -1,33 +1,35 @@
+{-# LANGUAGE DuplicateRecordFields, NamedFieldPuns #-}
 module QRCode where
 
 import qualified Data.UUID.V4 as UUIDV4
 import qualified Data.UUID as UUID
-import Data.Maybe
-import Codec.QRCode
-import Codec.QRCode.JuicyPixels
-import AsciiArt
-import Codec.Picture ( Image ( imageHeight, imageWidth ), pixelAt)
-import Control.Monad ( forM_ )
+import Data.Maybe (fromMaybe)
+import qualified Codec.QRCode as QR
+import Codec.QRCode.JuicyPixels (toImage)
+import Codec.Picture.Types ( Image, Pixel8 )
+import AsciiArt (printAsciiArtString)
+import GHC.Generics (Generic)
 
-generate :: IO ()
-generate = do
+data QrCode = QrCode {
+    uuid  :: UUID.UUID
+   , image :: Image Pixel8
+}
+
+instance Show QrCode where
+  show (QrCode u i) = printAsciiArtString i
+
+qrCode :: IO QrCode
+qrCode = do
   uuid <- UUIDV4.nextRandom
-  qrCode (UUID.toString uuid)
-  undefined
+  return $ QrCode uuid (createImage (UUID.toString uuid))
 
-qrCode :: [Char] -> IO ()
-qrCode input = do
-  let maxWidth = 40
-  print input
-  let img = toImage 1 1 
-            $ fromMaybe (error "QRC.encodeTExt failed") 
-            $ encodeText (defaultQRCodeOptions M) Utf8WithoutECI input
-      width  = imageWidth  img
-      height = imageHeight img
-      indent = replicate ((maxWidth - width) `div` 2) ' '
-  forM_ [0 .. height - 1] $ \ y -> do
-      putStr indent
-      forM_ [0 .. width - 1] $ \ x -> do
-        putStr $ pixelToChar (pixelAt img x y) ""
-      putStr "\n"
-  print "HY"
+ 
+-- generate :: IO ()
+-- generate = do
+--   uuid <- UUIDV4.nextRandom
+--   qrCode2 (UUID.toString uuid)
+
+createImage :: String -> Image Pixel8
+createImage input = toImage 1 1 
+                    $ fromMaybe (error "QRC.encodeTExt failed") 
+                    $ QR.encodeText (QR.defaultQRCodeOptions QR.M) QR.Utf8WithECI input

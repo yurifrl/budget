@@ -3,7 +3,7 @@
 module Budget where
 
 import Types
-import QRCode
+import QRCode (qrCode)
 
 import Network.Wreq (postWith, responseBody, Options, defaults, header)
 import Data.Aeson (ToJSON, FromJSON, toJSON, Value)
@@ -32,9 +32,9 @@ headers = defaults & header "Content-Type" .~ ["application/json"]
 
 getQrCode :: IO ()
 getQrCode = do
-  generate
+  code <- qrCode
+  print code
   
-
 -- login :: Maybe Text -> Maybe Text -> IO ()
 -- login l p = do
 --   r <- postWith headers discoveryUrl (toJSON Login {
