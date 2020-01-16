@@ -19,3 +19,6 @@
   - https://github.com/txkaduo/weixin-mp-sdk/blob/master/WeiXin/PublicPlatform/Utils.hs
   - https://github.com/Rufflewind/ascii-art/blob/master/Main.hs
   - https://github.com/alexkazik/qrcode/tree/master/qrcode-juicypixels
+- Image
+  - https://github.com/glittershark/xanthous/blob/master/src/Xanthous/Util/Graphics.hs
+  - https://github.com/phadej/JuicyPixels-scale-dct/blob/master/src/Codec/Picture/ScaleDCT.hs

@@ -1,4 +1,3 @@
-{-# LANGUAGE DuplicateRecordFields, NamedFieldPuns #-}
 module QRCode where
 
 import qualified Data.UUID.V4 as UUIDV4
@@ -23,13 +22,7 @@ qrCode = do
   uuid <- UUIDV4.nextRandom
   return $ QrCode uuid (createImage (UUID.toString uuid))
 
- 
--- generate :: IO ()
--- generate = do
---   uuid <- UUIDV4.nextRandom
---   qrCode2 (UUID.toString uuid)
-
 createImage :: String -> Image Pixel8
-createImage input = toImage 1 1 
+createImage input = toImage 3 1
                     $ fromMaybe (error "QRC.encodeTExt failed") 
-                    $ QR.encodeText (QR.defaultQRCodeOptions QR.M) QR.Utf8WithECI input
+                    $ QR.encodeText (QR.defaultQRCodeOptions QR.L) QR.Utf8WithoutECI "1"
