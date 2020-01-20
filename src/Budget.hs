@@ -1,50 +1,103 @@
-{-# LANGUAGE DeriveGeneric, OverloadedStrings, ScopedTypeVariables, DuplicateRecordFields #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
-module Budget where
+
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
+module Budget (run) where
 
 import Types
-import QRCode (qrCode)
+import QRCode (createQrCode, getId)
+import Database (saveToken, retriveToken)
 
-import Network.Wreq (postWith, responseBody, Options, defaults, header)
-import Data.Aeson (ToJSON, FromJSON, toJSON, Value)
-import Data.Text (Text, unpack)
+import Control.Lens ((&), (^.), (^?), (.~))
+import Data.Aeson (FromJSON, toJSON, Value, decode)
+import Data.Aeson.Lens (_String, key)
+import Data.ByteString.Lazy (ByteString)
 import Data.Complex
-import Control.Lens
+import Data.Maybe (fromMaybe)
+import Data.Text (Text, unpack, pack)
+import Data.Text.Encoding (encodeUtf8)
+import Network.Wreq (postWith, getWith, responseBody, Options, defaults, header, Response)
+import qualified Data.ByteString.UTF8 as BU
+import qualified Data.ByteString.Char8 as BC
 
--- import Control.Monad.IO.Class
--- import Data.Aeson
--- import Network.HTTP.Req
-
+hash :: String
+hash = "123"
 discoveryUrl :: String
-discoveryUrl = "https://prod-global-webapp-proxy.nubank.com.br/api/app/discovery"
--- discoveryUrl = "https://prod-s0-webapp-proxy.nubank.com.br/api/discovery"
--- tokenUrl = "https://prod-auth.nubank.com.br/api/token"
--- url = "https://prod-customers.nubank.com.br/api/customers"
+discoveryUrl = "https://prod-s0-webapp-proxy.nubank.com.br/api/discovery"
+discoveryAppUrl :: String
+discoveryAppUrl = "https://prod-s0-webapp-proxy.nubank.com.br/api/app/discovery"
 
-instance ToJSON Login
-instance FromJSON Login
-
+-- | headers
 headers :: Options
-headers = defaults & header "Content-Type" .~ ["application/json"]
+headers = defaults
+  & header "Content-Type" .~ ["application/json"]
   & header "X-Correlation-Id" .~ ["WEB-APP.pewW9"]
   & header "User-Agent" .~ ["lambdaNu Client - https://github.com/yurifrl/lambdaNu"]
 
+-- |
+getProxyAppUrl :: String -> IO (Maybe ByteString)
+getProxyAppUrl url = do
+  res <- getWith headers url
+  return $ res ^? responseBody
 
-getQrCode :: IO ()
-getQrCode = do
-  code <- qrCode
-  print code
-  
--- login :: Maybe Text -> Maybe Text -> IO ()
--- login l p = do
---   r <- postWith headers discoveryUrl (toJSON Login {
---                            login = maybe "" unpack l,
---                            password = maybe "" unpack p,
---                            grant_type = "password",
---                            client_id = "other.conta",
---                            client_secret = "yQPeLzoHuJzlMMSAjC-LgNUJdUecx8XO"
---                            })
---   print r
---   undefined
---   -- r ^? responseBody . key "json" . nth 2
---   -- liftIO $ print (responseBody r :: Value)
+-- |
+getProxyUrl :: String -> IO (Maybe ByteString)
+getProxyUrl url = do
+  res <- getWith headers url
+  return $ res ^? responseBody
+
+-- |
+passwordAuth :: String -> String -> String -> IO (Maybe ByteString)
+passwordAuth url l p = do
+  res <- postWith headers url (toJSON o)
+  return $ res ^? responseBody
+  where
+    o = defaultLoginRequest l p
+
+
+lift :: String -> String -> String -> IO (Maybe ByteString)
+lift url token id = do
+  res <- postWith (headers & header "Authorization" .~ [(BC.pack ("Bearer " ++ token))]) url (toJSON o)
+  return $ res ^? responseBody
+  where
+    o = defaultLiftRequest id
+
+-- | run
+run :: Maybe Text -> Maybe Text -> IO ()
+run l p = do
+  qrCode <- createQrCode
+  eitherProxyAppList <- getProxyAppUrl discoveryAppUrl
+  eitherProxyList <- getProxyUrl discoveryUrl
+  eitherToken <- retriveToken (BU.fromString hash) (encodeUtf8 (fromMaybe "" l)) (encodeUtf8 (fromMaybe "" p))
+  token <- case eitherToken of
+    Right res -> case res of
+      Just t -> do
+        print "Token retrived: "
+        return $ t
+      Nothing -> do
+        resp <- case eitherProxyList of
+          Just loginUrl -> passwordAuth (maybe "" unpack $ loginUrl ^? key "login" . _String) (maybe "" unpack l) (maybe "" unpack p)
+        token <- case resp of
+          Just resp -> return $ maybe "" unpack $ resp ^? key "access_token" . _String
+        return $ BU.fromString token
+
+  ok <- saveToken
+    (BU.fromString hash)
+    (encodeUtf8 (fromMaybe "" l))
+    (encodeUtf8 (fromMaybe "" p))
+    token
+
+  print ok
+  print token
+  print qrCode
+
+  resp <- case eitherProxyAppList of
+    Just liftUrl -> lift (maybe "" unpack $ liftUrl ^? key "lift" . _String) (BC.unpack token) (getId qrCode)
+
+  print resp
+
+
+
+  undefined

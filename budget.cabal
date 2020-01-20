@@ -22,21 +22,27 @@ library
     Types
     QRCode
     AsciiArt
+    Database
   -- other-extensions:
   build-depends:       base >=4.1 && <4.14,
-                       wreq,
                        aeson,
-                       containers,
-                       ghc-prim,
-                       lens,
-                       uuid,
-                       qrcode-core,
-                       JuicyPixels,
-                       qrcode-juicypixels,
-                       lens-aeson,
-                       data-ordlist,
                        array,
+                       bytestring,
+                       containers,
+                       data-ordlist,
+                       ghc-prim,
+                       deriveJsonNoPrefix,
+                       hedis,
+                       http-client,
+                       JuicyPixels,
+                       lens-aeson,
+                       utf8-string,
+                       lens,
+                       qrcode-core,
+                       qrcode-juicypixels,
                        text,
+                       uuid,
+                       wreq,
   hs-source-dirs:      src
   default-language:    Haskell2010
 

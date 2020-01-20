@@ -21,5 +21,4 @@ main = do
   nbConfig <- decodeEnv :: IO (Either String NBConfig)
   case nbConfig of
     Left l -> fail $ show l
-    -- Right r -> getQrCode ( Just (nbLogin r) ) ( Just (nbPassword r) )
-    Right r -> getQrCode
+    Right r -> run ( Just (nbLogin r) ) ( Just (nbPassword r) )

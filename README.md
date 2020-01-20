@@ -22,3 +22,7 @@
 - Image
   - https://github.com/glittershark/xanthous/blob/master/src/Xanthous/Util/Graphics.hs
   - https://github.com/phadej/JuicyPixels-scale-dct/blob/master/src/Codec/Picture/ScaleDCT.hs
+- Wreq
+  - https://bitemyapp.com/blog/haskell-is-not-trivial-not-unfair/
+- Redis
+  - https://github.com/cossacklabs/rd_themis

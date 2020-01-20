@@ -11,5 +11,11 @@ services:
     environment:
       - NB_LOGIN=$LOGIN
       - NB_PASSWORD=$PASSWORD
+    depends_on:
+      - redis
+  redis:
+    image: seriouscomp/rd_themis
+    ports:
+      - 6379:6379
 volumes:
   stack-work: {}

@@ -1,4 +1,8 @@
-module QRCode where
+module QRCode
+  (
+    createQrCode,
+    getId
+  ) where
 
 import qualified Data.UUID.V4 as UUIDV4
 import qualified Data.UUID as UUID
@@ -17,12 +21,15 @@ data QrCode = QrCode {
 instance Show QrCode where
   show (QrCode u i) = printAsciiArtString i
 
-qrCode :: IO QrCode
-qrCode = do
+createQrCode :: IO QrCode
+createQrCode = do
   uuid <- UUIDV4.nextRandom
   return $ QrCode uuid (createImage (UUID.toString uuid))
 
 createImage :: String -> Image Pixel8
-createImage input = toImage 3 1
-                    $ fromMaybe (error "QRC.encodeTExt failed") 
-                    $ QR.encodeText (QR.defaultQRCodeOptions QR.L) QR.Utf8WithoutECI "1"
+createImage input = toImage 1 1
+                    $ fromMaybe (error "QRC.encodeTExt failed")
+                    $ QR.encodeText (QR.defaultQRCodeOptions QR.L) QR.Utf8WithoutECI input
+
+getId :: QrCode -> String
+getId q = UUID.toString $ uuid q
