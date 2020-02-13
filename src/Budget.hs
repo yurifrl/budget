@@ -78,16 +78,19 @@ run l p = do
         return $ t
       Nothing -> do
         resp <- case eitherProxyList of
-          Just loginUrl -> passwordAuth (maybe "" unpack $ loginUrl ^? key "login" . _String) (maybe "" unpack l) (maybe "" unpack p)
+          Just loginUrl -> passwordAuth
+                            (maybe "" unpack $ loginUrl ^? key "login" . _String)
+                            (maybe "" unpack l)
+                            (maybe "" unpack p)
         token <- case resp of
           Just resp -> return $ maybe "" unpack $ resp ^? key "access_token" . _String
         return $ BU.fromString token
 
   ok <- saveToken
-    (BU.fromString hash)
-    (encodeUtf8 (fromMaybe "" l))
-    (encodeUtf8 (fromMaybe "" p))
-    token
+          (BU.fromString hash)
+          (encodeUtf8 (fromMaybe "" l))
+          (encodeUtf8 (fromMaybe "" p))
+          token
 
   print ok
   print token
