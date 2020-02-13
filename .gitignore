@@ -1,5 +1,3 @@
-secrets/
-dist-newstyle/
-.ghc.*
 .stack-work/
-.hpc/
+events.cabal
+*~
