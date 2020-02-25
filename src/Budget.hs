@@ -59,7 +59,7 @@ passwordAuth url l p = do
 
 lift :: String -> String -> String -> IO (Maybe ByteString)
 lift url token id = do
-  res <- postWith (headers & header "Authorization" .~ [(BC.pack ("Bearer " ++ token))]) url (toJSON o)
+  res <- postWith (headers & header "Authorization" .~ [BC.pack ("Bearer " ++ token)]) url (toJSON o)
   return $ res ^? responseBody
   where
     o = defaultLiftRequest id
@@ -75,7 +75,7 @@ run l p = do
     Right res -> case res of
       Just t -> do
         print "Token retrived: "
-        return $ t
+        return t
       Nothing -> do
         resp <- case eitherProxyList of
           Just loginUrl -> passwordAuth
@@ -100,7 +100,5 @@ run l p = do
     Just liftUrl -> lift (maybe "" unpack $ liftUrl ^? key "lift" . _String) (BC.unpack token) (getId qrCode)
 
   print resp
-
-
 
   undefined

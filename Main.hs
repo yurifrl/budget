@@ -10,8 +10,8 @@ import GHC.Generics (Generic)
 import Data.Text (Text)
 
 data NBConfig = NBConfig {
-  nbLogin    :: Text,
-  nbPassword :: Text
+  login    :: Text,
+  password :: Text
 } deriving (Generic, Show)
 
 instance FromEnv NBConfig
@@ -21,4 +21,4 @@ main = do
   nbConfig <- decodeEnv :: IO (Either String NBConfig)
   case nbConfig of
     Left l -> fail $ show l
-    Right r -> run ( Just (nbLogin r) ) ( Just (nbPassword r) )
+    Right r -> run ( Just (login r) ) ( Just (password r) )

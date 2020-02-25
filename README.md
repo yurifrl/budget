@@ -1,8 +1,7 @@
 # Budget
 
-
-- cabal run
-- cabal new-test
+- docker-composer run --rm test bash
+- stack run
 
 ## References
 
@@ -26,3 +25,7 @@
   - https://bitemyapp.com/blog/haskell-is-not-trivial-not-unfair/
 - Redis
   - https://github.com/cossacklabs/rd_themis
+
+## TODO
+- [] Use hash to encrypt and decript token redis
+- [] Make redis connection once and if it dies retrie, do it on a monad
