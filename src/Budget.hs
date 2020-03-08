@@ -3,7 +3,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveGeneric #-}
 module Budget (run) where
 
 import Types
@@ -74,7 +73,7 @@ run l p = do
   token <- case eitherToken of
     Right res -> case res of
       Just t -> do
-        print "Token retrived: "
+        print "Token retrived"
         return t
       Nothing -> do
         resp <- case eitherProxyList of
@@ -92,9 +91,11 @@ run l p = do
           (encodeUtf8 (fromMaybe "" p))
           token
 
-  print ok
+  print "Token"
   print token
+  print "qrCode"
   print qrCode
+  print "..."
 
   resp <- case eitherProxyAppList of
     Just liftUrl -> lift (maybe "" unpack $ liftUrl ^? key "lift" . _String) (BC.unpack token) (getId qrCode)

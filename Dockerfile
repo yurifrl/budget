@@ -6,3 +6,4 @@ RUN stack build --install-ghc --system-ghc --dependencies-only
 COPY . /usr/local/src
 RUN stack build --install-ghc --system-ghc
 VOLUME ["/usr/local/src/.stack-work"]
+ENV LC_ALL=C.UTF-8
