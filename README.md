@@ -1,7 +1,8 @@
 # Budget
 
-- docker-composer run --rm test bash
-- stack run
+- export the variables LOGIN and PASSWORD then
+- `docker-composer run --rm test bash`
+- `stack run`
 
 ## References
 
