@@ -1,0 +1,100 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`generateAvatar snapshot of fixed seeds (changing the generator re-rolls every avatar) 1`] = `
+{
+  "accent": "#ff7a8f",
+  "bg": "#4a7a1c",
+  "blush": false,
+  "brow": "none",
+  "decor": "band",
+  "decorX": 81.7,
+  "decorY": 48,
+  "eyes": {
+    "kind": "sleepy",
+    "size": 5.7,
+    "spacing": 11.4,
+    "y": -6,
+  },
+  "face": "#e2ff9e",
+  "faceShape": {
+    "dx": -1.5,
+    "dy": -0.5,
+    "radius": 26.9,
+    "rotate": -8.3,
+    "size": 67.3,
+  },
+  "ink": "#1c1530",
+  "mouth": {
+    "depth": 9.7,
+    "kind": "smile",
+    "width": 11.3,
+    "y": 12.4,
+  },
+}
+`;
+
+exports[`generateAvatar snapshot of fixed seeds (changing the generator re-rolls every avatar) 2`] = `
+{
+  "accent": "#ff9ccf",
+  "bg": "#4a3aa8",
+  "blush": true,
+  "brow": "none",
+  "decor": "band",
+  "decorX": 25.2,
+  "decorY": 63.3,
+  "eyes": {
+    "kind": "dot",
+    "size": 5.7,
+    "spacing": 15.5,
+    "y": -4,
+  },
+  "face": "#9ef0c8",
+  "faceShape": {
+    "dx": 2.1,
+    "dy": 0.3,
+    "radius": 26.4,
+    "rotate": -11.9,
+    "size": 66.1,
+  },
+  "ink": "#1c1530",
+  "mouth": {
+    "depth": 7.4,
+    "kind": "grin",
+    "width": 8.5,
+    "y": 12.4,
+  },
+}
+`;
+
+exports[`generateAvatar snapshot of fixed seeds (changing the generator re-rolls every avatar) 3`] = `
+{
+  "accent": "#ff5d7d",
+  "bg": "#0f5b6e",
+  "blush": true,
+  "brow": "none",
+  "decor": "circle",
+  "decorX": 73.9,
+  "decorY": 77.5,
+  "eyes": {
+    "kind": "oval",
+    "size": 5.2,
+    "spacing": 15.9,
+    "y": -8.3,
+  },
+  "face": "#ffd56b",
+  "faceShape": {
+    "dx": -5.8,
+    "dy": -1.1,
+    "radius": 27.3,
+    "rotate": -14.1,
+    "size": 68.3,
+  },
+  "ink": "#1c1530",
+  "mouth": {
+    "depth": 9.3,
+    "kind": "smirk",
+    "width": 12.8,
+    "y": 14.9,
+  },
+}
+`;
