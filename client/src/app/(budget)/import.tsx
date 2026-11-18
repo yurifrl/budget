@@ -1,1 +1,1 @@
-export { ImportScreen as default } from '@/budget';
+export { ImportScreen as default } from '@/features/import';

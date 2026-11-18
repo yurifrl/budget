@@ -1,5 +1,5 @@
 /** Pure profile logic (no React, no network) — unit tested in model.test.ts. */
-import type { PersonAvatar } from '@/ui/avatar/types';
+import type { PersonAvatar } from '@/domain/avatar';
 
 export type Me = {
   id: string;

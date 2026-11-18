@@ -1,1 +1,1 @@
-export { ExportImportScreen as default } from '@/budget';
+export { ExportImportScreen as default } from '@/features/backup';

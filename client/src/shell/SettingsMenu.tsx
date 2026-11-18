@@ -11,7 +11,7 @@
  * or swallow its clicks. Escape and outside-taps close it.
  *
  * The host passes its panes (`panes`); the first one is the root. Pane content
- * pushes sibling panes through `useMenuNav()` (see budget/ui/MenuPanes).
+ * pushes sibling panes through `useMenuNav()` (see features/settings).
  */
 import Constants from 'expo-constants';
 import { useEffect, useRef, useState } from 'react';

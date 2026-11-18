@@ -1,1 +1,1 @@
-export { BudgetHomeScreen as default } from '@/budget';
+export { BudgetHomeScreen as default } from '@/features/plan';

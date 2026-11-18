@@ -13,11 +13,11 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as ReduxProvider } from 'react-redux';
 
-import { LoginGate } from '@/auth/LoginGate';
-import { StoreMoneyFormatProvider } from '@/budget/model/useDisplayPrefs';
+import { LoginGate } from '@/features/auth';
+import { StoreMoneyFormatProvider } from '@/shell/StoreMoneyFormatProvider';
 import { ServiceProvider } from '@/platform/di/ServiceContext';
 import { Tokens } from '@/platform/di/tokens';
-import { createRuntime } from '@/store/runtime';
+import { createRuntime } from '@/shell/runtime';
 
 export const unstable_settings = {
   anchor: '(budget)',

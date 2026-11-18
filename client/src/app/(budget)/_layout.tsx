@@ -1,1 +1,1 @@
-export { BudgetLayout as default } from '@/budget';
+export { BudgetLayout as default } from '@/shell/BudgetLayout';

@@ -13,7 +13,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
 const SRC = resolve(import.meta.dir);
-const DOMAIN_DIRS = ['budget/domain'];
+const DOMAIN_DIRS = ['domain'];
 const EXTS = ['.ts', '.tsx', '.native.ts', '.native.tsx', '.web.ts', '.web.tsx', '.ios.ts', '.ios.tsx'];
 
 function walk(dir: string, out: string[] = []): string[] {

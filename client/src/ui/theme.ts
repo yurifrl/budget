@@ -6,7 +6,7 @@
  * their own names so nothing changes on screen.
  */
 
-import type { Cents, FlagColor, FundingState } from '@/budget/domain/types';
+import type { Cents, FlagColor, FundingState } from '@/domain/types';
 
 export const colors = {
   bg: '#0c0f16',

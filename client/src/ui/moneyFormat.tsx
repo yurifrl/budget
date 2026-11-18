@@ -8,7 +8,7 @@
  */
 import { createContext, useContext, type ReactNode } from 'react';
 
-import { DEFAULT_MONEY_FORMAT, type MoneyFormat } from '@/budget/domain/format';
+import { DEFAULT_MONEY_FORMAT, type MoneyFormat } from '@/domain/format';
 
 const MoneyFormatContext = createContext<MoneyFormat>(DEFAULT_MONEY_FORMAT);
 

@@ -1,1 +1,1 @@
-export { ConnectBankScreen as default } from '@/budget';
+export { ConnectBankScreen as default } from '@/features/banks';

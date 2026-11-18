@@ -1,1 +1,1 @@
-export { ConnectedAppsScreen as default } from '@/profile';
+export { ConnectedAppsScreen as default } from '@/features/profile';

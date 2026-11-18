@@ -1,1 +1,1 @@
-export { ManagePayeesScreen as default } from '@/budget';
+export { ManagePayeesScreen as default } from '@/features/payees';

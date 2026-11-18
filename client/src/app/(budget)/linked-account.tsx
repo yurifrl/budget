@@ -1,1 +1,1 @@
-export { LinkedAccountDetailScreen as default } from '@/budget';
+export { LinkedAccountDetailScreen as default } from '@/features/banks';
