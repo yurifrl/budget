@@ -1,0 +1,18 @@
+# Deployed image tags: the single deploy switch for ArgoCD.
+#
+# `release.yml`'s deploy job rewrites this file right after the images are
+# pushed (plain GITHUB_TOKEN, commit to main). ArgoCD tracks this repo as a
+# values source of the budget Application: a changed tag deep-merges over the
+# chart's `latest` fallback, sync updates the Deployments, and the pods roll.
+# Pushing a new api/VERSION is therefore the whole release+deploy flow, with no
+# manual cluster steps.
+#
+# Keys are Deployment names (chart `deployments[].name`); values are image
+# tags (no `v` prefix, matching what CI pushes to GHCR).
+imageTags:
+  budget-web: latest
+  budget-api: latest
+  # Same image as the API (bun src/worker.ts); pinned to the API tag by release.yml.
+  budget-worker: latest
+  # Admin SPA (deploy/Dockerfile.admin).
+  budget-admin: latest

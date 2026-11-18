@@ -1,0 +1,36 @@
+# Budget admin SPA (admin/): static Vite bundle served by busybox httpd on :8080
+# with the same SPA fallback as the web image. Build context is the REPO ROOT.
+#
+# The API base URL is baked in at build time (VITE_API_URL) and can be
+# overridden at runtime by mounting /www/config.json ({ "apiUrl": "https://..." }).
+
+# ---- Build stage --------------------------------------------------------------
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.4-alpine AS build
+WORKDIR /app
+
+# shared/ supplies the jobs contracts (@shared/*) and the single zod copy.
+COPY shared/package.json shared/bun.lock shared/bunfig.toml shared/
+RUN cd shared && bun install --frozen-lockfile --production
+COPY admin/package.json admin/bun.lock admin/bunfig.toml admin/
+RUN cd admin && bun install --frozen-lockfile
+
+COPY shared/src shared/src
+COPY shared/tsconfig.json shared/
+COPY admin admin
+
+ARG VITE_API_URL=https://budget-api.syscd.live
+ENV VITE_API_URL=$VITE_API_URL
+RUN cd admin && bun run build
+
+# ---- Serve stage --------------------------------------------------------------
+FROM busybox:1.38 AS serve
+
+RUN adduser -D -u 10001 -H app
+
+COPY --from=build /app/admin/dist /www
+COPY deploy/httpd.conf /etc/httpd.conf
+
+USER app
+EXPOSE 8080
+
+CMD ["busybox", "httpd", "-f", "-v", "-p", "0.0.0.0:8080", "-h", "/www", "-c", "/etc/httpd.conf"]

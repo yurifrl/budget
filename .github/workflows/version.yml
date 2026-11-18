@@ -1,0 +1,108 @@
+# Release marker: validate `api/VERSION` and cut the `v<VERSION>` tag the
+# Release workflow builds and deploys from.
+#
+# `task release` bumps api/VERSION and pushes main; this workflow validates the
+# value, generates release notes (scripts/release-changelog.ts via OpenRouter
+# when OPENROUTER_API_KEY is set, otherwise a plain commit-list section),
+# commits them to main, tags that commit, and dispatches release.yml as its own
+# run (a GITHUB_TOKEN tag push never triggers other workflows; workflow_dispatch
+# events are the documented exception, so the dispatch is the handoff). A tag
+# that already exists means the version is already released: the run succeeds
+# without dispatching Release. Re-releases go through release.yml's own
+# workflow_dispatch.
+#
+# Optional secret: OPENROUTER_API_KEY.
+name: Version
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - api/VERSION
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: version
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag v<VERSION>
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read Bun version from mise.toml
+        id: bun
+        run: echo "version=$(sed -n 's/^bun *= *"\(.*\)"/\1/p' mise.toml)" >> "$GITHUB_OUTPUT"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ steps.bun.outputs.version }}
+
+      - name: Read version from api/VERSION
+        id: version
+        run: |
+          version="$(tr -d '[:space:]' < api/VERSION)"
+          if ! [[ "$version" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]{2})?$ ]]; then
+            echo "::error::api/VERSION must be YYYY.MM.DD[-NN], got '$version'"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether tag exists on remote
+        id: check
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate release notes
+        id: notes
+        if: steps.check.outputs.exists == 'false'
+        env:
+          # Optional: without it the changelog falls back to the commit list.
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          bun scripts/release-changelog.ts --version "${{ steps.version.outputs.version }}"
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add CHANGELOG.md
+            git commit -m "docs: release notes v${{ steps.version.outputs.version }}"
+            git push origin HEAD:main
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push release tag
+        id: tag
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git tag "v${{ steps.version.outputs.version }}" "${{ steps.notes.outputs.sha }}"
+          git push origin "refs/tags/v${{ steps.version.outputs.version }}"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger Release
+        if: steps.tag.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Dispatches release.yml as its own top-level run. Dispatched at main,
+        # which is now the notes commit.
+        run: |
+          gh workflow run release.yml --ref main \
+            -f version="${{ steps.version.outputs.version }}"
+
+      - name: Already released
+        if: steps.check.outputs.exists == 'true'
+        run: echo "v${{ steps.version.outputs.version }} is already released, skipping Release"

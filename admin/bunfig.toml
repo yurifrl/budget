@@ -1,0 +1,3 @@
+[install]
+# Public registry on purpose: never resolve through a machine-local proxy.
+registry = "https://registry.npmjs.org"

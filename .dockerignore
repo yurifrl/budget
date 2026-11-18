@@ -1,9 +1,17 @@
+# Build contexts are the repo root (deploy/Dockerfile.*): keep them small.
 **/node_modules
 **/dist
 **/.expo
-client
-docs
 .git
+.worktrees
+.tasks
+.tmp
 .env
 .env*.local
-.tmp
+docs/evidence
+client/ios
+client/android
+**/ios
+**/android
+*.log
+.DS_Store

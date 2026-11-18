@@ -1,9 +1,19 @@
 version: '3'
 
 # No root package.json: every package installs and runs from its own directory.
+# shared/ must be installed first (it owns zod; api/client/admin link to
+# shared/node_modules/zod).
 
 vars:
-  PACKAGES: shared api client
+  PACKAGES: shared api client admin
+  DEPENDENT: api client admin
+  # Local ports (none of syscd-app's 3000 / 8081 / 5174): api 3100, web 8091, admin 5191.
+  # Postgres: an existing :5432 is reused, otherwise the compose one on :55432.
+  PG_PORT:
+    sh: if nc -z -G1 localhost 5432 2>/dev/null; then echo 5432; else echo 55432; fi
+
+  DEV_DATABASE_URL: '{{.DATABASE_URL | default (printf "postgres://postgres:postgres@localhost:%s/budgetnew_dev" .PG_PORT)}}'
+  DEV_TEMPORAL: '{{.TEMPORAL_ADDRESS | default "localhost:57233"}}'
 
 tasks:
   default:
@@ -12,16 +22,40 @@ tasks:
     silent: true
 
   install:
-    desc: bun install in shared, api, client (shared first; client/api read its node_modules)
+    desc: bun install in shared, api, client, admin (shared first; the others link to its zod)
     cmds:
-      - for: { var: PACKAGES }
+      - cd shared && bun install
+      - for: { var: DEPENDENT, split: ' ' }
         cmd: cd {{.ITEM}} && bun install
 
-  test:
-    desc: bun test in every package (api tests need Postgres on localhost:5432; DB budgetnew_test*)
+  deps:
+    desc: Local dependencies, foreground. Reuses Postgres on :5432 if present (run `task db:init` once), else compose Postgres :55432 (budgetnew_dev); compose Temporal on :57233 / UI :58233
+    run: once
     cmds:
-      - for: { var: PACKAGES }
-        cmd: cd {{.ITEM}} && bun test
+      - mkdir -p .tmp/temporal
+      - |
+        if nc -z -G1 localhost 5432 2>/dev/null; then
+          echo "deps: :5432 already in use, reusing that Postgres (task db:init creates budgetnew_dev); starting temporal only"
+          docker compose up temporal
+        else
+          docker compose up
+        fi
+
+  db:init:
+    desc: Create and seed budgetnew_dev on the Postgres at :5432 (needs psql; no-op if it exists)
+    cmds:
+      - scripts/db-init.sh budgetnew_dev
+
+  run:
+    desc: Whole local stack in parallel (api :3100, worker, admin :5191, web :8091). Start `task deps` in another terminal first
+    deps: [api, worker, admin, web]
+
+  test:
+    desc: bun test in every package that has tests (api needs Postgres on localhost:5432; DB budgetnew_test*)
+    cmds:
+      - cd shared && bun test
+      - task: test:api
+      - cd client && bun test
 
   test:api:
     desc: bun test in api only, with the DB-backed suites required (no silent skips)
@@ -31,10 +65,15 @@ tasks:
     cmds:
       - bun test
 
+  test:e2e:
+    desc: API e2e that needs no Temporal (OAuth consent + MCP over HTTP, DB budgetnew_e2e on :5432)
+    cmds:
+      - scripts/e2e-api.sh
+
   typecheck:
     desc: tsc --noEmit in every package
     cmds:
-      - for: { var: PACKAGES }
+      - for: { var: PACKAGES, split: ' ' }
         cmd: cd {{.ITEM}} && bunx tsc --noEmit
 
   lint:
@@ -45,27 +84,71 @@ tasks:
       - cd client && bunx eslint .
 
   api:
-    desc: Run the API in local auth-off mode (default port 3100, override with API_PORT). Needs DATABASE_URL (e.g. budgetnew_dev).
+    desc: Run the API in local auth-off mode (port 3100, override with API_PORT). DATABASE_URL defaults to budgetnew_dev
     dir: api
     env:
       # Explicit local-dev opt-in; the server refuses to boot without auth config otherwise.
       AUTH_DISABLED_OK: '1'
+      ADMIN_ORIGIN: http://localhost:5191
+      DATABASE_URL: '{{.DEV_DATABASE_URL}}'
+      TEMPORAL_ADDRESS: '{{.DEV_TEMPORAL}}'
     cmds:
       - bun --watch src/index.ts
 
   worker:
     desc: Run the jobs worker (Temporal worker + outbox relay; retries until Temporal is up)
     dir: api
+    env:
+      DATABASE_URL: '{{.DEV_DATABASE_URL}}'
+      TEMPORAL_ADDRESS: '{{.DEV_TEMPORAL}}'
     cmds:
       - bun --watch src/worker.ts
+
+  admin:
+    desc: Run the jobs admin SPA (Vite) on :5191 (API at VITE_API_URL, default http://localhost:3100)
+    dir: admin
+    cmds:
+      - bun run dev
 
   web:
     desc: Run the Expo web dev server (Metro on 8091)
     dir: client
+    env:
+      EXPO_PUBLIC_API_URL: '{{.EXPO_PUBLIC_API_URL | default "http://localhost:3100"}}'
     cmds:
       - bunx expo start --web --port 8091
+
+  admin:build:
+    desc: Production build of the admin SPA
+    dir: admin
+    cmds:
+      - bun run build
 
   image:api:
     desc: Build the API image (context = repo root). On this Mac the docker shim's builder has no DNS; use `container build --dns 1.1.1.1 ...` instead.
     cmds:
       - docker build -f deploy/Dockerfile.api -t budget-api:dev .
+
+  image:web:
+    desc: Build the web image (context = repo root; same DNS note as image:api)
+    cmds:
+      - docker build -f deploy/Dockerfile.web -t budget-web:dev .
+
+  image:admin:
+    desc: Build the admin image (context = repo root; same DNS note as image:api)
+    cmds:
+      - docker build -f deploy/Dockerfile.admin -t budget-admin:dev .
+
+  release:
+    desc: Bump api/VERSION (UTC date; -NN suffix for same-day re-releases), commit and push to main. CI tags, builds the web/api/admin images, pins k8s/values.yaml and creates the GitHub release
+    cmds:
+      - |
+        branch="$(git rev-parse --abbrev-ref HEAD)"
+        if [ "$branch" != "main" ]; then
+          echo "task release must run on main (HEAD is '$branch', merge first)" >&2
+          exit 1
+        fi
+      - bun scripts/release-bump.ts
+      - git add api/VERSION
+      - 'git commit -m "release: v$(cat api/VERSION)" -- api/VERSION'
+      - git push origin HEAD:main
