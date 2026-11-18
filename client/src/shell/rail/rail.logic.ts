@@ -1,12 +1,12 @@
 /**
  * Pure view-model of the budget rail and shell: account sections with their
- * balances, and which budget becomes active when the persisted one is gone.
- * Reads wire rows (AccountRow / BudgetRow milliunits), so it lives beside the
+ * balances, and whether the shell has a budget to show or must leave for the
+ * home page. Reads wire rows (AccountRow milliunits, BudgetListRow), so it lives beside the
  * rail rather than in domain/.
  */
 
 import { milliToCents } from '@/budget/data/mapping';
-import type { AccountRow, BudgetRow } from '@/budget/data/rows';
+import type { AccountRow, BudgetListRow } from '@/budget/data/rows';
 import { workingBalance } from '@/domain/engine';
 
 /** Rail section order: CLOSED always last. */
@@ -70,18 +70,31 @@ export function railSectionTotal(accs: readonly Balances[]): number {
   return accs.reduce((sum, a) => sum + milliToCents(a.cleared_balance) + milliToCents(a.uncleared_balance), 0);
 }
 
+export type ShellGate = 'loading' | 'ready' | 'home';
+
 /**
- * The budget to switch to when the active id is missing or stale (budget
- * deleted server-side, DB reset), or null when the active one is fine or the
- * list is empty. Prefers the first non-archived budget: while Budgets
- * refetches after a fresh-start the not-yet-listed replacement must not be
- * bounced back to data[0] — which an archive reorder makes an archived budget.
+ * Whether the budget shell may render. It needs an active budget the caller
+ * can reach; it never picks one itself: that choice starts on the home page
+ * (`/`), which is also where a person with no budgets belongs.
+ *
+ * - `loading`: the persisted id is not restored yet, the list has not
+ *   arrived, or the active id is missing from a list that is being
+ *   refetched (a just-created budget must not be bounced, budget-fwf).
+ * - `ready`: the active budget is listed (archived ones stay openable).
+ * - `home`: no active budget, a stale one (deleted, access removed, another
+ *   person signed in on this device), no budgets at all, or the list failed.
  */
-export function fallbackBudgetId(
-  budgets: readonly Pick<BudgetRow, 'id' | 'archived_at'>[] | undefined,
-  activeId: string | null | undefined,
-): string | null {
-  if (!budgets?.length) return null;
-  if (activeId && budgets.some((b) => b.id === activeId)) return null;
-  return budgets.find((b) => !b.archived_at)?.id ?? budgets[0].id;
+export function shellGate(s: {
+  restored: boolean;
+  activeId: string | null | undefined;
+  budgets: readonly Pick<BudgetListRow, 'id'>[] | undefined;
+  isFetching: boolean;
+  isError: boolean;
+}): ShellGate {
+  if (!s.restored) return 'loading';
+  if (!s.activeId) return 'home';
+  if (s.budgets?.some((b) => b.id === s.activeId)) return 'ready';
+  if (s.isFetching) return 'loading';
+  if (s.budgets === undefined && !s.isError) return 'loading';
+  return 'home';
 }

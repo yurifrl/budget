@@ -10,7 +10,7 @@
  * (cross-references by index as well; split parents export with their summed
  * amount and no category, like the restore format expects).
  *
- * Scoping is the router's budgetAccess (owner-or-admin, else 404).
+ * Scoping is the router's budgetAccess (owner or member, else 404).
  */
 
 import { pool } from '../../core/db';

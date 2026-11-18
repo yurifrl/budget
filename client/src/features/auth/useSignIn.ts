@@ -5,7 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { authProviders } from '@shared/contracts/user/providers';
 import type { KVStore } from '@/platform/storage/types';
-import { saveSessionToken } from '@/platform/storage/sessionToken';
+import { clearSessionToken, saveSessionToken } from '@/platform/storage/sessionToken';
 import { exchangeAccessCode, fetchSessionToken, nativeSignInUrl, parseAuthCallback, webSignInUrl } from './nativeAuth';
 import {
   ACCESS_REDIRECT_KEY,
@@ -13,8 +13,11 @@ import {
   accessWebSignInUrl,
   decideSignIn,
   LEGACY_PROVIDERS,
+  logoutUrl,
   parseProviders,
   parseRedirectMark,
+  parseSignedOutMark,
+  SIGNED_OUT_KEY,
   type Providers,
   type SignInAction,
 } from './signIn.logic';
@@ -24,6 +27,15 @@ import type { AuthStatus } from './useAuth';
 function session(): Storage | null {
   try {
     return Platform.OS === 'web' && typeof window !== 'undefined' ? window.sessionStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+/** localStorage on web (null on native or when blocked): the sign-out mark outlives the tab. */
+function local(): Storage | null {
+  try {
+    return Platform.OS === 'web' && typeof window !== 'undefined' ? window.localStorage : null;
   } catch {
     return null;
   }
@@ -40,7 +52,9 @@ const markRedirect = () => session()?.setItem(ACCESS_REDIRECT_KEY, String(Date.n
 export function useSignIn(apiUrl: string, status: AuthStatus, storage: KVStore, refresh: () => void) {
   // The providers answer plus the loop-guard mark and clock read at that
   // moment (read once, in the effect: render stays pure).
-  const [seen, setSeen] = useState<{ providers: Providers; lastRedirectAt: number | null; now: number } | undefined>(undefined);
+  const [seen, setSeen] = useState<{ providers: Providers; lastRedirectAt: number | null; now: number; signedOut: boolean } | undefined>(
+    undefined,
+  );
   const providers = seen?.providers;
   const [notice, setNotice] = useState<string | null>(null);
   // Set once the window is navigating away: keep the spinner up meanwhile.
@@ -53,7 +67,13 @@ export function useSignIn(apiUrl: string, status: AuthStatus, storage: KVStore, 
       .then(async (res) => parseProviders(res.status, await res.json().catch(() => null)))
       .catch(() => LEGACY_PROVIDERS)
       .then((p) => {
-        if (live) setSeen({ providers: p, lastRedirectAt: parseRedirectMark(session()?.getItem(ACCESS_REDIRECT_KEY)), now: Date.now() });
+        if (!live) return;
+        setSeen({
+          providers: p,
+          lastRedirectAt: parseRedirectMark(session()?.getItem(ACCESS_REDIRECT_KEY)),
+          now: Date.now(),
+          signedOut: parseSignedOutMark(local()?.getItem(SIGNED_OUT_KEY)),
+        });
       });
     return () => {
       live = false;
@@ -65,6 +85,7 @@ export function useSignIn(apiUrl: string, status: AuthStatus, storage: KVStore, 
   useEffect(() => {
     if (status !== 'in') return;
     session()?.removeItem(ACCESS_REDIRECT_KEY);
+    local()?.removeItem(SIGNED_OUT_KEY);
     setSeen(undefined);
     setRedirecting(false);
   }, [status]);
@@ -75,6 +96,7 @@ export function useSignIn(apiUrl: string, status: AuthStatus, storage: KVStore, 
     providers,
     lastRedirectAt: seen?.lastRedirectAt ?? null,
     now: seen?.now ?? 0,
+    signedOut: seen?.signedOut ?? false,
   });
   const action: SignInAction = redirecting && decided.kind !== 'none' ? { kind: 'pending' } : decided;
 
@@ -91,6 +113,8 @@ export function useSignIn(apiUrl: string, status: AuthStatus, storage: KVStore, 
   const signIn = useCallback(
     async (provider: 'access' | 'google') => {
       setNotice(null);
+      // Pressing a sign-in button ends "signed out on purpose".
+      local()?.removeItem(SIGNED_OUT_KEY);
       if (Platform.OS === 'web') {
         // Web holds the API's httpOnly session cookie: a top-level navigation
         // through the provider ends back on this app, signed in.
@@ -134,6 +158,19 @@ export function useSignIn(apiUrl: string, status: AuthStatus, storage: KVStore, 
     [apiUrl, goAccessWeb, refresh, storage],
   );
 
+  // Explicit sign-out. Web: leave the mark (so a live Access session does not
+  // sign the person straight back in), then let the API drop its cookie and
+  // send the browser back here. Native: forget the token and re-probe.
+  const signOut = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      local()?.setItem(SIGNED_OUT_KEY, '1');
+      window.location.href = logoutUrl(apiUrl);
+      return;
+    }
+    await clearSessionToken(storage);
+    refresh();
+  }, [apiUrl, refresh, storage]);
+
   const error = action.kind === 'show-login' ? action.error : null;
-  return { action, providers: providers ?? LEGACY_PROVIDERS, notice: notice ?? error, signIn } as const;
+  return { action, providers: providers ?? LEGACY_PROVIDERS, notice: notice ?? error, signIn, signOut } as const;
 }

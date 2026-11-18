@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { AccountRow } from '@/budget/data/rows';
-import { fallbackBudgetId, railAccountBalance, railSections, railSectionTotal } from './rail.logic';
+import { railAccountBalance, railSections, railSectionTotal, shellGate } from './rail.logic';
 
 const acc = (id: string, account_group: AccountRow['account_group'], type: AccountRow['type']) => ({ id, account_group, type });
 
@@ -76,27 +76,43 @@ describe('balances', () => {
   });
 });
 
-describe('fallbackBudgetId', () => {
-  const budgets = [
-    { id: 'archived', archived_at: '2026-01-01' },
-    { id: 'b1', archived_at: null },
-    { id: 'b2' },
-  ];
+describe('shellGate', () => {
+  const budgets = [{ id: 'archived' }, { id: 'b1' }];
+  const gate = (over: Partial<Parameters<typeof shellGate>[0]>) =>
+    shellGate({ restored: true, activeId: 'b1', budgets, isFetching: false, isError: false, ...over });
 
-  test('nothing to do while the list is empty or the active budget is listed', () => {
-    expect(fallbackBudgetId(undefined, null)).toBeNull();
-    expect(fallbackBudgetId([], 'gone')).toBeNull();
-    expect(fallbackBudgetId(budgets, 'b2')).toBeNull();
-    // An archived budget that is still listed stays active.
-    expect(fallbackBudgetId(budgets, 'archived')).toBeNull();
+  test('waits for the persisted id before deciding anything', () => {
+    expect(gate({ restored: false })).toBe('loading');
+    expect(gate({ restored: false, activeId: null, budgets: [] })).toBe('loading');
   });
 
-  test('no active budget, or a stale id: the first non-archived budget', () => {
-    expect(fallbackBudgetId(budgets, null)).toBe('b1');
-    expect(fallbackBudgetId(budgets, 'gone')).toBe('b1');
+  test('a listed active budget renders the shell, archived or not, also while refetching', () => {
+    expect(gate({})).toBe('ready');
+    expect(gate({ activeId: 'archived' })).toBe('ready');
+    expect(gate({ isFetching: true })).toBe('ready');
   });
 
-  test('only archived budgets: the first one', () => {
-    expect(fallbackBudgetId([{ id: 'a1', archived_at: 'x' }, { id: 'a2', archived_at: 'y' }], null)).toBe('a1');
+  test('no active budget goes home and never picks one', () => {
+    expect(gate({ activeId: null })).toBe('home');
+    expect(gate({ activeId: null, budgets: undefined, isFetching: true })).toBe('home');
+  });
+
+  test('zero budgets goes home instead of spinning', () => {
+    expect(gate({ activeId: 'gone', budgets: [] })).toBe('home');
+    expect(gate({ activeId: null, budgets: [] })).toBe('home');
+  });
+
+  test('a stale id goes home once the list has settled', () => {
+    expect(gate({ activeId: 'gone' })).toBe('home');
+  });
+
+  test('an id missing from a list still loading or refetching waits (budget-fwf)', () => {
+    expect(gate({ activeId: 'new', isFetching: true })).toBe('loading');
+    expect(gate({ activeId: 'b1', budgets: undefined, isFetching: true })).toBe('loading');
+    expect(gate({ activeId: 'b1', budgets: undefined })).toBe('loading');
+  });
+
+  test('a failed list goes home, where the error and a retry are shown', () => {
+    expect(gate({ activeId: 'b1', budgets: undefined, isError: true })).toBe('home');
   });
 });

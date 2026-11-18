@@ -1208,15 +1208,18 @@ and someone already logged in to Access is signed in without a prompt.
 
 ### Allow-list: every place it is enforced
 
-`isAllowed` (`user/config.ts`) is the single rule: with `AUTH_ALLOWED_EMAILS`
-set the e-mail must be on it (both providers); without it, everyone is allowed
-only when Access is configured (the Cloudflare policy is the list); neither =
-nobody. Call sites, unchanged in shape: the Google callback and `/auth/token`
+Superseded by "Multi-user" below (2026-11-18): `AUTH_ALLOWED_EMAILS` is now
+Google's list only and Access sign-ins are not checked against it. What
+follows is the original rule, kept for the record.
+
+`isAllowed` (`user/config.ts`) was the single rule: with `AUTH_ALLOWED_EMAILS`
+set the e-mail had to be on it (both providers); without it, everyone was
+allowed only when Access was configured (the Cloudflare policy is the list);
+neither = nobody. Call sites: the Google callback and `/auth/token`
 (sign-in), `/auth/access` and `/auth/exchange` (sign-in), `currentUser`
 and `cookieSessionUser` (every session request and the consent page),
 `accessPrincipal` (every OAuth access token, MCP included) and the consent
-POST in `oauth/authorize.ts`. In Access-only mode the per-request checks pass
-every validly signed session, so Access-issued sessions are not locked out.
+POST in `oauth/authorize.ts`.
 
 ### Threat model
 
@@ -1267,6 +1270,29 @@ JWKS for its own key and injects a signed assertion on `/auth/access*`:
 cookie, the app came back signed out once and showed the error screen (no
 second redirect); `03` the "Sign in" button then signed in.
 
+## Landing page and sign-out (2026-11-18)
+
+- `features/auth/LandingPage.tsx` is the one signed-out screen on web and
+  iOS (split panes from the `lg` breakpoint, a single column below it). It
+  also carries the sign-in error and the "Can't reach the API" state. What
+  the gate shows is decided in `landing.logic.ts` (`gateView`): the page never
+  renders while the session probe, the providers request or a redirect is
+  still in flight.
+- The client had no sign-out. Profile now has "Sign out" (`useAuthSession()`
+  from the auth barrel, provided by `LoginGate`). Web: set
+  `localStorage['budget.signedOutOnPurpose']`, then navigate to the API's
+  existing `GET /auth/logout` (drops the cookie, redirects to the app).
+  Native: drop the stored token and re-probe.
+- Without the mark a web sign-out behind Access would be undone at once by
+  the automatic redirect. `decideSignIn` therefore returns `show-login` (no
+  error) while the mark is set, ahead of the loop guard. Pressing a sign-in
+  button or any successful sign-in clears it. localStorage rather than
+  sessionStorage so that closing the tab does not undo the sign-out.
+- Sign-out ends the Budget session only; the Cloudflare Access session stays,
+  so "Sign in" afterwards is usually one click with no Cloudflare prompt.
+- Browser check used `docs/evidence/landing-login/stub-api.ts` (auth surface
+  only, no Postgres), not the real API.
+
 ## Workflow bundle built into the image (2026-11-18)
 
 The Temporal worker used to bundle its workflows with webpack on every boot
@@ -1282,3 +1308,183 @@ Measured locally (macOS arm64, worker connected and polling, peak RSS):
 181 MB with the pre-built bundle, 327 MB without. `scripts/e2e-jobs.ts` passes
 against a worker running from the bundle.
 
+## Multi-user (budget-s1n, 2026-11-18)
+
+The app was written for one household. It now has to serve unrelated people:
+each signs in through Cloudflare Access (no sign-up), sees only the budgets
+they own or that were shared with them, creates budgets and invites people.
+This is the API and contract half.
+
+### Sign-in: Access is the gate, the API keeps no list for it
+
+Before: with `AUTH_ALLOWED_EMAILS` set (it must be whenever Google is on), an
+Access-authenticated person who was not on that list got 403 `not_authorized`
+from `/auth/access` and no user row; without the variable they were let in.
+So an invited friend also had to be added to an env var and the API restarted.
+
+Now:
+
+- `/auth/access` and `/auth/access/native` do not consult
+  `AUTH_ALLOWED_EMAILS`. A verified assertion is enough: the person gets a
+  user row (`resolveOrCreateSessionUser`: role `user`, no budgets, nothing
+  created for them) or, when their e-mail was invited to a budget or linked to
+  a placeholder person, the existing row (`on conflict (email)`), so the shared
+  budget is there on first sign-in.
+- The list is Google's (`googleAllowed`): the Google callback and
+  `/auth/token` require the e-mail on it; no list = nobody. Google is not
+  behind Access, so without it anyone with a Google account could sign in.
+- So that an Access person is not then refused on every request, a session
+  minted by the Access routes carries `idp: 'access'` (an additive optional
+  claim in the same HS256 JWT; older and Google sessions have none) and an
+  OAuth grant stores how its approver signed in (`oauth_grants.idp`, migration
+  0101). The per-request rule is `isAllowed(email, idp)`:
+  on the Google list = yes; else `idp === 'access'` = yes while Access is
+  configured; else (Google, or a session from before the claim) only the
+  old Access-only fallback (no list configured and Access on). A Google
+  session of someone removed from the list still dies at once, as before.
+- Threat model, unchanged where it matters: the assertion is verified
+  (signature, issuer, AUD, expiry, human e-mail, header only), so the only
+  people who reach a user row are those the Cloudflare policy admits. What
+  changed is that the API no longer second-guesses that policy: if the policy
+  is widened (say, to any e-mail with a one-time PIN), anyone it admits gets an
+  account with zero budgets and can create budgets and link a bank. Keep the
+  policy as tight as the product needs. Revoking a person is unchanged
+  (remove from the policy AND `users.status = 'disabled'`).
+- The first user ever inserted is still seeded as `admin`
+  (`resolveOrCreateSessionUser`). On an installation that already has an admin
+  a newcomer is always `user`.
+
+### "Has signed in" is `users.signed_in_at`, not `google_sub`
+
+A person who only uses Access never gets a `google_sub`, so the old test
+(`google_sub is null` = pending) showed them as pending forever and let any
+member of a shared budget rename them (`budget_members_rename`). Migration
+0101 adds `users.signed_in_at` (nullable, backfilled for rows with a Google
+subject); `resolveOrCreateSessionUser` stamps it on first sight of an
+authenticated principal, whatever the provider. `pending` and
+`renameUnclaimedUser` read it. Rows written by syscd-app (shared database)
+have it NULL until that person's first request here.
+
+### Budgets list for a home page
+
+`budget_list` (`GET /budgets`) returns `budgetListRowSchema`
+(`shared/src/contracts/budget/outputs.ts`): the old row plus, always present,
+
+- `is_owner: boolean`: the caller owns it ("My budgets") or not ("Shared with me");
+- `owner: { user_id, name, email, avatar } | null`: for "shared by ..."; null
+  only for a legacy budget nobody has claimed;
+- `member_count: number`: people on the budget, owner included, the same set
+  `budget_members_list` returns (placeholders and pending invitees count).
+
+The other budget operations keep returning `budgetRowSchema`. A person with
+no budgets gets `[]`. Nothing creates a budget on their behalf.
+
+### Who can do what
+
+- Reach a budget (read and write its data): the owner and the members. Nobody
+  else, **the `admin` role included**. Before, an admin was let through
+  `budgetAccess`, saw every budget in `GET /budgets` and could rename, archive,
+  delete, restore, fresh-start any budget and remove anyone's members. That
+  was fine for one household and is wrong for strangers sharing an
+  installation. `admin` is now an operator role only: the jobs ledger
+  (`/jobs`, `requireAdmin`), the app-wide sync window, and claiming legacy
+  unowned budgets. To see someone's budget an admin has to be added to it like
+  anyone else.
+- Owner only: rename, archive, unarchive, delete, restore, fresh start,
+  removing a person. The owner cannot be removed. Anyone else gets 404.
+- Any member: everything inside the budget, adding a person (by e-mail =
+  sharing it, or a placeholder), linking a placeholder's e-mail, renaming a
+  person who has not signed in. Left as it was on purpose (the people list is
+  shared like the rest of the budget); it does mean a member can share the
+  budget onward and the owner removes whoever they do not want. If that is not
+  wanted, gate `budget_members_add` with an e-mail and `budget_members_link_email`
+  on `isBudgetOwner` (two lines in `routes/members.ts`).
+- A member cannot leave on their own (only the owner removes). Not built.
+
+### Other gaps closed
+
+- Claim-on-first-login: any human session's `GET /budgets` used to sweep every
+  unowned budget into that person's ownership. With open sign-in that would
+  hand legacy or seed data to whoever arrived first. Only an admin's session
+  claims now.
+- `PATCH /connections/settings` (the app-wide sync window, one value for
+  everybody's bank syncs) was open to every signed-in user: admin only now.
+- A bank connection outlives its owner's membership: the connection summary
+  and its transactions list showed accounts (names, balances, imported
+  transactions) of a budget the connection's owner had been removed from, and
+  the bank kept syncing into it. Removing a member now unlinks the accounts
+  fed by that member's connections; the two reads and the disconnect 409 only
+  consider accounts in budgets the caller can reach today (disconnect drops
+  links it finds in budgets they cannot).
+
+### Looked at, left alone
+
+- `GET /users/:id/avatar` serves any user's photo to any signed-in user (ids
+  are random UUIDs a person only learns through a shared budget; a removed
+  member keeps the id). Narrowing it to people who share a budget is the fix
+  if photos are to be private.
+- The jobs ledger shows every run (connection ids, job input) to admins. It is
+  the operator's tool and sits behind the Access admin policy.
+- `linked_by` on accounts and members' names/e-mails are visible to everyone
+  on the budget, by design.
+- Background work never takes a budget id from a request: sync jobs are keyed
+  by connection id and are enqueued after an ownership check, by the webhook
+  (provider secret) or by the sweep; the repeat-rule tick walks all budgets.
+- MCP tools and the CLI call the HTTP API with the caller's bearer, so they
+  pass through the same guards.
+
+## Home page (budget-ygu, 2026-11-18)
+
+The client half of "Multi-user". Before: after sign-in the app dropped into
+the budget shell at `/` and the shell chose a budget by itself (the persisted
+one, else the first non-archived one; `fallbackBudgetId`). A person with no
+budgets got a shell with spinners in it.
+
+- **`/` is the home page, for everyone, every time.** The budget's phone
+  landing tab moved from `/` to `/overview` (tab label "Overview"; "Home" now
+  means one thing). Considered and dropped: keeping `/` as the budget and
+  showing home only after a sign-in. It needs a "just signed in" flag, and a
+  person with one shared and one own budget would never see the list again
+  unless they went looking. The cost of the choice: one more tap after a cold
+  start for someone with a single budget.
+- **The active budget stays out of the URL.** Budget routes are `/plan`,
+  `/accounts?account=` and so on, as before; the id is persisted (KV
+  `budget.activeBudgetId`) by `switchBudget`. Putting it in the path would be
+  the proper deep link, and is a rewrite of every route and link in the shell.
+  So a deep link opens "the budget this device last had open"; with none, or
+  one the person cannot reach any more, it lands on home.
+- **The shell never picks a budget** (`shellGate` replaces
+  `fallbackBudgetId`). An id missing from a list that is still being fetched
+  waits instead of bouncing (budget-fwf); creating a budget refetches the list
+  before switching, on home as in the settings menu
+  (`state/refetchBudgets.ts`). Archiving or deleting the active budget, or
+  losing access to it, sends the person home rather than into some other
+  budget. `restoreActiveBudget` no longer overrides a budget chosen in this
+  session (home switches, then the shell mounts and restores).
+- **Archived budgets** keep the treatment the switcher gave them: their own
+  section (collapsed on home), name plus archive date, still openable. The
+  date was printed from the raw timestamp (`18T22:03:58.457Z/11/2026`) in the
+  switcher; both places cut it to the day now.
+- **Inviting is the existing People pane**, opened in a sheet from a card.
+  Any member may add a person (the API's rule), so every live card has the
+  button: "Invite" for the owner, "People" for a member. The pane's old line
+  about `AUTH_ALLOWED_EMAILS` was wrong since "Multi-user"; it now says what
+  happens (the budget is on the invitee's home page at their sign-in; nothing
+  is sent). Member add/remove/link invalidate the Budgets list, which carries
+  `member_count`.
+- **Owner-only controls are absent, not disabled, for members**: Fresh Start
+  row, rename field, archive/delete section (Plan Settings shows the name and
+  who the owner is), backup import. Format prefs stay: they are per device.
+- **The sync-window control needed no change.** The pills in
+  `SyncWindowControl` / `bank/SettingsPanel` / `ConnectionSettingsScreen`
+  write the per-bank window (`PATCH /connections/:id/settings`, the caller's
+  own connection). Nothing in the client calls the admin-only
+  `PATCH /connections/settings`; `useUpdateSyncWindowMutation` is exported and
+  unused. Checked against the running API as a non-admin: the app-wide PATCH
+  answers 403, the app-wide GET (shown as "Default (...)") 200.
+- **Sign-out from Profile** lands on home at the next sign-in: on web the
+  API's logout redirect goes to the app root; on native the router is moved
+  to `/` first.
+
+Evidence: `docs/evidence/home-page/` (screenshots; `access-proxy.ts` is the
+Access stub with `/__as?email=` to switch identity).

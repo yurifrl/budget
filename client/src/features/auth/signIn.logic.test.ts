@@ -8,8 +8,10 @@ import {
   decideSignIn,
   LEGACY_PROVIDERS,
   loginButtons,
+  logoutUrl,
   parseProviders,
   parseRedirectMark,
+  parseSignedOutMark,
   redirectedRecently,
   type SignInState,
 } from './signIn.logic';
@@ -24,6 +26,7 @@ const state = (over: Partial<SignInState> = {}): SignInState => ({
   providers: ACCESS,
   lastRedirectAt: null,
   now: NOW,
+  signedOut: false,
   ...over,
 });
 
@@ -57,6 +60,40 @@ describe('decideSignIn', () => {
 
   it('native never redirects by itself', () => {
     expect(decideSignIn(state({ platform: 'native' }))).toEqual({ kind: 'show-login', error: null });
+  });
+});
+
+describe('signed out on purpose', () => {
+  it('web + Access: no automatic redirect, the landing page stays up without an error', () => {
+    expect(decideSignIn(state({ signedOut: true }))).toEqual({ kind: 'show-login', error: null });
+    expect(decideSignIn(state({ signedOut: true, providers: BOTH }))).toEqual({ kind: 'show-login', error: null });
+  });
+
+  it('outranks the loop guard: no "did not complete" error after a sign-out', () => {
+    expect(decideSignIn(state({ signedOut: true, lastRedirectAt: NOW - 5_000 }))).toEqual({ kind: 'show-login', error: null });
+  });
+
+  it('changes nothing where there is no automatic redirect anyway', () => {
+    expect(decideSignIn(state({ signedOut: true, providers: GOOGLE }))).toEqual({ kind: 'show-login', error: null });
+    expect(decideSignIn(state({ signedOut: true, platform: 'native' }))).toEqual({ kind: 'show-login', error: null });
+  });
+
+  it('still waits for the providers answer and stays out of the way when not signed out', () => {
+    expect(decideSignIn(state({ signedOut: true, providers: undefined }))).toEqual({ kind: 'pending' });
+    expect(decideSignIn(state({ signedOut: true, status: 'in' }))).toEqual({ kind: 'none' });
+  });
+
+  it('once the mark is cleared (sign-in pressed), the automatic redirect is back', () => {
+    expect(decideSignIn(state({ signedOut: false }))).toEqual({ kind: 'auto-redirect' });
+  });
+
+  it('parses the stored mark', () => {
+    expect(parseSignedOutMark('1')).toBe(true);
+    for (const none of [null, undefined, '']) expect(parseSignedOutMark(none)).toBe(false);
+  });
+
+  it('web sign-out goes through the API logout', () => {
+    expect(logoutUrl('https://budget-api.syscd.live/')).toBe('https://budget-api.syscd.live/auth/logout');
   });
 });
 

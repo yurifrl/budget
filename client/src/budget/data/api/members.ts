@@ -41,6 +41,8 @@ export const membersApi = budgetsApi.injectEndpoints({
     addBudgetMember: b.mutation<{ members: BudgetMember[] }, { budgetId: string; email?: string; name?: string }>({
       query: ({ budgetId, email, name }) => contractRequest(membersAdd, { budget_id: budgetId, email, name }),
       onQueryStarted: syncMembers,
+      // The Budgets list carries member_count (home page).
+      invalidatesTags: ['Budgets'],
     }),
 
     /** Attach an email to a placeholder; an existing user with that email absorbs it (merge). */
@@ -49,6 +51,7 @@ export const membersApi = budgetsApi.injectEndpoints({
       onQueryStarted: syncMembers,
       // A merge repoints the placeholder's accounts and categories at the surviving person.
       invalidatesTags: (_r, _e, { budgetId }) => [
+        'Budgets',
         { type: 'Accounts', id: budgetId },
         { type: 'Categories', id: budgetId },
       ],
@@ -66,6 +69,7 @@ export const membersApi = budgetsApi.injectEndpoints({
       // Removal also nulls that person's accounts and categories server-side.
       onQueryStarted: syncMembers,
       invalidatesTags: (_r, _e, { budgetId }) => [
+        'Budgets',
         { type: 'Accounts', id: budgetId },
         { type: 'Categories', id: budgetId },
       ],

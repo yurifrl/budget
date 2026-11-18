@@ -83,10 +83,10 @@ function csrfValid(cfg: OAuthConfig, email: string, r: AuthRequest, token: strin
 }
 
 /** Resolve who is approving: the session cookie, or the dev identity when auth is off. */
-async function approver(c: Context, cfg: OAuthConfig): Promise<string | null> {
+async function approver(c: Context, cfg: OAuthConfig): Promise<{ email: string; idp?: string } | null> {
   const session = await cookieSessionUser(c);
-  if (session) return session.email;
-  if (cfg.devEmail && authDisabled()) return cfg.devEmail;
+  if (session) return session;
+  if (cfg.devEmail && authDisabled()) return { email: cfg.devEmail };
   return null;
 }
 
@@ -101,7 +101,7 @@ export function authorizeRoutes(cfg: OAuthConfig): Hono {
       const r = parsed.redirect;
       return c.redirect(redirectWith(r.uri, cfg.issuer, { error: r.error, error_description: r.description, state: r.state }));
     }
-    const email = await approver(c, cfg);
+    const email = (await approver(c, cfg))?.email;
     if (!email) {
       // Reuse the app's sign-in (Cloudflare Access when configured, else
       // Google); both return here via a validated same-origin relative return_to.
@@ -151,8 +151,9 @@ export function authorizeRoutes(cfg: OAuthConfig): Hono {
       const r = parsed.redirect;
       return c.redirect(redirectWith(r.uri, cfg.issuer, { error: r.error, error_description: r.description, state: r.state }), 303);
     }
-    const email = await approver(c, cfg);
-    if (!email) return c.html(renderError('Your session expired. Start again.'), 401);
+    const who = await approver(c, cfg);
+    const email = who?.email;
+    if (!who || !email) return c.html(renderError('Your session expired. Start again.'), 401);
     // CSRF layer 2: token bound to this user and this exact request.
     if (!csrfValid(cfg, email, parsed.req, form.csrf ?? '')) return c.html(renderError('Invalid or expired form. Start again.'), 403);
 
@@ -161,12 +162,13 @@ export function authorizeRoutes(cfg: OAuthConfig): Hono {
       return c.redirect(redirectWith(q.redirectUri, cfg.issuer, { error: 'access_denied', state: q.state }), 303);
     }
     if (!cfg.devEmail || !authDisabled()) {
-      if (!isAllowed(email)) return c.html(renderError('Not authorized.'), 403);
+      if (!isAllowed(email, who.idp)) return c.html(renderError('Not authorized.'), 403);
     }
     const user = await resolveOrCreateSessionUser(email);
     if (user.status !== 'active') return c.html(renderError('Account disabled.'), 403);
     const code = await createGrantAndCode({
       userId: user.id,
+      idp: who.idp ?? null,
       clientId: q.clientId,
       scope: q.scope,
       resource: q.resource,

@@ -13,17 +13,22 @@ import {
 import { claimUnownedBudgets } from '../ownership';
 import { budgetRouter } from '../router';
 import * as budgetsStore from '../store/budgets';
-import { authDisabled, DEV_EMAIL, type IdentityUser } from '../../user';
+import { authDisabled, DEV_EMAIL, toPersonRef, type IdentityUser } from '../../user';
 
 export const operations = [
   /**
-   * Budget list — owner-scoped (USER-05): admins see every budget, everyone
-   * else only budgets they own or are members of. The app's first call is usually this list, so
-   * it doubles as the claim-on-first-login trigger (USER-04): session humans
-   * sweep unowned budgets into their ownership before the filter applies.
-   * Only app session logins claim: the service bearer lane (no principal) and
-   * OAuth access tokens (MCP/CLI — principal carries grantId/scope) never
-   * claim, so they see only what they own or are members of.
+   * Budget list: the budgets the caller owns or is a member of, nothing else
+   * (no role sees more), each saying whether the caller owns it, who does and
+   * how many people are on it, so a home page can split "My budgets" from
+   * "Shared with me". A person with no budgets gets `[]`; nothing here creates
+   * a budget for them.
+   *
+   * It doubles as the claim trigger for LEGACY unowned budgets (USER-04,
+   * pre-v1.1 data and the dev seed): only an admin's own app session sweeps
+   * them into their ownership. A newly signed-up person is never an admin
+   * (unless they are the very first user of the installation), so they can
+   * never inherit someone else's data this way; the service bearer lane and
+   * OAuth access tokens (MCP/CLI) never claim either.
    */
   implement(budgetList, async (c) => {
     const user: IdentityUser | undefined = c.get('user');
@@ -31,20 +36,21 @@ export const operations = [
 
     const principal = c.get('principal');
     // The dev bypass (auth unconfigured, no principal, the synthetic dev user)
-    // is the one local human, so it claims like a first real sign-in; the
-    // service lane (a different identity, and only exists with auth on) never does.
+    // is the one local human and always an admin, so it claims the seed.
     const humanSession = principal
       ? principal.grantId === undefined && principal.scope === undefined
       : authDisabled() && user.email === DEV_EMAIL;
-    if (humanSession) {
+    if (humanSession && user.role === 'admin') {
       if (await budgetsStore.anyUnownedBudget(pool)) await claimUnownedBudgets(user.id);
     }
 
-    const rows =
-      user.role === 'admin'
-        ? await budgetsStore.listAllBudgets(pool)
-        : await budgetsStore.listAccessibleBudgets(pool, user.id);
-    return c.json(rows);
+    const rows = await budgetsStore.listAccessibleBudgets(pool, user.id);
+    return c.json(
+      rows.map(({ ref_user_id, ref_name, ref_email, avatar_seed, avatar_image_version, ...budget }) => ({
+        ...budget,
+        owner: toPersonRef({ ref_user_id, ref_name, ref_email, avatar_seed, avatar_image_version }),
+      })),
+    );
   }),
 
   /**
@@ -79,8 +85,7 @@ export const operations = [
       const archived = await budgetsStore.archiveWithTimestampedName(client, body.budget_id);
       // Fresh start keeps the original name on the new instance.
       const created = await budgetsStore.insertBudgetReturningArchive(client, current.name, user.id);
-      // The household carries over: same members, plus the (possibly admin)
-      // caller who is now the owner.
+      // The household carries over: same members, plus the caller (the owner).
       await budgetsStore.copyMembersPlusCaller(client, body.budget_id, created.id, user.id);
       const oldId = body.budget_id;
       const newId = created.id;
@@ -104,8 +109,8 @@ export const operations = [
   }),
 
   /**
-   * Rename a budget (Plan Settings). Owner-or-admin like every budget-data
-   * route (USER-05): cross-owner renames surface as 404, never 403.
+   * Rename a budget (Plan Settings). Owner only (USER-05): anyone else,
+   * members included, gets 404, never 403.
    */
   implement(budgetRename, async (c, body) => {
     const user: IdentityUser | undefined = c.get('user');
@@ -118,8 +123,8 @@ export const operations = [
   /**
    * Archive a budget (Configure pane): stamps archived_at so it moves to the
    * Open Budget ARCHIVED section. Idempotent — archiving an archived budget
-   * returns its existing row. Owner-or-admin (USER-05): cross-owner calls
-   * surface as 404, never 403.
+   * returns its existing row. Owner only (USER-05): anyone else, members
+   * included, gets 404, never 403.
    */
   implement(budgetArchive, async (c, { id }) => {
     const user: IdentityUser | undefined = c.get('user');
@@ -131,7 +136,7 @@ export const operations = [
 
   /**
    * Unarchive a budget (Configure pane): clears archived_at, returning it to
-   * the active Open Budget list. Idempotent like archive. Owner-or-admin.
+   * the active Open Budget list. Idempotent like archive. Owner only.
    */
   implement(budgetUnarchive, async (c, { id }) => {
     const user: IdentityUser | undefined = c.get('user');
@@ -145,7 +150,7 @@ export const operations = [
    * Permanently delete a budget: every budget-scoped table references
    * public.budgets(id) ON DELETE CASCADE (0001_budget_schema), so this one
    * statement wipes accounts, transactions, categories, payees, rules and
-   * targets. Owner-or-admin; cross-owner deletes surface as 404.
+   * targets. Owner only; anyone else, members included, gets 404.
    */
   implement(budgetDelete, async (c, { id }) => {
     const user: IdentityUser | undefined = c.get('user');

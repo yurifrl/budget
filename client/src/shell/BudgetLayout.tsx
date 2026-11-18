@@ -17,9 +17,9 @@
  * (features/settings) — one portal menu, nothing paints over it.
  */
 
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useService } from '@/platform/di/ServiceContext';
@@ -30,7 +30,7 @@ import { useMedia } from '@/ui/media';
 import { useGetBudgetsQuery } from '@/budget/data/api';
 import { useMoneyMask } from '@/state/useDisplayPrefs';
 import type { Transaction } from '@/domain/types';
-import { restoreActiveBudget, switchBudget } from '@/state/thunks';
+import { clearActiveBudget, restoreActiveBudget } from '@/state/thunks';
 import { selectActiveBudgetId } from '@/state/ui';
 import { useBudgetRevisionWatcher } from '@/state/useBudgetRevisionWatcher';
 import { colors, radius } from '@/ui/theme';
@@ -38,15 +38,60 @@ import { AddTransactionSheet } from '@/features/accounts';
 import { budgetMenuPanes } from '@/features/settings';
 import { BudgetRail } from './rail/BudgetRail';
 import { BudgetTabs } from './rail/BudgetTabs';
-import { fallbackBudgetId } from './rail/rail.logic';
+import { shellGate } from './rail/rail.logic';
+import { IconSymbol } from '@/ui/icon-symbol';
 import { ShellContext, type BudgetShellState } from './context';
 
 export { useBudgetShell, type BudgetShellState } from './context';
 
+/** The home page (my budgets / shared with me), outside the budget rail. */
+const HOME_HREF = '/';
+
 /** KVStore keys persisting the rail's collapse states (desktop) across reloads. */
 const RAIL_COLLAPSED_KEY = 'budget.shell.railCollapsed';
 
+/**
+ * The `(budget)` group's layout: the shell, once there is a budget to show.
+ * Which budget is active is chosen on the home page (`/`) and persisted; a
+ * reload or deep link inside a budget restores it here. With none (first
+ * visit, zero budgets, a stale id) the person is sent home; the shell never
+ * picks a budget by itself.
+ */
 export function BudgetLayout() {
+  const dispatch = useAppDispatch();
+  const budgetId = useAppSelector((s) => selectActiveBudgetId(s));
+  const budgets = useGetBudgetsQuery();
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    void dispatch(restoreActiveBudget()).finally(() => setRestored(true));
+  }, [dispatch]);
+  const gate = shellGate({
+    restored,
+    activeId: budgetId,
+    budgets: budgets.data,
+    isFetching: budgets.isFetching,
+    isError: budgets.isError,
+  });
+  // A stale id (budget deleted, access removed, another person on this
+  // device) must not resurrect on the next launch. Kept when the list merely
+  // failed to load: that says nothing about the budget.
+  const stale = gate === 'home' && !!budgetId && budgets.data !== undefined;
+  useEffect(() => {
+    if (stale) void dispatch(clearActiveBudget());
+  }, [stale, dispatch]);
+
+  if (gate === 'home') return <Redirect href={HOME_HREF} />;
+  if (gate === 'loading' || !budgetId) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.muted} />
+      </View>
+    );
+  }
+  return <BudgetShell budgetId={budgetId} />;
+}
+
+function BudgetShell({ budgetId }: { budgetId: string }) {
   const media = useMedia();
   // Same buckets as Tamagui v5's media (see ui/media.ts): min-width keys, `max-*` for max-width.
   // Buckets: phone ≤768 (`max-md`), desktop ≥1024 (lg), tablet in between.
@@ -59,11 +104,7 @@ export function BudgetLayout() {
   const chromeTop = Math.max(13, insets.top + 4);
   const contentTopPad = chromeTop + 39;
 
-  const dispatch = useAppDispatch();
-  const budgetId = useAppSelector((s) => selectActiveBudgetId(s));
-  const budgets = useGetBudgetsQuery();
   useBudgetRevisionWatcher(budgetId);
-  const [restored, setRestored] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Desktop-only collapse of the rail to an icon strip, persisted like the
   // plan's group collapse (same KVStore service).
@@ -103,23 +144,10 @@ export function BudgetLayout() {
   // useMoneyFormat.)
   const [masked, setMasked] = useMoneyMask();
 
-  // Restore the persisted active budget, then fall back to the first budget.
-  useEffect(() => {
-    void dispatch(restoreActiveBudget()).finally(() => setRestored(true));
-  }, [dispatch]);
-  useEffect(() => {
-    // A persisted id can go stale (budget deleted server-side, DB reset):
-    // reconcile against the fetched list, not just absence, or every
-    // budget-data write 404s with "budget not found" forever. Skips
-    // archived rows: while Budgets refetches after a fresh-start the
-    // not-yet-listed replacement must not be bounced back to data[0] —
-    // which an archive reorder makes an archived budget.
-    if (!restored) return;
-    const fallback = fallbackBudgetId(budgets.data, budgetId);
-    if (fallback) void dispatch(switchBudget(fallback));
-  }, [restored, budgetId, budgets.data, dispatch]);
-
   const router = useRouter();
+  // The one-tap way back to the home page (all budgets): pops to it when the
+  // budget was opened from there, replaces this screen after a deep link.
+  const goHome = useCallback(() => router.dismissTo(HOME_HREF), [router]);
   const shell: BudgetShellState = useMemo(
     () => ({
       isPhone,
@@ -157,6 +185,7 @@ export function BudgetLayout() {
         {isDesktop ? (
           <BudgetRail
             onNavigate={() => {}}
+            onGoHome={goHome}
             secondary={panes}
             openRequest={menuRequest}
             onOpenRequestHandled={clearMenuRequest}
@@ -177,6 +206,13 @@ export function BudgetLayout() {
               accessibilityLabel="Menu">
               <Text style={styles.chromeBtnText}>☰</Text>
             </Pressable>
+            <Pressable
+              style={[styles.chromeBtn, { left: 56, top: chromeTop }]}
+              onPress={goHome}
+              accessibilityRole="button"
+              accessibilityLabel="All budgets">
+              <IconSymbol size={17} name="house.fill" color={colors.muted} />
+            </Pressable>
           </>
         ) : null}
         {!isDesktop && drawerOpen ? (
@@ -187,6 +223,7 @@ export function BudgetLayout() {
                 topInset={insets.top}
                 bottomInset={Math.max(13, insets.bottom)}
                 onNavigate={() => setDrawerOpen(false)}
+                onGoHome={goHome}
                 secondary={panes}
                 openRequest={menuRequest}
                 onOpenRequestHandled={clearMenuRequest}
@@ -246,6 +283,7 @@ export function BudgetLayout() {
 }
 
 const styles = StyleSheet.create({
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   root: { flex: 1, flexDirection: 'row', backgroundColor: colors.bg },
   maskBanner: {
     position: 'absolute',

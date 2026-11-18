@@ -165,7 +165,7 @@ const updateAccount = implement(
           if (!link.externalAccountId) {
             throw new HttpError(400, 'link.externalAccountId is required when linking');
           }
-          // Owner-or-admin on the connection: another user's connection id is
+          // The caller's own connection only: another user's connection id is
           // indistinguishable from a bogus one — 404 either way.
           const conn = await findUserConnection(client, link.connectionId, user.id);
           if (!conn) throw new HttpError(404, 'connection not found');

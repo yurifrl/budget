@@ -7,10 +7,12 @@ import { AvatarStack } from '@/ui/avatar/AvatarStack';
 
 import { toAvatarPerson } from '@/domain/people';
 import { useMoneyMask } from '@/state/useDisplayPrefs';
+import { useGetBudgetsQuery } from '@/budget/data/api';
 import { usePeople } from '@/features/people';
 import { selectActiveBudgetId } from '@/state/ui';
 import { useBudgetShell } from '@/shell/context';
 import { MenuRow } from './menuRows';
+import { canManageBudget } from './settings.logic';
 import { MENU_BG, s } from './styles';
 
 /** Root menu — the two sections from the validated mock. */
@@ -20,6 +22,8 @@ export function SettingsRootPane() {
   const { openPayees, closeSidebar } = useBudgetShell();
   const [masked, setMasked] = useMoneyMask();
   const web = process.env.EXPO_OS === 'web';
+  const activeBudgetId = useAppSelector((st) => selectActiveBudgetId(st));
+  const isOwner = canManageBudget(useGetBudgetsQuery().data?.find((b) => b.id === activeBudgetId));
   // A row that leaves the menu for a routed page must collapse every layer of
   // chrome: the switcher menu portal, then the tablet/phone drawer holding the
   // rail (no-op on desktop, where the rail sits beside content).
@@ -35,7 +39,7 @@ export function SettingsRootPane() {
       <MenuRow label="New Budget" onPress={() => nav.open('new')} />
       <MenuRow label="Plan Settings" onPress={() => nav.open('settings')} />
       <PeopleMenuRow onPress={() => nav.open('people')} />
-      <MenuRow label="Make a Fresh Start" onPress={() => nav.open('fresh-start')} />
+      {isOwner ? <MenuRow label="Make a Fresh Start" onPress={() => nav.open('fresh-start')} /> : null}
       <Text style={s.sectionLabel}>MANAGE</Text>
       <MenuRow label="Manage Payees" onPress={() => leaveForPage(openPayees)} />
       <MenuRow

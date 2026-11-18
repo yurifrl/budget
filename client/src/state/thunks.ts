@@ -13,7 +13,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { Container } from '@/platform/di/container';
 import { Tokens } from '@/platform/di/tokens';
 
-import { setActiveBudget } from './ui';
+import { selectActiveBudgetId, setActiveBudget, type BudgetUiRootState } from './ui';
 
 /** KVStore key holding the persisted active budget id. */
 export const ACTIVE_BUDGET_STORAGE_KEY = 'budget.activeBudgetId';
@@ -32,7 +32,7 @@ export const switchBudget = createAsyncThunk<void, string, ThunkConfig>(
 
 /**
  * Clear the active Budget selection (archive/delete of the active budget):
- * nulls the redux id — the shell's reconcile effect picks the next budget —
+ * nulls the redux id, so the shell leaves for the home page (shellGate),
  * and drops the persisted key so a stale id never resurrects on relaunch.
  */
 export const clearActiveBudget = createAsyncThunk<void, void, ThunkConfig>(
@@ -45,16 +45,19 @@ export const clearActiveBudget = createAsyncThunk<void, void, ThunkConfig>(
 );
 
 /**
- * Restore the persisted active Budget on launch. Returns the restored id (or
- * null when nothing was persisted — the shell then falls back to the first
- * budget from `getBudgets`).
+ * Restore the persisted active Budget when the budget shell mounts (reload or
+ * deep link inside a budget). Returns the stored id, or null when nothing was
+ * persisted: the shell then sends the person to the home page to pick one.
  */
 export const restoreActiveBudget = createAsyncThunk<string | null, void, ThunkConfig>(
   'budgetUi/restoreActiveBudget',
-  async (_, { dispatch, extra }) => {
+  async (_, { dispatch, getState, extra }) => {
     const storage = (extra as Container).resolve(Tokens.Storage);
     const stored = await storage.get<string | null>(ACTIVE_BUDGET_STORAGE_KEY, null);
-    if (stored) dispatch(setActiveBudget(stored));
+    // A budget opened from the home page in this session wins over the
+    // persisted one (the shell mounts, and restores, after that choice).
+    const current = selectActiveBudgetId(getState() as BudgetUiRootState);
+    if (stored && !current) dispatch(setActiveBudget(stored));
     return stored;
   },
 );

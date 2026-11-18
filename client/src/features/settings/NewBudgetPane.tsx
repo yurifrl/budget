@@ -8,7 +8,7 @@ import { useAppDispatch } from '@/state/hooks';
 import { useCreateBudgetMutation } from '@/budget/data/api';
 import { switchBudget } from '@/state/thunks';
 import { MenuRow } from './menuRows';
-import { refetchBudgets } from './refetchBudgets';
+import { refetchBudgets } from '@/state/refetchBudgets';
 import { s } from './styles';
 import { colors } from '@/ui/theme';
 

@@ -1,7 +1,8 @@
 /**
  * "Has this person ever signed in?" — the one definition. A user row created
- * by an invite (provisionUserByEmail) has no google_sub until their first
- * Google sign-in links it; until then they are *pending*.
+ * by an invite (provisionUserByEmail) or as a placeholder has no
+ * `signed_in_at` until their first sign-in (any provider) stamps it; until
+ * then they are *pending*.
  */
 
 import { personAvatarSql, toPersonAvatar, type PersonAvatar, type PersonAvatarRow } from './avatar';
@@ -9,7 +10,7 @@ import { personAvatarSql, toPersonAvatar, type PersonAvatar, type PersonAvatarRo
 /** SQL select-list fragment: `pending` boolean for the `public.users` row aliased `alias`. */
 export function personPendingSql(alias: string): string {
   if (!/^[a-z_][a-z0-9_]*$/i.test(alias)) throw new Error(`invalid SQL alias: ${alias}`);
-  return `(${alias}.google_sub is null) as pending`;
+  return `(${alias}.signed_in_at is null) as pending`;
 }
 
 /** A person reference: the minimal identity a budget member may see of another (name/email/avatar). */

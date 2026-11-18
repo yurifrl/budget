@@ -1,14 +1,19 @@
 /**
  * Budget ownership + membership (v1.1 Phase 2 — USER-03/04/05; sharing).
  *
- * Pre-v1.1 budgets have no owner. The first real sign-in claims them
- * (claim-on-first-login), after which ownership is finalized to NOT NULL.
+ * The rule, defined ONCE here: a person reaches a budget only as its owner or
+ * as a member (public.budget_members). Everyone else gets 404, never 403, and
+ * that includes users with the `admin` role: `admin` is an operator role (the
+ * jobs ledger, app-wide settings, claiming legacy unowned budgets), not a
+ * pass into other people's budgets. Owner-only actions (fresh start, restore,
+ * rename/archive/delete, removing people) use the owner predicate instead.
+ *
  * Enforcement is app-layer: budgetAccess is a Hono guard mounted at the top
- * of every budget-data route file — owner, member (public.budget_members) or
- * admin; everyone else surfaces as 404, never 403. Owner-only actions
- * (fresh-start, restore, rename/archive/delete, member management) use the
- * owner-or-admin predicate instead. Both predicates are defined ONCE here. The dead is_budget_member RLS blocks from
- * 0004/0011 were deleted; RLS remains a documented future hardening step.
+ * of every budget-data route file. RLS remains a documented future hardening
+ * step (the dead is_budget_member RLS blocks from 0004/0011 were deleted).
+ *
+ * Pre-v1.1 budgets have no owner. The first sign-in of an admin claims them
+ * (claim-on-first-login), after which ownership is finalized to NOT NULL.
  *
  * Accounts/transactions/payees/… resolve ownership transitively through
  * their budget_id, so only budgets carry owner_user_id.
@@ -25,9 +30,9 @@ type Queryable = Pick<typeof pool, 'query'>;
 
 /**
  * SQL predicate: `userParam` (e.g. '$2') may ACCESS the budget row at
- * `budgetAlias` — owner or member. Admin is a role check the caller adds
- * (`OR $n = 'admin'`) or short-circuits in JS. The single definition of
- * "can access"; reuse it in any query that scopes budgets to a user.
+ * `budgetAlias` — owner or member, nobody else (no role bypass). The single
+ * definition of "can access"; reuse it in any query that scopes budgets to a
+ * user.
  */
 export function accessibleBudgetSql(budgetAlias: string, userParam: string): string {
   return `(${budgetAlias}.owner_user_id = ${userParam}::uuid OR EXISTS (
@@ -36,17 +41,16 @@ export function accessibleBudgetSql(budgetAlias: string, userParam: string): str
 }
 
 /**
- * SQL predicate: `userParam` owns the budget at `budgetAlias`, or
- * `roleParam` is 'admin'. For owner-only actions (members cannot do them).
+ * SQL predicate: `userParam` owns the budget at `budgetAlias`. For owner-only
+ * actions (members cannot do them; neither can an admin who is not the owner).
  */
-export function ownerOrAdminSql(budgetAlias: string, userParam: string, roleParam: string): string {
-  return `(${budgetAlias}.owner_user_id = ${userParam}::uuid OR ${roleParam} = 'admin')`;
+export function ownerSql(budgetAlias: string, userParam: string): string {
+  return `(${budgetAlias}.owner_user_id = ${userParam}::uuid)`;
 }
 
 /**
  * Is `userId` a member of the budget — the owner or a budget_members row
- * (the same predicate as accessibleBudgetSql, admin role excluded: an admin
- * who is not on the list is not a household member). Used to validate
+ * (the same predicate as accessibleBudgetSql). Used to validate
  * account↔person assignments.
  */
 export async function isBudgetMember(budgetId: string, userId: string, db: Queryable = pool): Promise<boolean> {
@@ -57,13 +61,9 @@ export async function isBudgetMember(budgetId: string, userId: string, db: Query
   return (r.rowCount ?? 0) > 0;
 }
 
-/** Owner-or-admin check for a budget id (the owner-only actions' guard). */
-export async function isBudgetOwnerOrAdmin(user: IdentityUser, budgetId: string): Promise<boolean> {
-  if (user.role === 'admin') return true;
-  const r = await pool.query(
-    `SELECT 1 FROM public.budgets b WHERE b.id = $1 AND ${ownerOrAdminSql('b', '$2', '$3')} LIMIT 1`,
-    [budgetId, user.id, user.role],
-  );
+/** Owner check for a budget id (the owner-only actions' guard). */
+export async function isBudgetOwner(userId: string, budgetId: string, db: Queryable = pool): Promise<boolean> {
+  const r = await db.query(`SELECT 1 FROM public.budgets b WHERE b.id = $1 AND ${ownerSql('b', '$2')} LIMIT 1`, [budgetId, userId]);
   return (r.rowCount ?? 0) > 0;
 }
 
@@ -115,12 +115,11 @@ async function budgetIdsFrom(c: { req: { query: (k: string) => string | undefine
 }
 
 /**
- * Owner/member/admin guard (USER-05). Mounted via `app.use('*', budgetAccess)`
+ * Owner/member guard (USER-05). Mounted via `app.use('*', budgetAccess)`
  * at the top of every budget-data route file, before handlers:
  * - missing identity → 401 (requireUser guarantees one; defense in depth);
- * - admin bypasses ownership;
- * - a budget owned by someone else the user is not a member of — or not yet claimed (the bearer/service
- *   lane never claims) — → 404 `not found`, never 403;
+ * - a budget the user neither owns nor is a member of — or not yet claimed —
+ *   → 404 `not found`, never 403. No role bypasses this, admin included;
  * - EVERY budget_id carried (query and body) must be accessible, else 404;
  * - no budget addressed (no budget_id anywhere) → pass through; handlers
  *   own the 400 for a missing budget_id, and no budget is being touched.
@@ -132,7 +131,6 @@ async function budgetIdsFrom(c: { req: { query: (k: string) => string | undefine
 export const budgetAccess: MiddlewareHandler = async (c, next) => {
   const user: IdentityUser | undefined = c.get('user');
   if (!user) return errorResponse(c, 401, 'unauthorized');
-  if (user.role === 'admin') return next();
 
   const budgetIds = await budgetIdsFrom(c);
   if (budgetIds.length === 0) return next();

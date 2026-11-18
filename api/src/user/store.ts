@@ -66,7 +66,10 @@ const mapRow = (row: UpsertRow): IdentityUser => ({
  * a null google_sub (old cookies carry no sub — JWT shape frozen per D-01),
  * an incoming name only fills a missing one (the name is user-owned once set —
  * a name edited on the profile page must survive the next Google sign-in),
- * and last_seen_at is stamped on every touch. Callers resolving authority per request pass no
+ * last_seen_at is stamped on every touch and signed_in_at on the first one
+ * (every caller holds an authenticated principal, whatever the provider, so
+ * this is what ends an invitee's "pending" state: see ./person.ts).
+ * Callers resolving authority per request pass no
  * identity, leaving any stored google_sub untouched.
  *
  * First-admin seeding: only the very first insert may capture the bootstrap
@@ -88,11 +91,12 @@ export async function resolveOrCreateSessionUser(
     return await withTransaction(pool, async (client) => {
       await client.query('select pg_advisory_xact_lock($1)', [BOOTSTRAP_LOCK_KEY]);
       const upsert = await client.query<UpsertRow>(
-        `insert into public.users (id, google_sub, email, name)
-         values (gen_random_uuid(), $1, $2, $3)
+        `insert into public.users (id, google_sub, email, name, signed_in_at)
+         values (gen_random_uuid(), $1, $2, $3, now())
          on conflict (email) do update
            set google_sub = coalesce(public.users.google_sub, excluded.google_sub),
                name = coalesce(public.users.name, excluded.name),
+               signed_in_at = coalesce(public.users.signed_in_at, now()),
                last_seen_at = now()
          returning id, email, name, google_sub, role, status, (xmax = 0) as inserted`,
         [sub, normalized, name],
@@ -130,9 +134,10 @@ export async function resolveOrCreateSessionUser(
 /**
  * Pre-provision (or look up) a user row by email without a sign-in — used to
  * invite someone to a shared budget before they have ever logged in. The row
- * has no google_sub and role 'user'; resolveOrCreateSessionUser's
- * `on conflict (email)` upsert links it on the person's first Google
- * sign-in (sub backfilled, same id, so memberships persist). Idempotent:
+ * has no google_sub, no signed_in_at and role 'user';
+ * resolveOrCreateSessionUser's `on conflict (email)` upsert links it on the
+ * person's first sign-in, Cloudflare Access or Google (same id, so
+ * memberships persist; signed_in_at stamped; Google also backfills the sub). Idempotent:
  * an existing row (provisioned or signed-in) is returned untouched, except
  * that an optional `name` fills a missing one (never overwrites).
  */
@@ -197,18 +202,20 @@ export async function resolveServiceUser(c: Context): Promise<IdentityUser | nul
  * revoke, refresh-token reuse detection) therefore kills its outstanding
  * access tokens at the next request instead of waiting out the 1h TTL.
  * The grant tables are owned by server/oauth (migration 0025); this is the
- * one read of them from the identity layer.
+ * one read of them from the identity layer. Returns the grant's `idp` (how
+ * the approving session signed in, migration 0101; null = Google or older),
+ * or null when the grant is not live.
  */
-export async function isGrantActive(grantId: string, email: string): Promise<boolean> {
-  const { rowCount } = await pool.query(
-    `select 1
+export async function activeGrant(grantId: string, email: string): Promise<{ idp: string | null } | null> {
+  const { rows } = await pool.query<{ idp: string | null }>(
+    `select g.idp
        from public.oauth_grants g
        join public.users u on u.id = g.user_id
       where g.id = $1 and u.email = $2
         and g.revoked_at is null and g.expires_at > now()`,
     [grantId, email.toLowerCase()],
   );
-  return rowCount === 1;
+  return rows[0] ?? null;
 }
 
 /**
@@ -279,7 +286,7 @@ export class EmailLinkError extends Error {}
 /**
  * Attach an email to a placeholder person. No row holds the email yet → the
  * placeholder simply gains it (it becomes a pre-provisioned user who links on
- * their first Google sign-in). A row already holds it (signed in, or invited)
+ * their first sign-in). A row already holds it (signed in, or invited)
  * → the placeholder is MERGED into that row in one transaction: all references
  * repointed (see {@link repointUserReferences}), a missing name filled from the
  * placeholder, then the placeholder deleted. Returns the surviving user id.
@@ -314,10 +321,12 @@ export async function linkEmailToPlaceholder(
 /**
  * Rename a person who has not signed in (placeholder or pending invitee).
  * A signed-in user's name is theirs (profile) — returns false, nothing changed.
+ * "Signed in" is signed_in_at, not google_sub: someone who only uses
+ * Cloudflare Access never gets a google_sub.
  */
 export async function renameUnclaimedUser(userId: string, name: string): Promise<boolean> {
   const { rowCount } = await pool.query(
-    `update public.users set name = $2 where id = $1 and google_sub is null`,
+    `update public.users set name = $2 where id = $1 and signed_in_at is null`,
     [userId, name.trim()],
   );
   return (rowCount ?? 0) > 0;

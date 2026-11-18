@@ -99,14 +99,15 @@ describe.skipIf(!dbReady)('budget members API', () => {
         name: null,
         is_owner: true,
         is_me: true,
-        pending: true, // fixture rows are inserted without a google_sub
+        pending: true, // fixture rows are inserted without a signed_in_at
         avatar: { seed: owner.id, image_version: null },
       },
     ]);
   });
 
   test('is_me is relative to the viewer; a signed-in user is not pending', async () => {
-    await pool.query(`UPDATE public.users SET google_sub = 'g-peer-sub' WHERE id = $1`, [peer.id]);
+    // Signed in through Cloudflare Access: no google_sub, ever.
+    await pool.query(`UPDATE public.users SET signed_in_at = now() WHERE id = $1`, [peer.id]);
     currentUser = owner;
     await add(peer.email);
     const asOwner = listSchema.parse(await (await list()).json()).members;
@@ -195,11 +196,14 @@ describe.skipIf(!dbReady)('budget members API', () => {
     expect((await members.request('/')).status).toBe(400);
   });
 
-  test('the owner cannot be removed (400), even by an admin', async () => {
+  test('the owner cannot be removed: 400 for the owner, 404 for a member and for an admin', async () => {
     currentUser = owner;
     expect((await remove(owner.id)).status).toBe(400);
+    currentUser = peer;
+    expect((await remove(owner.id)).status).toBe(404);
     currentUser = admin;
-    expect((await remove(owner.id)).status).toBe(400);
+    expect((await remove(owner.id)).status).toBe(404);
+    expect((await pool.query('SELECT owner_user_id FROM budgets WHERE id = $1', [budgetId])).rows[0].owner_user_id).toBe(owner.id);
   });
 
   test('removing a member nulls their accounts in that budget (others untouched)', async () => {
@@ -233,8 +237,23 @@ describe.skipIf(!dbReady)('budget members API', () => {
       `INSERT INTO category_groups (budget_id, name) VALUES ($1, 'g') RETURNING id`, [otherBudget])).rows[0].id;
     await pool.query(`INSERT INTO categories (budget_id, group_id, name, user_id) VALUES ($1, $2, 'elsewhere cat', $3)`, [otherBudget, otherGroup, peer.id]);
 
-    currentUser = admin;
+    // The peer's own bank is linked to one account here; the owner's bank to another.
+    const conn = async (userId: string) =>
+      (await pool.query<{ id: string }>(
+        `INSERT INTO connections (id, user_id, provider, external_id, status) VALUES (gen_random_uuid(), $1, 'members-test', gen_random_uuid()::text, 'connected') RETURNING id`,
+        [userId])).rows[0].id;
+    const [peerConn, ownerConn] = [await conn(peer.id), await conn(owner.id)];
+    await pool.query(`UPDATE accounts SET connection_id = $2, external_account_id = 'ext-peer', institution = 'Peer Bank' WHERE id = $1`, [peerAcc, peerConn]);
+    await pool.query(`UPDATE accounts SET connection_id = $2, external_account_id = 'ext-owner', institution = 'Owner Bank' WHERE id = $1`, [ownerAcc, ownerConn]);
+
     expect((await remove(peer.id)).status).toBe(200);
+    // The removed person's bank no longer feeds this budget; the owner's link is untouched.
+    const links = await pool.query<{ id: string; connection_id: string | null; external_account_id: string | null }>(
+      'SELECT id, connection_id, external_account_id FROM accounts WHERE id = ANY($1)', [[peerAcc, ownerAcc]]);
+    expect(links.rows.find((r) => r.id === peerAcc)).toMatchObject({ connection_id: null, external_account_id: null });
+    expect(links.rows.find((r) => r.id === ownerAcc)).toMatchObject({ connection_id: ownerConn, external_account_id: 'ext-owner' });
+    await pool.query('UPDATE accounts SET connection_id = NULL, external_account_id = NULL WHERE id = $1', [ownerAcc]);
+    await pool.query('DELETE FROM connections WHERE id = ANY($1)', [[peerConn, ownerConn]]);
     const cats = await pool.query<{ id: string; user_id: string | null }>('SELECT id, user_id FROM categories WHERE id = ANY($1)', [[peerCat, ownerCat]]);
     expect(cats.rows.find((r) => r.id === peerCat)?.user_id).toBeNull();
     expect(cats.rows.find((r) => r.id === ownerCat)?.user_id).toBe(owner.id);
@@ -249,8 +268,15 @@ describe.skipIf(!dbReady)('budget members API', () => {
     expect(elsewhere.rows[0].user_id).toBe(peer.id);
   });
 
-  test('removing a member revokes access; admin can manage any budget', async () => {
+  test('removing a member revokes access; only the owner can remove', async () => {
+    await pool.query('INSERT INTO public.budget_members (budget_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [budgetId, peer.id]);
+    // A member cannot remove anyone (not even themselves), an admin who is not on the budget cannot either.
+    currentUser = peer;
+    expect((await remove(peer.id)).status).toBe(404);
     currentUser = admin;
+    expect((await remove(peer.id)).status).toBe(404);
+    expect((await pool.query('SELECT 1 FROM public.budget_members WHERE budget_id = $1 AND user_id = $2', [budgetId, peer.id])).rowCount).toBe(1);
+    currentUser = owner;
     // peer was already removed above; re-add so this test still exercises removal.
     await pool.query('INSERT INTO public.budget_members (budget_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [budgetId, peer.id]);
     const res = await remove(peer.id);
@@ -268,12 +294,14 @@ describe.skipIf(!dbReady)('budget members API', () => {
     expect(body.members.map((m) => [m.user_id, m.is_owner, m.is_me])).toEqual([[owner.id, true, true]]);
   });
 
-  test('a budget with no owner yet lists the viewer', async () => {
+  test('a budget with no owner yet is closed to everyone, admin included, until it is claimed', async () => {
     const unowned = crypto.randomUUID();
     await pool.query(`INSERT INTO budgets (id, name) VALUES ($1, 'members-test')`, [unowned]);
-    currentUser = admin;
-    const body = listSchema.parse(await (await members.request(`/?budget_id=${unowned}`)).json());
-    expect(body.members.map((m) => [m.user_id, m.is_me])).toEqual([[admin.id, true]]);
+    for (const who of [admin, owner, stranger]) {
+      currentUser = who;
+      expect((await members.request(`/?budget_id=${unowned}`)).status).toBe(404);
+    }
+    await pool.query('DELETE FROM budgets WHERE id = $1', [unowned]);
   });
 
   describe('placeholder people', () => {
@@ -303,7 +331,7 @@ describe.skipIf(!dbReady)('budget members API', () => {
       const ok = await members.request('/', { method: 'PATCH', headers: json, body: JSON.stringify({ budget_id: budgetId, user_id: ph.user_id, name: 'New' }) });
       expect(ok.status).toBe(200);
       expect(mutationSchema.parse(await ok.json()).members.some((m) => m.name === 'New')).toBe(true);
-      await pool.query(`UPDATE public.users SET google_sub = 'g-own' WHERE id = $1`, [owner.id]);
+      await pool.query(`UPDATE public.users SET signed_in_at = now() WHERE id = $1`, [owner.id]);
       const no = await members.request('/', { method: 'PATCH', headers: json, body: JSON.stringify({ budget_id: budgetId, user_id: owner.id, name: 'Hax' }) });
       expect(no.status).toBe(400);
     });

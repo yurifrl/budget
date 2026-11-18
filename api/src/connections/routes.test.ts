@@ -75,6 +75,12 @@ appB.route('/connections', connectionsApp);
 appB.use('/accounts/*', asUser(userB));
 appB.route('/accounts', accountsRouter);
 
+/** An operator: the admin role, no connections and no budgets of their own. */
+const appAdmin = new Hono();
+appAdmin.onError(httpOnError);
+appAdmin.use('/connections/*', asUser({ id: crypto.randomUUID(), email: 'conn-admin@routes.test', role: 'admin' } as never));
+appAdmin.route('/connections', connectionsApp);
+
 const post = async (app: Hono, path: string, body: unknown): Promise<Response> =>
   app.request(path, {
     method: 'POST',
@@ -523,20 +529,25 @@ describe('connections routes', () => {
     expect((await after.json()).status).toBe('disconnected');
   });
 
-  test.skipIf(!dbReady)('settings: default All, round-trip, and bounds', async () => {
+  test.skipIf(!dbReady)('settings: default All, round-trip, and bounds (the app-wide value is admin-only)', async () => {
     const initial = await appA.request('/connections/settings');
     expect(initial.status).toBe(200);
     expect((await initial.json()).syncWindowDays).toBe(0);
 
-    const capped = await patch(appA, '/connections/settings', { syncWindowDays: 90 });
+    // One value for everybody's syncs: an ordinary user reads it, never sets it.
+    const denied = await patch(appA, '/connections/settings', { syncWindowDays: 7 });
+    expect(denied.status).toBe(403);
+    expect((await (await appA.request('/connections/settings')).json()).syncWindowDays).toBe(0);
+
+    const capped = await patch(appAdmin, '/connections/settings', { syncWindowDays: 90 });
     expect(capped.status).toBe(200);
     expect((await capped.json()).syncWindowDays).toBe(90);
     expect((await (await appA.request('/connections/settings')).json()).syncWindowDays).toBe(90);
 
-    const back = await patch(appA, '/connections/settings', { syncWindowDays: 0 });
+    const back = await patch(appAdmin, '/connections/settings', { syncWindowDays: 0 });
     expect((await back.json()).syncWindowDays).toBe(0);
 
-    const tooWide = await patch(appA, '/connections/settings', { syncWindowDays: 99999 });
+    const tooWide = await patch(appAdmin, '/connections/settings', { syncWindowDays: 99999 });
     expect(tooWide.status).toBe(400);
   });
 });

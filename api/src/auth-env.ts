@@ -44,9 +44,9 @@ const HOSTNAME = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2
  * - At least one sign-in provider must be fully configured, plus a >= 32 char
  *   SESSION_SECRET, unless `AUTH_DISABLED_OK=1` deliberately asks for
  *   auth-off local dev:
- *     Cloudflare Access = ACCESS_TEAM_DOMAIN + ACCESS_AUD (the e-mail
- *       allow-list lives in the Cloudflare policy; AUTH_ALLOWED_EMAILS, when
- *       set, is an extra check);
+ *     Cloudflare Access = ACCESS_TEAM_DOMAIN + ACCESS_AUD (who may sign in is
+ *       the Cloudflare policy's call alone; AUTH_ALLOWED_EMAILS does not
+ *       apply to Access sign-ins);
  *     Google = GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET + AUTH_ALLOWED_EMAILS.
  *   A half-configured provider is itself an error, even when the other one is
  *   complete (a typo must not silently switch a provider off).

@@ -36,6 +36,7 @@ import { CONNECTIONS_SYNC_JOB, syncSubjectKey, type SyncMode } from './jobspec';
 import { runsForSubjects, schedulerHealth, type JobRun } from '../jobs';
 import type { ExternalAccount } from './types';
 import { requireUserId } from '../user';
+import { accessibleBudgetSql } from '../budget';
 import { pool } from '../core/db';
 import { implement } from '../core/operation';
 import { HttpError } from '../core/validate';
@@ -174,6 +175,8 @@ export const operations = [
 
   implement(contracts.connectionsSettingsUpdate, async (c, { syncWindowDays }) => {
     requireUserId(c);
+    // One value for every user's syncs: an operator setting, not a personal one.
+    if (c.get('user')?.role !== 'admin') throw new HttpError(403, 'forbidden');
     return { syncWindowDays: await setSyncWindowDays(syncWindowDays) };
   }),
 
@@ -242,7 +245,7 @@ export const operations = [
     const userId = requireUserId(c);
     const row = await store.getConnectionByUser(userId, id);
     if (!row) throw new HttpError(404, 'not found');
-    return connectionSummary(row.id);
+    return connectionSummary(row.id, userId);
   }),
 
   /** One linked account's imported transactions, keyset-paginated (date DESC, id DESC). */
@@ -250,7 +253,7 @@ export const operations = [
     const userId = requireUserId(c);
     const row = await store.getConnectionByUser(userId, id);
     if (!row) throw new HttpError(404, 'not found');
-    return connectionTransactionsPage(row.id, accountId, cursor, limit);
+    return connectionTransactionsPage(row.id, userId, accountId, cursor, limit);
   }),
 
   /** Request a background sync (coalesced with any in-flight one). */
@@ -274,6 +277,15 @@ export const operations = [
     const userId = requireUserId(c);
     const row = await store.getConnectionByUser(userId, id);
     if (!row) throw new HttpError(404, 'not found');
+    // Accounts in a budget the caller can no longer reach (they were removed
+    // from it) are not theirs to unlink by hand, and their names are not
+    // theirs to read: drop those links here instead of blocking on them.
+    await pool.query(
+      `UPDATE public.accounts a SET connection_id = NULL, external_account_id = NULL, institution = NULL
+        WHERE a.connection_id = $1
+          AND NOT EXISTS (SELECT 1 FROM public.budgets b WHERE b.id = a.budget_id AND ${accessibleBudgetSql('b', '$2')})`,
+      [row.id, userId],
+    );
     const linked = await pool.query<{ name: string }>(
       `SELECT name FROM public.accounts
        WHERE connection_id = $1 AND NOT deleted`,
@@ -311,7 +323,15 @@ function decodeCursor(cursor: string): { date: string; id: string } {
 /** removed = deleted (tombstoned) row; edited = live row the user changed (blocked); else imported. */
 const STATE_SQL = `CASE WHEN t.deleted THEN 'removed' WHEN s.blocked THEN 'edited' ELSE 'imported' END`;
 
-async function connectionSummary(connectionId: string) {
+/**
+ * Budget rows reached through a connection are still budget rows: only
+ * accounts in a budget `userId` can reach today are shown (the connection's
+ * owner may have been removed from a budget their bank is linked into).
+ */
+const ACCOUNT_BUDGET_ACCESSIBLE = (accountAlias: string, userParam: string) =>
+  `EXISTS (SELECT 1 FROM public.budgets b WHERE b.id = ${accountAlias}.budget_id AND ${accessibleBudgetSql('b', userParam)})`;
+
+async function connectionSummary(connectionId: string, userId: string) {
   const { rows } = await pool.query<{
     account_id: string;
     budget_id: string;
@@ -336,10 +356,11 @@ async function connectionSummary(connectionId: string) {
        LEFT JOIN public.transactions t ON t.account_id = a.id
        LEFT JOIN public.connection_transactions s ON s.transaction_id = t.id
       WHERE a.connection_id = $1 AND NOT a.deleted
+        AND ${ACCOUNT_BUDGET_ACCESSIBLE('a', '$2')}
         AND (t.id IS NULL OR s.transaction_id IS NOT NULL)
       GROUP BY a.id
       ORDER BY a.name, a.id`,
-    [connectionId],
+    [connectionId, userId],
   );
   const accounts = rows.map((r) => {
     const importedCount = Number(r.imported);
@@ -376,13 +397,15 @@ async function connectionSummary(connectionId: string) {
 
 async function connectionTransactionsPage(
   connectionId: string,
+  userId: string,
   accountId: string,
   cursor: string | undefined,
   limit: number,
 ) {
   const owned = await pool.query(
-    'SELECT 1 FROM public.accounts WHERE id = $1 AND connection_id = $2 AND NOT deleted',
-    [accountId, connectionId],
+    `SELECT 1 FROM public.accounts a WHERE a.id = $1 AND a.connection_id = $2 AND NOT a.deleted
+        AND ${ACCOUNT_BUDGET_ACCESSIBLE('a', '$3')}`,
+    [accountId, connectionId, userId],
   );
   if (owned.rows.length === 0) throw new HttpError(404, 'not found');
   const after = cursor ? decodeCursor(cursor) : null;

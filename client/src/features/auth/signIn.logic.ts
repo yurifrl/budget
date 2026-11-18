@@ -11,6 +11,12 @@
  * signed out inside the window means the round-trip failed (cookie blocked,
  * API refused), so the gate shows the login screen with an error instead of
  * redirecting again (no loops).
+ *
+ * Signed out on purpose: "Sign out" leaves a mark in localStorage before the
+ * session is dropped. While it is there the web app never redirects by
+ * itself (a live Access session would sign the person straight back in);
+ * the landing page stays up until they press a sign-in button, which clears
+ * the mark, as does any successful sign-in.
  */
 import { authProvidersSchema } from '@shared/contracts/user/providers';
 import type { z } from '@shared/zod';
@@ -25,6 +31,9 @@ export const ACCESS_REDIRECT_KEY = 'budget.accessAutoRedirectAt';
 /** A return inside this window, still signed out, counts as a failed round-trip. */
 export const ACCESS_REDIRECT_WINDOW_MS = 2 * 60_000;
 
+/** localStorage key set by an explicit sign-out (web); present = no automatic redirect. */
+export const SIGNED_OUT_KEY = 'budget.signedOutOnPurpose';
+
 export const ACCESS_RETRY_ERROR = 'Automatic sign-in with Cloudflare Access did not complete. Try again.';
 
 const base = (apiUrl: string) => apiUrl.replace(/\/+$/, '');
@@ -37,6 +46,16 @@ export function accessWebSignInUrl(apiUrl: string, returnTo: string): string {
 /** Native: the Access sign-in in the in-app browser, ending on the app's deep link. */
 export function accessNativeSignInUrl(apiUrl: string, redirectUri: string): string {
   return `${base(apiUrl)}/auth/access/native?redirect_uri=${encodeURIComponent(redirectUri)}`;
+}
+
+/** Web sign-out: the API drops its session cookie and redirects back to the app. */
+export function logoutUrl(apiUrl: string): string {
+  return `${base(apiUrl)}/auth/logout`;
+}
+
+/** Stored sign-out mark -> whether the person signed out on purpose. */
+export function parseSignedOutMark(raw: string | null | undefined): boolean {
+  return Boolean(raw);
 }
 
 /** The providers answer, or LEGACY_PROVIDERS for anything unusable (404, bad JSON, none on). */
@@ -77,12 +96,16 @@ export interface SignInState {
   /** ACCESS_REDIRECT_KEY's value (web), null when none. */
   lastRedirectAt: number | null;
   now: number;
+  /** SIGNED_OUT_KEY is set (web): the person chose "Sign out" and has not pressed sign-in since. */
+  signedOut: boolean;
 }
 
 export function decideSignIn(s: SignInState): SignInAction {
   if (s.status !== 'out') return { kind: 'none' };
   if (!s.providers) return { kind: 'pending' };
   if (s.platform !== 'web' || !s.providers.access) return { kind: 'show-login', error: null };
+  // An explicit sign-out outranks everything automatic, the loop-guard error included.
+  if (s.signedOut) return { kind: 'show-login', error: null };
   if (redirectedRecently(s.lastRedirectAt, s.now)) return { kind: 'show-login', error: ACCESS_RETRY_ERROR };
   return { kind: 'auto-redirect' };
 }

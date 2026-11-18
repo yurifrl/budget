@@ -23,7 +23,11 @@ export interface AuthConfig {
   appOrigin: string;
   /** Public API origin (OAuth issuer, Google redirect URIs). */
   apiBaseUrl: string;
-  /** Lower-cased e-mails allowed to sign in. */
+  /**
+   * Lower-cased e-mails allowed to sign in WITH GOOGLE (AUTH_ALLOWED_EMAILS).
+   * Cloudflare Access sign-ins are not checked against it: the Access policy
+   * is their gate.
+   */
   allowedEmails: string[];
   googleClientId: string;
   googleClientSecret: string;
@@ -78,15 +82,36 @@ export const authConfig = (): AuthConfig => current;
 /** Cloudflare Access sign-in is on: a team domain and at least one AUD tag. */
 export const accessConfigured = (): boolean => !!current.accessTeamDomain && current.accessAud.length > 0;
 
+const normalizeEmail = (email: string): string => email.toLowerCase().trim();
+
 /**
- * Email is authorized to hold a session. With an API-side allow-list
- * (AUTH_ALLOWED_EMAILS) it must be on it, whatever the provider. Without one,
- * only an Access deployment admits anyone: the Cloudflare policy that gates
- * /auth/access is the list. No list and no Access = nobody (fail closed).
+ * May this e-mail sign in with Google? Google is not behind Cloudflare Access
+ * (anyone with a Google account reaches the callback), so it needs the
+ * API-side list: no list = nobody.
  */
-export function isAllowed(email: string): boolean {
-  const e = email.toLowerCase().trim();
+export function googleAllowed(email: string): boolean {
+  const e = normalizeEmail(email);
+  return !!e && current.allowedEmails.includes(e);
+}
+
+/**
+ * May this e-mail hold a session (checked on every request, for sessions and
+ * OAuth grants alike)? `idp` is how the session, or the session that approved
+ * the grant, signed in.
+ *
+ * - `access`: the person passed the Cloudflare Access policy and the API
+ *   verified the assertion. Access is the gate, so no API-side list applies;
+ *   the session is good while Access stays configured (or the e-mail is on the
+ *   Google list anyway).
+ * - anything else (Google, or a session minted before the marker existed):
+ *   with AUTH_ALLOWED_EMAILS set the e-mail must be on it; without a list only
+ *   an Access deployment admits anyone (those are pre-marker Access sessions).
+ *   No list and no Access = nobody (fail closed).
+ */
+export function isAllowed(email: string, idp?: string | null): boolean {
+  const e = normalizeEmail(email);
   if (!e) return false;
-  if (current.allowedEmails.length > 0) return current.allowedEmails.includes(e);
-  return accessConfigured();
+  if (current.allowedEmails.includes(e)) return true;
+  if (idp === 'access') return accessConfigured();
+  return current.allowedEmails.length === 0 && accessConfigured();
 }

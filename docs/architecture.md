@@ -88,16 +88,31 @@ start at `0100`). One image runs both the API and the worker
   (`user/authz.ts`: `/auth/google*`, `/auth/token`). A provider's routes
   answer 404 unless it is configured; `GET /auth/providers` says which are on
   and the client's `LoginGate` picks (web + Access: one automatic redirect,
-  loop-guarded). The OAuth consent page hands logged-out browsers to Access
-  when configured, else Google. `isAllowed` (`user/config.ts`) is the one
-  allow-list rule: on `AUTH_ALLOWED_EMAILS` when set, otherwise everyone
-  only when Access is on (its policy is the list). `requireUser` reads
-  `users.status` per request: `disabled` = 401 `account_disabled` (how a
-  person is revoked). Config comes only from `auth-env.ts` (boot guard:
-  `checkAuthEnv`). Decisions and threat model: `decisions.md`, "Access sign-in".
-- **Access.** `budgetAccess` authorises the `budget_id` in query/body; path
-  `:id` routes re-scope by `budget_id` in SQL. `src/access.test.ts` drives
-  every path-param operation from the catalog as a non-member and expects 404.
+  loop-guarded, and none after an explicit sign-out until a sign-in button is
+  pressed; signed out or unreachable it shows `features/auth/LandingPage`).
+  The OAuth consent page hands logged-out browsers to Access
+  when configured, else Google. Who may sign in: for Access, whoever the
+  Cloudflare policy lets through (no API-side list; a first-time person gets a
+  user row and zero budgets, an invited e-mail links to its existing row); for
+  Google, only `AUTH_ALLOWED_EMAILS` (`googleAllowed`). Access-minted sessions
+  carry `idp: 'access'` and OAuth grants remember it (`oauth_grants.idp`), so
+  the per-request check `isAllowed(email, idp)` (`user/config.ts`) holds Google
+  sessions to the list and Access ones to "Access is configured".
+  `requireUser` reads `users.status` per request: `disabled` = 401
+  `account_disabled` (how a person is revoked) and stamps
+  `users.signed_in_at` (what ends an invitee's "pending" state). Config comes
+  only from `auth-env.ts` (boot guard: `checkAuthEnv`). Decisions and threat
+  model: `decisions.md`, "Access sign-in" and "Multi-user".
+- **Access.** A person reaches a budget only as its owner or a member
+  (`budget_members`); nobody else does, the `admin` role included (it is an
+  operator role: jobs ledger, app-wide sync window, claiming legacy unowned
+  budgets). `budgetAccess` authorises the `budget_id` in query/body; path
+  `:id` routes re-scope by `budget_id` in SQL; rename/archive/delete/restore/
+  fresh start and removing people are owner-only. `GET /budgets` returns only
+  the caller's budgets with `is_owner`, `owner` and `member_count`.
+  `src/access.test.ts` classifies every catalog operation, drives each
+  path-param and `budget_id` operation as a non-member (and as a non-member
+  admin) and expects 404, then shares the budget and expects the reads to open.
 - **Repeat-rule tick.** Still an in-process interval in the API
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.
@@ -114,7 +129,7 @@ shell/      BudgetLayout (rail / drawer / tabs, sheets it hosts), rail/,
             SettingsMenu (pane-stack host), runtime.ts (DI container + store),
             context.ts (useBudgetShell) and menuNav.ts (useMenuNav): the only
             shell files features may import
-features/   plan accounts banks payees import backup reflect spending
+features/   home plan accounts banks payees import backup reflect spending
             settings people auth profile: each holds its screens, components,
             hooks (useXxx.ts) and feature-local logic (*.logic.ts + tests);
             index.ts is its public surface
@@ -149,6 +164,23 @@ and `shell/menuNav.ts`; the shell imports features through barrels too.
 no React/RN/Expo. `architecture.test.ts` fails on any runtime import cycle
 under `src/` and on a non-pure domain import.
 
+- **Navigation and the active budget.** The root stack is `index` (the home
+  page, `features/home`), `(budget)` (the shell), `profile`, `connected-apps`.
+  `/` is always the home page: "My budgets" (`is_owner`), "Shared with me"
+  (with the owner), archived ones collapsed, create, invite (the People pane
+  of `features/people` in a sheet), profile and sign out; with zero budgets
+  it is the first-run page. It shares its frame with the landing page
+  (`ui/BrandedPage`). Opening or creating a budget there is the only way one
+  becomes active: `switchBudget` (redux + KV key `budget.activeBudgetId`),
+  then push `/overview` (phone) or `/plan`. Budget routes carry no budget
+  id; a reload or deep link inside `(budget)` restores the persisted id
+  (`restoreActiveBudget`), and `shellGate` (`shell/rail/rail.logic.ts`)
+  decides: render the shell, wait, or redirect to `/` (no id, stale id, zero
+  budgets, list failed). The shell never picks a budget. The way back is one
+  tap: the rail's "All budgets" row, and a house button beside the menu
+  button on tablet/phone. Owner-only controls (rename, archive, delete, Fresh
+  Start, restoring a backup, removing a person) are not rendered for members
+  (`is_owner` on the list row, `can_manage` on members).
 - **Wire boundary.** `budget/data`: `data/api.ts` re-exports one RTK Query
   api assembled from `data/api/{base,budgets,members,plan,payees,register,connections}.ts`
   (`injectEndpoints`), every request built with `contractRequest`; `rows.ts`

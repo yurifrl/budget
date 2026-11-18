@@ -9,7 +9,7 @@ import { SettingsMenu, type MenuPane } from '../SettingsMenu';
 import { useAppSelector } from '@/state/hooks';
 import { IconSymbol } from '@/ui/icon-symbol';
 
-import { useGetAccountsQuery } from '@/budget/data/api';
+import { useGetAccountsQuery, useGetBudgetsQuery } from '@/budget/data/api';
 import type { AccountRow } from '@/budget/data/rows';
 import { personLabel } from '@/domain/people';
 import { useMoneyFormat } from '@/ui/moneyFormat';
@@ -39,6 +39,7 @@ const GROUP_COLLAPSED_KEY = 'budget.sidebar.collapsedAccountGroups';
  */
 export function BudgetRail({
   onNavigate,
+  onGoHome,
   secondary,
   collapsed,
   onSetCollapsed,
@@ -48,6 +49,8 @@ export function BudgetRail({
   onOpenRequestHandled,
 }: {
   onNavigate: () => void;
+  /** Leave the budget for the home page (all budgets). */
+  onGoHome: () => void;
   openRequest?: { paneId: string } | null;
   onOpenRequestHandled?: () => void;
   /** Panes for the settings menu (budget settings). */
@@ -83,6 +86,7 @@ export function BudgetRail({
 
   const budgetId = useAppSelector((s) => selectActiveBudgetId(s));
   const accounts = useGetAccountsQuery(budgetId ? { budgetId } : { budgetId: '' }, { skip: !budgetId });
+  const budgetName = useGetBudgetsQuery().data?.find((b) => b.id === budgetId)?.name;
   const { personOf, me } = usePeople(budgetId);
   const showClosedAccounts = useAppSelector((s) =>
     selectShowClosedAccounts(s),
@@ -112,6 +116,21 @@ export function BudgetRail({
           onOpenRequestHandled={onOpenRequestHandled}
         />
       </View>
+      <Pressable
+        onPress={onGoHome}
+        accessibilityRole="button"
+        accessibilityLabel="All budgets"
+        style={({ pressed }) => [styles.homeLink, isCollapsed && styles.navLinkIcon, pressed && styles.homeLinkPressed]}>
+        <IconSymbol size={isCollapsed ? 20 : 15} name="house.fill" color={colors.muted} />
+        {isCollapsed ? null : (
+          <View style={styles.homeLinkText}>
+            <Text style={styles.homeLinkKicker}>ALL BUDGETS</Text>
+            <Text style={styles.homeLinkName} numberOfLines={1}>
+              {budgetName ?? 'Budget'}
+            </Text>
+          </View>
+        )}
+      </Pressable>
       <View style={styles.nav}>
         {NAV_LINKS.map((l) => {
           const active = pathname.startsWith(l.route);
@@ -240,7 +259,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     gap: 4,
   },
-  nav: { marginTop: 14, gap: 2 },
+  homeLink: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  homeLinkPressed: { backgroundColor: colors.hover },
+  homeLinkText: { flex: 1, minWidth: 0 },
+  homeLinkKicker: { color: colors.faint, fontSize: 9, fontWeight: '700', letterSpacing: 1.2 },
+  homeLinkName: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  nav: { marginTop: 8, gap: 2 },
   navLink: { paddingVertical: 9, paddingHorizontal: 12, borderRadius: radius.sm },
   navLinkActive: { backgroundColor: colors.indigoSoft },
   navLinkText: { color: colors.muted, fontSize: 14, fontWeight: '600' },

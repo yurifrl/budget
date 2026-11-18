@@ -23,17 +23,33 @@
  *    that belongs to budget B; nothing in B may be read or changed, and no row
  *    of A may end up referencing a row of B. A new id-carrying field fails the
  *    coverage test until it has a case here (or an allow-list entry).
+ *
+ * D. two people, the whole catalog. Every operation in `catalog.ts` is
+ *    classified: budget-scoped by `budget_id`, budget/connection-scoped by a
+ *    path id (A), or listed with the reason it cannot reach another person's
+ *    budget. Every `budget_id` operation is then called on A's budget with a
+ *    request that would succeed for A, by B (an ordinary user who is not on
+ *    it) and by an operator (the `admin` role, also not on it): 404, nothing
+ *    changed, nothing of A's in the response. Then A adds B: every read
+ *    answers 200 for B, the owner-only operations stay closed to B, and when
+ *    A removes B the door is shut again. A new operation fails the coverage
+ *    test until it is classified and has an input here.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Hono } from 'hono';
 
 import { contracts as budgetContracts } from '@shared/contracts/budget';
 import { contracts as connectionsContracts } from '@shared/contracts/connections';
+import { contracts as jobsContracts } from '@shared/contracts/jobs';
+import { budgetListRowSchema } from '@shared/contracts/budget/outputs';
 import { inputLocations, type OperationContract } from '@shared/operation-contract';
 import { UUID_RE } from '@shared/validation';
 import { z } from '@shared/zod';
 import budget from './budget';
+import { contracts as catalog } from './catalog';
 import connections from './connections';
+import jobs from './jobs';
+import { grantsRoutes } from './oauth';
 import { pool } from './core/db';
 import { dbReady } from './core/test-gate';
 import { httpOnError } from './core/validate';
@@ -48,6 +64,10 @@ const mkUser = (tag: string): IdentityUser => ({
 });
 const victim = mkUser('victim');
 const attacker = mkUser('attacker');
+/** The operator: `admin` role, on nobody's budget (section D). */
+const operator: IdentityUser = { ...mkUser('operator'), role: 'admin' };
+/** Who the request is made as. Sections A to C never change it. */
+let acting: IdentityUser = attacker;
 
 // Victim fixtures (ids fixed up front so samples can reference them).
 const V = {
@@ -82,11 +102,13 @@ const VICTIM_MARKERS = [VICTIM_MARKER, 'Victim Checking', 'Victim Group', 'Victi
 const app = new Hono();
 app.onError(httpOnError);
 app.use('*', (c, next) => {
-  c.set('user', attacker);
+  c.set('user', acting);
   return next();
 });
 app.route('/', budget);
 app.route('/connections', connections);
+app.route('/jobs', jobs);
+app.route('/', grantsRoutes);
 
 /** Sample inputs (victim row ids; attacker's budget id) per path-param operation. */
 const samples: Record<string, Record<string, unknown>> = {
@@ -244,8 +266,8 @@ async function cleanup() {
 beforeAll(async () => {
   if (!dbReady) return;
   await cleanup();
-  for (const u of [victim, attacker]) {
-    await pool.query(`INSERT INTO public.users (id, email, role) VALUES ($1, $2, 'user')`, [u.id, u.email]);
+  for (const u of [victim, attacker, operator]) {
+    await pool.query(`INSERT INTO public.users (id, email, role, signed_in_at) VALUES ($1, $2, $3, now())`, [u.id, u.email, u.role]);
   }
   await pool.query(`INSERT INTO budgets (id, name, owner_user_id) VALUES ($1, 'access-victim', $2), ($3, 'access-attacker', $4), ($5, 'access-restore', $4)`, [
     V.budget, victim.id, A.budget, attacker.id, A.restoreBudget,
@@ -588,5 +610,301 @@ describe.skipIf(!dbReady)('controls: the same operations still work with the att
     const patch = { category_id: A.category, matched_transaction_id: A.txn };
     expect((await send('budget_transactions_update', { id: A.txn, budget_id: A.budget, patch })).status).toBe(204);
     expect((await send('budget_transactions_update', { id: A.txn, budget_id: A.budget, patch: { matched_transaction_id: null } })).status).toBe(204);
+  });
+});
+
+// ---- D. two people, the whole catalog ----------------------------------------
+
+const byBudgetId = budgetContracts.filter((c) => c.expose.api && hasBudgetId(c));
+
+/**
+ * Operations that carry neither a `budget_id` nor a budget/connection path id,
+ * each with the reason it cannot reach another person's budget. Anything new
+ * in the catalog must be added here (or be scoped) before the coverage test
+ * passes.
+ */
+const notBudgetAddressed: Record<string, string> = {
+  budget_list: "lists only budgets the caller owns or is a member of (asserted below)",
+  budget_create: 'creates a new budget owned by the caller',
+  connections_connect_token: "mints a widget token bound to the caller's own user id",
+  connections_items_register: "registers a bank item for the caller; another user's item is 409",
+  connections_list: "lists the caller's own connections (asserted below)",
+  connections_settings_get: 'reads the app-wide sync window: one number, no budget data',
+  connections_settings_update: 'app-wide sync window: admin only (403 asserted below)',
+  connections_sync_status: "sync state of the caller's own connections",
+  connections_upstream_list: "upstream accounts of the caller's own connections",
+  jobs_cancel_run: 'jobs ledger: admin only (403 asserted below)',
+  jobs_get_run: 'jobs ledger: admin only (403 asserted below)',
+  jobs_health: 'jobs ledger: admin only (403 asserted below)',
+  jobs_list_runs: 'jobs ledger: admin only (403 asserted below)',
+  jobs_retry_run: 'jobs ledger: admin only (403 asserted below)',
+  oauth_grants_list: "lists the caller's own grants (asserted below)",
+  oauth_grants_revoke: "revokes the caller's own grant; another person's is 404 (asserted below)",
+  rates_usd_brl: 'a public exchange rate, no budget data',
+  user_auth_me: "the caller's own e-mail",
+  user_auth_providers: 'which sign-in providers are on, no user data',
+  user_me_avatar_remove: "the caller's own profile",
+  user_me_get: "the caller's own profile",
+  user_me_update: "the caller's own profile",
+};
+
+/**
+ * A request on the VICTIM's budget that would succeed for the victim, per
+ * `budget_id` operation: the path-param samples above re-aimed at V.budget,
+ * plus an input for every operation without a path param.
+ */
+const onVictimBudget: Record<string, Record<string, unknown>> = {
+  budget_accounts_create: { name: 'pwned', type: 'checking', on_budget: true, balance: 0 },
+  budget_accounts_list: {},
+  budget_assignments_batch: { month: MONTH, updates: [{ category_id: V.category, budgeted: 1 }] },
+  budget_assignments_list: {},
+  budget_assignments_set: { month: MONTH, category_id: V.category, budgeted: 1000 },
+  budget_export: {},
+  budget_restore: { groups: ['G'], categories: [], accounts: [], transactions: [], assignments: [] },
+  budget_fresh_start: {},
+  budget_categories_create: { group_id: V.group, name: 'pwned', sort_order: 0 },
+  budget_categories_list: {},
+  budget_categories_reorder: { moves: [{ id: V.category, group_id: V.group, sort_order: 5 }] },
+  budget_categories_set_group_person: { group_id: V.group, user_id: victim.id },
+  budget_bundles_create: { group_id: V.group, name: 'pwned', category_ids: [V.category, A.category] },
+  budget_bundles_list: {},
+  budget_categories_set_bundle: { bundle_id: V.bundle, category_ids: [V.category] },
+  budget_category_notes_list: { month: MONTH },
+  budget_category_targets_list: {},
+  budget_groups_create: { name: 'pwned' },
+  budget_groups_list: {},
+  budget_members_add: { email: 'access-smuggled@accesscatalog.test' },
+  budget_members_link_email: { user_id: victim.id, email: 'access-link@accesscatalog.test' },
+  budget_members_list: {},
+  budget_members_remove: { user_id: victim.id },
+  budget_members_rename: { user_id: victim.id, name: 'pwned' },
+  budget_month_notes_list: {},
+  budget_month_notes_set: { month: MONTH, note: 'pwned' },
+  budget_payees_create: { name: 'pwned' },
+  budget_payees_list: {},
+  budget_payees_merge: { id: V.payee, target_id: V.payee },
+  budget_plan_auto_assign: { month: MONTH, rows: [{ category_id: V.category, assigned: 1000 }] },
+  budget_repeat_rules_create: ruleBase({ account_id: V.account }),
+  budget_repeat_rules_generate: {},
+  budget_repeat_rules_list: {},
+  budget_revision_get: {},
+  budget_transaction_add: { account_id: V.account, amount: -1000, payee: 'p' },
+  budget_transactions_bulk_import: { account_id: V.account, txns: [bulkRow()] },
+  budget_transactions_create: { txn: txnBase({ account_id: V.account }) },
+  budget_transactions_list: {},
+};
+const victimInput = (c: OperationContract): Record<string, unknown> | undefined => {
+  const base = onVictimBudget[c.name] ?? samples[c.name];
+  return base && { ...base, budget_id: V.budget };
+};
+const allMarkers = [...VICTIM_MARKERS, 'victim month note'];
+
+describe('access catalog coverage (every operation, two people)', () => {
+  test('every catalog operation is budget-scoped, path-scoped (A) or listed with a reason', () => {
+    const pathScoped = new Set(pathOps.map((c) => c.name));
+    const unclassified = catalog
+      .filter((c) => c.expose.api)
+      .filter((c) => !(c.name.startsWith('budget_') && hasBudgetId(c)) && !pathScoped.has(c.name) && !(c.name in notBudgetAddressed))
+      .map((c) => c.name);
+    expect(unclassified).toEqual([]);
+    // Only budget operations may rely on `budget_id` + budgetAccess.
+    expect(catalog.filter((c) => hasBudgetId(c) && !c.name.startsWith('budget_')).map((c) => c.name)).toEqual([]);
+  });
+
+  test('every budget_id operation has a request on the victim budget that parses against its contract', () => {
+    for (const c of byBudgetId) {
+      const input = victimInput(c);
+      expect(input, `${c.name}: no input`).toBeDefined();
+      const parsed = c.input.safeParse(input);
+      expect(parsed.success ? 'ok' : JSON.stringify(parsed.error.issues), c.name).toBe('ok');
+      expect((input as { budget_id: string }).budget_id).toBe(V.budget);
+    }
+  });
+});
+
+describe.skipIf(!dbReady)('D: two people, every budget operation', () => {
+  const byName = new Map(catalog.map((c) => [c.name, c]));
+  const send = (name: string, input: Record<string, unknown>) => app.request(buildRequest(byName.get(name)!, input));
+  const listAs = async (who: IdentityUser) => {
+    acting = who;
+    const res = await send('budget_list', {});
+    expect(res.status).toBe(200);
+    return z.array(budgetListRowSchema).parse(await res.json());
+  };
+
+  afterAll(async () => {
+    acting = attacker;
+    if (!dbReady) return;
+    await pool.query('DELETE FROM public.budget_members WHERE budget_id = $1 AND user_id <> $2', [V.budget, victim.id]);
+    await pool.query(`DELETE FROM public.oauth_clients WHERE client_id = 'c_access_catalog_test'`);
+  });
+
+  for (const [who, label] of [[attacker, 'another user'], [operator, 'an admin who is not on the budget']] as const) {
+    for (const c of byBudgetId) {
+      test(`${c.method} ${c.path} (${c.name}) on the victim's budget is 404 for ${label}`, async () => {
+        acting = who;
+        const before = await victimSnapshot();
+        const res = await app.request(buildRequest(c, victimInput(c)!));
+        const text = await res.text();
+        expect(res.status, `${c.name}: ${text.slice(0, 200)}`).toBe(404);
+        expect(await victimSnapshot(), `${c.name}: victim budget changed`).toBe(before);
+        for (const m of allMarkers) expect(text.includes(m), `${c.name}: response leaks victim data (${m})`).toBe(false);
+      });
+    }
+
+    test(`path-id budget operations (rename, archive, unarchive, delete) are 404 for ${label}`, async () => {
+      acting = who;
+      const before = await victimSnapshot();
+      for (const name of ['budget_rename', 'budget_archive', 'budget_unarchive', 'budget_delete']) {
+        expect((await send(name, samples[name]!)).status, name).toBe(404);
+      }
+      expect(await victimSnapshot()).toBe(before);
+    });
+
+    test(`the budgets list of ${label} does not contain the victim's budget`, async () => {
+      const list = await listAs(who);
+      expect(list.some((b) => b.id === V.budget)).toBe(false);
+      expect(JSON.stringify(list).includes('access-victim')).toBe(false);
+    });
+  }
+
+  test('a refused budget_members_add provisions nobody', async () => {
+    const r = await pool.query(`SELECT 1 FROM public.users WHERE email = 'access-smuggled@accesscatalog.test'`);
+    expect(r.rowCount).toBe(0);
+  });
+
+  test("connections: another user's list is their own; the app-wide sync window is admin-only", async () => {
+    acting = attacker;
+    const res = await send('connections_list', {});
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text.includes(A.connection)).toBe(true);
+    expect(text.includes(V.connection)).toBe(false);
+    expect((await send('connections_settings_update', { syncWindowDays: 7 })).status).toBe(403);
+  });
+
+  test('the connection summary and transactions show nothing from a budget its owner is no longer on', async () => {
+    // The victim's bank is linked to an account in the ATTACKER's budget (which the victim is not on),
+    // and both linked accounts hold an imported transaction, so both would be in the summary.
+    await pool.query(`UPDATE accounts SET connection_id = $2, external_account_id = 'ext-a' WHERE id = $1`, [A.account, V.connection]);
+    await pool.query(
+      `INSERT INTO public.connection_transactions (transaction_id, provider, external_transaction_id)
+       VALUES ($1::uuid, 'access-test', $1::uuid::text), ($2::uuid, 'access-test', $2::uuid::text)`,
+      [V.txn, A.txn],
+    );
+    try {
+      acting = victim;
+      const summary = await send('connections_accounts_summary', { id: V.connection });
+      expect(summary.status).toBe(200);
+      const text = await summary.text();
+      expect(text.includes('Victim Checking')).toBe(true); // the account in their own budget
+      expect(text.includes('Attacker Checking')).toBe(false);
+      expect(text.includes(A.account)).toBe(false);
+      expect((await send('connections_transactions_list', { id: V.connection, accountId: A.account })).status).toBe(404);
+      const own = await send('connections_transactions_list', { id: V.connection, accountId: V.account });
+      expect(own.status).toBe(200);
+      expect((await own.text()).includes(V.txn)).toBe(true);
+
+      // Disconnecting does not get stuck on (or name) the account they cannot reach: that link is dropped.
+      const del = await send('connections_delete', { id: V.connection });
+      expect(del.status).toBe(409);
+      const message = await del.text();
+      expect(message.includes('Victim Checking')).toBe(true);
+      expect(message.includes('Attacker Checking')).toBe(false);
+      expect((await pool.query('SELECT connection_id FROM accounts WHERE id = $1', [A.account])).rows[0].connection_id).toBeNull();
+    } finally {
+      await pool.query(`UPDATE accounts SET connection_id = NULL, external_account_id = NULL WHERE id = $1`, [A.account]);
+      await pool.query('DELETE FROM public.connection_transactions WHERE transaction_id = ANY($1)', [[V.txn, A.txn]]);
+    }
+  });
+
+  test('jobs ledger: 403 for an ordinary user on every operation', async () => {
+    acting = attacker;
+    for (const c of jobsContracts.filter((op) => op.expose.api)) {
+      const input = inputLocations(c).path.length > 0 ? { id: crypto.randomUUID() } : {};
+      expect((await app.request(buildRequest(c, input))).status, c.name).toBe(403);
+    }
+  });
+
+  test("OAuth grants: another user's grant is neither listed nor revocable", async () => {
+    await pool.query(
+      `INSERT INTO public.oauth_clients (client_id, client_name, redirect_uris) VALUES ('c_access_catalog_test', 'Victim App', '{http://localhost/cb}')`,
+    );
+    const grant = (
+      await pool.query<{ id: string }>(
+        `INSERT INTO public.oauth_grants (id, user_id, client_id, scope, resource, expires_at)
+         VALUES (gen_random_uuid(), $1, 'c_access_catalog_test', 'read', 'r', now() + interval '1 hour') RETURNING id`,
+        [victim.id],
+      )
+    ).rows[0]!.id;
+    acting = attacker;
+    const list = await send('oauth_grants_list', {});
+    expect(list.status).toBe(200);
+    expect((await list.text()).includes('Victim App')).toBe(false);
+    expect((await send('oauth_grants_revoke', { id: grant })).status).toBe(404);
+    expect((await pool.query('SELECT revoked_at FROM public.oauth_grants WHERE id = $1', [grant])).rows[0].revoked_at).toBeNull();
+  });
+
+  test('then the owner shares the budget: the other person can read everything, and it shows as shared with them', async () => {
+    acting = victim;
+    const added = await send('budget_members_add', { budget_id: V.budget, email: attacker.email });
+    expect(added.status).toBe(200);
+    // Same user row (invited by e-mail), not a second one.
+    expect((await pool.query('SELECT user_id FROM public.budget_members WHERE budget_id = $1 ORDER BY added_at', [V.budget])).rows.map((r) => r.user_id).sort()).toEqual(
+      [victim.id, attacker.id].sort(),
+    );
+
+    const shared = (await listAs(attacker)).find((b) => b.id === V.budget);
+    expect(shared).toMatchObject({ is_owner: false, member_count: 2, owner: { user_id: victim.id, email: victim.email } });
+    const own = (await listAs(attacker)).find((b) => b.id === A.budget);
+    expect(own).toMatchObject({ is_owner: true, member_count: 1, owner: { user_id: attacker.id } });
+    expect((await listAs(victim)).find((b) => b.id === V.budget)).toMatchObject({ is_owner: true, member_count: 2 });
+    // The operator still sees neither.
+    expect(await listAs(operator)).toEqual([]);
+
+    acting = attacker;
+    for (const c of byBudgetId.filter((op) => op.kind === 'read')) {
+      const res = await app.request(buildRequest(c, victimInput(c)!));
+      const body = await res.text();
+      expect(res.status, `${c.name}: ${body.slice(0, 200)}`).toBe(200);
+      expect(c.output!.safeParse(JSON.parse(body)).success, `${c.name}: output does not parse`).toBe(true);
+    }
+    const accounts = await (await send('budget_accounts_list', { budget_id: V.budget })).text();
+    expect(accounts.includes('Victim Checking')).toBe(true);
+  });
+
+  test('a member who is not the owner cannot rename, archive, delete, restore, fresh-start or remove people', async () => {
+    acting = attacker;
+    const before = await victimSnapshot();
+    for (const [name, input] of [
+      ['budget_rename', samples.budget_rename!],
+      ['budget_archive', samples.budget_archive!],
+      ['budget_unarchive', samples.budget_unarchive!],
+      ['budget_delete', samples.budget_delete!],
+      ['budget_fresh_start', { budget_id: V.budget }],
+      ['budget_restore', { ...onVictimBudget.budget_restore, budget_id: V.budget }],
+      ['budget_members_remove', { budget_id: V.budget, user_id: victim.id }],
+      ['budget_members_remove', { budget_id: V.budget, user_id: attacker.id }],
+    ] as const) {
+      const res = await send(name, input);
+      expect(res.status, name).toBe(404);
+    }
+    expect(await victimSnapshot()).toBe(before);
+    const members = await (await send('budget_members_list', { budget_id: V.budget })).json();
+    expect(members.can_manage).toBe(false);
+    // The owner is told they can manage, and cannot remove themselves.
+    acting = victim;
+    expect((await (await send('budget_members_list', { budget_id: V.budget })).json()).can_manage).toBe(true);
+    expect((await send('budget_members_remove', { budget_id: V.budget, user_id: victim.id })).status).toBe(400);
+  });
+
+  test('when the owner removes them the budget is closed again', async () => {
+    acting = victim;
+    expect((await send('budget_members_remove', { budget_id: V.budget, user_id: attacker.id })).status).toBe(200);
+    acting = attacker;
+    for (const c of byBudgetId.filter((op) => op.kind === 'read')) {
+      expect((await app.request(buildRequest(c, victimInput(c)!))).status, c.name).toBe(404);
+    }
+    expect((await listAs(attacker)).some((b) => b.id === V.budget)).toBe(false);
   });
 });

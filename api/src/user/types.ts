@@ -20,7 +20,13 @@ export type IdentityUser = {
  * downstream. The JWT carries only `sub` = email (shape frozen per D-01),
  * so old cookies keep working with no re-login.
  */
-export type SessionPrincipal = { email: string; scope?: string; grantId?: string };
+export type SessionPrincipal = {
+  email: string;
+  scope?: string;
+  grantId?: string;
+  /** 'access' when the session (or the session behind the OAuth grant) signed in through Cloudflare Access. */
+  idp?: string;
+};
 
 // Hono's documented augmentation point for middleware-captured state
 // (assumption A1, hono 4.12 exports ContextVariableMap from the 'hono'

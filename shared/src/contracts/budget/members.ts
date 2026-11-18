@@ -6,7 +6,7 @@ import { budgetMembersChangedSchema, budgetMembersSchema } from './outputs';
 
 export const membersList = defineOperation({
   name: 'budget_members_list',
-  description: 'List who a budget is shared with, and whether the caller can manage the list.',
+  description: 'List who a budget is shared with, and whether the caller can remove people (can_manage: true for the owner only).',
   input: z.object({ budget_id: budgetId }),
   output: budgetMembersSchema,
   method: 'GET',
@@ -18,7 +18,7 @@ export const membersList = defineOperation({
 export const membersAdd = defineOperation({
   name: 'budget_members_add',
   description:
-    'Add a person to a budget (any member; grouping, not permission). With an email: share with that person (the email must also be allow-listed to sign in). Without one: a named placeholder person, linkable to an email later with budget_members_link_email.',
+    'Add a person to a budget (any member may). With an email: share the budget with that person; they see it the first time they sign in through Cloudflare Access, with no further allow-listing (Google sign-in still needs the email on the Google allow-list). Without one: a named placeholder person (grouping only, cannot sign in), linkable to an email later with budget_members_link_email.',
   input: z.object({
     budget_id: budgetId,
     email: z.string().trim().toLowerCase().email().max(254).optional(),
@@ -35,7 +35,7 @@ export const membersAdd = defineOperation({
 export const membersLinkEmail = defineOperation({
   name: 'budget_members_link_email',
   description:
-    'Attach an email to a placeholder person. If that email already belongs to a user, the placeholder is merged into them (their accounts, categories and memberships move over).',
+    'Attach an email to a placeholder person (any member may), which shares the budget with that email. If that email already belongs to a user, the placeholder is merged into them (their accounts, categories and memberships move over).',
   input: z.object({
     budget_id: budgetId,
     user_id: uuidSchema,
@@ -61,7 +61,7 @@ export const membersRename = defineOperation({
 
 export const membersRemove = defineOperation({
   name: 'budget_members_remove',
-  description: "Stop sharing a budget with a member (owner or admin only); the member's accounts fall back to Shared.",
+  description: "Stop sharing a budget with a member (owner only; the owner cannot be removed); the member's accounts and categories fall back to Shared.",
   input: z.object({ budget_id: budgetId, user_id: uuidSchema }),
   output: budgetMembersChangedSchema,
   method: 'DELETE',

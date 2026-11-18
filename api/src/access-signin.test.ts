@@ -3,11 +3,19 @@
  * (buildApp, real auth gate, real DB): a FAKE JWKS (local key pair, injected
  * fetch) stands in for Cloudflare. Covers /auth/access (web cookie),
  * /auth/access/native + /auth/exchange (native token), /auth/providers,
- * the OAuth consent hand-off, the Access-only allow-list rule and the
- * revocation path (users.status).
+ * the OAuth consent hand-off, the allow-list rule (Access sign-ins are not
+ * held to AUTH_ALLOWED_EMAILS; Google ones are), a brand-new person's first
+ * sign-in (a user, zero budgets, nothing created), an invited person's first
+ * sign-in (same user, the shared budget is there) and the revocation path
+ * (users.status).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { createHash, randomBytes } from 'node:crypto';
+
+import { budgetCreate, budgetList, membersAdd, membersLinkEmail, membersList } from '@shared/contracts/budget';
+import { connectionsList, connectionsSettingsGet } from '@shared/contracts/connections/connections';
+import { meGet } from '@shared/contracts/user';
 import { authProviders } from '@shared/contracts/user/providers';
 import { buildApp } from './app';
 import { pool } from './core/db';
@@ -22,6 +30,14 @@ const API = 'https://api.test';
 const APP = 'https://app.test';
 const PERSON = 'access-person@accesssignin.test';
 const OTHER = 'access-other@accesssignin.test';
+/** An operator row that exists before anyone in this file signs in (so nobody here is "the first user"). */
+const OPERATOR = 'access-operator@accesssignin.test';
+/** People the app has never seen. */
+const NEWCOMER = 'access-newcomer@accesssignin.test';
+const INVITED = 'access-invited@accesssignin.test';
+const LINKED = 'access-linked@accesssignin.test';
+const SHARER = 'access-sharer@accesssignin.test';
+const FRESH = [NEWCOMER, INVITED, LINKED, SHARER];
 
 let key: TestKey;
 let jwks: ReturnType<typeof fakeJwks>;
@@ -50,18 +66,19 @@ const sessionCookie = (res: Response) => /budget_session=([^;]+)/.exec(res.heade
 
 async function cleanup() {
   if (!dbReady) return;
-  // PERSON's GET /budgets is the first human session of the run, so it claims
-  // the seed's unowned budgets (and the claim finalizes owner NOT NULL): the
-  // row cannot be deleted. Leave it as a plain active user instead; the test
-  // database is recreated on every run.
+  // PERSON is left in place as a plain active user (the test database is
+  // recreated on every run); everyone else this file creates is removed.
   await pool.query(`update public.users set role = 'user', status = 'active' where email = $1`, [PERSON]);
   await pool.query(`delete from public.users where email = $1`, [OTHER]);
+  await pool.query(`delete from public.budgets where owner_user_id in (select id from public.users where email = any($1))`, [FRESH]);
+  await pool.query(`delete from public.users where email = any($1)`, [[...FRESH, OPERATOR]]);
 }
 
 beforeAll(async () => {
   key = await makeKey('kid-e2e');
   jwks = fakeJwks([key]);
   await cleanup();
+  if (dbReady) await pool.query(`insert into public.users (id, email, role) values (gen_random_uuid(), $1, 'admin')`, [OPERATOR]);
 });
 
 beforeEach(() => {
@@ -156,13 +173,6 @@ describe('GET /auth/access (web)', () => {
     }
   });
 
-  dbTest('with AUTH_ALLOWED_EMAILS set it still applies (403 for others)', async () => {
-    configureAuth({ ...ACCESS_ON(), allowedEmails: [OTHER] });
-    const res = await app().request('/auth/access', { headers: { 'Cf-Access-Jwt-Assertion': await assertion() } });
-    expect(res.status).toBe(403);
-    expect(sessionCookie(res)).toBeNull();
-  });
-
   dbTest('links a pre-provisioned (invited) row by e-mail and fills a missing name', async () => {
     await pool.query(`insert into public.users (id, email) values (gen_random_uuid(), $1) on conflict (email) do nothing`, [OTHER]);
     const before = await pool.query<{ id: string }>(`select id from public.users where email = $1`, [OTHER]);
@@ -253,6 +263,195 @@ describe('OAuth consent hand-off', () => {
     expect(loc.startsWith('/auth/access?return_to=')).toBe(true);
     expect(new URL(loc, API).searchParams.get('return_to')).toBe(`/oauth/authorize?${q}`);
     await pool.query(`delete from public.oauth_clients where client_id = $1`, [client.client_id]);
+  });
+});
+
+describe('first sign-in through Access (no sign-up, no API-side allow-listing)', () => {
+  /** Sign in through Access as `email`; returns the session cookie header. */
+  const signIn = async (email: string, name?: string) => {
+    const res = await app().request('/auth/access', {
+      headers: { 'Cf-Access-Jwt-Assertion': await signRs256(key, claims({ email, ...(name ? { name } : {}) })) },
+    });
+    expect(res.status).toBe(302);
+    return { cookie: `budget_session=${sessionCookie(res)}` };
+  };
+  const call = (headers: Record<string, string>, path: string, init: { method?: string; body?: unknown } = {}) =>
+    app().request(path, {
+      method: init.method ?? 'GET',
+      headers: { ...headers, ...(init.body ? { 'content-type': 'application/json' } : {}) },
+      body: init.body ? JSON.stringify(init.body) : undefined,
+    });
+  const userRow = async (email: string) =>
+    (await pool.query<{ id: string; role: string; google_sub: string | null; signed_in_at: Date | null }>(
+      `select id, role, google_sub, signed_in_at from public.users where email = $1`, [email])).rows[0];
+  const budgetCount = async () => (await pool.query<{ n: number }>('select count(*)::int as n from public.budgets')).rows[0]!.n;
+
+  // AUTH_ALLOWED_EMAILS belongs to Google: it names somebody else in every case here.
+  beforeEach(() => configureAuth({ ...ACCESS_ON(), allowedEmails: [OTHER] }));
+
+  dbTest('someone the app has never seen gets a user and lands signed in with zero budgets; nothing is created for them', async () => {
+    expect(await userRow(NEWCOMER)).toBeUndefined();
+    const budgetsBefore = await budgetCount();
+    const unownedBefore = (await pool.query(`select count(*)::int as n from public.budgets where owner_user_id is null`)).rows[0].n;
+
+    const who = await signIn(NEWCOMER, 'New Comer');
+    const row = await userRow(NEWCOMER);
+    expect(row).toMatchObject({ role: 'user', google_sub: null });
+    expect(row!.signed_in_at).not.toBeNull();
+
+    // Everything the client calls at boot answers, with nothing in it.
+    expect(await (await call(who, '/auth/me')).json()).toEqual({ email: NEWCOMER });
+    const me = await call(who, '/me');
+    expect(me.status).toBe(200);
+    expect(meGet.output!.parse(await me.json())).toMatchObject({ id: row!.id, email: NEWCOMER, name: 'New Comer', role: 'user' });
+    const budgets = await call(who, '/budgets');
+    expect(budgets.status).toBe(200);
+    expect(budgetList.output!.parse(await budgets.json())).toEqual([]);
+    const conns = await call(who, '/connections');
+    expect(conns.status).toBe(200);
+    expect(connectionsList.output!.parse(await conns.json())).toEqual([]);
+    const settings = await call(who, '/connections/settings');
+    expect(settings.status).toBe(200);
+    connectionsSettingsGet.output!.parse(await settings.json());
+    expect((await call(who, '/oauth/grants')).status).toBe(200);
+
+    // No budget was created or handed to them (unowned legacy budgets stay unowned).
+    expect(await budgetCount()).toBe(budgetsBefore);
+    expect((await pool.query(`select count(*)::int as n from public.budgets where owner_user_id is null`)).rows[0].n).toBe(unownedBefore);
+    expect((await pool.query(`select 1 from public.budget_members where user_id = $1`, [row!.id])).rowCount).toBe(0);
+
+    // They can create their own, and then it is theirs alone.
+    const created = await call(who, '/budgets', { method: 'POST', body: { name: 'Newcomer budget' } });
+    expect(created.status).toBe(200);
+    const mine = budgetCreate.output!.parse(await created.json());
+    const list = budgetList.output!.parse(await (await call(who, '/budgets')).json());
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id: mine.id, is_owner: true, member_count: 1, owner: { user_id: row!.id, email: NEWCOMER, name: 'New Comer' } });
+  });
+
+  dbTest('the Google list still guards Google: the same person cannot hold an unmarked (Google-style) session', async () => {
+    await signIn(NEWCOMER);
+    const googleStyle = await issueSession(SECRET, NEWCOMER, 60);
+    expect((await call({ cookie: `budget_session=${googleStyle}` }, '/budgets')).status).toBe(401);
+    expect((await call({ authorization: `Bearer ${googleStyle}` }, '/budgets')).status).toBe(401);
+    // ...and an Access-marked session stops working if Access is switched off.
+    const marked = await issueSession(SECRET, NEWCOMER, 60, 'access');
+    expect((await call({ cookie: `budget_session=${marked}` }, '/budgets')).status).toBe(200);
+    configureAuth({ ...ACCESS_ON(), accessTeamDomain: '', accessAud: [], allowedEmails: [OTHER], googleClientId: 'cid', googleClientSecret: 'sec' });
+    expect((await call({ cookie: `budget_session=${marked}` }, '/budgets')).status).toBe(401);
+  });
+
+  dbTest('native: the exchange code buys an Access-marked session for a person who is not on the Google list', async () => {
+    const start = await app().request(`/auth/access/native?redirect_uri=${encodeURIComponent('budgetapp://login')}`, {
+      headers: { 'Cf-Access-Jwt-Assertion': await signRs256(key, claims({ email: NEWCOMER })) },
+    });
+    const code = new URL(start.headers.get('location')!).searchParams.get('code')!;
+    const ex = await call({}, '/auth/exchange', { method: 'POST', body: { code } });
+    expect(ex.status).toBe(200);
+    const { token } = (await ex.json()) as { token: string };
+    expect((await call({ authorization: `Bearer ${token}` }, '/budgets')).status).toBe(200);
+  });
+
+  dbTest('an invited e-mail signs in for the first time as that same user and sees the shared budget', async () => {
+    const sharer = await signIn(SHARER, 'Sha Rer');
+    const budget = budgetCreate.output!.parse(await (await call(sharer, '/budgets', { method: 'POST', body: { name: 'Shared trip' } })).json());
+    const added = await call(sharer, '/budget-members', { method: 'POST', body: { budget_id: budget.id, email: INVITED } });
+    expect(added.status).toBe(200);
+    const invitedMember = membersAdd.output!.parse(await added.json()).members.find((m) => m.email === INVITED)!;
+    expect(invitedMember.pending).toBe(true);
+    expect((await userRow(INVITED))!.signed_in_at).toBeNull();
+
+    const invited = await signIn(INVITED, 'In Vited');
+    expect((await userRow(INVITED))!.id).toBe(invitedMember.user_id); // same user, not a second row
+    expect((await pool.query(`select count(*)::int as n from public.users where email = $1`, [INVITED])).rows[0].n).toBe(1);
+
+    const list = budgetList.output!.parse(await (await call(invited, '/budgets')).json());
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      id: budget.id,
+      name: 'Shared trip',
+      is_owner: false,
+      member_count: 2,
+      owner: { user_id: (await userRow(SHARER))!.id, email: SHARER, name: 'Sha Rer' },
+    });
+    expect((await call(invited, `/accounts?budget_id=${budget.id}`)).status).toBe(200);
+
+    // No longer pending, and a signed-in person's name is their own (Access users have no google_sub).
+    const members = membersList.output!.parse(await (await call(sharer, `/budget-members?budget_id=${budget.id}`)).json());
+    expect(members.members.find((m) => m.email === INVITED)).toMatchObject({ pending: false, name: 'In Vited' });
+    const rename = await call(sharer, '/budget-members', { method: 'PATCH', body: { budget_id: budget.id, user_id: invitedMember.user_id, name: 'Renamed By Owner' } });
+    expect(rename.status).toBe(400);
+    // The sharer's own list says it is theirs, shared with one more person.
+    const own = budgetList.output!.parse(await (await call(sharer, '/budgets')).json());
+    expect(own.find((b) => b.id === budget.id)).toMatchObject({ is_owner: true, member_count: 2 });
+  });
+
+  dbTest('a placeholder person linked to an e-mail signs in as that person', async () => {
+    const sharer = await signIn(SHARER);
+    const budget = budgetCreate.output!.parse(await (await call(sharer, '/budgets', { method: 'POST', body: { name: 'Placeholder budget' } })).json());
+    const ph = membersAdd.output!.parse(
+      await (await call(sharer, '/budget-members', { method: 'POST', body: { budget_id: budget.id, name: 'Lin Ked' } })).json(),
+    ).members.find((m) => m.name === 'Lin Ked')!;
+    expect(ph.email).toBeNull();
+    const linked = await call(sharer, '/budget-members/link-email', { method: 'POST', body: { budget_id: budget.id, user_id: ph.user_id, email: LINKED } });
+    expect(linked.status).toBe(200);
+    membersLinkEmail.output!.parse(await linked.json());
+
+    const who = await signIn(LINKED);
+    expect((await userRow(LINKED))!.id).toBe(ph.user_id);
+    const list = budgetList.output!.parse(await (await call(who, '/budgets')).json());
+    expect(list.map((b) => [b.id, b.is_owner])).toEqual([[budget.id, false]]);
+    expect(meGet.output!.parse(await (await call(who, '/me')).json()).name).toBe('Lin Ked');
+  });
+
+  dbTest('OAuth (MCP/CLI): a grant approved from an Access session works for a person who is not on the Google list', async () => {
+    const a = app();
+    const who = await signIn(NEWCOMER);
+    const reg = await a.request('/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ client_name: 'Access Grant Test', redirect_uris: ['http://localhost:7777/callback'] }),
+    });
+    const client = (await reg.json()) as { client_id: string };
+    const verifier = randomBytes(32).toString('base64url');
+    const q = new URLSearchParams({
+      response_type: 'code',
+      client_id: client.client_id,
+      redirect_uri: 'http://localhost:7777/callback',
+      code_challenge: createHash('sha256').update(verifier).digest('base64url'),
+      code_challenge_method: 'S256',
+      state: 's',
+    });
+    const page = await a.request(`/oauth/authorize?${q}`, { headers: who });
+    expect(page.status).toBe(200);
+    const fields: Record<string, string> = {};
+    for (const m of (await page.text()).matchAll(/<input type="hidden" name="([^"]*)" value="([^"]*)">/g)) {
+      fields[m[1]!] = m[2]!.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'");
+    }
+    const approve = await a.request('/oauth/authorize', {
+      method: 'POST',
+      headers: { ...who, origin: API, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ ...fields, decision: 'approve' }),
+    });
+    expect(approve.status).toBe(303);
+    const code = new URL(approve.headers.get('location')!).searchParams.get('code')!;
+    const tok = await a.request('/oauth/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: client.client_id, redirect_uri: 'http://localhost:7777/callback', code_verifier: verifier }),
+    });
+    expect(tok.status).toBe(200);
+    const { access_token: token } = (await tok.json()) as { access_token: string };
+    try {
+      expect((await pool.query(`select idp from public.oauth_grants where client_id = $1`, [client.client_id])).rows[0].idp).toBe('access');
+      const res = await a.request('/budgets', { headers: { authorization: `Bearer ${token}` } });
+      expect(res.status).toBe(200);
+      // Take the marker off the grant: the token is then judged against the Google list, which does not name them.
+      await pool.query(`update public.oauth_grants set idp = null where client_id = $1`, [client.client_id]);
+      expect((await a.request('/budgets', { headers: { authorization: `Bearer ${token}` } })).status).toBe(401);
+    } finally {
+      await pool.query(`delete from public.oauth_clients where client_id = $1`, [client.client_id]);
+    }
   });
 });
 

@@ -9,13 +9,13 @@ import { ratesUsdBrl } from '@shared/contracts/rates/rates';
 import { authMe } from '@shared/contracts/user/me';
 import type { OperationOutput } from '@shared/operation-contract';
 import { type CentsRestorePayload, restorePayloadToWire } from '../mapping';
-import type { BudgetRow, UsdBrlRateRow } from '../rows';
+import type { BudgetListRow, BudgetRow, UsdBrlRateRow } from '../rows';
 import { baseApi } from './base';
 import type { RestoreWire } from './types';
 
 export const budgetsApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
-    getBudgets: b.query<BudgetRow[], void>({
+    getBudgets: b.query<BudgetListRow[], void>({
       query: () => contractRequest(budgetList, {}),
       providesTags: ['Budgets'],
     }),

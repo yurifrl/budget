@@ -17,9 +17,26 @@ export function splitBudgets<T extends Archivable>(rows: readonly T[] | undefine
   return { active: all.filter((b) => !b.archived_at), archived: all.filter((b) => b.archived_at) };
 }
 
-/** Row label of an archived budget: its name plus the archive date. */
+/**
+ * Rename, archive, delete, restore and Fresh Start are the owner's (the API
+ * answers 403 to anyone else), so the menu does not offer them to a member.
+ * Unknown (list not loaded) counts as not the owner.
+ */
+export function canManageBudget(b: { is_owner: boolean } | null | undefined): boolean {
+  return b?.is_owner === true;
+}
+
+/** What a member reads where the owner has the rename and archive/delete controls. */
+export function ownerOnlyHint(owner: { name: string | null; email: string | null } | null | undefined): string {
+  const who = owner?.name?.trim() || owner?.email || null;
+  return who
+    ? `Only the owner (${who}) can rename, archive or delete this budget.`
+    : 'Only the owner can rename, archive or delete this budget.';
+}
+
+/** Row label of an archived budget: its name plus the archive date (`archived_at` is a timestamp; the formatter takes a date). */
 export function archivedBudgetLabel(b: Archivable, formatDate: (iso: string) => string): string {
-  return b.archived_at ? `${b.name} · ${formatDate(b.archived_at)}` : b.name;
+  return b.archived_at ? `${b.name} · ${formatDate(b.archived_at.slice(0, 10))}` : b.name;
 }
 
 /** Fresh Start explainer for the active budget (or the prompt to pick one). */
