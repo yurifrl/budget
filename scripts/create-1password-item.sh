@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Create the 1Password items the cluster's `budget` Application reads
-# (home-systems k8s/applications/budget.yaml), in one pass:
+# Create the ONE 1Password item the cluster's `budget` Application reads
+# (home-systems k8s/applications/budget.yaml): item `budget`, holding
 #
-#   budget           app env (ExternalSecret `budget`, dataFrom extract) +
-#                    DB_PASSWORD for the CNPG role budget_app
-#   budget-temporal  DB_PASSWORD for the CNPG role budget_temporal (Temporal)
-#   argocd-budget    sshPrivateKey: ArgoCD's read-only deploy key for the
-#                    private yurifrl/budget repo (the public half is added to
-#                    the repo with `gh repo deploy-key add`)
+#   the app env             (ExternalSecret `budget`, dataFrom extract), incl.
+#                           DB_PASSWORD for the CNPG role budget_app
+#   TEMPORAL_DB_PASSWORD    password of the CNPG role budget_temporal
+#   ARGOCD_SSH_PRIVATE_KEY  ArgoCD's read-only deploy key for the private
+#                           yurifrl/budget repo (the public half is added to
+#                           the repo with `gh repo deploy-key add`)
 #
 # Random values (SESSION_SECRET, both DB passwords, the SSH key) are generated
 # here at run time and never printed or written to the repo. Account-bound
@@ -61,7 +61,7 @@ exists() {
   fi
   [ "$n" -eq 1 ]
 }
-for t in budget budget-temporal argocd-budget; do exists "$t" || true; done
+exists budget || true
 
 # Build a Secure Note template from NAME=VALUE pairs (VALUE may be empty) and
 # create the item. Every field is CONCEALED. Values are passed through env
@@ -96,6 +96,12 @@ else
   export V_DATABASE_URL="postgres://${PG_USER}:${db_password}@${PG_HOST}/${PG_DB}"
   export V_SESSION_SECRET="$session_secret"
   export V_PLUGGY_SANDBOX="false"
+  temporal_password="$(openssl rand -hex 24)"
+  [ -n "$temporal_password" ] || { echo "random generation failed" >&2; exit 1; }
+  export V_TEMPORAL_DB_PASSWORD="$temporal_password"
+  ssh-keygen -q -t ed25519 -N '' -C "argocd@home-systems (yurifrl/budget, read-only)" -f "$tmp/argocd-budget"
+  ssh_key="$(cat "$tmp/argocd-budget")"
+  export V_ARGOCD_SSH_PRIVATE_KEY="$ssh_key"
   # Left empty on purpose (filled by hand): GOOGLE_*, AUTH_ALLOWED_EMAILS,
   # PLUGGY_CLIENT_ID/SECRET, PLUGGY_WEBHOOK_SECRET, PLUGGY_ITEM_IDS,
   # OT_SERVICE_TOKEN (empty = lane disabled).
@@ -103,37 +109,22 @@ else
     DB_PASSWORD DATABASE_URL SESSION_SECRET \
     GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET AUTH_ALLOWED_EMAILS \
     PLUGGY_CLIENT_ID PLUGGY_CLIENT_SECRET PLUGGY_SANDBOX PLUGGY_WEBHOOK_SECRET \
-    PLUGGY_ITEM_IDS OT_SERVICE_TOKEN
+    PLUGGY_ITEM_IDS OT_SERVICE_TOKEN \
+    TEMPORAL_DB_PASSWORD ARGOCD_SSH_PRIVATE_KEY
   unset V_DB_PASSWORD V_DATABASE_URL V_SESSION_SECRET V_PLUGGY_SANDBOX db_password session_secret
+  unset V_TEMPORAL_DB_PASSWORD V_ARGOCD_SSH_PRIVATE_KEY temporal_password ssh_key
+  new_item=1
 fi
 
-# ---- budget-temporal ------------------------------------------------------
-if exists budget-temporal; then
-  echo "item 'budget-temporal' already exists: skipped"
-else
-  temporal_password="$(openssl rand -hex 24)"
-  [ -n "$temporal_password" ] || { echo "random generation failed" >&2; exit 1; }
-  export V_DB_PASSWORD="$temporal_password"
-  create_item budget-temporal DB_PASSWORD
-  unset V_DB_PASSWORD temporal_password
-fi
-
-# ---- argocd-budget (deploy key) --------------------------------------------
-if exists argocd-budget; then
-  echo "item 'argocd-budget' already exists: skipped (deploy key not touched)"
-else
-  ssh-keygen -q -t ed25519 -N '' -C "argocd@home-systems (yurifrl/budget, read-only)" -f "$tmp/argocd-budget"
-  ssh_key="$(cat "$tmp/argocd-budget")"
-  export V_sshPrivateKey="$ssh_key"
-  create_item argocd-budget sshPrivateKey
-  unset V_sshPrivateKey ssh_key
-  # Read-only by default (no --allow-write). If this fails the item exists and
-  # a rerun skips it, so say how to add the public half by hand.
+# ---- deploy key (public half of ARGOCD_SSH_PRIVATE_KEY) --------------------
+# Read-only by default (no --allow-write). Only when the item was created in
+# this run; an existing item's key is never touched.
+if [ "${new_item:-0}" = 1 ]; then
   if gh repo deploy-key add "$tmp/argocd-budget.pub" --repo "$REPO" --title "argocd (home-systems)"; then
     echo "added read-only deploy key to $REPO"
   else
     echo "deploy key NOT added. Add it by hand (prints only the public key):" >&2
-    echo "  op read --account $OP_ACCOUNT --out-file k 'op://$OP_VAULT/argocd-budget/sshPrivateKey' && ssh-keygen -y -f k > k.pub && rm k && gh repo deploy-key add k.pub --repo $REPO --title 'argocd (home-systems)' && rm k.pub" >&2
+    echo "  op read --account $OP_ACCOUNT --out-file k 'op://$OP_VAULT/budget/ARGOCD_SSH_PRIVATE_KEY' && ssh-keygen -y -f k > k.pub && rm k && gh repo deploy-key add k.pub --repo $REPO --title 'argocd (home-systems)' && rm k.pub" >&2
     exit 1
   fi
 fi

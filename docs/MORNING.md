@@ -40,16 +40,28 @@ cd ~/Workdir/Yuri/budget
 scripts/create-1password-item.sh          # OP_VAULT defaults to Kubernetes
 ```
 
-It creates three items in vault `Kubernetes` (the vault the `onepassword`
-ClusterSecretStore reads, where `syscd-app` lives). It never prints a secret
-value, and it skips any item whose title already exists (it stops if a title
-matches more than one item, or if `op` cannot list the vault).
+It creates ONE item, `budget`, in vault `Kubernetes` (the vault the
+`onepassword` ClusterSecretStore reads, where `syscd-app` lives). It never
+prints a secret value, and it skips the item if it already exists.
 
-| Item | Fields |
+| Fields of `budget` | |
 |---|---|
-| `budget` | generated: `DB_PASSWORD`, `DATABASE_URL`, `SESSION_SECRET`; set to `false`: `PLUGGY_SANDBOX`; empty, for you: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_ALLOWED_EMAILS`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `PLUGGY_WEBHOOK_SECRET`, `PLUGGY_ITEM_IDS`, `OT_SERVICE_TOKEN` |
-| `budget-temporal` | `DB_PASSWORD` (generated) |
-| `argocd-budget` | `sshPrivateKey` (generated); the script adds its public half to yurifrl/budget as a read-only deploy key |
+| generated | `DB_PASSWORD`, `DATABASE_URL`, `SESSION_SECRET`, `TEMPORAL_DB_PASSWORD` (Temporal's Postgres role), `ARGOCD_SSH_PRIVATE_KEY` (ArgoCD's read-only deploy key; the script adds the public half to yurifrl/budget) |
+| set to `false` | `PLUGGY_SANDBOX` |
+| empty, for you | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_ALLOWED_EMAILS`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `PLUGGY_WEBHOOK_SECRET`, `PLUGGY_ITEM_IDS`, `OT_SERVICE_TOKEN` |
+
+**If you already ran the first version of the script** (it made three items:
+`budget`, `budget-temporal`, `argocd-budget`), fold the two extra ones into
+`budget` before archiving them, or the Temporal password and the deploy key
+are lost:
+
+```sh
+scripts/merge-1password-items.sh            # copies the two fields into `budget`
+scripts/merge-1password-items.sh --archive  # same, then archives the two old items
+```
+
+The cluster reads only `budget` once home-systems commit "budget reads all
+its secrets from the one 1Password item" is on `main`.
 
 `DATABASE_URL` is `postgres://budget_app:<DB_PASSWORD>@pg-rw.databases.svc.cluster.local:5432/budget`,
 which is what `api/src/index.ts` and `api/src/worker.ts` read. If syscd-app's
