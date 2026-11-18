@@ -89,15 +89,28 @@ start at `0100`). One image runs both the API and the worker
   answer 404 unless it is configured; `GET /auth/providers` says which are on
   and the client's `LoginGate` picks (web + Access: one automatic redirect,
   loop-guarded). The OAuth consent page hands logged-out browsers to Access
-  when configured, else Google. `isAllowed` (`user/config.ts`) is the one
-  allow-list rule: on `AUTH_ALLOWED_EMAILS` when set, otherwise everyone
-  only when Access is on (its policy is the list). `requireUser` reads
-  `users.status` per request: `disabled` = 401 `account_disabled` (how a
-  person is revoked). Config comes only from `auth-env.ts` (boot guard:
-  `checkAuthEnv`). Decisions and threat model: `decisions.md`, "Access sign-in".
-- **Access.** `budgetAccess` authorises the `budget_id` in query/body; path
-  `:id` routes re-scope by `budget_id` in SQL. `src/access.test.ts` drives
-  every path-param operation from the catalog as a non-member and expects 404.
+  when configured, else Google. Who may sign in: for Access, whoever the
+  Cloudflare policy lets through (no API-side list; a first-time person gets a
+  user row and zero budgets, an invited e-mail links to its existing row); for
+  Google, only `AUTH_ALLOWED_EMAILS` (`googleAllowed`). Access-minted sessions
+  carry `idp: 'access'` and OAuth grants remember it (`oauth_grants.idp`), so
+  the per-request check `isAllowed(email, idp)` (`user/config.ts`) holds Google
+  sessions to the list and Access ones to "Access is configured".
+  `requireUser` reads `users.status` per request: `disabled` = 401
+  `account_disabled` (how a person is revoked) and stamps
+  `users.signed_in_at` (what ends an invitee's "pending" state). Config comes
+  only from `auth-env.ts` (boot guard: `checkAuthEnv`). Decisions and threat
+  model: `decisions.md`, "Access sign-in" and "Multi-user".
+- **Access.** A person reaches a budget only as its owner or a member
+  (`budget_members`); nobody else does, the `admin` role included (it is an
+  operator role: jobs ledger, app-wide sync window, claiming legacy unowned
+  budgets). `budgetAccess` authorises the `budget_id` in query/body; path
+  `:id` routes re-scope by `budget_id` in SQL; rename/archive/delete/restore/
+  fresh start and removing people are owner-only. `GET /budgets` returns only
+  the caller's budgets with `is_owner`, `owner` and `member_count`.
+  `src/access.test.ts` classifies every catalog operation, drives each
+  path-param and `budget_id` operation as a non-member (and as a non-member
+  admin) and expects 404, then shares the budget and expects the reads to open.
 - **Repeat-rule tick.** Still an in-process interval in the API
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.
