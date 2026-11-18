@@ -74,7 +74,6 @@ export function useAccountEdit(account: AccountRow | null, budgetId: string, onC
   // chooser).
   const upstream = useGetUpstreamAccountsQuery(undefined);
 
-
   if (!account) return null;
 
   const connection =
