@@ -49,6 +49,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   owner: 'yurifrl',
   version: VERSION,
   orientation: 'portrait',
+  // App icon and web favicon: syscd-app's assets/images (icon.png, favicon.png).
+  icon: './assets/images/icon.png',
   userInterfaceStyle: 'automatic',
   ios: {
     supportsTablet: true,
@@ -65,7 +67,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Epoch seconds fit Android's 2^31 versionCode cap until 2036.
     versionCode: Math.floor(NOW.getTime() / 1000),
   },
-  web: { output: 'single' },
+  web: { output: 'single', favicon: './assets/images/favicon.png' },
   plugins: ['expo-router', 'expo-image', 'expo-sharing', 'expo-status-bar', 'expo-web-browser'],
   experiments: {
     typedRoutes: true,
