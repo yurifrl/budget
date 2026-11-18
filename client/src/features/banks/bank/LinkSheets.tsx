@@ -20,8 +20,7 @@ export function LinkAccountSheet({
   connectionId,
   institution,
   bank,
-  currentAccountId,
-  currentBudgetId,
+  current,
   accounts,
   upstream,
   onClose,
@@ -31,10 +30,11 @@ export function LinkAccountSheet({
   institution: string | null;
   /** The bank account to link; null = sheet closed. */
   bank: UpstreamAccountJson | null;
-  /** Budget account that follows `bank` today (change mode); null = first link. */
-  currentAccountId?: string | null;
-  /** Budget `currentAccountId` lives in, when it is not the active one. */
-  currentBudgetId?: string;
+  /**
+   * Budget account that follows `bank` today (change mode) with the budget it
+   * lives in, which may not be the active one; null = first link.
+   */
+  current?: { accountId: string; budgetId: string } | null;
   accounts: AccountRow[];
   upstream: ConnectionUpstreamJson[];
   onClose: () => void;
@@ -63,8 +63,8 @@ export function LinkAccountSheet({
             onConfirm={async (accountId) => {
               setError(null);
               const inst = bank.institution ?? institution;
-              const failure = currentAccountId
-                ? await move(currentAccountId, accountId, connectionId, bank.externalId, inst, currentBudgetId)
+              const failure = current
+                ? await move(current.accountId, accountId, connectionId, bank.externalId, inst, current.budgetId)
                 : await link(accountId, connectionId, bank.externalId, inst);
               if (failure) setError(failure);
               else onClose();

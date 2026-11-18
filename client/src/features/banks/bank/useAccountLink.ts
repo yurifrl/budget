@@ -5,8 +5,9 @@
  *
  * `budgetId` is the active budget. A connection belongs to the user, not to a
  * budget, so an account it feeds may live in another budget: `unlink` and
- * `move` take that account's own budget, since the API scopes the account by
- * the budget in the request.
+ * `move` REQUIRE the budget of the account losing its link (no default to the
+ * active one), since the API scopes the account by the budget in the request.
+ * Defaulting it was the 2026-11-18 production "account not found" on Unlink.
  */
 
 import { useCallback } from 'react';
@@ -31,7 +32,7 @@ export function useAccountLink(budgetId: string) {
   );
 
   const unlink = useCallback(
-    async (accountId: string, accountBudgetId: string = budgetId) => {
+    async (accountId: string, accountBudgetId: string) => {
       try {
         await linkAccount({ budgetId: accountBudgetId, accountId, connectionId: null }).unwrap();
         return null;
@@ -39,7 +40,7 @@ export function useAccountLink(budgetId: string) {
         return apiErrorMessage(err, 'failed to unlink account');
       }
     },
-    [budgetId, linkAccount],
+    [linkAccount],
   );
 
   /**
@@ -54,7 +55,7 @@ export function useAccountLink(budgetId: string) {
       connectionId: string,
       externalAccountId: string,
       institution: string | null,
-      fromBudgetId: string = budgetId,
+      fromBudgetId: string,
     ) => {
       const dropped = await unlink(fromAccountId, fromBudgetId);
       if (dropped) return dropped;
@@ -63,7 +64,7 @@ export function useAccountLink(budgetId: string) {
       const restored = await link(fromAccountId, connectionId, externalAccountId, institution, fromBudgetId);
       return restored ? `${failure} (and the previous link could not be restored: ${restored})` : failure;
     },
-    [budgetId, link, unlink],
+    [link, unlink],
   );
 
   return { link, unlink, move, busy: isLoading };
