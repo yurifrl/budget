@@ -13,32 +13,25 @@
  * ScrollView transform, so this stays paintable above every register row.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle, type ViewInstance, type ViewStyle } from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle, type ViewInstance, type ViewStyle } from 'react-native';
 import type { PayeeAdminRow } from '../../data/rows';
 import type { Account } from '../../domain/types';
 import { colors, radius } from '../../ui/theme';
 import { createPortalOnWeb } from '@/ui/portal';
 import { ManagePayeesModal } from '../ManagePayeesModal';
-import { transferPayeeName } from '@shared/domain/transfers';
+import {
+  anchorFromRect,
+  enterTarget,
+  highlightAfterKey,
+  payeeMenu,
+  payeePortalPlacement,
+  payeeSections,
+  type PayeeAnchor,
+  type PayeeItem,
+} from './payeeDropdown.logic';
+import { PayeeMenuBody } from './PayeeMenuBody';
 
-
-type ItemKind = 'selected' | 'transfer' | 'payee';
-
-interface Item {
-  kind: ItemKind;
-  key: string;
-  label: string;
-  sub?: string;
-  /** The payee string committed into the field when picked. */
-  commit: string;
-  checked?: boolean;
-}
-
-interface Section {
-  title: string;
-  items: Item[];
-}
 
 export function PayeeDropdown({
   value,
@@ -77,27 +70,14 @@ export function PayeeDropdown({
   const containerRef = useRef<ViewInstance>(null);
   // Web portal anchor: document-space rect (left/top/width) of the container.
   // Null on native, which keeps the in-place absolute dropdown.
-  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number; topVp: number; bottomVp: number } | null>(null);
+  const [anchor, setAnchor] = useState<PayeeAnchor | null>(null);
 
   const measureAnchor = useCallback(() => {
     if (process.env.EXPO_OS !== 'web') return;
     const node = containerRef.current as unknown as HTMLElement | null; // RNW forwards the View ref to its host element
     const rect = node?.getBoundingClientRect?.();
     if (!rect || rect.width <= 0) return;
-    // Document coordinates: body is static in RN-web, so a body-level
-    // absolute dropdown stays glued to the input across page scroll.
-    const left = rect.left + window.scrollX;
-    const top = rect.bottom + window.scrollY;
-    setAnchor((prev) =>
-      prev &&
-      prev.left === left &&
-      prev.top === top &&
-      prev.width === rect.width &&
-      prev.topVp === rect.top &&
-      prev.bottomVp === rect.bottom
-        ? prev
-        : { left, top, width: rect.width, topVp: rect.top, bottomVp: rect.bottom },
-    );
+    setAnchor((prev) => anchorFromRect(prev, rect, window.scrollX, window.scrollY));
   }, []);
 
   useLayoutEffect(() => {
@@ -116,68 +96,16 @@ export function PayeeDropdown({
     };
   }, [measureAnchor, open]);
 
-  const query = value.trim().toLowerCase();
   const trimmedValue = value.trim();
 
-  const sections = useMemo<Section[]>(() => {
-    const transferItems: Item[] = accounts
-      .filter((a) => a.id !== currentAccountId)
-      .map((a) => ({
-        kind: 'transfer' as const,
-        key: `transfer:${a.id}`,
-        label: transferPayeeName(a.name),
-        sub: a.group === 'CASH' ? 'Cash account' : a.group === 'CREDIT' ? 'Credit account' : 'Account',
-        commit: transferPayeeName(a.name),
-      }));
-    const payeeItems: Item[] = payees
-      .filter((p) => !p.hidden)
-      .map((p) => ({
-        kind: 'payee' as const,
-        key: `payee:${p.id}`,
-        label: p.name,
-        commit: p.name,
-      }));
-
-    const matches = (s: string) => s.toLowerCase().includes(query);
-    const filterItems = (list: Item[]) => (query ? list.filter((i) => matches(i.label)) : list);
-
-    const visiblePayee = payees.find((p) => !p.hidden && p.name === trimmedValue);
-    // A selected transfer (committed from Payments and Transfers, or an
-    // existing "Transfer : <account>" transaction being edited) shows under
-    // Selected too — including a transfer to the current account, which the
-    // option list omits but the field can still hold.
-    const visibleTransfer = accounts.find((a) => transferPayeeName(a.name) === trimmedValue);
-    const selectedRow: Item | null = visiblePayee
-      ? { kind: 'selected' as const, key: 'selected', label: visiblePayee.name, commit: visiblePayee.name, checked: true }
-      : visibleTransfer
-        ? {
-            kind: 'selected' as const,
-            key: 'selected-transfer',
-            label: transferPayeeName(visibleTransfer.name),
-            commit: transferPayeeName(visibleTransfer.name),
-            checked: true,
-          }
-        : null;
-    const selectedSection: Section | null = selectedRow ? { title: 'Selected', items: [selectedRow] } : null;
-
-    const transfers = filterItems(transferItems);
-    const saved = filterItems(payeeItems);
-    return [
-      ...(selectedSection ? [selectedSection] : []),
-      ...(transfers.length ? [{ title: 'Payments and Transfers', items: transfers }] : []),
-      ...(saved.length ? [{ title: 'Saved Payees', items: saved }] : []),
-    ];
-  }, [accounts, currentAccountId, payees, query, trimmedValue]);
-
+  const sections = useMemo(
+    () => payeeSections({ accounts, currentAccountId, payees, value }),
+    [accounts, currentAccountId, payees, value],
+  );
   // Flat pick list for keyboard highlight: section rows, then the create row
   // (typed queries matching no option) and Manage Payees.
-  const flatRows: Item[] = useMemo(() => sections.flatMap((s) => s.items), [sections]);
-  const hasExactMatch = useMemo(
-    () => query.length > 0 && (flatRows.some((r) => r.label.toLowerCase() === query) || trimmedValue.length === 0),
-    [flatRows, query, trimmedValue],
-  );
-  // +1 create row (typed query with no exact match), +1 Manage Payees row.
-  const rowCount = flatRows.length + (query && !hasExactMatch ? 1 : 0) + 1;
+  const menu = useMemo(() => payeeMenu(sections, value), [sections, value]);
+  const { rowCount } = menu;
   const highlightedIndex = Math.min(highlight, rowCount - 1);
 
   const blurClose = () => {
@@ -192,7 +120,7 @@ export function PayeeDropdown({
   }, []);
 
   const commitItem = useCallback(
-    (item: Item) => {
+    (item: PayeeItem) => {
       setOpen(false);
       setHighlight(0);
       onChangeText(item.commit);
@@ -200,69 +128,23 @@ export function PayeeDropdown({
     [onChangeText],
   );
 
-  const dropdownContent: ReactNode[] = [];
-  let flatIndex = 0;
-  for (const section of sections) {
-    dropdownContent.push(
-      <Text key={`hdr:${section.title}`} style={styles.sectionTitle}>
-        {section.title}
-      </Text>,
-    );
-    for (const item of section.items) {
-      const i = flatIndex;
-      const active = i === highlightedIndex;
-      dropdownContent.push(
-        <Pressable
-          key={item.key}
-          onPressIn={() => commitItem(item)}
-          onHoverIn={() => setHighlight(i)}
-          style={[styles.row, active && styles.rowActive]}>
-          {item.checked ? <Text style={styles.check}>✓</Text> : <Text style={styles.checkPlaceholder} />}
-          <Text style={styles.rowLabel} numberOfLines={1}>
-            {item.label}
-          </Text>
-          {item.sub ? <Text style={styles.rowSub}>{item.sub}</Text> : null}
-        </Pressable>,
-      );
-      flatIndex += 1;
-    }
-  }
-  if (query && !hasExactMatch) {
-    const i = flatIndex;
-    const active = i === highlightedIndex;
-    dropdownContent.push(
-      <Pressable
-        key="__create__"
-        onPressIn={() => {
-          setOpen(false);
-          setHighlight(0);
-          onChangeText(trimmedValue);
-        }}
-        onHoverIn={() => setHighlight(i)}
-        style={[styles.row, active && styles.rowActive]}>
-        <Text style={styles.checkPlaceholder} />
-        <Text style={[styles.rowLabel, styles.createMark]}>＋</Text>
-        <Text style={[styles.rowLabel, styles.createLabel]} numberOfLines={1}>
-          {`Use “${trimmedValue}” as payee`}
-        </Text>
-      </Pressable>,
-    );
-    flatIndex += 1;
-  }
-  const iManage = flatIndex;
-  const manageActive = iManage === highlightedIndex;
-  // Pinned footer (YNAB): always visible below the scrollable list, never
-  // clipped by the portal's maxHeight.
-  const manageRow = (
-    <Pressable
-      key="__manage__"
-      onPressIn={goManagePayees}
-      onHoverIn={() => setHighlight(iManage)}
-      style={[styles.row, styles.manageRow, manageActive && styles.rowActive]}
-      testID="manage-row-v2">
-      <Text style={styles.checkPlaceholder} />
-      <Text style={[styles.rowLabel, styles.manageLabel]}>Manage Payees…</Text>
-    </Pressable>
+  const commitTyped = () => {
+    setOpen(false);
+    setHighlight(0);
+    onChangeText(trimmedValue);
+  };
+
+  const menuBody = (
+    <PayeeMenuBody
+      sections={sections}
+      showCreate={menu.showCreate}
+      createLabel={trimmedValue}
+      highlightedIndex={highlightedIndex}
+      onHighlight={setHighlight}
+      onPick={commitItem}
+      onCreate={commitTyped}
+      onManage={goManagePayees}
+    />
   );
 
   // Portal mount point. body is static in RN-web, so document-anchored
@@ -275,49 +157,35 @@ export function PayeeDropdown({
     if (key === 'ArrowDown') {
       e.preventDefault();
       setOpen(true);
-      setHighlight((h) => Math.min(h + 1, rowCount - 1));
+      setHighlight((h) => highlightAfterKey(h, 'ArrowDown', rowCount));
     } else if (key === 'ArrowUp') {
       e.preventDefault();
-      setHighlight((h) => Math.max(h - 1, 0));
+      setHighlight((h) => highlightAfterKey(h, 'ArrowUp', rowCount));
     } else if (key === 'Enter') {
       e.preventDefault();
       if (!open) return;
       // Enter below the section rows picks create (typed query) or closes via
       // Manage Payees only when highlighted — mirror the core Combobox, where
       // Enter picks the highlighted row.
-      if (highlightedIndex < flatRows.length) {
-        const item = flatRows[highlightedIndex];
-        if (item) commitItem(item);
-      } else if (query && !hasExactMatch && highlightedIndex === flatRows.length) {
-        setOpen(false);
-        setHighlight(0);
-        onChangeText(trimmedValue);
-      } else {
-        goManagePayees();
-      }
+      const target = enterTarget(highlightedIndex, menu);
+      if (target.kind === 'item') commitItem(target.item);
+      else if (target.kind === 'create') commitTyped();
+      else if (target.kind === 'manage') goManagePayees();
     } else if (key === 'Escape') {
       setOpen(false);
     }
   };
 
-  // Viewport-aware portal placement: flip above the input when there's no
-  // room below for a useful dropdown (short windows), and cap the height to
-  // the available space so the pinned Manage Payees row stays on-screen.
+  // Viewport-aware portal placement (flip above / cap the height).
   // Web-only: the native dropdown keeps its in-place absolute layout.
-  const portalPlacement = () => {
-    if (!anchor) return null;
-    const spaceBelow = window.innerHeight - anchor.bottomVp;
-    const flipUp = spaceBelow < 200 && anchor.topVp > spaceBelow;
-    const maxHeight = Math.max(160, Math.min(240, (flipUp ? anchor.topVp : spaceBelow) - 8));
-    return flipUp
-      ? {
-          left: anchor.left,
-          bottom: document.documentElement.scrollHeight - (anchor.topVp + window.scrollY) + 2,
-          width: Math.max(anchor.width, 260),
-          maxHeight,
-        }
-      : { left: anchor.left, top: anchor.top, width: Math.max(anchor.width, 260), maxHeight };
-  };
+  const portalPlacement = () =>
+    anchor
+      ? payeePortalPlacement(anchor, {
+          innerHeight: window.innerHeight,
+          scrollY: window.scrollY,
+          scrollHeight: document.documentElement.scrollHeight,
+        })
+      : null;
 
   return (
     <View ref={containerRef} style={[styles.container, containerStyle]}>
@@ -347,20 +215,14 @@ export function PayeeDropdown({
         // the ScrollView transform, so the dropdown paints above all rows.
         createPortalOnWeb(
           <View style={[styles.dropdownPortal, portalPlacement()]} testID="register-popover">
-            <ScrollView style={styles.listScroll} keyboardShouldPersistTaps="handled">
-              {dropdownContent}
-            </ScrollView>
-            {manageRow}
+            {menuBody}
           </View>,
           portalHost,
         )
       ) : open ? (
         // Native: in-place absolute dropdown (portals are web-only).
         <View style={styles.dropdown}>
-          <ScrollView style={styles.listScroll} keyboardShouldPersistTaps="handled">
-            {dropdownContent}
-          </ScrollView>
-          {manageRow}
+          {menuBody}
         </View>
       ) : null}
       {manageOpen ? <ManagePayeesModal visible={manageOpen} onClose={() => setManageOpen(false)} /> : null}
@@ -408,34 +270,6 @@ const styles = StyleSheet.create({
     zIndex: 60,
     elevation: 8,
   },
-  // Scrollable body inside the portal: sections + create row. The Manage
-  // Payees footer sits below it, pinned outside the maxHeight clip.
-  listScroll: { maxHeight: 212, flexShrink: 1 },
-  sectionTitle: {
-    color: colors.faint,
-    fontSize: 11,
-    fontWeight: '700',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-  },
-  rowActive: { backgroundColor: colors.hover },
-  rowLabel: { color: colors.text, fontSize: 13, flexShrink: 1 },
-  rowSub: { color: colors.faint, fontSize: 11 },
-  createMark: { color: colors.indigo2, fontWeight: '700' },
-  createLabel: { color: colors.indigo2 },
-  check: { color: colors.indigo2, fontSize: 12, fontWeight: '700', width: 12 },
-  checkPlaceholder: { width: 12 },
-  manageRow: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-  manageLabel: { color: colors.indigo2, fontWeight: '600' },
   inputChevron: { paddingRight: 24 },
   chevronWrap: { position: 'absolute', right: 8, top: 0, bottom: 0, justifyContent: 'center' },
   chevronText: { color: colors.faint, fontSize: 12 },
