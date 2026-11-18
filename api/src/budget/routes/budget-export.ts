@@ -121,7 +121,11 @@ export const operations = [
         bundleIndex: bundleIndex.get(c.bundle_id) ?? null,
       })),
       bundles: bundles.map((b) => ({ groupIndex: b.groupIndex, name: b.name })),
-      accounts: accounts.map((a) => ({ name: a.name, userId: (a.user_id as string | null) ?? null })),
+      accounts: accounts.map((a) => ({
+        name: a.name,
+        userId: (a.user_id as string | null) ?? null,
+        currency: (a.currency as string | null) ?? null,
+      })),
       transactions,
       assignments,
       payees: payees.map((p) => p.name),

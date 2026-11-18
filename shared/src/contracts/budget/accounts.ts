@@ -1,11 +1,11 @@
 import { z } from '../../zod';
 
 import { defineOperation, EXPOSE_ALL, EXPOSE_NO_MCP } from '../../operation-contract';
-import { ACCOUNT_TYPES, accountLinkSchema, budgetId, milliunitsSchema, personSchema, uuidSchema } from './schemas';
+import { ACCOUNT_TYPES, accountCurrencySchema, accountLinkSchema, budgetId, milliunitsSchema, personSchema, uuidSchema } from './schemas';
 
 export const accountsList = defineOperation({
   name: 'budget_accounts_list',
-  description: 'List the accounts of a budget with their cleared/uncleared balances in integer MILLIUNITS (1/1000 of the currency unit; 12.34 = 12340).',
+  description: 'List the accounts of a budget with their cleared/uncleared balances in integer MILLIUNITS (1/1000 of the currency unit; 12.34 = 12340) and their currency (ISO 4217 code; null = the budget\'s currency).',
   input: z.object({ budget_id: budgetId }),
   method: 'GET',
   path: '/accounts',
@@ -16,7 +16,7 @@ export const accountsList = defineOperation({
 export const accountsCreate = defineOperation({
   name: 'budget_accounts_create',
   description:
-    'Create an account. balance is in integer MILLIUNITS (12.34 = 12340); a non-zero value (stated as |balance| for debt types) books a "Starting Balance" transaction.',
+    'Create an account. balance is in integer MILLIUNITS (12.34 = 12340); a non-zero value (stated as |balance| for debt types) books a "Starting Balance" transaction. currency: optional ISO 4217 code (omit or null = the budget\'s currency); stored only, no conversion.',
   input: z.object({
     budget_id: budgetId,
     name: z.string().trim().min(1).max(200),
@@ -24,6 +24,7 @@ export const accountsCreate = defineOperation({
     on_budget: z.boolean().optional().default(true),
     balance: milliunitsSchema.optional().default(0),
     user_id: personSchema,
+    currency: accountCurrencySchema.optional(),
   }),
   method: 'POST',
   path: '/accounts',
@@ -35,7 +36,7 @@ export const accountsCreate = defineOperation({
 export const accountsUpdate = defineOperation({
   name: 'budget_accounts_update',
   description:
-    'Edit an account: rename, note, close/reopen, override the working balance (working_balance, integer MILLIUNITS, 12.34 = 12340), or link/unlink a bank connection.',
+    'Edit an account: rename, note, close/reopen, override the working balance (working_balance, integer MILLIUNITS, 12.34 = 12340), set its currency (ISO 4217 code, or null = the budget\'s currency; stored only, no conversion), or link/unlink a bank connection.',
   input: z.object({
     id: uuidSchema,
     budget_id: budgetId,
@@ -44,6 +45,7 @@ export const accountsUpdate = defineOperation({
     closed: z.boolean().optional(),
     working_balance: milliunitsSchema.optional(),
     user_id: personSchema,
+    currency: accountCurrencySchema.optional(),
     link: accountLinkSchema.optional(),
   }),
   method: 'PATCH',

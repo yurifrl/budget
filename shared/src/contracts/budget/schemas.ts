@@ -8,6 +8,7 @@ import { z } from '../../zod';
 import { categorizationModes, matchTypes } from '../../domain/payees';
 import {
   clearedSchema,
+  currencyCodeSchema,
   flagSchema,
   isoDateSchema,
   milliunitsSchema,
@@ -17,7 +18,10 @@ import {
 } from '../../validation';
 import { FREQUENCIES } from './frequencies';
 
-export { uuidSchema, monthDateSchema, milliunitsSchema, nonNegativeMilliunitsSchema, isoDateSchema };
+export { uuidSchema, monthDateSchema, milliunitsSchema, nonNegativeMilliunitsSchema, isoDateSchema, currencyCodeSchema };
+
+/** Account currency: ISO 4217 code, or null = the budget's currency. */
+export const accountCurrencySchema = currencyCodeSchema.nullable();
 
 /** Every budget-scoped endpoint addresses its budget with this key. */
 export const budgetId = uuidSchema;
@@ -226,7 +230,14 @@ export const restorePayloadShape = {
     .max(10000)
     .optional(),
   accounts: z
-    .array(z.object({ name: z.string().min(1).max(500), userId: uuidSchema.nullable().optional() }))
+    .array(
+      z.object({
+        name: z.string().min(1).max(500),
+        userId: uuidSchema.nullable().optional(),
+        /** ISO 4217 code; absent/null = the budget's currency (older backups have no key). */
+        currency: currencyCodeSchema.nullable().optional(),
+      }),
+    )
     .max(1000),
   transactions: z
     .array(

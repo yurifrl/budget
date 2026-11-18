@@ -45,15 +45,38 @@ export async function getAccount(db: Queryable, accountId: string) {
 
 export async function insertAccount(
   db: Queryable,
-  a: { budgetId: string; name: string; type: AccountType; accountGroup: 'CASH' | 'CREDIT'; onBudget: boolean; userId: string | null },
+  a: {
+    budgetId: string;
+    name: string;
+    type: AccountType;
+    accountGroup: 'CASH' | 'CREDIT';
+    onBudget: boolean;
+    userId: string | null;
+    currency: string | null;
+  },
 ): Promise<string> {
   const created = await db.query<{ id: string }>(
-    `INSERT INTO accounts (budget_id, name, type, account_group, on_budget, user_id)
-       VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO accounts (budget_id, name, type, account_group, on_budget, user_id, currency)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-    [a.budgetId, a.name, a.type, a.accountGroup, a.onBudget, a.userId],
+    [a.budgetId, a.name, a.type, a.accountGroup, a.onBudget, a.userId, a.currency],
   );
   return created.rows[0].id;
+}
+
+/** Set (or clear, with null) an account's ISO 4217 currency. */
+export async function setAccountCurrency(db: Queryable, accountId: string, currency: string | null): Promise<void> {
+  await db.query('UPDATE accounts SET currency = $2 WHERE id = $1', [accountId, currency]);
+}
+
+/**
+ * Bank sync: adopt the provider's currency for a linked account only while
+ * the account has none — a user-set (or earlier adopted) value is never
+ * overwritten. True when the row changed.
+ */
+export async function adoptAccountCurrency(db: Queryable, accountId: string, currency: string): Promise<boolean> {
+  const res = await db.query('UPDATE accounts SET currency = $2 WHERE id = $1 AND currency IS NULL', [accountId, currency]);
+  return (res.rowCount ?? 0) > 0;
 }
 
 /** The Credit Card Payments group of a budget (first live one), if any. */

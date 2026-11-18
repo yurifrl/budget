@@ -117,7 +117,14 @@ export const operations = [
       // ---- accounts ----------------------------------------------------------
       const accountIds = payload.accounts.map(() => crypto.randomUUID());
       for (let i = 0; i < payload.accounts.length; i++) {
-        await insertRestoredAccount(client, accountIds[i], budgetId, payload.accounts[i].name, await personFor(payload.accounts[i].userId));
+        await insertRestoredAccount(
+          client,
+          accountIds[i],
+          budgetId,
+          payload.accounts[i].name,
+          await personFor(payload.accounts[i].userId),
+          payload.accounts[i].currency ?? null,
+        );
       }
 
       // ---- payees ------------------------------------------------------------

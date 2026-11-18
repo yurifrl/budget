@@ -53,6 +53,40 @@ interface LinkedAccountRow {
   id: string;
   budget_id: string;
   external_account_id: string;
+  /** ISO 4217 code; null until set by the user or adopted from the provider. */
+  currency: string | null;
+}
+
+const ISO_4217 = /^[A-Z]{3}$/;
+
+/**
+ * Provider currency per upstream account id, fetched only when some linked
+ * account has no currency yet (G1). Best-effort: a provider failure, timeout
+ * or adapter without account listing yields an empty map and the sync goes
+ * on — currency never blocks importing transactions.
+ */
+async function upstreamCurrencies(
+  aggregator: BankAggregator,
+  externalItemId: string,
+  linked: readonly LinkedAccountRow[],
+  timeoutMs: number,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!linked.some((a) => a.currency == null)) return out;
+  try {
+    const accounts = await withTimeout(
+      aggregator.listExternalAccounts(externalItemId),
+      timeoutMs,
+      `upstream listExternalAccounts(${externalItemId})`,
+    );
+    for (const account of accounts) {
+      const code = account.currencyCode?.trim().toUpperCase();
+      if (code && ISO_4217.test(code)) out.set(account.externalId, code);
+    }
+  } catch {
+    /* best-effort: the next sync tries again */
+  }
+  return out;
 }
 
 interface ExistingTxnRow {
@@ -216,7 +250,7 @@ async function syncOnce(
 
   // Budget accounts linked to upstream accounts of this connection:
   // unlinked accounts are skipped — mirroring is a budget-module concern.
-  const linkedSql = `SELECT ac.id, ac.budget_id, ac.external_account_id
+  const linkedSql = `SELECT ac.id, ac.budget_id, ac.external_account_id, ac.currency
          FROM public.accounts ac
          JOIN public.connections c ON c.id = ac.connection_id
          WHERE ac.connection_id = $1 AND ac.external_account_id IS NOT NULL
@@ -237,6 +271,7 @@ async function syncOnce(
     fetched.set(acc.id, { acc, transactions: upstream.transactions, complete: !upstream.hasMore });
     input.onProgress?.();
   }
+  const currencies = await upstreamCurrencies(aggregator, row.external_id, linked, timeoutMs);
   await input.beforeCommit?.();
 
   // ---- Phase 2: short write transaction ---------------------------------
@@ -265,6 +300,10 @@ async function syncOnce(
       const pulled = fetched.get(id);
       if (!pulled) continue;
       const { acc } = pulled;
+      // G1: adopt the provider's currency while the account has none (a
+      // user-set value is never overwritten; the UPDATE re-checks IS NULL).
+      const code = currencies.get(acc.external_account_id);
+      if (code) await ledger.adoptAccountCurrency(pg, acc.id, code);
       const upstream = { transactions: pulled.transactions };
       const seen = new Set(upstream.transactions.map((txn) => txn.externalId));
 

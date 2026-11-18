@@ -54,7 +54,7 @@ async function ensureCardPaymentCategory(client: Queryable, budgetId: string, na
 
 const createAccount = implement(
   accountsCreate,
-  async (_c, { budget_id, name, type, on_budget, balance, user_id }) => {
+  async (_c, { budget_id, name, type, on_budget, balance, user_id, currency }) => {
     const accountId = await withTransaction(pool, async (client) => {
       if (!(await accountsStore.budgetExists(client, budget_id))) throw new HttpError(404, 'budget not found');
 
@@ -69,6 +69,7 @@ const createAccount = implement(
         accountGroup: accountGroupFor(type),
         onBudget: on_budget,
         userId: user_id ?? null,
+        currency: currency ?? null,
       });
       // Every account gets its "Transfer : <name>" payee so it shows up in the
       // register's Payments and Transfers list and can be a transfer target.
@@ -93,7 +94,7 @@ const createAccount = implement(
 
 const updateAccount = implement(
   accountsUpdate,
-  async (c, { id: accountId, budget_id, name, note, closed, working_balance, link, user_id }) => {
+  async (c, { id: accountId, budget_id, name, note, closed, working_balance, link, user_id, currency }) => {
     const user = c.get('user');
     if (!user) throw new HttpError(401, 'unauthorized');
     await withTransaction(pool, async (client) => {
@@ -113,6 +114,7 @@ const updateAccount = implement(
         note !== undefined ||
         working_balance !== undefined ||
         user_id !== undefined ||
+        currency !== undefined ||
         link !== undefined;
       if (isClosed && closed !== false && mutatesFields) {
         throw new HttpError(409, 'account is closed — reopen it to make changes');
@@ -148,6 +150,11 @@ const updateAccount = implement(
       if (user_id !== undefined) {
         await assertMemberOrShared(client, budget_id, user_id);
         await accountsStore.setAccountUser(client, accountId, user_id);
+      }
+
+      // Currency is a label (G1): stored as given, no amounts are converted.
+      if (currency !== undefined) {
+        await accountsStore.setAccountCurrency(client, accountId, currency);
       }
 
       if (link !== undefined) {

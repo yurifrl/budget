@@ -39,5 +39,15 @@ export const milliunitsSchema = z
   .max(Number.MAX_SAFE_INTEGER)
   .describe('Integer milliunits (1/1000 of the currency unit), e.g. 12.34 = 12340');
 
+/**
+ * ISO 4217 currency code ('BRL', 'USD'): trimmed and upper-cased, then exactly
+ * three letters. Matches the `accounts_currency_iso4217` CHECK (migration 0100).
+ */
+export const currencyCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z]{3}$/, 'must be an ISO 4217 currency code (3 letters, e.g. BRL)');
+
 /** Non-negative integer milliunits (one-way inflow / outflow legs). */
 export const nonNegativeMilliunitsSchema = milliunitsSchema.min(0);

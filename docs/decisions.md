@@ -793,3 +793,66 @@ cents export emitted fractional cents, which its own restore rejected).
   (`client/src/budget/transfer`), decimal strings with no unit, parsed into
   the cents domain. That path is unchanged; `data/` converts the resulting
   payload to a format-2 document before it is sent.
+
+## G1: `accounts.currency` (migration 0100)
+
+`api/db/migrations/0100_account_currency.sql`: `alter table public.accounts
+add column if not exists currency text constraint accounts_currency_iso4217
+check (currency ~ '^[A-Z]{3}$')`. Nullable, no default, no backfill: NULL
+means "the budget's currency" (`budgets.currency_format`), which every
+existing row is. Signature `column:public.accounts.currency`. Adding a
+nullable column with no default is a catalog-only change in Postgres; the
+CHECK is validated against existing rows, all NULL, under a short lock on a
+small table.
+
+API: `currency` (ISO 4217, trimmed and upper-cased by `currencyCodeSchema`,
+null clears) on `budget_accounts_create` / `_update`; returned by every
+account read (`SELECT a.*`); carried by fresh start, by `budget_export`
+(`accounts[].currency`) and `budget_restore` (optional, older backups have no
+key). A closed account rejects a currency change like any other field. No
+amount is converted anywhere.
+
+Bank sync: when some linked account of a connection has no currency, the sync
+lists the item's upstream accounts once (same timeout as the pulls, failures
+swallowed) and, inside its write transaction, runs
+`UPDATE accounts SET currency = $code WHERE id = $id AND currency IS NULL`
+through `ledger.adoptAccountCurrency`. A user-set value is never overwritten,
+an invalid provider code is ignored, and once every linked account has a
+currency no extra provider call is made. Linking alone does not set it (the
+link request has no provider data server-side); the next sync of the
+connection does. Tests: `connections/sync-currency.test.ts`,
+`budget/routes/accounts-currency.test.ts`.
+
+Client: `AccountRow` carries `currency` (wire type), but the domain `Account`
+(`client/src/budget/domain/types.ts`) is outside `data/`, so the app ignores
+it for now (follow-up filed for the UI).
+
+### Why the running syscd-app keeps working with the extra column
+
+Checked by grepping syscd-app at 8e79a31 (`server/`, `modules/`, `scripts/`)
+for every statement touching `accounts`:
+
+- **`SELECT *` / `a.*` row mapping** (`server/budget/routes/accounts.ts:118,249`
+  read-back, `:429` list): the rows are returned as JSON. The extra
+  `currency` key reaches syscd's client, whose `AccountRow` mapping
+  (`modules/budget/data/mapping.ts`) reads named fields only and ignores
+  unknown keys. No code spreads such a row back into an INSERT/UPDATE.
+- **Every `INSERT INTO accounts` names its columns**: account create
+  (`accounts.ts:86`), restore (`budget-restore.ts:139`) and fresh start
+  (`budgets.ts:164-175`). An unnamed nullable column with no default simply
+  gets NULL, so all three keep succeeding. Consequence: a fresh start or a
+  restore run *from syscd's UI* produces accounts with currency NULL (the
+  budget's currency), i.e. a user-set currency is not carried by syscd's
+  copy paths. Nothing in syscd can set a currency, so this can only lose a
+  value set through this API during the dual-run; accepted.
+- **Every other read names its columns** (`connections/routes.ts:202,288,344,392`,
+  `connections/store.ts:174`, `connections/sync.ts:270`, budget domain
+  `transactions.ts:78`, `transfers.ts`, `card-payments.ts:119`,
+  `budget-export.ts:60`, `repeat-rules.ts:171`): unaffected.
+- **Export** names `id, name, user_id`, so syscd backups simply lack
+  `currency` and restore here as NULL.
+- No `TRUNCATE`, `COPY` or dump/restore of `accounts` exists in syscd.
+- Migrations: syscd's runner only iterates its own files and ignores the
+  unknown `0100_account_currency.sql` row in `schema_migrations` (phase 2
+  findings), and the column name cannot collide with a future syscd
+  migration number (0034+).
