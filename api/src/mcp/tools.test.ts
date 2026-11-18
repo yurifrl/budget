@@ -82,3 +82,16 @@ describe('MCP SDK + shared zod', () => {
     expect(realpathSync(path.dirname(fromSdk))).toBe(sharedZodDir);
   });
 });
+
+describe('real catalog: advertised output schemas', () => {
+  test('object outputs become outputSchema and never forbid extra properties (rows carry more columns than declared)', async () => {
+    const { contracts } = await import('../catalog');
+    const { mcpOperations, mcpOutputSchema } = await import('./tools');
+    const withSchema = mcpOperations(contracts).filter((c) => mcpOutputSchema(c));
+    expect(withSchema.length).toBeGreaterThan(20);
+    for (const c of withSchema) {
+      const json = JSON.stringify(sharedZ.toJSONSchema(mcpOutputSchema(c)!, { io: 'output', unrepresentable: 'any' }));
+      expect(json, c.name).not.toContain('"additionalProperties":false');
+    }
+  });
+});

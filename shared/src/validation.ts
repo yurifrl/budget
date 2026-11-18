@@ -21,25 +21,33 @@ export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YY
 /** YNAB flag colors (0004_ynab_compat.sql:166-167). */
 export const flagSchema = z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple', '']).nullable();
 export const clearedSchema = z.enum(['cleared', 'uncleared', 'reconciled']);
-/** Integer cents/milliunits, bounded to what bigint + JS number can carry. */
-export const centsSchema = z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER);
+/**
+ * Money on the wire: every amount, in both directions, is an integer number of
+ * MILLIUNITS (1/1000 of the currency unit: 12.34 = 12340, -5 = -5000). Field
+ * names carry no unit suffix (`amount`, `inflow`, `balance`, `budgeted`).
+ * Any integer is accepted (the database holds YNAB-imported sub-cent values);
+ * the app's own writes are always multiples of 10.
+ */
+export const MONEY_UNIT_RULE =
+  'Money: every amount is an integer number of MILLIUNITS (1/1000 of the currency unit; 12.34 = 12340). Amount fields have no unit suffix.';
 
-export const balanceDeltaSchema = z.preprocess(
-  // accept snake_case (curl/tests) or camelCase (app client) keys.
-  (raw) => {
-    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return raw;
-    const r = raw as Record<string, unknown>;
-    return {
-      account_id: r.account_id ?? r.accountId,
-      cleared_delta: r.cleared_delta ?? r.clearedDelta ?? 0,
-      uncleared_delta: r.uncleared_delta ?? r.unclearedDelta ?? 0,
-    };
-  },
-  z.object({
-    account_id: uuidSchema,
-    cleared_delta: centsSchema,
-    uncleared_delta: centsSchema,
-  }),
-);
+/** Integer milliunits, bounded to what bigint + JS number can carry. */
+export const milliunitsSchema = z
+  .number()
+  .int()
+  .min(Number.MIN_SAFE_INTEGER)
+  .max(Number.MAX_SAFE_INTEGER)
+  .describe('Integer milliunits (1/1000 of the currency unit), e.g. 12.34 = 12340');
 
-export const balanceDeltasSchema = z.array(balanceDeltaSchema).max(100);
+/**
+ * ISO 4217 currency code ('BRL', 'USD'): trimmed and upper-cased, then exactly
+ * three letters. Matches the `accounts_currency_iso4217` CHECK (migration 0100).
+ */
+export const currencyCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z]{3}$/, 'must be an ISO 4217 currency code (3 letters, e.g. BRL)');
+
+/** Non-negative integer milliunits (one-way inflow / outflow legs). */
+export const nonNegativeMilliunitsSchema = milliunitsSchema.min(0);

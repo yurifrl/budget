@@ -35,7 +35,7 @@ export const exportBundles = (db: Queryable, budgetId: string) =>
   );
 
 export const exportAccounts = (db: Queryable, budgetId: string) =>
-  q(db, 'SELECT id, name, user_id FROM accounts WHERE budget_id = $1 AND NOT deleted ORDER BY sort_order, name, id', budgetId);
+  q(db, 'SELECT id, name, user_id, currency FROM accounts WHERE budget_id = $1 AND NOT deleted ORDER BY sort_order, name, id', budgetId);
 
 export const exportTransactions = (db: Queryable, budgetId: string) =>
   q(

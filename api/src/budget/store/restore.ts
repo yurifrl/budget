@@ -73,11 +73,18 @@ export async function insertRestoredCategory(
   );
 }
 
-export async function insertRestoredAccount(db: Queryable, id: string, budgetId: string, name: string, userId: string | null): Promise<void> {
+export async function insertRestoredAccount(
+  db: Queryable,
+  id: string,
+  budgetId: string,
+  name: string,
+  userId: string | null,
+  currency: string | null = null,
+): Promise<void> {
   await db.query(
-    `INSERT INTO public.accounts (id, budget_id, name, type, account_group, user_id)
-         VALUES ($1, $2, $3, 'checking', 'CASH', $4)`,
-    [id, budgetId, name, userId],
+    `INSERT INTO public.accounts (id, budget_id, name, type, account_group, user_id, currency)
+         VALUES ($1, $2, $3, 'checking', 'CASH', $4, $5)`,
+    [id, budgetId, name, userId, currency],
   );
 }
 

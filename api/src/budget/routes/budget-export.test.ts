@@ -109,7 +109,7 @@ describe.skipIf(!dbReady)('GET /budgets/export', () => {
   test('returns the restore payload for the seeded budget', async () => {
     const res = await getExport(budgetA);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as typeof seed & { budget: { name: string } };
+    const body = (await res.json()) as typeof seed & { budget: { name: string }; format_version: number };
     expect(body.budget.name).toBe('export-test-a');
     expect(body.groups).toEqual(seed.groups);
     expect(body.categories.map((c) => c.name)).toEqual(['Groceries', 'Utilities', 'Hidden Cat']);
@@ -119,8 +119,10 @@ describe.skipIf(!dbReady)('GET /budgets/export', () => {
     const transfer = body.transactions.filter((t) => t.transferPeerIndex !== null);
     expect(transfer).toHaveLength(2);
     expect(transfer.every((t) => t.payee === '')).toBe(true);
+    // The seed was restored as a legacy (cents) backup; the export is format 2 (milliunits).
+    expect(body.format_version).toBe(2);
     expect(body.transactions.find((t) => t.memo === 'weekly shop')).toMatchObject({
-      outflow: 1234,
+      outflow: 12340,
       inflow: 0,
       flag: 'red',
       payee: 'Fresh Market',
@@ -152,20 +154,20 @@ describe.skipIf(!dbReady)('GET /budgets/export', () => {
     );
 
     const body = (await (await getExport(budgetA)).json()) as {
-      category_targets: { kind: string; amount_cents: number }[];
+      category_targets: { kind: string; amount: number }[];
       category_notes: { note: string }[];
       month_notes: { note: string }[];
-      repeat_rules: { memo: string; amount_cents: number }[];
-      splits: { amount_cents: number }[];
+      repeat_rules: { memo: string; amount: number }[];
+      splits: { amount: number }[];
       transactions: { memo: string; outflow: number; categoryIndex: number | null }[];
     };
-    expect(body.category_targets).toMatchObject([{ kind: 'monthly', amount_cents: 25000 }]);
+    expect(body.category_targets).toMatchObject([{ kind: 'monthly', amount: 250000 }]);
     expect(body.category_notes.map((n) => n.note)).toEqual(['cat note']);
     expect(body.month_notes.map((n) => n.note)).toEqual(['month note']);
-    expect(body.repeat_rules).toMatchObject([{ memo: 'rent', amount_cents: -10000 }]);
-    expect(body.splits.map((s) => s.amount_cents)).toEqual([-634, -600]);
+    expect(body.repeat_rules).toMatchObject([{ memo: 'rent', amount: -100000 }]);
+    expect(body.splits.map((s) => s.amount)).toEqual([-6340, -6000]);
     // split parent: summed amount, no category
-    expect(body.transactions.find((t) => t.memo === 'weekly shop')).toMatchObject({ outflow: 1234, categoryIndex: null });
+    expect(body.transactions.find((t) => t.memo === 'weekly shop')).toMatchObject({ outflow: 12340, categoryIndex: null });
   });
 
   test('category person is exported (userId) and survives restore into a budget where they are a member', async () => {

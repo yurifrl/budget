@@ -3,7 +3,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { authDisabled, currentUser } from './authz';
 
 import { ensureDevAdminRole, resolveOrCreateSessionUser, resolveServiceUser } from './store';
-import { HttpError } from '../core/validate';
+import { HttpError, errorResponse } from '../core/validate';
 import type { IdentityUser } from './types';
 
 export const DEV_EMAIL = 'dev@localhost';
@@ -51,8 +51,8 @@ export const requireUser: MiddlewareHandler = async (c, next) => {
  * JWT itself stays valid. Returns the rejection response, or null to proceed.
  */
 function rejectUnlessActive(c: Context, user: IdentityUser | null | undefined): Response | null {
-  if (!user) return c.json({ error: 'unauthorized' }, 401);
-  if (user.status !== 'active') return c.json({ error: 'account disabled' }, 401);
+  if (!user) return errorResponse(c, 401, 'unauthorized');
+  if (user.status !== 'active') return errorResponse(c, 401, 'account disabled', 'account_disabled');
   return null;
 }
 
@@ -74,8 +74,8 @@ export async function rejectUnlessActiveSession(c: Context): Promise<Response | 
  */
 export const requireAdmin: MiddlewareHandler = async (c, next) => {
   const user = c.get('user');
-  if (!user) return c.json({ error: 'unauthorized' }, 401);
-  if (user.role !== 'admin') return c.json({ error: 'forbidden' }, 403);
+  if (!user) return errorResponse(c, 401, 'unauthorized');
+  if (user.role !== 'admin') return errorResponse(c, 403, 'forbidden');
   await next();
 };
 
@@ -98,7 +98,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  */
 export const forbidOAuthWrites: MiddlewareHandler = async (c, next) => {
   if (!SAFE_METHODS.has(c.req.method) && c.get('principal')?.scope !== undefined) {
-    return c.json({ error: 'forbidden' }, 403);
+    return errorResponse(c, 403, 'forbidden');
   }
   await next();
 };

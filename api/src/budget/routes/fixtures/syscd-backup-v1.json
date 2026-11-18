@@ -1,0 +1,1903 @@
+{
+ "budget": {
+  "name": "Trabalho",
+  "archived": false
+ },
+ "groups": [
+  "Credit Card Payments",
+  "Mes",
+  "Recorrentes",
+  "Projetos",
+  "Outros",
+  "Yuri",
+  "Viagens",
+  "Parity Group"
+ ],
+ "categories": [
+  {
+   "groupIndex": 0,
+   "name": "Itau Cartão",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 0,
+   "name": "Comer F",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Academia",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Mercado",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Transporte",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Psiquiatra",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Diversão",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Comer Fora",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Farmacia",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Ifood",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Saude",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Celular",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Mercado Livre",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Comprar Online",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Bebês",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Coisas Para Casa",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "🤷‍♀️ What is this?",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Gastos - Gabriele",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "Gastos - Yuri",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 1,
+   "name": "🏛️ Colchão",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 2,
+   "name": "Plano de Saude",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 2,
+   "name": "Verisure",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 2,
+   "name": "Gas",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 2,
+   "name": "Aluguel",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 2,
+   "name": "Internet",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 2,
+   "name": "Luz",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 2,
+   "name": "Agua",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 2,
+   "name": "IPTU",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 2,
+   "name": "1️⃣ Seguro da Casa",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 3,
+   "name": "Ar Condicionado",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 3,
+   "name": "🧱 Drywal",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 3,
+   "name": "Servidor",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 4,
+   "name": "Business Expenses",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 4,
+   "name": "Presentes",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 4,
+   "name": "Plano de Saude Out Plan",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 4,
+   "name": "Rendimentos",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 5,
+   "name": "1Password",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 6,
+   "name": "Férias Dezembro",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 6,
+   "name": "Passagens",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 6,
+   "name": "Curso da Ana",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  },
+  {
+   "groupIndex": 7,
+   "name": "Parity Cat",
+   "hidden": false,
+   "userId": null,
+   "bundleIndex": null
+  }
+ ],
+ "bundles": [],
+ "accounts": [
+  {
+   "name": "Carteira",
+   "userId": null
+  },
+  {
+   "name": "Itau Cartão",
+   "userId": null
+  },
+  {
+   "name": "Itau Conta Corrente",
+   "userId": null
+  },
+  {
+   "name": "Parity Cash",
+   "userId": null
+  },
+  {
+   "name": "Poupança Nubank",
+   "userId": null
+  }
+ ],
+ "transactions": [
+  {
+   "accountIndex": 1,
+   "date": "2026-04-01",
+   "payee": "Starting Balance",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 271369,
+   "inflow": 0,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-04-01",
+   "payee": "Starting Balance",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 500000,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-04-10",
+   "payee": "Extra",
+   "categoryIndex": 3,
+   "memo": "",
+   "outflow": 95000,
+   "inflow": 0,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-04-14",
+   "payee": "iFood",
+   "categoryIndex": 9,
+   "memo": "",
+   "outflow": 15000,
+   "inflow": 0,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-04-18",
+   "payee": "Posto Ipiranga",
+   "categoryIndex": 4,
+   "memo": "Gasolina",
+   "outflow": 9000,
+   "inflow": 0,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-05-02",
+   "payee": "Salário",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 1380000,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-05-03",
+   "payee": "Smart Fit",
+   "categoryIndex": 2,
+   "memo": "",
+   "outflow": 12000,
+   "inflow": 0,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-05-04",
+   "payee": "Carrefour",
+   "categoryIndex": 3,
+   "memo": "",
+   "outflow": 60000,
+   "inflow": 0,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-05-12",
+   "payee": "Pão de Açúcar",
+   "categoryIndex": 3,
+   "memo": "",
+   "outflow": 50000,
+   "inflow": 0,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-05-15",
+   "payee": "iFood",
+   "categoryIndex": 9,
+   "memo": "",
+   "outflow": 18000,
+   "inflow": 0,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-06-02",
+   "payee": "Salário",
+   "categoryIndex": null,
+   "memo": "Pagamento mensal",
+   "outflow": 0,
+   "inflow": 1380000,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-06-03",
+   "payee": "Smart Fit",
+   "categoryIndex": 2,
+   "memo": "",
+   "outflow": 12000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-06-05",
+   "payee": "Pão de Açúcar",
+   "categoryIndex": 3,
+   "memo": "Compra da semana",
+   "outflow": 45000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-06-08",
+   "payee": "Hortifruti",
+   "categoryIndex": 3,
+   "memo": "",
+   "outflow": 40000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-06-09",
+   "payee": "Posto Shell",
+   "categoryIndex": 4,
+   "memo": "Gasolina",
+   "outflow": 8000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-06-10",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "Pagamento parcial da fatura",
+   "outflow": 0,
+   "inflow": 100000,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 16
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-06-10",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "Pagamento parcial da fatura",
+   "outflow": 100000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 15
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-06-10",
+   "payee": "Vivo",
+   "categoryIndex": 11,
+   "memo": "Conta do celular",
+   "outflow": 9000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-06-11",
+   "payee": "Restaurante Madero",
+   "categoryIndex": 7,
+   "memo": "Jantar",
+   "outflow": 9000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-06-12",
+   "payee": "iFood",
+   "categoryIndex": 9,
+   "memo": "",
+   "outflow": 10000,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-06-13",
+   "payee": "Transferência PIX",
+   "categoryIndex": null,
+   "memo": "Precisa de categoria",
+   "outflow": 5500,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-09-05",
+   "payee": "Salário",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 1500000,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-09-06",
+   "payee": "Imobiliária Lopes",
+   "categoryIndex": 23,
+   "memo": "",
+   "outflow": 232700,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-09-07",
+   "payee": "Smart Fit",
+   "categoryIndex": 2,
+   "memo": "",
+   "outflow": 12000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-09-08",
+   "payee": "Enel",
+   "categoryIndex": 25,
+   "memo": "",
+   "outflow": 28000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-09-09",
+   "payee": "Sabesp",
+   "categoryIndex": 26,
+   "memo": "",
+   "outflow": 10500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-09-10",
+   "payee": "Vivo",
+   "categoryIndex": 11,
+   "memo": "",
+   "outflow": 9000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-09-11",
+   "payee": "Pão de Açúcar",
+   "categoryIndex": 3,
+   "memo": "",
+   "outflow": 48000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-09-12",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 100000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 29
+  },
+  {
+   "accountIndex": 4,
+   "date": "2026-09-12",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 100000,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": 28
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-09-14",
+   "payee": "iFood",
+   "categoryIndex": 9,
+   "memo": "",
+   "outflow": 7500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-09-15",
+   "payee": "Restaurante Madero",
+   "categoryIndex": 7,
+   "memo": "",
+   "outflow": 21000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-09-17",
+   "payee": "Posto Shell",
+   "categoryIndex": 4,
+   "memo": "",
+   "outflow": 25000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-09-18",
+   "payee": "Drogasil",
+   "categoryIndex": 8,
+   "memo": "",
+   "outflow": 6400,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-09-20",
+   "payee": "Hortifruti",
+   "categoryIndex": 3,
+   "memo": "",
+   "outflow": 15500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 0,
+   "date": "2026-09-21",
+   "payee": "Feira",
+   "categoryIndex": 3,
+   "memo": "feira de domingo",
+   "outflow": 4500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-09-22",
+   "payee": "Netflix",
+   "categoryIndex": 6,
+   "memo": "",
+   "outflow": 5590,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-09-24",
+   "payee": "Amazon",
+   "categoryIndex": 13,
+   "memo": "",
+   "outflow": 13900,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "blue",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-09-25",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 150000,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 39
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-09-25",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 150000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 38
+  },
+  {
+   "accountIndex": 0,
+   "date": "2026-09-26",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 10000,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 41
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-09-26",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 10000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 40
+  },
+  {
+   "accountIndex": 4,
+   "date": "2026-09-28",
+   "payee": "Rendimento",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 8000,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-10-05",
+   "payee": "Salário",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 1500000,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-10-06",
+   "payee": "Imobiliária Lopes",
+   "categoryIndex": 23,
+   "memo": "",
+   "outflow": 232700,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-10-07",
+   "payee": "Smart Fit",
+   "categoryIndex": 2,
+   "memo": "",
+   "outflow": 12000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-10-08",
+   "payee": "Enel",
+   "categoryIndex": 25,
+   "memo": "",
+   "outflow": 29500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-10-09",
+   "payee": "Sabesp",
+   "categoryIndex": 26,
+   "memo": "",
+   "outflow": 10500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-10-10",
+   "payee": "Vivo",
+   "categoryIndex": 11,
+   "memo": "",
+   "outflow": 9000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-10-11",
+   "payee": "Pão de Açúcar",
+   "categoryIndex": 3,
+   "memo": "",
+   "outflow": 51000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-10-12",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 100000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 51
+  },
+  {
+   "accountIndex": 4,
+   "date": "2026-10-12",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 100000,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": 50
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-10-14",
+   "payee": "iFood",
+   "categoryIndex": 9,
+   "memo": "",
+   "outflow": 7500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "red",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-10-15",
+   "payee": "Restaurante Madero",
+   "categoryIndex": 7,
+   "memo": "",
+   "outflow": 25000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-10-17",
+   "payee": "Posto Shell",
+   "categoryIndex": 4,
+   "memo": "",
+   "outflow": 25000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-10-18",
+   "payee": "Drogasil",
+   "categoryIndex": 8,
+   "memo": "",
+   "outflow": 6400,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-10-20",
+   "payee": "Hortifruti",
+   "categoryIndex": 3,
+   "memo": "",
+   "outflow": 15500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 0,
+   "date": "2026-10-21",
+   "payee": "Feira",
+   "categoryIndex": 3,
+   "memo": "feira de domingo",
+   "outflow": 4500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-10-22",
+   "payee": "Netflix",
+   "categoryIndex": 6,
+   "memo": "",
+   "outflow": 5590,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-10-24",
+   "payee": "Amazon",
+   "categoryIndex": 13,
+   "memo": "",
+   "outflow": 13900,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-10-25",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 150000,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 61
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-10-25",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 150000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 60
+  },
+  {
+   "accountIndex": 0,
+   "date": "2026-10-26",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 10000,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 63
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-10-26",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 10000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 62
+  },
+  {
+   "accountIndex": 4,
+   "date": "2026-10-28",
+   "payee": "Rendimento",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 8200,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 4,
+   "date": "2026-11-03",
+   "payee": "Alura",
+   "categoryIndex": 39,
+   "memo": "",
+   "outflow": 9900,
+   "inflow": 0,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-05",
+   "payee": "Salário",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 1500000,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-06",
+   "payee": "Imobiliária Lopes",
+   "categoryIndex": 23,
+   "memo": "",
+   "outflow": 232700,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-07",
+   "payee": "Smart Fit",
+   "categoryIndex": 2,
+   "memo": "",
+   "outflow": 12000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-08",
+   "payee": "Enel",
+   "categoryIndex": 25,
+   "memo": "",
+   "outflow": 31000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-09",
+   "payee": "Sabesp",
+   "categoryIndex": 26,
+   "memo": "",
+   "outflow": 10500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-10",
+   "payee": "Vivo",
+   "categoryIndex": 11,
+   "memo": "",
+   "outflow": 9000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-11",
+   "payee": "Pão de Açúcar",
+   "categoryIndex": 3,
+   "memo": "",
+   "outflow": 54000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-12",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 100000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 74
+  },
+  {
+   "accountIndex": 4,
+   "date": "2026-11-12",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 100000,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": 73
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-13",
+   "payee": "Carrefour",
+   "categoryIndex": null,
+   "memo": "compra do mês",
+   "outflow": 42000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "green",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-14",
+   "payee": "iFood",
+   "categoryIndex": 9,
+   "memo": "",
+   "outflow": 7500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-15",
+   "payee": "Restaurante Madero",
+   "categoryIndex": 7,
+   "memo": "",
+   "outflow": 29000,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-15",
+   "payee": "Padaria Parity Renamed central",
+   "categoryIndex": null,
+   "memo": "pão",
+   "outflow": 1250,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-16",
+   "payee": "Outback",
+   "categoryIndex": 7,
+   "memo": "",
+   "outflow": 32000,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "purple",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-16",
+   "payee": "Extra",
+   "categoryIndex": null,
+   "memo": "mercado",
+   "outflow": 8890,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-17",
+   "payee": "Posto Shell",
+   "categoryIndex": 4,
+   "memo": "",
+   "outflow": 25000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-17",
+   "payee": "EXTRA HIPER 123 SP",
+   "categoryIndex": null,
+   "memo": "categorizar",
+   "outflow": 18750,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "blue",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-17",
+   "payee": "Cliente X",
+   "categoryIndex": null,
+   "memo": "freela",
+   "outflow": 0,
+   "inflow": 50000,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 0,
+   "date": "2026-11-18",
+   "payee": "Starting Balance",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 30000,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-18",
+   "payee": "Drogasil",
+   "categoryIndex": 8,
+   "memo": "",
+   "outflow": 6400,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "orange",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-18",
+   "payee": "Starting Balance",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 6570,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-18",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "parity transfer",
+   "outflow": 25000,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": 90
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-18",
+   "payee": "Padaria Parity Renamed",
+   "categoryIndex": null,
+   "memo": "parity split",
+   "outflow": 6000,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "blue",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 3,
+   "date": "2026-11-18",
+   "payee": "Starting Balance",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 5000,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 4,
+   "date": "2026-11-18",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "parity transfer",
+   "outflow": 0,
+   "inflow": 25000,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": 87
+  },
+  {
+   "accountIndex": 4,
+   "date": "2026-11-18",
+   "payee": "Starting Balance",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 1000000,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-20",
+   "payee": "Hortifruti",
+   "categoryIndex": 3,
+   "memo": "",
+   "outflow": 15500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 0,
+   "date": "2026-11-21",
+   "payee": "Feira",
+   "categoryIndex": 3,
+   "memo": "feira de domingo",
+   "outflow": 4500,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-22",
+   "payee": "Netflix",
+   "categoryIndex": 6,
+   "memo": "",
+   "outflow": 5590,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-24",
+   "payee": "Amazon",
+   "categoryIndex": 13,
+   "memo": "",
+   "outflow": 13900,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-11-25",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 50000,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": 97
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-25",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 50000,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": 96
+  },
+  {
+   "accountIndex": 0,
+   "date": "2026-11-26",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 10000,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 99
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-11-26",
+   "payee": "",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 10000,
+   "inflow": 0,
+   "cleared": "cleared",
+   "flag": "",
+   "transferPeerIndex": 98
+  },
+  {
+   "accountIndex": 4,
+   "date": "2026-11-28",
+   "payee": "Rendimento",
+   "categoryIndex": null,
+   "memo": "",
+   "outflow": 0,
+   "inflow": 8400,
+   "cleared": "reconciled",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2026-12-02",
+   "payee": "Spotify",
+   "categoryIndex": 6,
+   "memo": "",
+   "outflow": 2190,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 2,
+   "date": "2026-12-10",
+   "payee": "IPVA",
+   "categoryIndex": 4,
+   "memo": "",
+   "outflow": 120000,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "yellow",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2027-01-02",
+   "payee": "Spotify",
+   "categoryIndex": 6,
+   "memo": "",
+   "outflow": 2190,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  },
+  {
+   "accountIndex": 1,
+   "date": "2027-02-02",
+   "payee": "Spotify",
+   "categoryIndex": 6,
+   "memo": "",
+   "outflow": 2190,
+   "inflow": 0,
+   "cleared": "uncleared",
+   "flag": "",
+   "transferPeerIndex": null
+  }
+ ],
+ "assignments": [
+  {
+   "categoryIndex": 3,
+   "month": "2026-04-01",
+   "budgeted": 95000
+  },
+  {
+   "categoryIndex": 4,
+   "month": "2026-04-01",
+   "budgeted": 9000
+  },
+  {
+   "categoryIndex": 9,
+   "month": "2026-04-01",
+   "budgeted": 15000
+  },
+  {
+   "categoryIndex": 2,
+   "month": "2026-05-01",
+   "budgeted": 12000
+  },
+  {
+   "categoryIndex": 3,
+   "month": "2026-05-01",
+   "budgeted": 110000
+  },
+  {
+   "categoryIndex": 9,
+   "month": "2026-05-01",
+   "budgeted": 18000
+  },
+  {
+   "categoryIndex": 0,
+   "month": "2026-06-01",
+   "budgeted": 200000
+  },
+  {
+   "categoryIndex": 2,
+   "month": "2026-06-01",
+   "budgeted": 12000
+  },
+  {
+   "categoryIndex": 3,
+   "month": "2026-06-01",
+   "budgeted": 120000
+  },
+  {
+   "categoryIndex": 4,
+   "month": "2026-06-01",
+   "budgeted": 10000
+  },
+  {
+   "categoryIndex": 7,
+   "month": "2026-06-01",
+   "budgeted": 5000
+  },
+  {
+   "categoryIndex": 8,
+   "month": "2026-06-01",
+   "budgeted": 6000
+  },
+  {
+   "categoryIndex": 9,
+   "month": "2026-06-01",
+   "budgeted": 12000
+  },
+  {
+   "categoryIndex": 10,
+   "month": "2026-06-01",
+   "budgeted": 50000
+  },
+  {
+   "categoryIndex": 11,
+   "month": "2026-06-01",
+   "budgeted": 9000
+  },
+  {
+   "categoryIndex": 2,
+   "month": "2026-09-01",
+   "budgeted": 12000
+  },
+  {
+   "categoryIndex": 3,
+   "month": "2026-09-01",
+   "budgeted": 70000
+  },
+  {
+   "categoryIndex": 4,
+   "month": "2026-09-01",
+   "budgeted": 25000
+  },
+  {
+   "categoryIndex": 6,
+   "month": "2026-09-01",
+   "budgeted": 6000
+  },
+  {
+   "categoryIndex": 7,
+   "month": "2026-09-01",
+   "budgeted": 25000
+  },
+  {
+   "categoryIndex": 8,
+   "month": "2026-09-01",
+   "budgeted": 8000
+  },
+  {
+   "categoryIndex": 9,
+   "month": "2026-09-01",
+   "budgeted": 7500
+  },
+  {
+   "categoryIndex": 11,
+   "month": "2026-09-01",
+   "budgeted": 9000
+  },
+  {
+   "categoryIndex": 13,
+   "month": "2026-09-01",
+   "budgeted": 14000
+  },
+  {
+   "categoryIndex": 23,
+   "month": "2026-09-01",
+   "budgeted": 232700
+  },
+  {
+   "categoryIndex": 25,
+   "month": "2026-09-01",
+   "budgeted": 30000
+  },
+  {
+   "categoryIndex": 26,
+   "month": "2026-09-01",
+   "budgeted": 10500
+  },
+  {
+   "categoryIndex": 37,
+   "month": "2026-09-01",
+   "budgeted": 200000
+  },
+  {
+   "categoryIndex": 2,
+   "month": "2026-10-01",
+   "budgeted": 12000
+  },
+  {
+   "categoryIndex": 3,
+   "month": "2026-10-01",
+   "budgeted": 70000
+  },
+  {
+   "categoryIndex": 4,
+   "month": "2026-10-01",
+   "budgeted": 25000
+  },
+  {
+   "categoryIndex": 6,
+   "month": "2026-10-01",
+   "budgeted": 6000
+  },
+  {
+   "categoryIndex": 7,
+   "month": "2026-10-01",
+   "budgeted": 25000
+  },
+  {
+   "categoryIndex": 8,
+   "month": "2026-10-01",
+   "budgeted": 8000
+  },
+  {
+   "categoryIndex": 9,
+   "month": "2026-10-01",
+   "budgeted": 7500
+  },
+  {
+   "categoryIndex": 11,
+   "month": "2026-10-01",
+   "budgeted": 9000
+  },
+  {
+   "categoryIndex": 13,
+   "month": "2026-10-01",
+   "budgeted": 14000
+  },
+  {
+   "categoryIndex": 23,
+   "month": "2026-10-01",
+   "budgeted": 232700
+  },
+  {
+   "categoryIndex": 25,
+   "month": "2026-10-01",
+   "budgeted": 30000
+  },
+  {
+   "categoryIndex": 26,
+   "month": "2026-10-01",
+   "budgeted": 10500
+  },
+  {
+   "categoryIndex": 37,
+   "month": "2026-10-01",
+   "budgeted": 200000
+  },
+  {
+   "categoryIndex": 0,
+   "month": "2026-11-01",
+   "budgeted": 10000
+  },
+  {
+   "categoryIndex": 2,
+   "month": "2026-11-01",
+   "budgeted": 12000
+  },
+  {
+   "categoryIndex": 3,
+   "month": "2026-11-01",
+   "budgeted": 75000
+  },
+  {
+   "categoryIndex": 4,
+   "month": "2026-11-01",
+   "budgeted": 30000
+  },
+  {
+   "categoryIndex": 6,
+   "month": "2026-11-01",
+   "budgeted": 6000
+  },
+  {
+   "categoryIndex": 7,
+   "month": "2026-11-01",
+   "budgeted": 25000
+  },
+  {
+   "categoryIndex": 8,
+   "month": "2026-11-01",
+   "budgeted": 8000
+  },
+  {
+   "categoryIndex": 9,
+   "month": "2026-11-01",
+   "budgeted": 7500
+  },
+  {
+   "categoryIndex": 11,
+   "month": "2026-11-01",
+   "budgeted": 9000
+  },
+  {
+   "categoryIndex": 13,
+   "month": "2026-11-01",
+   "budgeted": 14000
+  },
+  {
+   "categoryIndex": 23,
+   "month": "2026-11-01",
+   "budgeted": 232700
+  },
+  {
+   "categoryIndex": 25,
+   "month": "2026-11-01",
+   "budgeted": 30000
+  },
+  {
+   "categoryIndex": 26,
+   "month": "2026-11-01",
+   "budgeted": 10500
+  },
+  {
+   "categoryIndex": 37,
+   "month": "2026-11-01",
+   "budgeted": 200000
+  }
+ ],
+ "payees": [
+  "Alura",
+  "Amazon",
+  "Carrefour",
+  "Cliente X",
+  "Drogasil",
+  "Enel",
+  "Extra",
+  "EXTRA HIPER 123 SP",
+  "Feira",
+  "Hortifruti",
+  "iFood",
+  "Imobiliária Lopes",
+  "IPVA",
+  "Netflix",
+  "Outback",
+  "Padaria Parity Renamed",
+  "Padaria Parity Renamed central",
+  "Pão de Açúcar",
+  "Posto Ipiranga",
+  "Posto Shell",
+  "Rendimento",
+  "Restaurante Madero",
+  "Sabesp",
+  "Salário",
+  "Smart Fit",
+  "Spotify",
+  "Starting Balance",
+  "Transferência PIX",
+  "Vivo"
+ ],
+ "category_targets": [],
+ "category_notes": [],
+ "month_notes": [],
+ "repeat_rules": [],
+ "splits": []
+}

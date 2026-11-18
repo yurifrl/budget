@@ -2,9 +2,9 @@
  * Operation CONTRACT — the pure-data half of a declare-once API operation.
  *
  * A contract says everything about an endpoint that is not server code: its
- * name, description, zod input schema, HTTP method + path template, where each
- * input key travels (path / query / body), a kind, and which surfaces expose
- * it. It imports zod ONLY, so the Expo app can import contracts (to generate
+ * name, description, zod input schema, zod output (response) schema, HTTP
+ * method + path template, where each input key travels (path / query / body),
+ * a kind, and which surfaces expose it. It imports zod ONLY, so the Expo app can import contracts (to generate
  * RTK Query endpoints) without bundling hono or pg. The server HANDLER is
  * attached separately by `implement()` in ./operation.ts.
  */
@@ -27,11 +27,22 @@ export interface OperationExpose {
 /** One flat input object — every key is a path param, query param or body field. */
 export type InputSchema = z.ZodObject<z.ZodRawShape>;
 
-export interface OperationContract<I extends InputSchema = InputSchema> {
+/** Any zod schema describing a JSON response body. */
+export type OutputSchema = z.ZodType;
+
+export interface OperationContract<I extends InputSchema = InputSchema, O extends OutputSchema = OutputSchema> {
   /** snake_case, feature-prefixed (budget_transactions_list). */
   name: string;
   description: string;
   input: I;
+  /**
+   * Response body schema (2xx JSON, after serialization: dates are strings).
+   * A handler that returns nothing (204) declares `z.null()`. Optional while
+   * contracts are being described; the client derives its wire types from it,
+   * tests validate every handler result against it, and MCP exposes it as the
+   * tool's outputSchema when it is an object.
+   */
+  output?: O;
   method: HttpMethod;
   /** Public path template, e.g. `/transactions/:id`. */
   path: string;
@@ -52,9 +63,14 @@ export interface OperationContract<I extends InputSchema = InputSchema> {
 }
 
 /** Declare an operation contract (identity helper that keeps the literal types). */
-export function defineOperation<I extends InputSchema>(contract: OperationContract<I>): OperationContract<I> {
+export function defineOperation<I extends InputSchema, O extends OutputSchema = OutputSchema>(
+  contract: OperationContract<I, O>,
+): OperationContract<I, O> {
   return contract;
 }
+
+/** The response body type of a contract with an output schema. */
+export type OperationOutput<C> = C extends OperationContract<InputSchema, infer O> ? z.output<O> : never;
 
 /** `:name` segments of a path template. */
 export function pathParamNames(path: string): string[] {

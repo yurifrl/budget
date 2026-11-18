@@ -23,7 +23,7 @@ import jobs from './jobs';
 import rates from './rates';
 import { authMiddleware, mountAuthRoutes } from './user/authz';
 import { accessPrincipal, authDisabled, profileRoutes, requireUser } from './user';
-import { httpOnError } from './core/validate';
+import { httpOnError, errorResponse } from './core/validate';
 
 interface BuildAppParams {
   /** First CORS origin; the fixed local-dev origins are always included. */
@@ -118,7 +118,7 @@ export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssu
 
   // 404 handler
   app.notFound((c) => {
-    return c.json({ error: 'not found' }, 404);
+    return errorResponse(c, 404, 'not found');
   });
 
   return app;

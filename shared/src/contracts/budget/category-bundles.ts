@@ -2,11 +2,13 @@ import { z } from '../../zod';
 
 import { defineOperation, EXPOSE_ALL } from '../../operation-contract';
 import { budgetId, nameSchema, uuidSchema } from './schemas';
+import { bundleRowSchema, noContent } from './outputs';
 
 export const bundlesList = defineOperation({
   name: 'budget_bundles_list',
   description: 'List the category bundles of a budget (display-only roll-ups of categories inside one category group).',
   input: z.object({ budget_id: budgetId }),
+  output: z.array(bundleRowSchema),
   method: 'GET',
   path: '/bundles',
   kind: 'read',
@@ -23,6 +25,7 @@ export const bundlesCreate = defineOperation({
     name: nameSchema,
     category_ids: z.array(uuidSchema).min(2).max(200),
   }),
+  output: bundleRowSchema,
   method: 'POST',
   path: '/bundles',
   kind: 'write',
@@ -33,6 +36,7 @@ export const bundlesRename = defineOperation({
   name: 'budget_bundles_rename',
   description: 'Rename a bundle.',
   input: z.object({ id: uuidSchema, budget_id: budgetId, name: nameSchema }),
+  output: noContent,
   method: 'PATCH',
   path: '/bundles/:id/name',
   query: ['budget_id'],
@@ -44,6 +48,7 @@ export const bundlesDelete = defineOperation({
   name: 'budget_bundles_delete',
   description: 'Ungroup a bundle: delete the bundle only; its categories stay in the group.',
   input: z.object({ id: uuidSchema, budget_id: budgetId }),
+  output: noContent,
   method: 'DELETE',
   path: '/bundles/:id',
   query: ['budget_id'],
@@ -60,6 +65,7 @@ export const categoriesSetBundle = defineOperation({
     category_ids: z.array(uuidSchema).min(1).max(200),
     bundle_id: uuidSchema.nullable(),
   }),
+  output: noContent,
   method: 'PATCH',
   path: '/bundles/categories',
   query: ['budget_id'],

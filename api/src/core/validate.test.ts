@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { z } from '@shared/zod';
 
-import { centsSchema } from '@shared/validation';
+import { milliunitsSchema } from '@shared/validation';
 import { HttpError, parseValue, uuidSchema } from './validate';
 
 const schema = z.object({
@@ -10,7 +10,7 @@ const schema = z.object({
   count: z.number().int(),
   kind: z.enum(['a', 'b']),
   tags: z.array(z.string()).max(1),
-  cents: centsSchema.optional(),
+  cents: milliunitsSchema.optional(),
 });
 
 function messageOf(raw: unknown): string {

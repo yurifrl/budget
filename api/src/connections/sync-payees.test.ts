@@ -42,11 +42,11 @@ const aggregator = {
   verifyWebhookHeaders: () => false,
 } as unknown as BankAggregator;
 
-const up = (externalId: string, description: string, amountCents = -1000): AggregatedTransaction => ({
+const up = (externalId: string, description: string, amount = -10000): AggregatedTransaction => ({
   externalId,
   externalAccountId: EXTERNAL_ACCOUNT,
   description,
-  amountCents,
+  amount,
   date: today(),
   currencyCode: 'BRL',
   cleared: false,

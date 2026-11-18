@@ -60,3 +60,4 @@ export * from './plan-auto-assign';
 export * from './repeat-rules';
 export * from './revision';
 export * from './transactions';
+export * from './outputs';

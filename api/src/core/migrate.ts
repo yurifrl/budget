@@ -58,6 +58,7 @@ const MIGRATION_SIGNATURES: Record<string, string> = {
   '0031_connection_status_message.sql': 'column:public.connections.status_message',
   '0032_category_bundles.sql': 'table:public.category_bundles',
   '0033_budget_revision.sql': 'column:public.budgets.revision',
+  '0100_account_currency.sql': 'column:public.accounts.currency',
 };
 
 /**

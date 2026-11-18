@@ -38,10 +38,14 @@ import type {
 } from './rows';
 
 // ---------------------------------------------------------------------------
-// money / month conversions (the storage boundary: DB milliunits ↔ domain cents)
+// money / month conversions (the wire boundary: API milliunits ↔ domain cents)
+//
+// Every amount on the wire, both directions, is integer MILLIUNITS (shared
+// `MONEY_UNIT_RULE`). The engine keeps cents in memory; this layer converts
+// once, on the way in (milliToCents) and on the way out (centsToMilli).
 // ---------------------------------------------------------------------------
 
-/** Domain cents -> storage milliunits. */
+/** Domain cents -> wire/storage milliunits. */
 export const centsToMilli = (c: Cents): number => c * 10;
 
 /** Storage milliunits -> domain cents (app rounds for display; storage keeps full precision). */
@@ -265,13 +269,13 @@ export interface SubTxnInput {
   inflowCents: Cents;
 }
 
-/** Map a split leg to the server's subTxnSchema (snake_case, one-way cents). */
+/** Map a split leg to the server's subTxnSchema (snake_case, one-way milliunits). */
 export function snakeSubTxn(input: SubTxnInput): Record<string, unknown> {
   return {
     category_id: input.categoryId,
     memo: input.memo || null,
-    outflow_cents: input.outflowCents,
-    inflow_cents: input.inflowCents,
+    outflow: centsToMilli(input.outflowCents),
+    inflow: centsToMilli(input.inflowCents),
   };
 }
 
@@ -283,8 +287,8 @@ export function snakeTxn(input: TransactionInput): Record<string, unknown> {
     payee: input.payee ?? '',
     category_id: input.categoryId,
     memo: input.memo || null,
-    outflow_cents: input.outflowCents ?? 0,
-    inflow_cents: input.inflowCents ?? 0,
+    outflow: centsToMilli(input.outflowCents ?? 0),
+    inflow: centsToMilli(input.inflowCents ?? 0),
     cleared: input.cleared,
     approved: input.approved,
     flag: input.flag ?? null,
@@ -294,15 +298,15 @@ export function snakeTxn(input: TransactionInput): Record<string, unknown> {
 
 /**
  * Wire row for POST /transactions/bulk — mirrors the server's `bulkTxnSchema`
- * (snake_case, one-way amounts, optional deterministic dedupe id).
+ * (snake_case, one-way amounts in milliunits, optional deterministic dedupe id).
  */
 export interface ImportTxnWire {
   date: string;
   payee: string;
   category_id: string | null;
   memo: string;
-  outflow_cents: number;
-  inflow_cents: number;
+  outflow: number;
+  inflow: number;
   import_id?: string;
   /** Statement payee as sent (after association/rename rules). */
   import_payee_name?: string;
@@ -325,8 +329,8 @@ export function snakeImportRow(
     payee,
     category_id: null,
     memo: row.memo || '',
-    outflow_cents: row.outflowCents,
-    inflow_cents: row.inflowCents,
+    outflow: centsToMilli(row.outflowCents),
+    inflow: centsToMilli(row.inflowCents),
   };
   if (row.importId) wire.import_id = row.importId;
   if (row.originalPayee) {
@@ -340,7 +344,7 @@ export function snakeImportRow(
  * PATCH mapper: sends only explicitly defined keys.
  *
  * The server's PATCH handler treats every present key as explicit intent
- * (payee '' clears payee_id, outflow_cents 0 zeroes the amount). Routing a
+ * (payee '' clears payee_id, outflow 0 zeroes the amount). Routing a
  * partial patch through {@link snakeTxn} would substitute those defaults and
  * silently wipe untouched fields on every single-field edit.
  */
@@ -351,12 +355,30 @@ export function snakeTxnPatch(patch: Partial<TransactionInput>): Record<string, 
   if (patch.payee !== undefined) out.payee = patch.payee;
   if (patch.categoryId !== undefined) out.category_id = patch.categoryId;
   if (patch.memo !== undefined) out.memo = patch.memo;
-  if (patch.outflowCents !== undefined) out.outflow_cents = patch.outflowCents;
-  if (patch.inflowCents !== undefined) out.inflow_cents = patch.inflowCents;
+  if (patch.outflowCents !== undefined) out.outflow = centsToMilli(patch.outflowCents);
+  if (patch.inflowCents !== undefined) out.inflow = centsToMilli(patch.inflowCents);
   if (patch.cleared !== undefined) out.cleared = patch.cleared;
   if (patch.approved !== undefined) out.approved = patch.approved;
   if (patch.flag !== undefined) out.flag = patch.flag;
   if (patch.repeat !== undefined) out.repeat = patch.repeat;
   if (patch.matchedTransactionId !== undefined) out.matched_transaction_id = patch.matchedTransactionId;
   return out;
+}
+
+/**
+ * Backup restore (phase 5d): the transfer payload is built in domain cents
+ * (`transfer/payload.ts`); the wire document is format 2, milliunits.
+ */
+export interface CentsRestorePayload {
+  transactions: readonly { outflow: Cents; inflow: Cents }[];
+  assignments: readonly { budgeted: Cents }[];
+}
+
+export function restorePayloadToWire<P extends CentsRestorePayload>(payload: P) {
+  return {
+    ...payload,
+    format_version: 2 as const,
+    transactions: payload.transactions.map((t) => ({ ...t, outflow: centsToMilli(t.outflow), inflow: centsToMilli(t.inflow) })),
+    assignments: payload.assignments.map((a) => ({ ...a, budgeted: centsToMilli(a.budgeted) })),
+  };
 }

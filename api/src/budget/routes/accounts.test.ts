@@ -385,12 +385,12 @@ describe('PATCH /accounts/:id/reconcile — stated balance is the working balanc
     const ov = await app.request(`/accounts/${acc.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ budget_id: budgetId, working_balance_cents: 12000 }),
+      body: JSON.stringify({ budget_id: budgetId, working_balance: 120000 }),
     });
     expect(ov.status).toBe(200);
 
     // Stated 50.00 = 5000 cents; ledger sum is 70000 milli -> adjustment -20000.
-    const res = await reconcile(acc.id, { stated_balance_cents: 5000 });
+    const res = await reconcile(acc.id, { stated_balance: 50000 });
     expect(res.status).toBe(204);
 
     const bal = await pool!.query<{ cleared_balance: string; uncleared_balance: string }>(

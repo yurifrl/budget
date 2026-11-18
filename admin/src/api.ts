@@ -2,7 +2,7 @@ import type { z } from '@shared/zod';
 import { contracts } from '@shared/contracts/jobs';
 import type { InputSchema, OperationContract } from '@shared/operation-contract';
 
-import { contractRequest } from './contractRequest';
+import { contractRequest } from '@shared/contract-request';
 
 import type { JobRun, JobsHealth, RunDetail } from './types';
 

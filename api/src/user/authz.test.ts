@@ -262,7 +262,7 @@ describe.skipIf(!dbReachable)('sign-in capture (criterion 5: identity lands at s
       `/auth/token?code=good&state=${encodeURIComponent(`${nonce}.${ticket}`)}`,
     );
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: 'email already provisioned' });
+    expect(await res.json()).toEqual({ error: 'email already provisioned', code: 'forbidden' });
     const { rows } = await rowFor('a@b.com');
     expect(rows[0]?.google_sub).toBe('sub-other');
   });

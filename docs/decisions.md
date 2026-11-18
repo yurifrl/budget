@@ -698,3 +698,277 @@ production); follow-up filed.
   (400 like create) and a foreign `patch.matched_transaction_id` (400). The
   checks are any-state (tombstoned rows of the same budget still pass), so
   legitimate requests are unchanged.
+
+## Phase 5d: money units (G7)
+
+### The rule
+
+Every amount on the wire, in both directions, for every operation, is an
+integer number of **milliunits** (1/1000 of the currency unit: 12.34 = 12340,
+-5 = -5000). **Amount fields carry no unit suffix** (`amount`, `inflow`,
+`outflow`, `balance`, `budgeted`, `limit`, ...); a `*_cents` / `*Cents` field
+no longer exists anywhere on the wire. The rule is `MONEY_UNIT_RULE` /
+`milliunitsSchema` in `shared/src/validation.ts`, repeated in every money
+operation's description (that is what `budget schema`, `--help` and the MCP
+tool list show).
+
+Storage did not change (it was already milliunits, except
+`category_targets.amount_cents`, see below). The x10 / /10 that used to sit
+in handlers are gone; the remaining conversions are exactly:
+
+| Where | Conversion | Why |
+|---|---|---|
+| `connections/adapters/pluggy` `milliFrom` | `Math.round(amount * 100) * 10` | Pluggy floats -> port milliunits, once, at the adapter. Rounded to whole cents first so rows stored by earlier syncs (which stored `round(x*100)*10`) compare equal and are not "refreshed". |
+| `budget/routes/category-targets.ts` | wire `amount` / 10 -> `amount_cents`; x10 on read | That table stores cents. The contract only accepts multiples of 10, so nothing is rounded. |
+| `budget/routes/budget-export.ts` `category_targets[].amount` | `amount_cents * 10` | same table |
+| `upgradeRestorePayload` (shared) | x10 on a format-1 backup | legacy backups (below) |
+| client `data/` (`mapping.ts`, `api.ts`, `connections.ts`) | cents <-> milliunits | the app's domain keeps cents in memory |
+
+`BalanceDelta` (internal, `budget/domain/transactions.ts`) is milliunits too,
+so `deriveDeltas`, `applyBalanceDeltas`, repeat generation and the sync
+engine add stored amounts directly.
+
+### Inventory
+
+"In" = request input, "out" = response. Unit before -> after.
+
+| Operation | Field | Dir | Before | After |
+|---|---|---|---|---|
+| `budget_transactions_create` | `txn.inflow_cents`, `txn.outflow_cents` | in | cents | `txn.inflow`, `txn.outflow` milliunits |
+| `budget_transactions_create` | `subtransactions[].inflow_cents/outflow_cents` | in | cents | `subtransactions[].inflow/outflow` milliunits |
+| `budget_transactions_update` | `patch.inflow_cents/outflow_cents` | in | cents | `patch.inflow/outflow` milliunits |
+| `budget_transactions_update` | `subtransactions[].inflow_cents/outflow_cents` | in | cents | `inflow/outflow` milliunits |
+| `budget_transactions_bulk_import` | `txns[].inflow_cents/outflow_cents` | in | cents | `txns[].inflow/outflow` milliunits |
+| `budget_transaction_add` | `amount_cents` (signed) | in | cents | `amount` milliunits |
+| `budget_accounts_create` | `balance_cents` | in | cents | `balance` milliunits |
+| `budget_accounts_update` | `working_balance_cents` | in | cents | `working_balance` milliunits |
+| `budget_accounts_reconcile` | `stated_balance_cents` | in | cents | `stated_balance` milliunits |
+| `budget_repeat_rules_create` | `inflow_cents`, `outflow_cents` | in | cents | `inflow`, `outflow` milliunits |
+| `budget_category_targets_set` | `amount_cents` | in | cents | `amount` milliunits, multiple of 10 |
+| `budget_category_targets_set` / `_list` | `amount_cents` | out | cents | `amount` milliunits |
+| `budget_categories_set_target` | `target.amount_cents` | in | cents | `target.amount` milliunits |
+| `budget_plan_auto_assign` | `rows[].assign_cents` | in | cents | `rows[].assigned` milliunits |
+| `budget_restore` | `transactions[].outflow/inflow`, `assignments[].budgeted` | in | cents | milliunits when `format_version: 2`; absent/1 = legacy cents, upgraded |
+| `budget_export` | `transactions[].outflow/inflow`, `assignments[].budgeted` | out | cents | milliunits, plus `format_version: 2` |
+| `budget_export` | `category_targets[].amount_cents`, `repeat_rules[].amount_cents`, `splits[].amount_cents` | out | cents | `amount` milliunits |
+| `connections_upstream_list`, `connections_items_register` | `accounts[].balanceCents` | out | cents | `balance` milliunits |
+| same | `credit.{limitCents, availableCents, usedCents, minimumPaymentCents}` | out | cents | `credit.{limit, available, used, minimumPayment}` milliunits |
+| same | `credit.latestBill.{totalCents, minimumPaymentCents}` | out | cents | `latestBill.{total, minimumPayment}` milliunits |
+
+Already milliunits and unchanged: `budget_assignments_set` / `_batch`
+`budgeted` (in), and every read amount: transactions and split `amount`,
+account `cleared_balance` / `uncleared_balance`, assignment `budgeted`,
+category `goal_target`, repeat-rule `amount`, payee-ledger `amount`,
+connection summary `balance`, connection transactions `amount`. That is
+**36 fields converted** (each field of each row counted once; the shared upstream account shape counted once) across
+16 operations; rates (`rate` is a ratio) and jobs carry no money.
+
+### Validation of sub-cent values
+
+Any integer milliunit is accepted. The database already holds YNAB-imported
+values, and storing a value is lossless; the app's own writes are always
+multiples of 10 (its domain is cents), and it displays `Math.round(m / 10)`
+cents as before. The dev database has 0 sub-cent rows (checked:
+transactions, subtransactions, assignments, balances, goals), production was
+not inspected. The one exception is `budget_category_targets_set.amount`,
+which must be a multiple of 10 (400 otherwise) because `category_targets`
+stores whole cents and silent rounding would make write != read. Behaviour
+change, on purpose: a sub-cent row now exports and re-imports exactly (the old
+cents export emitted fractional cents, which its own restore rejected).
+
+### Backups
+
+- `budget_export` writes `format_version: 2` (milliunits). `budget_restore`
+  accepts `format_version` 2, or 1 / absent = the original syscd format in
+  cents, which `upgradeRestorePayload` (shared) scales x10 before anything is
+  written. Any other value is a 400. So every old backup file still restores
+  through the API, the CLI and MCP-less clients alike.
+- `api/src/budget/routes/fixtures/syscd-backup-v1.json` was produced by the
+  ORIGINAL export code (this repo at `08ff6fd`, the same code as syscd's) from
+  the seeded Trabalho budget; `budget-restore-legacy.test.ts` restores it,
+  checks every stored amount is cents x 10, that v1, unversioned and the
+  equivalent v2 document land identical rows, and that the re-export is the
+  same document in milliunits.
+- The app's backup files are the Plan/Register TSV archive
+  (`client/src/budget/transfer`), decimal strings with no unit, parsed into
+  the cents domain. That path is unchanged; `data/` converts the resulting
+  payload to a format-2 document before it is sent.
+
+## G1: `accounts.currency` (migration 0100)
+
+`api/db/migrations/0100_account_currency.sql`: `alter table public.accounts
+add column if not exists currency text constraint accounts_currency_iso4217
+check (currency ~ '^[A-Z]{3}$')`. Nullable, no default, no backfill: NULL
+means "the budget's currency" (`budgets.currency_format`), which every
+existing row is. Signature `column:public.accounts.currency`. Adding a
+nullable column with no default is a catalog-only change in Postgres; the
+CHECK is validated against existing rows, all NULL, under a short lock on a
+small table.
+
+API: `currency` (ISO 4217, trimmed and upper-cased by `currencyCodeSchema`,
+null clears) on `budget_accounts_create` / `_update`; returned by every
+account read (`SELECT a.*`); carried by fresh start, by `budget_export`
+(`accounts[].currency`) and `budget_restore` (optional, older backups have no
+key). A closed account rejects a currency change like any other field. No
+amount is converted anywhere.
+
+Bank sync: when some linked account of a connection has no currency, the sync
+lists the item's upstream accounts once (same timeout as the pulls, failures
+swallowed) and, inside its write transaction, runs
+`UPDATE accounts SET currency = $code WHERE id = $id AND currency IS NULL`
+through `ledger.adoptAccountCurrency`. A user-set value is never overwritten,
+an invalid provider code is ignored, and once every linked account has a
+currency no extra provider call is made. Linking alone does not set it (the
+link request has no provider data server-side); the next sync of the
+connection does. Tests: `connections/sync-currency.test.ts`,
+`budget/routes/accounts-currency.test.ts`.
+
+Client: `AccountRow` carries `currency` (wire type), but the domain `Account`
+(`client/src/budget/domain/types.ts`) is outside `data/`, so the app ignores
+it for now (follow-up filed for the UI).
+
+### Why the running syscd-app keeps working with the extra column
+
+Checked by grepping syscd-app at 8e79a31 (`server/`, `modules/`, `scripts/`)
+for every statement touching `accounts`:
+
+- **`SELECT *` / `a.*` row mapping** (`server/budget/routes/accounts.ts:118,249`
+  read-back, `:429` list): the rows are returned as JSON. The extra
+  `currency` key reaches syscd's client, whose `AccountRow` mapping
+  (`modules/budget/data/mapping.ts`) reads named fields only and ignores
+  unknown keys. No code spreads such a row back into an INSERT/UPDATE.
+- **Every `INSERT INTO accounts` names its columns**: account create
+  (`accounts.ts:86`), restore (`budget-restore.ts:139`) and fresh start
+  (`budgets.ts:164-175`). An unnamed nullable column with no default simply
+  gets NULL, so all three keep succeeding. Consequence: a fresh start or a
+  restore run *from syscd's UI* produces accounts with currency NULL (the
+  budget's currency), i.e. a user-set currency is not carried by syscd's
+  copy paths. Nothing in syscd can set a currency, so this can only lose a
+  value set through this API during the dual-run; accepted.
+- **Every other read names its columns** (`connections/routes.ts:202,288,344,392`,
+  `connections/store.ts:174`, `connections/sync.ts:270`, budget domain
+  `transactions.ts:78`, `transfers.ts`, `card-payments.ts:119`,
+  `budget-export.ts:60`, `repeat-rules.ts:171`): unaffected.
+- **Export** names `id, name, user_id`, so syscd backups simply lack
+  `currency` and restore here as NULL.
+- No `TRUNCATE`, `COPY` or dump/restore of `accounts` exists in syscd.
+- Migrations: syscd's runner only iterates its own files and ignores the
+  unknown `0100_account_currency.sql` row in `schema_migrations` (phase 2
+  findings), and the column name cannot collide with a future syscd
+  migration number (0034+).
+
+## Phase 5c: contract outputs (G9)
+
+- `defineOperation` takes an optional `output` zod schema (the 2xx JSON body
+  after serialization; `z.null()` for a 204). **89 of the 96 catalog
+  operations have one: all 70 budget, all 14 connections, rates (1) and user
+  (4)**; jobs (5) and oauth (2) do not yet (admin / consent surfaces, outside
+  this phase; follow-up filed). Row schemas live in
+  `shared/src/contracts/{budget,connections}/outputs.ts`, transcribed from the
+  client's hand-written `rows.ts` / `connections.ts` and corrected where the
+  transcription met reality: `connections.client_user_id` and `.environment`
+  are nullable text (the client claimed a non-null enum); the USD/BRL rate
+  answers `{ rate, source, stale, fetched_at }` (the client's type claimed
+  `as_of`, which never existed); `connect-token`'s `clientId` is nullable.
+  Objects are non-strict (most reads are `SELECT *`), so a declared field that
+  is missing or mistyped fails, extra columns do not.
+- **Server checking.** `mountOperations` parses each handler result (JSON
+  round-tripped, or a returned JSON Response's body) with `output` when output
+  validation is on: `throw` under `bun test` (set by the preload, so a drift
+  is a 500 in whichever test exercised the handler: every one of the 800+ API
+  tests now doubles as an output check), `warn`/`throw` in local dev via
+  `API_VALIDATE_OUTPUT`, never in a cluster (`KUBERNETES_SERVICE_HOST` wins)
+  and off by default. `api/src/catalog-outputs.test.ts` seeds a budget (groups,
+  bundle, split, transfer, targets, notes, rule, placeholder member) and a
+  synced bank connection with a fake aggregator, then calls all 24 budget and
+  connections reads over HTTP and parses each answer; every list must come
+  back non-empty so its row schema met real rows. It also fails when a
+  budget/connections operation has no output or a read has no sample.
+- **MCP.** Tools whose `output` is a zod object advertise it as
+  `outputSchema` and return it as `structuredContent` (29 of the 66 MCP
+  tools; lists and 204s cannot, MCP requires an object schema). The SDK checks
+  the structured result against it, and so do MCP clients: a zod object
+  exports `additionalProperties: false`, and rows carry more columns than
+  declared, so `scripts/e2e-api.sh` failed until `mcpOutputSchema` started
+  advertising a copy with every object loosened (`z.looseObject`). The
+  contract schemas themselves stay plain objects, so the client's inferred
+  types have no index signature.
+- **Client types.** `data/rows.ts` and `data/connections.ts` are now
+  `z.infer` aliases under the old names (hand-written duplicates deleted;
+  `ScheduledTransactionRow`, `PayeeLocationRow`, `ScheduledFrequency` were
+  unused and had no endpoint, so they went). The upstream-account `*Json`
+  types stay cents views of the wire types (`Omit<Wire, ...> & {...Cents}`),
+  because the domain and screens read cents. `accounts.currency` is optional
+  in the schema so pre-G1 fixtures outside `data/` stay valid.
+- **URLs.** The 13 hand-written URLs in `data/api.ts` are gone: 11
+  connections routes and `/rates/usd-brl` had contracts; two new contracts
+  describe existing routes unchanged: `connections_connect_token` (POST
+  `/connections/connect-token`, api-only; the handler became an operation)
+  and `user_auth_me` (GET `/auth/me`, api-only; mounted as an operation ahead
+  of the auth middleware, still answering 401 itself). `profile/api.ts` also
+  moved `/me` GET/PATCH and `/me/avatar` DELETE to their existing contracts
+  (the binary PUT `/me/avatar` stays hand-written).
+- **Slice split.** `data/api.ts` (1,228 lines) became a 116-line re-export of
+  one api assembled from `data/api/base.ts` (createApi: same reducer path,
+  base query, tag types, refetch policy) plus `budgets`, `members`, `plan`,
+  `payees`, `register`, `connections` injected in that order (each endpoint
+  block moved verbatim, 82 endpoints), and `data/api/types.ts`. No import
+  outside `data/` changed; hook names, tags, `keepUnusedDataFor` and
+  optimistic updates are identical. A test pins 82 endpoints on the one api.
+- **`contractRequest`** moved to `shared/src/contract-request.ts`; the client
+  copy (`platform/api/contractRequest.ts`) and the admin copy are deleted. The
+  client's `ApiQuery` is now an alias of shared `ContractRequest`.
+- **Errors (G12-low).** `{ error, code }`, see `shared/README.md`. The client's
+  `ApiQueryError` carries `code`; `apiErrorMessage` is unchanged.
+
+### Phase 5c/5d checks (2026-11-18, branch `tk/budget-ku4`)
+
+| Check | Result |
+|---|---|
+| `bunx tsc --noEmit` shared / api / client / admin | clean |
+| `bunx eslint .` shared / api / client | 0 errors; client 8 warnings (was 10; none new) |
+| `bun test` shared | 43 pass (was 34) |
+| `BUDGET_REQUIRE_TEST_DB=1 bun test` api | 838 pass, 0 fail (was 785), with output validation on |
+| `bun test` client | 679 pass (was 666; 5 contractRequest tests moved to shared) |
+| admin `vite build` | built |
+| `scripts/e2e-api.sh` (psql shimmed with `pg`; no psql on this host) | exit 0: OAuth consent, 66 MCP tools rw / 24 ro, `budget_transaction_add` with `amount` in milliunits |
+| `expo export --platform web` | 1812 modules |
+| Real stack: API on :3197 against `budgetnew_dev` (migrator applied `0100_account_currency.sql`), web export on :8197; the pre-change build (08ff6fd) on :3198/:8198 against the same database | see below |
+
+End to end with `agent-browser` at 1440x900 on the Trabalho budget, all
+through the new UI, verified through the API:
+
+- add a transaction of 12,34 on Carteira: stored `12340`;
+- edit it to 56,78: stored `56780`;
+- assign 100,00 to Psiquiatra: assignment `100000`;
+- move 25,50 from Mercado to Transporte: `750000 -> 724500` and
+  `300000 -> 325500` (exactly 25500);
+- transfer 10,00 Carteira -> Itau Cartão: legs `-10000` / `+10000`, linked
+  both ways. (A first try to Poupança Nubank answered 400 "transfer account
+  not found in budget" on the old and the new API alike: Trabalho's transfer
+  payees for two accounts point at Casa's accounts, a pre-existing restore
+  bug, follow-up `budget-njc`.)
+- Plan and Accounts rendered by the new and the old build, same data, before
+  and after the writes: the page text is identical (151 amount strings on
+  Plan, 95/98 on Accounts) and the 1440 screenshots are pixel-identical (0
+  differing pixels). The parity screenshots in `docs/evidence/parity/1440`
+  show other data (the parity walk changed it), so the old build on the same
+  database is the baseline. The API ran with `API_VALIDATE_OUTPUT=warn`: 0
+  output-schema warnings over the whole session.
+- The test writes were reverted afterwards (rows deleted, assignments reset).
+
+Screenshots: `docs/evidence/phase5d/`. Follow-ups: `budget-njc` (restore
+transfer-payee scope), `budget-fys` (currency UI), `budget-vyz` (jobs/oauth
+outputs), `budget-ows` (currency at link time).
+
+### Assertions converted
+
+Unit changes converted 22 expected values in existing assertions (api 15:
+domain deltas 1, export 5, category targets 2, Pluggy adapter 7; client 7:
+request bodies 2, mapping 4, contractRequest 1) plus 1 rename-only
+(`usedCents` -> `used`, null); every input literal in tests was scaled x10
+explicitly. The error-code change added `code` to 15 exact error-body
+assertions and 1 key-list assertion. Two assertions encoded the old design
+and were replaced by stronger ones: "connect-token is not an operation" (now:
+it is an api-only operation) and the restore request body (now: format 2 with
+amounts x10).

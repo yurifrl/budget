@@ -38,7 +38,7 @@ import type { ExternalAccount } from './types';
 import { requireUserId } from '../user';
 import { pool } from '../core/db';
 import { implement } from '../core/operation';
-import { HttpError, parseBody } from '../core/validate';
+import { HttpError } from '../core/validate';
 import * as contracts from '@shared/contracts/connections/connections';
 import { connectionsRouter } from './router';
 
@@ -96,40 +96,30 @@ const connectionJson = (row: ConnectionWithLinker) => ({
   updated_at: row.updated_at,
 });
 
-/** Plain routes (not operations): the connect-token mint. Operations mount below. */
 const app = new Hono();
 
-/** Mint a connect token for the provider's widget. */
-app.post('/connect-token', async (c) => {
-  const user = c.get('user');
-  if (!user) throw new HttpError(401, 'unauthorized');
-  const body = await parseBody(
-    c,
-    z.object({
-      provider: z.string().min(1),
-      connectorId: z.number().int().optional(),
-      itemId: z.string().optional(),
-    }),
-  );
-  const aggregator = aggregatorFor(body.provider);
-  try {
-    const token = await aggregator.createConnectToken({
-      clientUserId: user.id,
-      connectorId: body.connectorId,
-      itemId: body.itemId,
-    });
-    return c.json({ token: token.token, clientId: token.clientId, widgetUrl: token.widgetUrl });
-  } catch (err) {
-    throwProviderMapped(err);
-  }
-});
-
 /**
- * Operations: everything below the connect-token. Order matters — the static
- * /settings, /upstream and /sync-status routes are registered before /:id so Hono never
- * shadows them.
+ * Operations. Order matters — the static /connect-token, /settings, /upstream
+ * and /sync-status routes are registered before /:id so Hono never shadows them.
  */
 export const operations = [
+  /** Mint a connect token for the provider's widget. */
+  implement(contracts.connectionsConnectToken, async (c, body) => {
+    const user = c.get('user');
+    if (!user) throw new HttpError(401, 'unauthorized');
+    const aggregator = aggregatorFor(body.provider);
+    try {
+      const token = await aggregator.createConnectToken({
+        clientUserId: user.id,
+        connectorId: body.connectorId,
+        itemId: body.itemId,
+      });
+      return { token: token.token, clientId: token.clientId, widgetUrl: token.widgetUrl };
+    } catch (err) {
+      throwProviderMapped(err);
+    }
+  }),
+
   /**
    * Register a connected item after widget success: persist the local row and
    * discover its upstream accounts. No accounts are persisted here — the link

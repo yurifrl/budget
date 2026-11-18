@@ -5,7 +5,8 @@
 import type { GoalColumns } from '../store/categories';
 
 export interface TargetInput {
-  amount_cents?: number;
+  /** Milliunits. */
+  amount?: number;
   cadence?: 'weekly' | 'monthly' | 'yearly' | 'custom';
   by_date?: string;
   behavior?: 'set-aside' | 'refill';
@@ -22,7 +23,7 @@ export function goalColumns(target: TargetInput | null): GoalColumns {
       goal_needs_whole_amount: null,
     };
   }
-  const milli = (target.amount_cents ?? 0) * 10;
+  const milli = target.amount ?? 0;
   if (target.cadence === 'custom') {
     return {
       goal_type: 'TBD',
