@@ -2,8 +2,9 @@
  * GET /budgets/export?budget_id=<uuid> — full budget export (backup).
  *
  * Emits the exact payload POST /budgets/restore accepts (groups, categories,
- * accounts, transactions, assignments — money in CENTS, cross-references as
- * array indexes), so export -> restore round-trips. Sections restore does not
+ * accounts, transactions, assignments — format_version 2: money in
+ * MILLIUNITS, as stored; cross-references as array indexes), so export ->
+ * restore round-trips. Sections restore does not
  * carry are added alongside and ignored by it: budget, payees,
  * category_targets, category_notes, month_notes, repeat_rules and splits
  * (cross-references by index as well; split parents export with their summed
@@ -16,6 +17,7 @@ import { pool } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { budgetExport } from '@shared/contracts/budget';
+import { BACKUP_FORMAT_VERSION } from '@shared/contracts/budget/schemas';
 import { budgetRouter } from '../router';
 import {
   exportAccounts,
@@ -34,7 +36,7 @@ import {
   type Row,
 } from '../store/export';
 
-const cents = (milli: unknown): number => Number(milli) / 10;
+const milli = (value: unknown): number => Number(value);
 
 export const operations = [
   implement(budgetExport, async (_c, { budget_id: budgetId }) => {
@@ -84,8 +86,8 @@ export const operations = [
         payee: peer === undefined ? ((t.payee as string | null) ?? '') : '',
         categoryIndex: splits ? null : (categoryIndex.get(t.category_id) ?? null),
         memo: (t.memo as string | null) ?? '',
-        outflow: Math.max(-amount, 0) / 10,
-        inflow: Math.max(amount, 0) / 10,
+        outflow: Math.max(-amount, 0),
+        inflow: Math.max(amount, 0),
         cleared: t.cleared,
         flag: ((t.flag_color ?? t.flag_name) as string | null) ?? '',
         transferPeerIndex: peer ?? null,
@@ -97,7 +99,7 @@ export const operations = [
       .map((a) => ({
         categoryIndex: categoryIndex.get(a.category_id) as number,
         month: a.month,
-        budgeted: cents(a.budgeted),
+        budgeted: milli(a.budgeted),
       }))
       .sort((a, b) => String(a.month).localeCompare(String(b.month)) || a.categoryIndex - b.categoryIndex);
 
@@ -108,6 +110,7 @@ export const operations = [
     const rules = await exportRepeatRules(pool, budgetId);
 
     return {
+      format_version: BACKUP_FORMAT_VERSION,
       budget: { name: budget.name, archived: budget.archived_at != null },
       groups: groups.map((g) => g.name),
       categories: categories.map((c) => ({
@@ -118,7 +121,11 @@ export const operations = [
         bundleIndex: bundleIndex.get(c.bundle_id) ?? null,
       })),
       bundles: bundles.map((b) => ({ groupIndex: b.groupIndex, name: b.name })),
-      accounts: accounts.map((a) => ({ name: a.name, userId: (a.user_id as string | null) ?? null })),
+      accounts: accounts.map((a) => ({
+        name: a.name,
+        userId: (a.user_id as string | null) ?? null,
+        currency: (a.currency as string | null) ?? null,
+      })),
       transactions,
       assignments,
       payees: payees.map((p) => p.name),
@@ -127,7 +134,8 @@ export const operations = [
         .map((t) => ({
           categoryIndex: categoryIndex.get(t.category_id) as number,
           kind: t.kind,
-          amount_cents: Number(t.amount_cents),
+          // category_targets stores cents; the document carries milliunits.
+          amount: Number(t.amount_cents) * 10,
           config: t.config,
         })),
       category_notes: categoryNotes
@@ -141,7 +149,7 @@ export const operations = [
           categoryIndex: categoryIndex.get(r.category_id) ?? null,
           payee: (r.payee as string | null) ?? '',
           memo: (r.memo as string | null) ?? '',
-          amount_cents: cents(r.amount),
+          amount: milli(r.amount),
           frequency: r.frequency,
           next_due_date: r.next_due_date,
           month_last_day: Boolean(r.month_last_day),
@@ -149,7 +157,7 @@ export const operations = [
       splits: liveTxns.flatMap((t) =>
         (splitsByTxn.get(t.id) ?? []).map((s) => ({
           transactionIndex: txnIndex.get(t.id) as number,
-          amount_cents: cents(s.amount),
+          amount: milli(s.amount),
           memo: (s.memo as string | null) ?? '',
           categoryIndex: categoryIndex.get(s.category_id) ?? null,
         })),

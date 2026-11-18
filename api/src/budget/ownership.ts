@@ -18,7 +18,7 @@ import type { MiddlewareHandler } from 'hono';
 
 import { pool, withTransaction } from '../core/db';
 import type { IdentityUser } from '../user';
-import { isUuid } from '../core/validate';
+import { isUuid, errorResponse } from '../core/validate';
 
 /** A pool or a checked-out transaction client. */
 type Queryable = Pick<typeof pool, 'query'>;
@@ -131,7 +131,7 @@ async function budgetIdsFrom(c: { req: { query: (k: string) => string | undefine
  */
 export const budgetAccess: MiddlewareHandler = async (c, next) => {
   const user: IdentityUser | undefined = c.get('user');
-  if (!user) return c.json({ error: 'unauthorized' }, 401);
+  if (!user) return errorResponse(c, 401, 'unauthorized');
   if (user.role === 'admin') return next();
 
   const budgetIds = await budgetIdsFrom(c);
@@ -143,5 +143,5 @@ export const budgetAccess: MiddlewareHandler = async (c, next) => {
   );
   if (owned.rows[0].n === budgetIds.length) return next();
 
-  return c.json({ error: 'not found' }, 404);
+  return errorResponse(c, 404, 'not found');
 };

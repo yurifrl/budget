@@ -21,6 +21,7 @@ import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { repeatRulesCreate, repeatRulesDelete, repeatRulesGenerate, repeatRulesList } from '@shared/contracts/budget';
+import { ONE_WAY_ERROR, bothPositive } from '@shared/contracts/budget/schemas';
 import { applyBalanceDeltas, resolvePayeeId } from '../domain/transactions';
 import { advanceOccurrence, isoDate } from '../domain/repeat-schedule';
 import { generateDueOccurrences } from '../domain/repeat-generation';
@@ -34,8 +35,8 @@ export const operations = [
   }),
 
   implement(repeatRulesCreate, async (_c, body) => {
-    if (body.inflow_cents > 0 && body.outflow_cents > 0) {
-      throw new HttpError(400, 'inflow_cents and outflow_cents cannot both be positive');
+    if (bothPositive(body)) {
+      throw new HttpError(400, ONE_WAY_ERROR);
     }
     const ruleId = await withTransaction(pool, async (client) => {
       // Referenced account must belong to this budget; otherwise the rule
@@ -77,7 +78,7 @@ export const operations = [
         await rulesStore.linkAnchorToRule(client, t.id, ruleId, body.frequency, upcoming);
         if (upcoming) {
           await applyBalanceDeltas(client, body.budget_id, [
-            { account_id: t.account_id, cleared_delta: 0, uncleared_delta: -Number(t.amount) / 10 },
+            { account_id: t.account_id, cleared_delta: 0, uncleared_delta: -Number(t.amount) },
           ]);
         }
       } else {
@@ -96,7 +97,7 @@ export const operations = [
           payeeId,
           categoryId: body.category_id,
           memo: body.memo || null,
-          amount: (body.inflow_cents - body.outflow_cents) * 10,
+          amount: body.inflow - body.outflow,
           frequency: body.frequency,
           nextDueDate: body.next_due_date,
           monthLastDay: body.month_last_day,

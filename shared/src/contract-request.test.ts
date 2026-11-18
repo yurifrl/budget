@@ -1,16 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { z } from '@shared/zod';
+import { z } from './zod';
 
-import { defineOperation } from '@shared/operation-contract';
-import { contracts } from '@shared/contracts/budget';
+import { defineOperation } from './operation-contract';
+import { contracts } from './contracts/budget';
 
-import type { BaseQueryApi } from '@reduxjs/toolkit/query';
-
-import { Container } from '../di/container';
-import { Tokens } from '../di/tokens';
-import type { KVStore } from '../storage/types';
-import { apiBaseQuery } from './baseQuery';
-import { contractRequest } from './contractRequest';
+import { contractRequest } from './contract-request';
 
 const E = { api: true, cli: true, mcp: true } as const;
 const byName = (n: string) => contracts.find((c) => c.name === n)!;
@@ -50,8 +44,8 @@ describe('contractRequest', () => {
     expect(contractRequest(c as never, { id: 'c1', budget_id: 'b', target: null } as never)).toEqual({
       url: '/categories/c1/target', method: 'PATCH', params: { budget_id: 'b' }, body: null,
     });
-    expect(contractRequest(c as never, { id: 'c1', budget_id: 'b', target: { amount_cents: 5, cadence: 'monthly' } } as never).body)
-      .toEqual({ amount_cents: 5, cadence: 'monthly' });
+    expect(contractRequest(c as never, { id: 'c1', budget_id: 'b', target: { amount: 50, cadence: 'monthly' } } as never).body)
+      .toEqual({ amount: 50, cadence: 'monthly' });
   });
 
   test('a missing path param throws', () => {
@@ -59,29 +53,3 @@ describe('contractRequest', () => {
   });
 });
 
-describe('apiBaseQuery body serialization', () => {
-  test('a JSON null body is sent as "null" with a content type; undefined sends nothing', async () => {
-    const seen: RequestInit[] = [];
-    const original = globalThis.fetch;
-    globalThis.fetch = Object.assign(async (_u: unknown, init?: RequestInit) => {
-      seen.push(init ?? {});
-      return new Response(null, { status: 204 });
-    }, original);
-    try {
-      const api = {
-        signal: new AbortController().signal,
-        extra: new Container()
-          .registerValue(Tokens.Config, { apiUrl: 'http://x', connectionsProvider: 't' })
-          .registerValue(Tokens.Storage, { get: async () => null, set: async () => {}, remove: async () => {} } as unknown as KVStore),
-      } as unknown as BaseQueryApi;
-      await apiBaseQuery({ url: '/a', method: 'PATCH', body: null }, api, {});
-      await apiBaseQuery({ url: '/a', method: 'DELETE' }, api, {});
-      expect(seen[0]!.body).toBe('null');
-      expect((seen[0]!.headers as Record<string, string>)['Content-Type']).toBe('application/json');
-      expect(seen[1]!.body).toBeUndefined();
-      expect(seen[0]!.signal).toBeDefined();
-    } finally {
-      globalThis.fetch = original;
-    }
-  });
-});

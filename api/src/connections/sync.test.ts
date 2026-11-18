@@ -192,7 +192,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
     externalId: 'up-sync-tx-1',
     externalAccountId: EXTERNAL_ACCOUNT,
     description: 'Coffee Shop',
-    amountCents: -3550,
+    amount: -35500,
     date: today(),
     currencyCode: 'BRL',
     cleared: false,
@@ -201,7 +201,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
     externalId: 'up-sync-tx-2',
     externalAccountId: EXTERNAL_ACCOUNT,
     description: 'Salary',
-    amountCents: 100000,
+    amount: 1000000,
     date: today(),
     currencyCode: 'BRL',
     cleared: false,
@@ -294,7 +294,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
     if (!dbReady) return;
     const before = await accountBalances();
     const changed = upTx1();
-    changed.amountCents = -10000;
+    changed.amount = -100000;
     const result = await syncConnectionTransactions({
       userId,
       connectionId: await connId(),
@@ -316,7 +316,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
       externalId: 'up-sync-tx-posted-1',
       externalAccountId: EXTERNAL_ACCOUNT,
       description: 'Grocery Store',
-      amountCents: -12500,
+      amount: -125000,
       date: '2026-11-05T03:00:00.000Z',
       currencyCode: 'BRL',
       cleared: true,
@@ -325,7 +325,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
     // the payload are swept as tombstones, so this test must not omit them.
     // tx-1's amount sits at the amount-change test's -10000 here; re-sending
     // the original -3550 would churn the row (and its balance) downstream.
-    const aggregator = fakeAggregator([posted, { ...upTx1(), amountCents: -10000 }, upTx2()]);
+    const aggregator = fakeAggregator([posted, { ...upTx1(), amount: -100000 }, upTx2()]);
     const first = await syncConnectionTransactions({
       userId,
       connectionId: await connId(),
@@ -426,7 +426,7 @@ describe.skipIf(!dbReady)('connections sync: transaction scope and sweep complet
     externalId: id,
     externalAccountId: EXTERNAL_ACCOUNT,
     description: `Desc ${id}`,
-    amountCents: cents,
+    amount: cents * 10, // the port carries milliunits
     date: today(),
     currencyCode: 'BRL',
     cleared: false,
@@ -608,7 +608,7 @@ describe.skipIf(!dbReady)('connections sync: budget revision', () => {
           externalId: 'up-sync-tx-revision',
           externalAccountId: EXTERNAL_ACCOUNT,
           description: 'Revision probe',
-          amountCents: -100,
+          amount: -1000,
           date: today(),
           currencyCode: 'BRL',
           cleared: false,

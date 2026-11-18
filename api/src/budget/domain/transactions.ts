@@ -28,7 +28,7 @@ export async function insertSubTxns(
     await client.query(
       `INSERT INTO subtransactions (budget_id, transaction_id, amount, memo, category_id)
        VALUES ($1, $2, $3, $4, $5)`,
-      [budgetId, txnId, (sub.inflow_cents - sub.outflow_cents) * 10, sub.memo, sub.category_id],
+      [budgetId, txnId, sub.inflow - sub.outflow, sub.memo, sub.category_id],
     );
   }
 }
@@ -98,28 +98,15 @@ export async function applyBalanceDeltas(
     }
     const cleared = Number(row.cleared_balance);
     const uncleared = Number(row.uncleared_balance);
-    // bigint columns return numeric strings from pg; deltas arrive in cents -> *10.
+    // bigint columns return numeric strings from pg; deltas are milliunits, like the columns.
     await client.query(
       'UPDATE accounts SET cleared_balance = $1, uncleared_balance = $2 WHERE id = $3',
-      [cleared + d.cleared_delta * 10, uncleared + d.uncleared_delta * 10, d.account_id],
+      [cleared + d.cleared_delta, uncleared + d.uncleared_delta, d.account_id],
     );
   }
 }
 
-export interface TransactionInput {
-  account_id: string;
-  date: string;
-  payee: string;
-  category_id: string | null;
-  memo: string;
-  outflow_cents: number;
-  inflow_cents: number;
-  cleared: 'cleared' | 'uncleared' | 'reconciled';
-  approved: boolean;
-  flag: string | null;
-  repeat: string;
-}
-
+/** A change to one account's cached balances, in MILLIUNITS (the balance columns' unit). */
 export interface BalanceDelta {
   account_id: string;
   cleared_delta: number;
@@ -134,7 +121,7 @@ export interface LedgerRow {
 }
 
 /**
- * Account balance deltas (cents) when `before` (or nothing) becomes `after`
+ * Account balance deltas (milliunits) when `before` (or nothing) becomes `after`
  * (or nothing): add (before = null), edit — including moving accounts or
  * cleared-status changes — and delete (after = null). Reconciled counts as
  * cleared. This is the server's single definition of the delta contract the
@@ -145,9 +132,9 @@ export function deriveDeltas(before: LedgerRow | null, after: LedgerRow | null):
   const byAccount = new Map<string, BalanceDelta>();
   const apply = (row: LedgerRow, sign: 1 | -1) => {
     const d = byAccount.get(row.account_id) ?? { account_id: row.account_id, cleared_delta: 0, uncleared_delta: 0 };
-    const cents = (sign * Number(row.amount)) / 10;
-    if (row.cleared === 'uncleared') d.uncleared_delta += cents;
-    else d.cleared_delta += cents;
+    const milli = sign * Number(row.amount);
+    if (row.cleared === 'uncleared') d.uncleared_delta += milli;
+    else d.cleared_delta += milli;
     byAccount.set(row.account_id, d);
   };
   if (before) apply(before, -1);

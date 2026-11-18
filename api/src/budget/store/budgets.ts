@@ -135,18 +135,18 @@ export async function copyBudgetForFreshStart(client: Queryable, oldId: string, 
             CASE WHEN direct_import_linked THEN uncleared_balance ELSE 0 END AS uncleared_balance,
             sort_order, created_at, closed, note, direct_import_linked,
             direct_import_in_error, debt_interest_rates, debt_minimum_payments,
-            debt_escrow_amounts, deleted, connection_id, external_account_id, institution, user_id
+            debt_escrow_amounts, deleted, connection_id, external_account_id, institution, user_id, currency
        FROM accounts WHERE budget_id = $1
    ), ins AS (
      INSERT INTO accounts
        (id, budget_id, name, type, account_group, on_budget, cleared_balance,
         uncleared_balance, sort_order, created_at, closed, note, direct_import_linked,
         direct_import_in_error, debt_interest_rates, debt_minimum_payments,
-        debt_escrow_amounts, deleted, connection_id, external_account_id, institution, user_id)
+        debt_escrow_amounts, deleted, connection_id, external_account_id, institution, user_id, currency)
      SELECT new_id, $2, name, type, account_group, on_budget, cleared_balance,
             uncleared_balance, sort_order, created_at, closed, note, direct_import_linked,
             direct_import_in_error, debt_interest_rates, debt_minimum_payments,
-            debt_escrow_amounts, deleted, connection_id, external_account_id, institution, user_id
+            debt_escrow_amounts, deleted, connection_id, external_account_id, institution, user_id, currency
        FROM src
    )
    INSERT INTO acc_map SELECT old_id, new_id FROM src`,

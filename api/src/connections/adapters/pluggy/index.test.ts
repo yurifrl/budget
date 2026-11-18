@@ -82,7 +82,7 @@ describe('adapter: account mapping', () => {
         name: 'Checking',
         type: 'BANK',
         currencyCode: 'BRL',
-        balanceCents: -1234, // float → integer cents via Math.round (rounds half up)
+        balance: -12340, // float → whole cents via Math.round (rounds half up), then milliunits
         institution: 'Nubank',
       },
       {
@@ -90,13 +90,13 @@ describe('adapter: account mapping', () => {
         name: '',
         type: 'CREDIT',
         currencyCode: null,
-        balanceCents: null,
+        balance: null,
         institution: null,
         credit: {
-          limitCents: null,
-          availableCents: null,
-          usedCents: null,
-          minimumPaymentCents: null,
+          limit: null,
+          available: null,
+          used: null,
+          minimumPayment: null,
           dueDate: null,
           latestBill: null, // /bills unavailable → degrade, never hide the account
         },
@@ -136,7 +136,7 @@ describe('adapter: transaction mapping', () => {
         externalId: 'tx1',
         externalAccountId: 'ac1',
         description: 'coffee',
-        amountCents: -1250,
+        amount: -12500,
         cleared: true,
         date: '2026-01-05',
         currencyCode: null,
@@ -145,7 +145,7 @@ describe('adapter: transaction mapping', () => {
         externalId: 'tx2',
         externalAccountId: 'ac1',
         description: '',
-        amountCents: 300,
+        amount: 3000,
         cleared: false,
         date: '2026-01-06',
         currencyCode: null,
@@ -154,7 +154,7 @@ describe('adapter: transaction mapping', () => {
         externalId: 'tx3',
         externalAccountId: 'ac1',
         description: '',
-        amountCents: 1, // rounds half away from zero
+        amount: 10, // rounds half away from zero
         cleared: false,
         date: '2026-01-07',
         currencyCode: null,
@@ -428,7 +428,7 @@ describe('adapter: credit accounts', () => {
     });
     const agg = makeAggregator(fetchImpl);
     const pull = await agg.listTransactions('cc1');
-    expect(pull.transactions.map((t) => t.amountCents)).toEqual([-12583, 153844]);
+    expect(pull.transactions.map((t) => t.amount)).toEqual([-125830, 1538440]);
     // account type is cached: a second pull does not refetch the account
     await agg.listTransactions('cc1');
     expect(callsTo(calls, '/accounts/cc1')).toHaveLength(1);
@@ -442,7 +442,7 @@ describe('adapter: credit accounts', () => {
       throw new Error(`unexpected ${url.pathname}`);
     });
     const pull = await makeAggregator(fetchImpl).listTransactions('cc1');
-    expect(pull.transactions.map((t) => t.amountCents)).toEqual([12583, -153844]);
+    expect(pull.transactions.map((t) => t.amount)).toEqual([125830, -1538440]);
   });
 
   it('uses the account type learned from a listing without an extra fetch', async () => {
@@ -456,7 +456,7 @@ describe('adapter: credit accounts', () => {
     const agg = makeAggregator(fetchImpl);
     await agg.listExternalAccounts('it1');
     const pull = await agg.listTransactions('cc1');
-    expect(pull.transactions[0]?.amountCents).toBe(-12583);
+    expect(pull.transactions[0]?.amount).toBe(-125830);
     expect(callsTo(calls, '/accounts/cc1')).toHaveLength(0);
   });
 
@@ -496,19 +496,19 @@ describe('adapter: credit accounts', () => {
       ],
     );
     expect(credit).toEqual({
-      limitCents: 8_426_000,
-      availableCents: 4_382_218,
-      usedCents: 4_043_782,
-      minimumPaymentCents: 267_338,
+      limit: 84_260_000,
+      available: 43_822_180,
+      used: 40_437_820,
+      minimumPayment: 2_673_380,
       dueDate: '2026-11-05',
-      latestBill: { totalCents: 1_712_334, dueDate: '2026-11-05', minimumPaymentCents: 267_338 },
+      latestBill: { total: 17_123_340, dueDate: '2026-11-05', minimumPayment: 2_673_380 },
     });
   });
 
   it('falls back to limit - available, and tolerates garbage creditData', () => {
-    expect(toCreditDetails({ creditLimit: 1000, availableCreditLimit: 400 }).usedCents).toBe(60_000);
+    expect(toCreditDetails({ creditLimit: 1000, availableCreditLimit: 400 }).used).toBe(600_000);
     const none = toCreditDetails('nonsense');
-    expect(none.usedCents).toBeNull();
+    expect(none.used).toBeNull();
     expect(none.latestBill).toBeNull();
     expect(toExternalAccount({ id: 'b', itemId: 'i', type: 'BANK' } as never).credit).toBeUndefined();
   });

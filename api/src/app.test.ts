@@ -81,7 +81,7 @@ describe('the gate enforces account status', () => {
   dbTest('disabled user is rejected with 401 account disabled', async () => {
     const res = await app().request('/rates', { headers: await cookie('off@x.com') });
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: 'account disabled' });
+    expect(await res.json()).toEqual({ error: 'account disabled', code: 'account_disabled' });
   });
 
   dbTest('active user passes the gate', async () => {
@@ -93,7 +93,7 @@ describe('the gate enforces account status', () => {
     for (const h of [{}, { authorization: 'Bearer nope' }] as Record<string, string>[]) {
       const res = await app().request('/rates', { headers: h });
       expect(res.status).toBe(401);
-      expect(await res.json()).toEqual({ error: 'unauthorized' });
+      expect(await res.json()).toEqual({ error: 'unauthorized', code: 'unauthorized' });
     }
   });
 

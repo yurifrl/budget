@@ -205,16 +205,17 @@ describe('mountOperations', () => {
     expect(seen.target).toEqual({ id: ID, target: null });
   });
 
-  test('validation failures are 400 with the {error} shape (path, query, body)', async () => {
+  test('validation failures are 400 with the {error, code} shape (path, query, body)', async () => {
     const badPath = await app.request(`/items/not-a-uuid?scope=${S}`);
     expect(badPath.status).toBe(400);
-    const badPathBody = (await badPath.json()) as { error: string };
-    expect(Object.keys(badPathBody)).toEqual(['error']);
+    const badPathBody = (await badPath.json()) as { error: string; code: string };
+    expect(Object.keys(badPathBody)).toEqual(['error', 'code']);
+    expect(badPathBody.code).toBe('invalid_input');
     expect(badPathBody.error).toBe('id must be a valid id');
 
     const missingQuery = await app.request(`/items/${ID}`);
     expect(missingQuery.status).toBe(400);
-    expect(await missingQuery.json()).toEqual({ error: 'scope is required' });
+    expect(await missingQuery.json()).toEqual({ error: 'scope is required', code: 'invalid_input' });
 
     const badCoerce = await app.request(`/items/${ID}?scope=${S}&limit=99`);
     expect(badCoerce.status).toBe(400);
@@ -224,15 +225,15 @@ describe('mountOperations', () => {
     expect(((await badBody.json()) as { error: string }).error).toMatch(/^name /);
 
     const wrongType = await app.request('/items', json({ scope: S, name: 5 }));
-    expect(await wrongType.json()).toEqual({ error: 'name must be a string' });
+    expect(await wrongType.json()).toEqual({ error: 'name must be a string', code: 'invalid_input' });
 
     const badJson = await app.request('/items', { ...json(null), body: '{nope' });
     expect(badJson.status).toBe(400);
-    expect(await badJson.json()).toEqual({ error: 'request body must be valid JSON' });
+    expect(await badJson.json()).toEqual({ error: 'request body must be valid JSON', code: 'invalid_input' });
 
     const notObject = await app.request('/items', json([1]));
     expect(notObject.status).toBe(400);
-    expect(await notObject.json()).toEqual({ error: 'request body must be a JSON object' });
+    expect(await notObject.json()).toEqual({ error: 'request body must be a JSON object', code: 'invalid_input' });
 
     const empty = await app.request('/items', { method: 'POST' });
     expect(empty.status).toBe(400);
@@ -244,7 +245,7 @@ describe('mountOperations', () => {
     expect(await res.json()).toEqual({ error: 'conflict-ish' });
     const err = await app.request('/boom');
     expect(err.status).toBe(418);
-    expect(await err.json()).toEqual({ error: 'teapot' });
+    expect(await err.json()).toEqual({ error: 'teapot', code: 'error' });
   });
 
   test('expose.api=false operations are not mounted', async () => {

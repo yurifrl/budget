@@ -12,20 +12,34 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from '@shared/zod';
+import { errorBody } from '@shared/errors';
 import { isUuid } from '@shared/validation';
 
 // Generic id validators (shared/); budget value schemas are imported from
 // @shared/validation by the code that needs them.
 export { UUID_RE, isUuid, uuidSchema } from '@shared/validation';
 
-/** An error carrying the HTTP status it should surface as. */
+export { defaultErrorCode, errorBody, type ApiErrorBody } from '@shared/errors';
+
+/**
+ * An error carrying the HTTP status it should surface as and a stable
+ * machine-readable `code` (defaults from the status; see shared/src/errors.ts).
+ */
 export class HttpError extends Error {
+  public readonly code: string | undefined;
   constructor(
     public readonly status: ContentfulStatusCode,
     message: string,
+    code?: string,
   ) {
     super(message);
+    this.code = code;
   }
+}
+
+/** A JSON error response with the shared `{ error, code }` shape. */
+export function errorResponse(c: Context, status: ContentfulStatusCode, message: string, code?: string) {
+  return c.json(errorBody(status, message, code), status);
 }
 
 
@@ -39,7 +53,7 @@ export async function parseBody<S extends z.ZodType>(c: Context, schema: S): Pro
   try {
     raw = await c.req.json();
   } catch {
-    throw new HttpError(400, 'request body must be valid JSON');
+    throw new HttpError(400, 'request body must be valid JSON', 'invalid_input');
   }
   return parseValue(schema, raw);
 }
@@ -61,14 +75,14 @@ function describeIssue(issue: z.core.$ZodIssue): string {
 export function parseValue<S extends z.ZodType>(schema: S, raw: unknown): z.infer<S> {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
-    throw new HttpError(400, parsed.error.issues.map(describeIssue).join('; '));
+    throw new HttpError(400, parsed.error.issues.map(describeIssue).join('; '), 'invalid_input');
   }
   return parsed.data;
 }
 
 /** Validate a path/query parameter; throws HttpError(400) with the param name. */
 export function requireUuidParam(value: string | undefined, name: string): string {
-  if (!isUuid(value)) throw new HttpError(400, `${name} is required (uuid)`);
+  if (!isUuid(value)) throw new HttpError(400, `${name} is required (uuid)`, 'invalid_input');
   return value;
 }
 
@@ -79,8 +93,8 @@ export function requireUuidParam(value: string | undefined, name: string): strin
  */
 export function httpOnError(err: unknown, c: Context) {
   if (err instanceof HttpError) {
-    return c.json({ error: err.message }, err.status);
+    return errorResponse(c, err.status, err.message, err.code);
   }
   console.error('Unhandled API error:', err);
-  return c.json({ error: 'internal server error' }, 500);
+  return errorResponse(c, 500, 'internal server error');
 }

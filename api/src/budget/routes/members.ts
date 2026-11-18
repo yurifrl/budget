@@ -1,6 +1,6 @@
 import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
-import { HttpError } from '../../core/validate';
+import { HttpError, errorResponse } from '../../core/validate';
 import {
   createPlaceholderUser,
   EmailLinkError,
@@ -55,7 +55,7 @@ async function requireManager(c: { get: (k: 'user') => IdentityUser | undefined 
 export const operations = [
   implement(membersList, async (c, { budget_id: budgetId }) => {
     const user: IdentityUser | undefined = c.get('user');
-    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    if (!user) return errorResponse(c, 401, 'unauthorized');
     const members = await listMembers(budgetId, user.id);
     return { members, can_manage: await isBudgetOwnerOrAdmin(user, budgetId) };
   }),

@@ -6,10 +6,12 @@ import {
   budgetId,
   bulkTxnSchema,
   createTxnSchema,
+  milliunitsSchema,
   patchTxnSchema,
   subTxnListSchema,
   uuidSchema,
 } from './schemas';
+import { bulkImportResultSchema, noContent, transactionRowSchema } from './outputs';
 
 /**
  * Account balance deltas are always derived by the server from the stored
@@ -20,8 +22,9 @@ import {
 
 export const transactionsList = defineOperation({
   name: 'budget_transactions_list',
-  description: 'List all live transactions of a budget (newest first) with their split legs. Returned `amount` fields are signed MILLIUNITS (cents x 10; negative = money out).',
+  description: 'List all live transactions of a budget (newest first) with their split legs. `amount` fields (parent and split legs) are signed milliunits (1/1000 of the currency unit, 12.34 = 12340; negative = money out).',
   input: z.object({ budget_id: budgetId }),
+  output: z.array(transactionRowSchema),
   method: 'GET',
   path: '/transactions',
   kind: 'read',
@@ -31,12 +34,13 @@ export const transactionsList = defineOperation({
 export const transactionsCreate = defineOperation({
   name: 'budget_transactions_create',
   description:
-    'Create a transaction. inflow_cents / outflow_cents are non-negative CENTS (inflow XOR outflow). Account balances are updated automatically.',
+    'Create a transaction. txn.inflow / txn.outflow (and split legs\' inflow / outflow) are integer MILLIUNITS (1/1000 of the currency unit; 12.34 = 12340), inflow XOR outflow. Account balances are updated automatically.',
   input: z.object({
     budget_id: budgetId,
     txn: createTxnSchema,
     subtransactions: subTxnListSchema.optional(),
   }),
+  output: transactionRowSchema,
   method: 'POST',
   path: '/transactions',
   status: 201,
@@ -47,8 +51,9 @@ export const transactionsCreate = defineOperation({
 export const transactionsBulk = defineOperation({
   name: 'budget_transactions_bulk_import',
   description:
-    'Import a batch of parsed statement rows into one account (inflow_cents / outflow_cents in CENTS); dedupes on import ids and stores rows uncleared + unapproved.',
+    'Import a batch of parsed statement rows into one account (inflow / outflow in integer MILLIUNITS, 12.34 = 12340); dedupes on import ids and stores rows uncleared + unapproved.',
   input: z.object({ budget_id: budgetId, account_id: uuidSchema, txns: z.array(bulkTxnSchema).min(1).max(2000) }),
+  output: bulkImportResultSchema,
   method: 'POST',
   path: '/transactions/bulk',
   status: 201,
@@ -59,13 +64,14 @@ export const transactionsBulk = defineOperation({
 export const transactionsUpdate = defineOperation({
   name: 'budget_transactions_update',
   description:
-    'Edit a transaction with a partial patch (and optionally replace its split legs); inflow_cents / outflow_cents in CENTS. Account balances are re-derived automatically.',
+    'Edit a transaction with a partial patch (and optionally replace its split legs); inflow / outflow in integer MILLIUNITS (12.34 = 12340). Account balances are re-derived automatically.',
   input: z.object({
     id: uuidSchema,
     budget_id: budgetId,
     patch: patchTxnSchema,
     subtransactions: subTxnListSchema.optional(),
   }),
+  output: noContent,
   method: 'PATCH',
   path: '/transactions/:id',
   kind: 'write',
@@ -76,6 +82,7 @@ export const transactionsDelete = defineOperation({
   name: 'budget_transactions_delete',
   description: 'Delete a transaction (soft delete). Account balances are reversed automatically.',
   input: z.object({ id: uuidSchema, budget_id: budgetId }),
+  output: noContent,
   method: 'DELETE',
   path: '/transactions/:id',
   query: ['budget_id'],
@@ -87,17 +94,18 @@ export const transactionsDelete = defineOperation({
 export const transactionAdd = defineOperation({
   name: 'budget_transaction_add',
   description:
-    'Add a transaction in one call. amount_cents is a signed integer in CENTS: negative = money out (spending), positive = money in. payee is a name (matched or created). date defaults to today (YYYY-MM-DD). Account balances update automatically.',
+    'Add a transaction in one call. amount is a signed integer in MILLIUNITS (1/1000 of the currency unit; -12.34 = -12340): negative = money out (spending), positive = money in. payee is a name (matched or created). date defaults to today (YYYY-MM-DD). Account balances update automatically.',
   input: z.object({
     budget_id: budgetId,
     account_id: uuidSchema,
-    amount_cents: z.number().int().refine((n) => n !== 0, { message: 'amount_cents must be non-zero' }),
+    amount: milliunitsSchema.refine((n) => n !== 0, { message: 'amount must be non-zero' }),
     payee: z.string().trim().min(1).max(200),
     category_id: uuidSchema.optional(),
     date: isoDateSchema.optional(),
     memo: z.string().max(500).optional(),
     cleared: clearedSchema.optional(),
   }),
+  output: transactionRowSchema,
   method: 'POST',
   path: '/transactions/add',
   status: 201,

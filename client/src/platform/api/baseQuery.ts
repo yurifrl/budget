@@ -7,24 +7,25 @@
  */
 
 import type { BaseQueryFn } from '@reduxjs/toolkit/query';
+import type { ContractRequest } from '@shared/contract-request';
 
 import type { Container } from '../di/container';
 import { Tokens } from '../di/tokens';
 import { loadAuthHeaders } from '../storage/sessionToken';
 
-export interface ApiQuery {
-  url: string;
-  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
-  /** Values are stringified here; `undefined` entries are omitted from the URL. */
-  params?: Record<string, string | number | boolean | undefined>;
-  /** JSON-serialized, unless it is a Blob — then sent raw with the blob's own content type. */
-  body?: unknown;
-}
+/**
+ * One request: the shape `contractRequest` (shared) builds. Params are
+ * stringified here (`undefined` omitted); the body is JSON-serialized unless
+ * it is a Blob, which is sent raw with the blob's own content type.
+ */
+export type ApiQuery = ContractRequest;
 
 export interface ApiQueryError {
   /** HTTP status code, or the literal 'FETCH_ERROR' when fetch itself threw. */
   status: number | 'FETCH_ERROR';
   message: string;
+  /** Stable machine-readable code from the API's `{ error, code }` body (shared/src/errors.ts), when present. */
+  code?: string;
 }
 
 const isRaw = (body: unknown): body is Blob => typeof Blob !== 'undefined' && body instanceof Blob;
@@ -80,13 +81,15 @@ export const apiBaseQuery: BaseQueryFn<ApiQuery, unknown, ApiQueryError> = async
 
   if (!response.ok) {
     let message = `HTTP ${response.status}`;
+    let code: string | undefined;
     try {
-      const payload = (await response.json()) as { error?: string; message?: string };
+      const payload = (await response.json()) as { error?: string; message?: string; code?: unknown };
       message = payload.error || payload.message || message;
+      if (typeof payload.code === 'string') code = payload.code;
     } catch {
       // ignore parse failure
     }
-    return { error: { status: response.status, message } };
+    return { error: code === undefined ? { status: response.status, message } : { status: response.status, message, code } };
   }
 
   const data = response.status === 204 ? null : await response.json();

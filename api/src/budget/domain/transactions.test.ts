@@ -16,7 +16,7 @@ import { deriveDeltas, type BalanceDelta, type LedgerRow } from './transactions'
 type Cleared = LedgerRow['cleared'];
 interface Txn {
   accountId: string;
-  /** cents */
+  /** Test model in cents; the wire and BalanceDelta are milliunits (x10 below). */
   outflow: number;
   inflow: number;
   cleared: Cleared;
@@ -26,12 +26,12 @@ const A = '00000000-0000-4000-8000-00000000000a';
 const B = '00000000-0000-4000-8000-00000000000b';
 
 const toRow = (t: Txn): LedgerRow => ({ account_id: t.accountId, amount: (t.inflow - t.outflow) * 10, cleared: t.cleared });
-/** Reference model: cents moved into the cleared/uncleared bucket of each account (reconciled counts as cleared). */
+/** Reference model: milliunits moved into the cleared/uncleared bucket of each account (reconciled counts as cleared). */
 function clientDeltas(oldTxn: Txn | null, newTxn: Txn | null) {
   const byAccount = new Map<string, { clearedDelta: number; unclearedDelta: number }>();
   const apply = (t: Txn, sign: 1 | -1) => {
     const d = byAccount.get(t.accountId) ?? { clearedDelta: 0, unclearedDelta: 0 };
-    const amount = sign * (t.inflow - t.outflow);
+    const amount = sign * (t.inflow - t.outflow) * 10;
     if (t.cleared === 'uncleared') d.unclearedDelta += amount;
     else d.clearedDelta += amount;
     byAccount.set(t.accountId, d);
@@ -72,7 +72,7 @@ describe('deriveDeltas == reference bucket model', () => {
 
   test('accepts the numeric-string amounts pg returns for bigint columns', () => {
     expect(deriveDeltas(null, { account_id: A, amount: '-12500', cleared: 'cleared' })).toEqual([
-      { account_id: A, cleared_delta: -1250, uncleared_delta: 0 },
+      { account_id: A, cleared_delta: -12500, uncleared_delta: 0 },
     ]);
   });
 });
@@ -165,8 +165,8 @@ describe.skipIf(!dbReady)('transaction writes: server-derived deltas (client-sup
         payee: 'Shop',
         category_id: subtransactions ? null : categoryId,
         memo: '',
-        outflow_cents: txn.outflow,
-        inflow_cents: txn.inflow,
+        outflow: txn.outflow * 10,
+        inflow: txn.inflow * 10,
         cleared: txn.cleared,
         approved: true,
         flag: null,
@@ -183,8 +183,8 @@ describe.skipIf(!dbReady)('transaction writes: server-derived deltas (client-sup
   async function patch(lane: 'client' | 'server', before: Tracked, after: Txn, extra: Record<string, unknown> = {}): Promise<Tracked> {
     const patchBody: Record<string, unknown> = {
       account_id: after.accountId,
-      outflow_cents: after.outflow,
-      inflow_cents: after.inflow,
+      outflow: after.outflow * 10,
+      inflow: after.inflow * 10,
       cleared: after.cleared,
       ...extra,
     };
@@ -237,8 +237,8 @@ describe.skipIf(!dbReady)('transaction writes: server-derived deltas (client-sup
 
   test('split transactions: the parent amount is the leg sum on both paths', async () => {
     const legs = [
-      { category_id: categoryId, memo: 'a', outflow_cents: 3000, inflow_cents: 0 },
-      { category_id: null, memo: 'b', outflow_cents: 0, inflow_cents: 500 },
+      { category_id: categoryId, memo: 'a', outflow: 30000, inflow: 0 },
+      { category_id: null, memo: 'b', outflow: 0, inflow: 5000 },
     ];
     const total: Omit<Txn, 'accountId'> = { outflow: 2500, inflow: 0, cleared: 'cleared' };
     const before = { client: await balances(lanes.client.b), server: await balances(lanes.server.b) };
@@ -263,8 +263,8 @@ describe.skipIf(!dbReady)('transaction writes: server-derived deltas (client-sup
         payee: '',
         category_id: null,
         memo: '',
-        outflow_cents: outflow,
-        inflow_cents: 0,
+        outflow,
+        inflow: 0,
         cleared: 'uncleared',
         approved: true,
         flag: null,
@@ -273,13 +273,13 @@ describe.skipIf(!dbReady)('transaction writes: server-derived deltas (client-sup
       deltas,
     });
     // Deliberately NOT what the server would derive; it must lose.
-    const res = await send('POST', '/transactions', body(100, [{ account_id: lanes.client.a, cleared_delta: 7, uncleared_delta: 0 }]));
+    const res = await send('POST', '/transactions', body(1000, [{ account_id: lanes.client.a, cleared_delta: 7, uncleared_delta: 0 }]));
     expect(res.status).toBe(201);
     const after = await balances(lanes.client.a);
     expect(after.cleared - before.cleared).toBe(0);
     expect(after.uncleared - before.uncleared).toBe(-1000);
     // An explicit empty list can no longer mean "move nothing".
-    const res2 = await send('POST', '/transactions', body(999, []));
+    const res2 = await send('POST', '/transactions', body(9990, []));
     expect(res2.status).toBe(201);
     const after2 = await balances(lanes.client.a);
     expect(after2.uncleared - after.uncleared).toBe(-9990);
@@ -300,8 +300,8 @@ describe.skipIf(!dbReady)('transaction writes: server-derived deltas (client-sup
         payee: '',
         category_id: null,
         memo: '',
-        outflow_cents: 500,
-        inflow_cents: 0,
+        outflow: 5000,
+        inflow: 0,
         cleared: 'uncleared',
         approved: true,
         flag: null,

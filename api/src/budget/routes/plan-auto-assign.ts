@@ -19,8 +19,8 @@ export const operations = [
         if (!(await liveCategoryInBudget(client, row.category_id, budget_id))) {
           throw new HttpError(400, 'category not found in budget');
         }
-        // Same milliunits storage as /assignments/batch (cents * 10).
-        await upsertAssignment(client, budget_id, month, row.category_id, row.assign_cents * 10);
+        // Milliunits in, milliunits stored (same as /assignments/batch).
+        await upsertAssignment(client, budget_id, month, row.category_id, row.assigned);
       }
     });
   }),

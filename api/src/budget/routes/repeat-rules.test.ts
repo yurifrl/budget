@@ -94,8 +94,8 @@ describe.skipIf(!dbReady)('repeat rules (characterisation)', () => {
       payee: 'Rent Co',
       category_id: null,
       memo: 'rent',
-      outflow_cents: 12_345,
-      inflow_cents: 0,
+      outflow: 123_450,
+      inflow: 0,
       frequency: 'monthly',
       next_due_date: isoDay(1),
     });
@@ -159,8 +159,8 @@ describe.skipIf(!dbReady)('repeat rules (characterisation)', () => {
       payee: 'ignored',
       category_id: null,
       memo: null,
-      outflow_cents: 1,
-      inflow_cents: 0,
+      outflow: 10,
+      inflow: 0,
       frequency: 'weekly',
       attach_transaction_id: anchorId,
     });
@@ -184,8 +184,8 @@ describe.skipIf(!dbReady)('repeat rules (characterisation)', () => {
       payee: 'ignored',
       category_id: null,
       memo: null,
-      outflow_cents: 1,
-      inflow_cents: 0,
+      outflow: 10,
+      inflow: 0,
       frequency: 'weekly',
       attach_transaction_id: anchorId,
     });
@@ -199,13 +199,13 @@ describe.skipIf(!dbReady)('repeat rules (characterisation)', () => {
       payee: 'X',
       category_id: null,
       memo: null,
-      outflow_cents: 100,
-      inflow_cents: 0,
+      outflow: 1000,
+      inflow: 0,
       frequency: 'monthly',
     };
     expect((await send('POST', '/repeat-rules', { ...base, account_id: otherAccountId, next_due_date: isoDay(1) })).status).toBe(400);
     expect((await send('POST', '/repeat-rules', base)).status).toBe(400);
-    expect((await send('POST', '/repeat-rules', { ...base, inflow_cents: 5, next_due_date: isoDay(1) })).status).toBe(400);
+    expect((await send('POST', '/repeat-rules', { ...base, inflow: 50, next_due_date: isoDay(1) })).status).toBe(400);
   });
 
   test('delete retires the rule and its pending rows, detaches entered rows; repeat is 404', async () => {

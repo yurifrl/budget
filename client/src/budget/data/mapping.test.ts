@@ -318,8 +318,8 @@ describe('snakeTxn / snakeTxnPatch (POST/PATCH wire mapping)', () => {
       payee: 'Casa',
       category_id: 'c1',
       memo: 'coffee',
-      outflow_cents: 1200,
-      inflow_cents: 0,
+      outflow: 12000,
+      inflow: 0,
       cleared: 'uncleared',
       approved: false,
       flag: null,
@@ -353,8 +353,8 @@ describe('snakeTxn / snakeTxnPatch (POST/PATCH wire mapping)', () => {
     ).toEqual({
       account_id: 'acc-2',
       category_id: null,
-      outflow_cents: 500,
-      inflow_cents: 700,
+      outflow: 5000,
+      inflow: 7000,
     });
   });
 
@@ -362,14 +362,14 @@ describe('snakeTxn / snakeTxnPatch (POST/PATCH wire mapping)', () => {
     expect(snakeSubTxn({ categoryId: 'c1', memo: 'leg', outflowCents: 2000, inflowCents: 0 })).toEqual({
       category_id: 'c1',
       memo: 'leg',
-      outflow_cents: 2000,
-      inflow_cents: 0,
+      outflow: 20000,
+      inflow: 0,
     });
     expect(snakeSubTxn({ categoryId: null, memo: '', outflowCents: 0, inflowCents: 700 })).toEqual({
       category_id: null,
       memo: null,
-      outflow_cents: 0,
-      inflow_cents: 700,
+      outflow: 0,
+      inflow: 7000,
     });
   });
 });

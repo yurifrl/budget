@@ -11,7 +11,7 @@
  *  - a `Response`  -> passed through untouched (custom status/headers);
  *  - `undefined`   -> 204 No Content;
  *  - anything else -> JSON with the contract's `status` (default 200).
- * Failures throw `HttpError` (-> `{ error }` via httpOnError).
+ * Failures throw `HttpError` (-> `{ error, code }` via httpOnError).
  */
 import type { Context, Hono, MiddlewareHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -50,7 +50,7 @@ async function readBody(c: Context): Promise<unknown> {
   try {
     return JSON.parse(text);
   } catch {
-    throw new HttpError(400, 'request body must be valid JSON');
+    throw new HttpError(400, 'request body must be valid JSON', 'invalid_input');
   }
 }
 
@@ -64,7 +64,7 @@ async function parseInput<I extends InputSchema>(c: Context, contract: Operation
     raw[contract.bodyKey] = body;
   } else if (loc.body.length > 0) {
     if (body !== undefined && (body === null || typeof body !== 'object' || Array.isArray(body))) {
-      throw new HttpError(400, 'request body must be a JSON object');
+      throw new HttpError(400, 'request body must be a JSON object', 'invalid_input');
     }
     const obj = (body ?? {}) as Record<string, unknown>;
     for (const key of loc.body) if (key in obj) raw[key] = obj[key];
@@ -76,6 +76,51 @@ async function parseInput<I extends InputSchema>(c: Context, contract: Operation
   for (const key of loc.path) raw[key] = c.req.param(key);
 
   return parseValue(contract.input, raw);
+}
+
+/**
+ * Response-vs-contract checking (G9). `off` in production (the default; never
+ * a production hot path): the bun test preload sets `throw`, so a handler
+ * whose result drifts from its contract's `output` fails the test that
+ * exercised it (as a 500); local dev may opt into `warn` with
+ * API_VALIDATE_OUTPUT (see index.ts).
+ */
+export type OutputValidation = 'off' | 'warn' | 'throw';
+let outputValidation: OutputValidation = 'off';
+
+export function configureOutputValidation(mode: OutputValidation): void {
+  outputValidation = mode;
+}
+
+export function outputValidationMode(): OutputValidation {
+  return outputValidation;
+}
+
+/** The JSON body a handler result becomes (null for 204, parsed JSON for a JSON Response, undefined = not JSON). */
+async function wireBody(result: unknown): Promise<unknown> {
+  if (result instanceof Response) {
+    if (!result.ok) return undefined;
+    if (result.status === 204) return null;
+    if (!(result.headers.get('content-type') ?? '').includes('application/json')) return undefined;
+    return result.clone().json();
+  }
+  return result === undefined ? null : JSON.parse(JSON.stringify(result));
+}
+
+/** Validate one handler result against the contract's output schema (no-op when off or undeclared). */
+export async function checkOutput(contract: OperationContract, result: unknown): Promise<void> {
+  if (outputValidation === 'off' || !contract.output) return;
+  const body = await wireBody(result);
+  if (body === undefined) return;
+  const parsed = contract.output.safeParse(body);
+  if (parsed.success) return;
+  const detail = parsed.error.issues
+    .slice(0, 5)
+    .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+    .join('; ');
+  const message = `${contract.name}: response does not match its output schema: ${detail}`;
+  if (outputValidation === 'throw') throw new Error(message);
+  console.warn(message);
 }
 
 export interface MountOptions {
@@ -104,6 +149,7 @@ export function mountOperations<H extends Hono>(hono: H, ops: readonly AnyOperat
     const route = async (c: Context) => {
       const input = await parseInput(c, contract);
       const result = await handler(c, input);
+      await checkOutput(contract, result);
       if (result instanceof Response) return result;
       if (result === undefined) return c.body(null, 204);
       return c.json(result, (contract.status ?? 200) as ContentfulStatusCode);

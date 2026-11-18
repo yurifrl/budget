@@ -2,9 +2,9 @@
  * Connections→budget transaction sync engine (v1.1 Phase 4).
  *
  * Pulls transactions for every budget account linked to one connection
- (`accounts.connection_id` + `external_account_id`), converts upstream signed
- * cent amounts into the storage boundary's signed-milliunit shape
- * (cents × 10 — the same conversion `store.centsFrom` uses for balances), and
+ (`accounts.connection_id` + `external_account_id`), stores the
+ * adapters' signed milliunit amounts as they are (each adapter converts its
+ * provider's unit once, at its own boundary), and
  * persists them through the budget `transactions` table with an import ledger
  * in `connection_transactions` (`import_id` = `<provider>:<external txn id>`,
  * idempotent across re-pulls).
@@ -53,6 +53,40 @@ interface LinkedAccountRow {
   id: string;
   budget_id: string;
   external_account_id: string;
+  /** ISO 4217 code; null until set by the user or adopted from the provider. */
+  currency: string | null;
+}
+
+const ISO_4217 = /^[A-Z]{3}$/;
+
+/**
+ * Provider currency per upstream account id, fetched only when some linked
+ * account has no currency yet (G1). Best-effort: a provider failure, timeout
+ * or adapter without account listing yields an empty map and the sync goes
+ * on — currency never blocks importing transactions.
+ */
+async function upstreamCurrencies(
+  aggregator: BankAggregator,
+  externalItemId: string,
+  linked: readonly LinkedAccountRow[],
+  timeoutMs: number,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!linked.some((a) => a.currency == null)) return out;
+  try {
+    const accounts = await withTimeout(
+      aggregator.listExternalAccounts(externalItemId),
+      timeoutMs,
+      `upstream listExternalAccounts(${externalItemId})`,
+    );
+    for (const account of accounts) {
+      const code = account.currencyCode?.trim().toUpperCase();
+      if (code && ISO_4217.test(code)) out.set(account.externalId, code);
+    }
+  } catch {
+    /* best-effort: the next sync tries again */
+  }
+  return out;
 }
 
 interface ExistingTxnRow {
@@ -98,13 +132,10 @@ const payloadFromRow = (row: { date: string; amount: number; memo: string | null
 const samePayload = (a: OwnedPayload, b: OwnedPayload): boolean =>
   a.date === b.date && a.amount === b.amount && a.memo === b.memo && a.payee === b.payee;
 
-/** Upstream cents → storage milliunits (×10, the boundary conversion). */
-const milliFromUpstream = (cents: number): number => Math.round(cents) * 10;
-
 /**
- * Per-account balance delta accumulators, in CENTS, bucketed by the row's
- * current cleared state so refreshed amounts move the right cached balance
- * (applyBalanceDeltas multiplies by 10 — deltas are its input unit).
+ * Per-account balance delta accumulators, in MILLIUNITS (the adapters already
+ * hand amounts over in milliunits), bucketed by the row's current cleared
+ * state so refreshed amounts move the right cached balance.
  */
 interface AccountDeltas {
   cleared_delta: number;
@@ -219,7 +250,7 @@ async function syncOnce(
 
   // Budget accounts linked to upstream accounts of this connection:
   // unlinked accounts are skipped — mirroring is a budget-module concern.
-  const linkedSql = `SELECT ac.id, ac.budget_id, ac.external_account_id
+  const linkedSql = `SELECT ac.id, ac.budget_id, ac.external_account_id, ac.currency
          FROM public.accounts ac
          JOIN public.connections c ON c.id = ac.connection_id
          WHERE ac.connection_id = $1 AND ac.external_account_id IS NOT NULL
@@ -240,6 +271,7 @@ async function syncOnce(
     fetched.set(acc.id, { acc, transactions: upstream.transactions, complete: !upstream.hasMore });
     input.onProgress?.();
   }
+  const currencies = await upstreamCurrencies(aggregator, row.external_id, linked, timeoutMs);
   await input.beforeCommit?.();
 
   // ---- Phase 2: short write transaction ---------------------------------
@@ -268,6 +300,10 @@ async function syncOnce(
       const pulled = fetched.get(id);
       if (!pulled) continue;
       const { acc } = pulled;
+      // G1: adopt the provider's currency while the account has none (a
+      // user-set value is never overwritten; the UPDATE re-checks IS NULL).
+      const code = currencies.get(acc.external_account_id);
+      if (code) await ledger.adoptAccountCurrency(pg, acc.id, code);
       const upstream = { transactions: pulled.transactions };
       const seen = new Set(upstream.transactions.map((txn) => txn.externalId));
 
@@ -277,8 +313,7 @@ async function syncOnce(
       const deltas: AccountDeltas = { cleared_delta: 0, uncleared_delta: 0 };
 
       for (const txn of upstream.transactions) {
-        const milli = milliFromUpstream(txn.amountCents);
-        const cents = milli / 10;
+        const milli = txn.amount;
         const importId = `${row.provider}:${txn.externalId}`;
         const existing = (
           await pg.query<ExistingTxnRow>(
@@ -323,7 +358,7 @@ async function syncOnce(
             ],
           );
           result.added += 1;
-          deltas[cleared === 'cleared' ? 'cleared_delta' : 'uncleared_delta'] += cents;
+          deltas[cleared === 'cleared' ? 'cleared_delta' : 'uncleared_delta'] += milli;
           continue;
         }
 
@@ -375,7 +410,7 @@ async function syncOnce(
         );
         result.updated += 1;
         const bucket = existing.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';
-        deltas[bucket] += cents - Number(existing.amount) / 10;
+        deltas[bucket] += milli - Number(existing.amount);
       }
 
       // Missing-upstream deletes: engine-owned, unblocked rows within the
@@ -408,7 +443,7 @@ async function syncOnce(
         if (seen.has(trackedRow.external_transaction_id)) continue;
         await ledger.tombstoneTransaction(pg, trackedRow.id);
         const bucket = trackedRow.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';
-        deltas[bucket] -= Number(trackedRow.amount) / 10;
+        deltas[bucket] -= Number(trackedRow.amount);
         result.deleted += 1;
       }
 

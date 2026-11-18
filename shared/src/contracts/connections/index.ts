@@ -3,7 +3,8 @@ import { collectContracts } from '../../operation-contract';
 
 import * as connectionsContracts from './connections';
 
-export { connectionsSummary, connectionsSyncStatus, connectionsTransactions } from './connections';
+export * from './connections';
+export * from './outputs';
 
 export const contracts = collectContracts(
   connectionsContracts,

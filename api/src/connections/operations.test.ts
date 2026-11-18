@@ -16,11 +16,13 @@ import connectionsApp, { operations } from './index';
 describeOperationCatalog('connections', operations, connectionsApp, '/connections');
 
 describe('connections MCP curation', () => {
-  test('mcp-exposed set is exactly the curated list; webhook and connect-token are not operations', () => {
+  test('mcp-exposed set is exactly the curated list; the webhook is not an operation; connect-token is api-only', () => {
     const mcp = operations.filter((o) => o.contract.expose.mcp).map((o) => o.contract.name).sort();
     expect(mcp).toEqual(['connections_accounts_summary', 'connections_get', 'connections_list', 'connections_sync', 'connections_sync_status', 'connections_transactions_list', 'connections_upstream_list']);
     const paths = operations.map((o) => o.contract.path);
-    expect(paths.some((p) => p.includes('webhook') || p.includes('connect-token'))).toBe(false);
+    expect(paths.some((p) => p.includes('webhook'))).toBe(false);
+    const token = operations.find((o) => o.contract.path === '/connections/connect-token')!.contract;
+    expect(token.expose).toEqual({ api: true, cli: false, mcp: false });
   });
 });
 

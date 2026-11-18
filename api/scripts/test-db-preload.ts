@@ -212,3 +212,8 @@ async function configurePool(connectionString: string): Promise<void> {
 }
 
 await setup();
+
+// Every handler result exercised by a test is checked against its contract's
+// output schema; drift surfaces as a 500 in the test that hit it (G9).
+const { configureOutputValidation } = await import('../src/core/operation');
+configureOutputValidation('throw');

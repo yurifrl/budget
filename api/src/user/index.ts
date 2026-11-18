@@ -15,7 +15,11 @@ export {
   userReferenceColumns,
   EmailLinkError,
 } from './store';
-export { default as profileRoutes, operations } from './routes';
+export { default as profileRoutes } from './routes';
+import { authOperations } from './authz';
+import { operations as profileOperations } from './routes';
+/** Every user-feature operation (profile + the /auth/me probe), for the catalog. */
+export const operations = [...profileOperations, ...authOperations];
 export { personAvatarSql, toPersonAvatar } from './avatar';
 export type { PersonAvatar, PersonAvatarRow } from './avatar';
 export { personPendingSql, personRefSql, toPersonRef } from './person';

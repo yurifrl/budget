@@ -259,7 +259,7 @@ describeIfDb('POST /budgets/fresh-start', () => {
     const linked = await app.request(`/accounts`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ budget_id: bid, name: 'Nubank Linked', type: 'checking', on_budget: true, balance_cents: 0 }),
+      body: JSON.stringify({ budget_id: bid, name: 'Nubank Linked', type: 'checking', on_budget: true, balance: 0 }),
     });
     expect(linked.status).toBe(201);
     const linkedAcc = (await linked.json()) as { id: string };
@@ -267,7 +267,7 @@ describeIfDb('POST /budgets/fresh-start', () => {
     const unlinked = await app.request(`/accounts`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ budget_id: bid, name: 'Carteira', type: 'checking', on_budget: true, balance_cents: 0 }),
+      body: JSON.stringify({ budget_id: bid, name: 'Carteira', type: 'checking', on_budget: true, balance: 0 }),
     });
     expect(unlinked.status).toBe(201);
     const unlinkedAcc = (await unlinked.json()) as { id: string };
@@ -286,8 +286,8 @@ describeIfDb('POST /budgets/fresh-start', () => {
             payee: 'Padaria',
             category_id: null,
             memo: '',
-            outflow_cents: 5000,
-            inflow_cents: 0,
+            outflow: 50000,
+            inflow: 0,
             cleared: 'cleared',
             approved: true,
             flag: null,
@@ -298,8 +298,8 @@ describeIfDb('POST /budgets/fresh-start', () => {
             payee: 'Mercado',
             category_id: null,
             memo: '',
-            outflow_cents: 12000,
-            inflow_cents: 0,
+            outflow: 120000,
+            inflow: 0,
             cleared: 'uncleared',
             approved: true,
             flag: null,
@@ -322,8 +322,8 @@ describeIfDb('POST /budgets/fresh-start', () => {
           payee: 'Mesa Bar',
           category_id: null,
           memo: '',
-          outflow_cents: 9000,
-          inflow_cents: 0,
+          outflow: 90000,
+          inflow: 0,
           cleared: 'uncleared',
           approved: true,
           flag: null,
@@ -346,8 +346,8 @@ describeIfDb('POST /budgets/fresh-start', () => {
           payee: 'Assinatura',
           category_id: null,
           memo: '',
-          outflow_cents: 9000,
-          inflow_cents: 0,
+          outflow: 90000,
+          inflow: 0,
           cleared: 'uncleared',
           approved: true,
           flag: null,
@@ -373,8 +373,8 @@ describeIfDb('POST /budgets/fresh-start', () => {
         payee: 'Aluguel',
         category_id: null,
         memo: null,
-        outflow_cents: 150000,
-        inflow_cents: 0,
+        outflow: 1500000,
+        inflow: 0,
         frequency: 'monthly',
         month_last_day: false,
         next_due_date: '2026-11-10',

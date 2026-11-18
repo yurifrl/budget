@@ -103,7 +103,7 @@ describe.skipIf(!dbReady)('small budget areas (characterisation)', () => {
     expect((await op('budget_groups_rename', { id: g1, budget_id: B, name: 'Renamed' })).status).toBe(204);
     const miss = await op('budget_groups_rename', { id: crypto.randomUUID(), budget_id: B, name: 'x' });
     expect(miss.status).toBe(404);
-    expect(miss.json).toEqual({ error: 'category group not found' });
+    expect(miss.json).toEqual({ error: 'category group not found', code: 'not_found' });
     expect((await op('budget_groups_rename', { id: otherGroup, budget_id: B, name: 'x' })).status).toBe(404);
     const row = await pool.query('SELECT name FROM category_groups WHERE id = $1', [g1]);
     expect(row.rows[0].name).toBe('Renamed');
@@ -138,34 +138,34 @@ describe.skipIf(!dbReady)('small budget areas (characterisation)', () => {
   });
 
   test('plan auto-assign: stores cents x 10, 400 for an unknown category and rolls back', async () => {
-    const ok = await op('budget_plan_auto_assign', { budget_id: B, month: '2026-03-01', rows: [{ category_id: c1, assign_cents: 1234 }] });
+    const ok = await op('budget_plan_auto_assign', { budget_id: B, month: '2026-03-01', rows: [{ category_id: c1, assigned: 12340 }] });
     expect(ok.status).toBe(204);
     const r = await pool.query(`SELECT budgeted FROM assignments WHERE budget_id = $1 AND month = '2026-03-01'`, [B]);
     expect(r.rows.map((x) => Number(x.budgeted))).toEqual([12340]);
     const bad = await op('budget_plan_auto_assign', {
       budget_id: B,
       month: '2026-04-01',
-      rows: [{ category_id: c2, assign_cents: 5 }, { category_id: otherCat, assign_cents: 5 }],
+      rows: [{ category_id: c2, assigned: 50 }, { category_id: otherCat, assigned: 50 }],
     });
     expect(bad.status).toBe(400);
-    expect(bad.json).toEqual({ error: 'category not found in budget' });
+    expect(bad.json).toEqual({ error: 'category not found in budget', code: 'bad_request' });
     const none = await pool.query(`SELECT 1 FROM assignments WHERE budget_id = $1 AND month = '2026-04-01'`, [B]);
     expect(none.rowCount).toBe(0);
   });
 
   test('category targets: set upserts, list, delete, 404s', async () => {
-    const set = await op('budget_category_targets_set', { categoryId: c1, budget_id: B, kind: 'monthly', amount_cents: 700, snooze_month: null });
+    const set = await op('budget_category_targets_set', { categoryId: c1, budget_id: B, kind: 'monthly', amount: 7000, snooze_month: null });
     expect(set.status).toBe(200);
-    expect(set.json).toMatchObject({ budget_id: B, category_id: c1, kind: 'monthly', amount_cents: 700 });
-    const up = await op('budget_category_targets_set', { categoryId: c1, budget_id: B, kind: 'monthly', amount_cents: 900, snooze_month: null });
-    expect(up.json.amount_cents).toBe(900);
-    expect((await op('budget_category_targets_set', { categoryId: otherCat, budget_id: B, kind: 'monthly', amount_cents: 1, snooze_month: null })).status).toBe(404);
+    expect(set.json).toMatchObject({ budget_id: B, category_id: c1, kind: 'monthly', amount: 7000 });
+    const up = await op('budget_category_targets_set', { categoryId: c1, budget_id: B, kind: 'monthly', amount: 9000, snooze_month: null });
+    expect(up.json.amount).toBe(9000);
+    expect((await op('budget_category_targets_set', { categoryId: otherCat, budget_id: B, kind: 'monthly', amount: 10, snooze_month: null })).status).toBe(404);
     const list = await op('budget_category_targets_list', { budget_id: B });
     expect(list.json.map((t: any) => t.category_id)).toEqual([c1]);
     expect((await op('budget_category_targets_delete', { categoryId: c1, budget_id: B })).status).toBe(204);
     const miss = await op('budget_category_targets_delete', { categoryId: c1, budget_id: B });
     expect(miss.status).toBe(404);
-    expect(miss.json).toEqual({ error: 'target not found' });
+    expect(miss.json).toEqual({ error: 'target not found', code: 'not_found' });
   });
 
   test('category notes: set upserts per month, list by month, 404 for foreign category', async () => {

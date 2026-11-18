@@ -14,10 +14,37 @@ import { defineOperation, type OperationExpose } from '../../operation-contract'
 
 const EXPOSE_API_ONLY: OperationExpose = { api: true, cli: false, mcp: false };
 
+/** The signed-in user's profile (PersonAvatar = generated-look seed + photo version). */
+export const meSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string().nullable(),
+  role: z.enum(['admin', 'user']),
+  avatar: z.object({ seed: z.string(), image_version: z.number().nullable() }),
+});
+
+/**
+ * GET /auth/me — the session probe every client (app LoginGate, CLI whoami)
+ * calls: 200 with the caller's email, 401 when signed out. Open (it answers
+ * 401 itself rather than through the auth middleware); in auth-disabled
+ * local dev it answers dev@localhost.
+ */
+export const authMe = defineOperation({
+  name: 'user_auth_me',
+  description: 'Session probe: the email of the signed-in caller (session cookie or bearer token); 401 when signed out.',
+  input: z.object({}),
+  output: z.object({ email: z.string() }),
+  method: 'GET',
+  path: '/auth/me',
+  kind: 'read',
+  expose: EXPOSE_API_ONLY,
+});
+
 export const meGet = defineOperation({
   name: 'user_me_get',
   description: 'The signed-in user: id, email, name, role and avatar (PersonAvatar).',
   input: z.object({}),
+  output: meSchema,
   method: 'GET',
   path: '/me',
   kind: 'read',
@@ -32,6 +59,7 @@ export const meUpdate = defineOperation({
     name: z.string().trim().min(1).max(80).optional(),
     avatar_seed: z.string().trim().min(1).max(64).nullable().optional(),
   }),
+  output: meSchema,
   method: 'PATCH',
   path: '/me',
   kind: 'write',
@@ -42,6 +70,7 @@ export const meAvatarRemove = defineOperation({
   name: 'user_me_avatar_remove',
   description: 'Remove your uploaded photo; your generated avatar shows again.',
   input: z.object({}),
+  output: meSchema,
   method: 'DELETE',
   path: '/me/avatar',
   kind: 'destructive',

@@ -110,7 +110,7 @@ class FakeAggregator implements BankAggregator {
         name: 'Fake Checking',
         type: 'BANK',
         currencyCode: 'BRL',
-        balanceCents: 123_456,
+        balance: 1_234_560,
         institution: 'Fake Bank',
       },
       {
@@ -118,7 +118,7 @@ class FakeAggregator implements BankAggregator {
         name: 'Fake Card',
         type: 'CREDIT',
         currencyCode: 'BRL',
-        balanceCents: -10_025,
+        balance: -100_250,
         institution: 'Fake Bank',
       },
     ];
