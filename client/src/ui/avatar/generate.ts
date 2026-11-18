@@ -86,7 +86,7 @@ export interface AvatarSpec {
 }
 
 /** [background, face, accent] — curated so every triple reads on dark AND light UIs. */
-const PALETTES: ReadonlyArray<readonly [string, string, string]> = [
+const PALETTES: readonly (readonly [string, string, string])[] = [
   ['#3b2a8f', '#ffc27a', '#ff6f9c'],
   ['#0f5b6e', '#ffd56b', '#ff5d7d'],
   ['#2a4d5c', '#f2d27a', '#f59e6c'],

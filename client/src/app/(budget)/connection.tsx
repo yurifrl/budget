@@ -1,1 +1,1 @@
-export { ConnectionSettingsScreen as default } from '@/budget';
+export { ConnectionSettingsScreen as default } from '@/features/banks';

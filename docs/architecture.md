@@ -1,7 +1,6 @@
 # Architecture
 
-State of `main` after phase 4. Sections marked "in flux" will change in phases
-3/5; do not rely on their internals.
+State of `main` after phase 5e (client) and 5b/5c/5d (api, shared).
 
 ## Packages
 
@@ -9,7 +8,7 @@ State of `main` after phase 4. Sections marked "in flux" will change in phases
 budget/
   shared/   pure TypeScript, zod only        (stable)
   api/      Bun + Hono API, worker, CLI, MCP (lifted from syscd, unchanged behaviour)
-  client/   Expo SDK 58 app, iOS + web       (phase 3/5, in flux)
+  client/   Expo SDK 58 app, iOS + web
   admin/    Vite + React SPA, jobs ledger    (copy of syscd's admin)
   deploy/   Dockerfile.{web,api,admin}, httpd.conf
   k8s/      values.yaml: image tags ArgoCD deploys
@@ -87,18 +86,74 @@ start at `0100`). One image runs both the API and the worker
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.
 
-## client/ (in flux)
+## client/
 
-Expo Router app. As of phase 3: `src/app` routes, `store`, `budget`
-(lifted syscd budget module), `auth`, `profile`, `shell`, `ui`, `platform`.
-`budget/data` is the wire boundary: `data/api.ts` re-exports one RTK Query
-api assembled from `data/api/{base,budgets,members,plan,payees,register,connections}.ts`
-(`injectEndpoints`), every request built with `contractRequest`; `rows.ts`
-and `connections.ts` are `z.infer` types of the contracts' output schemas;
-`mapping.ts` converts wire milliunits to the domain's cents and back.
-The lint-enforced layering is in `client/eslint.config.js`, with documented
-phase 3 exceptions. The target structure (features/, domain/, data/, state/)
-arrives in phase 5. `client/VERSION` feeds the Expo app version.
+Expo Router app (iOS + web). `client/VERSION` feeds the Expo app version.
+Layout since phase 5e (`client/src/`):
+
+```
+app/        routes only: thin stubs re-exporting a feature barrel; _layout.tsx
+            is the composition root (providers, LoginGate, StoreMoneyFormatProvider)
+shell/      BudgetLayout (rail / drawer / tabs, sheets it hosts), rail/,
+            SettingsMenu (pane-stack host), runtime.ts (DI container + store),
+            context.ts (useBudgetShell) and menuNav.ts (useMenuNav): the only
+            shell files features may import
+features/   plan accounts banks payees import backup reflect spending
+            settings people auth profile: each holds its screens, components,
+            hooks (useXxx.ts) and feature-local logic (*.logic.ts + tests);
+            index.ts is its public surface
+domain/     pure TypeScript (only itself and @shared/*): the engine
+            (zeroSum.ts), engine helpers (engine.ts), format.ts (formatters
+            taking prefs explicitly), targets, people, plan/register rules,
+            fixtures in __fixtures__/
+state/      store.ts (static configureStore), hooks.ts (typed hooks), ui.ts
+            (budgetUi slice: active budget/month, filters, display toggles,
+            format prefs, flag labels, Hide Amounts), planEdits (undo/redo
+            history), budgetSettings.ts (the one listener that loads and saves
+            the per-budget settings blob), thunks, store-backed hooks
+            (useBudgetModel, useBudgetMonth, useDisplayPrefs, ...)
+ui/         theme.ts (the one theme), primitives/ (MoneyInput, AmountCell,
+            buttons, sheets...), dropdown/ (pickers shared by features),
+            moneyFormat.tsx (useMoneyFormat context), avatar/, combobox, portal
+platform/   api base query, di, storage (KVStore, Keychain secret store), config,
+            state listeners, file picker
+budget/data/       RTK Query api, wire rows, mapping (owned by the data-layer
+                   work; not moved yet). budget/{domain,state,import}/*.ts
+                   are one-line re-export shims kept only for data/'s imports
+profile/api.ts     profile RTK Query slice (+ its pure model.ts), data layer
+```
+
+Rules (`client/eslint.config.js`, `src/architecture.test.ts`):
+`app → shell → features → {state, data} → ui → domain`, with `platform`
+below everything but domain. A feature imports another feature only through
+`@/features/<x>` (its `index.ts`) and of the shell only `shell/context.ts`
+and `shell/menuNav.ts`; the shell imports features through barrels too.
+`state/` and the data layer know no feature, shell or UI; `ui/` imports only
+`domain/` and `platform/`; `domain/` imports only itself and `@shared/*` and
+no React/RN/Expo. `architecture.test.ts` fails on any runtime import cycle
+under `src/` and on a non-pure domain import.
+
+- **Wire boundary.** `budget/data`: `data/api.ts` re-exports one RTK Query
+  api assembled from `data/api/{base,budgets,members,plan,payees,register,connections}.ts`
+  (`injectEndpoints`), every request built with `contractRequest`; `rows.ts`
+  and `connections.ts` are `z.infer` types of the contracts' output schemas;
+  `mapping.ts` converts wire milliunits to the domain's cents and back.
+  Wire-typed view logic lives in the feature that uses it (e.g.
+  `features/banks/model/`), not in `domain/`.
+- **Engine.** `domain/zeroSum.ts` (`computeBudgetMonth`) is the canonical
+  engine (`docs/budget-engine-spec.md`); `domain/engine.ts` holds helpers
+  around it (balances, assigned lookups, target funding, Cost to Be Me, the
+  legacy activity recompute data/mapping uses) and never derives month
+  figures itself.
+- **Display prefs.** Format prefs, flag labels and the Hide Amounts mask live
+  in the budgetUi slice; `state/budgetSettings.ts` hydrates them from the
+  per-budget KV blob on every `setActiveBudget` and persists settings actions.
+  Components format through `useMoneyFormat()` (`ui/moneyFormat.tsx`, fed from
+  the slice at the root), pure code takes a `MoneyFormat` argument. No module
+  singletons.
+- **Session token.** Web: httpOnly cookie. Native: the Keychain via
+  `platform/storage/secretStore.native.ts` (expo-secure-store), moved once
+  from AsyncStorage on first read (`sessionToken.ts`).
 
 ## admin/
 

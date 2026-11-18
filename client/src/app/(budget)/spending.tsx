@@ -1,1 +1,1 @@
-export { SpendingScreen as default } from '@/budget';
+export { SpendingScreen as default } from '@/features/spending';

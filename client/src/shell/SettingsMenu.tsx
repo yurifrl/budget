@@ -11,10 +11,10 @@
  * or swallow its clicks. Escape and outside-taps close it.
  *
  * The host passes its panes (`panes`); the first one is the root. Pane content
- * pushes sibling panes through `useMenuNav()` (see budget/ui/MenuPanes).
+ * pushes sibling panes through `useMenuNav()` (see features/settings).
  */
 import Constants from 'expo-constants';
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -26,38 +26,10 @@ import {
   type ViewInstance,
 } from 'react-native';
 
-/** A host-rendered pane on the menu's pane stack. */
-export interface MenuPane {
-  id: string;
-  title: string;
-  content: ReactNode;
-}
+import { MenuNavContext, type MenuNav, type MenuPane } from './menuNav';
+import { colors } from '@/ui/theme';
 
-/** Pane navigation handed to pane content via useMenuNav(). */
-export interface MenuNav {
-  /** Push a pane (by id) onto the stack. */
-  open: (id: string) => void;
-  /**
-   * Push the per-budget pane onto the stack (Open Budget rows): carries the
-   * target id in one call so the pane reads it without extra plumbing.
-   */
-  openBudget: (id: string) => void;
-  /** Budget the per-budget pane operates on (set by openBudget). */
-  editingBudgetId: string | null;
-  /** Pop the stack (no-op at the root pane). */
-  back: () => void;
-  /** Close the whole menu. */
-  close: () => void;
-}
-
-const MenuNavContext = createContext<MenuNav | null>(null);
-
-/** Pane-content navigation hook (menu rows use it to push sibling panes). */
-export function useMenuNav(): MenuNav {
-  const nav = useContext(MenuNavContext);
-  if (!nav) throw new Error('useMenuNav must be used inside the settings menu');
-  return nav;
-}
+export { useMenuNav, type MenuNav, type MenuPane } from './menuNav';
 
 /** The app's identity shown on the trigger (was the Budget entry of the Apps switcher). */
 const APP = { title: 'Budget', color: '#3a7bd5' };
@@ -69,7 +41,7 @@ function AppBadge({ size = 30 }: { size?: number }) {
         styles.avatar,
         { width: size, height: size, borderRadius: size * 0.27, backgroundColor: APP.color },
       ]}>
-      <Text style={{ color: '#fff', fontWeight: '800', fontSize: size * 0.46 }}>{APP.title.charAt(0)}</Text>
+      <Text style={{ color: colors.white, fontWeight: '800', fontSize: size * 0.46 }}>{APP.title.charAt(0)}</Text>
     </View>
   );
 }
@@ -264,17 +236,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     borderRadius: 10,
   },
-  kicker: { fontSize: 9, color: '#7d6ff0', letterSpacing: 1.2, fontWeight: '700' },
-  name: { fontSize: 14, color: '#eef1f7', fontWeight: '700' },
-  caret: { color: '#98a2b5', marginLeft: 8 },
+  kicker: { fontSize: 9, color: colors.indigo2, letterSpacing: 1.2, fontWeight: '700' },
+  name: { fontSize: 14, color: colors.text, fontWeight: '700' },
+  caret: { color: colors.muted, marginLeft: 8 },
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(4, 6, 12, 0.55)' },
   menu: {
     position: 'absolute',
     width: MENU_W,
     borderRadius: 12,
-    backgroundColor: '#161a24',
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#333c50',
+    borderColor: colors.border2,
     padding: 6,
   },
   menuHead: {
@@ -290,16 +262,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headBtnText: { color: '#98a2b5', fontSize: 16, fontWeight: '700' },
+  headBtnText: { color: colors.muted, fontSize: 16, fontWeight: '700' },
   menuHeader: {
     flex: 1,
     textAlign: 'center',
     fontSize: 9,
-    color: '#5f6878',
+    color: colors.faint,
     letterSpacing: 1.2,
     fontWeight: '700',
   },
-  menuHeaderVersion: { color: '#98a2b5', fontSize: 8, letterSpacing: 0.8 },
+  menuHeaderVersion: { color: colors.muted, fontSize: 8, letterSpacing: 0.8 },
   paneBody: { maxHeight: PANE_MAX_BODY },
   paneContent: { gap: 2, paddingBottom: 4 },
   gearBtn: {
@@ -308,5 +280,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gearGlyph: { color: '#98a2b5', fontSize: 30, lineHeight: 34 },
+  gearGlyph: { color: colors.muted, fontSize: 30, lineHeight: 34 },
 });

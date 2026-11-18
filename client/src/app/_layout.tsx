@@ -13,10 +13,11 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as ReduxProvider } from 'react-redux';
 
-import { LoginGate } from '@/auth/LoginGate';
+import { LoginGate } from '@/features/auth';
+import { StoreMoneyFormatProvider } from '@/shell/StoreMoneyFormatProvider';
 import { ServiceProvider } from '@/platform/di/ServiceContext';
 import { Tokens } from '@/platform/di/tokens';
-import { createRuntime } from '@/store/runtime';
+import { createRuntime } from '@/shell/runtime';
 
 export const unstable_settings = {
   anchor: '(budget)',
@@ -33,6 +34,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ServiceProvider container={runtime.container}>
           <ReduxProvider store={runtime.store}>
+            <StoreMoneyFormatProvider>
             <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
               <LoginGate apiUrl={apiUrl}>
                 <Stack>
@@ -43,6 +45,7 @@ export default function RootLayout() {
               </LoginGate>
               <StatusBar style="auto" />
             </ThemeProvider>
+            </StoreMoneyFormatProvider>
           </ReduxProvider>
         </ServiceProvider>
       </SafeAreaProvider>

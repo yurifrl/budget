@@ -1,0 +1,55 @@
+import { Pressable, Text, View } from 'react-native';
+
+import { useMoneyFormat } from '@/ui/moneyFormat';
+import { colors } from '@/ui/theme';
+import { styles } from './styles';
+import type { AddTransaction } from './useAddTransaction';
+
+/** The sheet's field rows (inside the sheet's scroll view): payee, category and account open a picker; the date steps by a day. */
+export function SheetFields({ sheet }: { sheet: AddTransaction }) {
+  const { formatDate } = useMoneyFormat();
+  const { payee, category, labelOf, isIncome, account, date, stepDate, setPicker } = sheet;
+  return (
+    <>
+      <Pressable style={styles.row} onPress={() => setPicker('payee')}>
+        <Text style={styles.rowIcon}>◎</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowK}>Payee</Text>
+          <Text style={styles.rowV}>{payee || 'Choose…'}</Text>
+        </View>
+        <Text style={styles.chev}>›</Text>
+      </Pressable>
+      <Pressable style={styles.row} onPress={() => setPicker('category')}>
+        <Text style={styles.rowIcon}>▤</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowK}>Category</Text>
+          <Text style={styles.rowV}>
+            {(category ? labelOf(category) : null) ?? (isIncome ? 'Ready to Assign' : 'Choose…')}
+          </Text>
+        </View>
+        <Text style={styles.chev}>›</Text>
+      </Pressable>
+      <Pressable style={styles.row} onPress={() => setPicker('account')}>
+        <Text style={[styles.rowIcon, { color: colors.greenPillFg }]}>◉</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowK}>Account</Text>
+          <Text style={styles.rowV}>{account?.name ?? 'Choose…'}</Text>
+        </View>
+        <Text style={styles.chev}>›</Text>
+      </Pressable>
+      <View style={styles.row}>
+        <Text style={styles.rowIcon}>▦</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowK}>Date</Text>
+          <Text style={styles.rowV}>{formatDate(date)}</Text>
+        </View>
+        <Pressable onPress={() => stepDate(-1)} hitSlop={8}>
+          <Text style={styles.dateStep}>‹</Text>
+        </Pressable>
+        <Pressable onPress={() => stepDate(1)} hitSlop={8}>
+          <Text style={styles.dateStep}>›</Text>
+        </Pressable>
+      </View>
+    </>
+  );
+}

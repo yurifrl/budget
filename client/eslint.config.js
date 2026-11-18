@@ -1,4 +1,7 @@
 // https://docs.expo.dev/guides/using-eslint/
+/* global __dirname */
+const { readdirSync } = require('node:fs');
+const path = require('node:path');
 const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');
 
@@ -8,94 +11,67 @@ const zodPaths = [{ name: 'zod', message: zodMessage }];
 const zodPatterns = [{ group: ['zod/*'], message: zodMessage }];
 
 /**
- * Layering (client/src):
+ * Layering (client/src), see docs/architecture.md:
  *
- *   app → store → {auth, profile, budget} → shell → ui → platform
+ *   app → shell → features → {state, data} → ui → domain
+ *                                    ↘ platform ↙
  *
- * - `app/` is routes + the composition root; it may import anything.
- * - `store/` builds the static store from the features' slices. Features may
- *   import only `store/hooks.ts` (the typed hooks; RootState is type-only).
- * - Features (`auth`, `profile`, `budget`) import another feature only through
- *   its public barrel (`<feature>/index.ts`).
- * - `shell/` (settings menu host) knows no feature; `ui/` knows no feature or
- *   shell; `platform/` imports nothing from the app.
- * - Nothing imports the API package (`../api`).
+ * - `app/` is routes + the composition root; it may import anything. Route
+ *   stubs import feature barrels.
+ * - `shell/` (responsive layout, rail, settings menu host, runtime) may import
+ *   features only through their barrels.
+ * - `features/<x>/` may import another feature only through its barrel
+ *   (`features/<y>/index.ts`), and of the shell only its contexts
+ *   (`shell/context.ts`, `shell/menuNav.ts`).
+ * - `state/` (store, budgetUi slice, plan-edit history, store-backed hooks)
+ *   and the data layer (`budget/data/`, `profile/{api,model}.ts`, and the
+ *   re-export shims `budget/{domain,state,import}` kept for data/)
+ *   know no feature, shell or app.
+ * - `ui/` (theme, primitives, pickers, avatar) imports only `domain/` and
+ *   `platform/`; `platform/` imports nothing from the app.
+ * - `domain/` imports only itself and `@shared/*`, and no React/RN/Expo.
+ * - Nothing imports the API package (`../api`). Cycles: src/architecture.test.ts.
  */
 const SRC = './src';
-const FEATURES = ['auth', 'profile', 'budget'];
+const FEATURES = readdirSync(path.join(__dirname, 'src/features'), { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => d.name);
 
-const layerMessage = (target, from) =>
-  `Layering: ${target}/ may not import ${from}/ (app → store → auth/profile/budget → shell → ui → platform).`;
+const zone = (target, from, message, except) => ({
+  target: `${SRC}/${target}`,
+  from: `${SRC}/${from}`,
+  message,
+  ...(except ? { except } : {}),
+});
+const below = (target, froms, why) =>
+  froms.map((from) => zone(target, from, `Layering: ${target}/ may not import ${from}/ (${why}).`));
 
-/** Zones forbidding `target` to import from each of `froms`. */
-function forbid(target, froms) {
-  return froms.map((from) => {
-    const zone = { target: `${SRC}/${target}`, from: `${SRC}/${from}`, message: layerMessage(target, from) };
-    // Only features get the store/hooks.ts and feature-barrel allowances.
-    if (FEATURES.includes(target) && from === 'store') zone.except = ['hooks.ts'];
-    if (FEATURES.includes(target) && FEATURES.includes(from)) zone.except = ['index.ts', 'index.tsx'];
-    if (zone.except) zone.message += ` Allowed: ${from}/${zone.except.join(', ')}.`;
-    return zone;
-  });
-}
-
-const apiZone = {
-  target: '.',
-  from: '../api',
-  message: 'client/ never imports the API package. Share code through ../shared (@shared/*).',
-};
-
+const DATA = ['budget', 'profile'];
 const layerZones = [
-  apiZone,
-  ...forbid('store', ['app']),
-  ...FEATURES.flatMap((f) => forbid(f, ['app', 'store', ...FEATURES.filter((o) => o !== f)])),
-  ...forbid('shell', ['app', 'store', ...FEATURES]),
-  ...forbid('ui', ['app', 'store', ...FEATURES, 'shell']),
-  ...forbid('platform', ['app', 'store', ...FEATURES, 'shell', 'ui']),
+  { target: '.', from: '../api', message: 'client/ never imports the API package. Share code through ../shared (@shared/*).' },
+  ...below('shell', ['app'], 'only routes import the shell'),
+  ...FEATURES.flatMap((f) => [
+    ...below(`features/${f}`, ['app'], 'features never import routes'),
+    zone(`features/${f}`, 'shell', 'Layering: a feature may import only the shell contexts (shell/context.ts, shell/menuNav.ts).', [
+      'context.ts',
+      'menuNav.ts',
+    ]),
+    ...FEATURES.filter((o) => o !== f).map((o) =>
+      zone(`features/${f}`, `features/${o}`, `Features import each other only through the barrel: '@/features/${o}'.`, ['index.ts']),
+    ),
+  ]),
+  ...FEATURES.map((f) => zone('shell', `features/${f}`, `The shell imports features only through the barrel: '@/features/${f}'.`, ['index.ts'])),
+  ...below('state', ['app', 'shell', 'features', 'ui'], 'state sits below features and knows no UI'),
+  ...DATA.flatMap((d) => below(d, ['app', 'shell', 'features', 'ui'], 'the data layer knows no feature or UI')),
+  ...below('ui', ['app', 'shell', 'features', 'state', ...DATA], 'ui imports only domain and platform'),
+  ...below('platform', ['app', 'shell', 'features', 'state', ...DATA, 'ui', 'domain'], 'platform imports nothing from the app'),
 ];
 
-/**
- * budget/domain is meant to be pure: no React Native / Expo / React, and no
- * imports from the rest of the client (only itself and @shared). The copied
- * code does not meet that yet (migration-plan G10); the exceptions below are
- * the narrowest per-file allowances, to be removed in phase 5a.
- */
-const DOMAIN = `${SRC}/budget/domain`;
-const domainForbidden = [
-  'budget/data',
-  'budget/state',
-  'budget/model',
-  'budget/import',
-  'budget/transfer',
-  'budget/ui',
-  'budget/screens',
-  'ui',
-  'platform',
-];
-const domainZones = (allow = {}) =>
-  domainForbidden
-    .filter((from) => allow[from] !== '*')
-    .map((from) => ({
-      target: DOMAIN,
-      from: `${SRC}/${from}`,
-      ...(allow[from] ? { except: allow[from] } : {}),
-      message: `budget/domain must stay pure: it may not import ${from}/ (imports only itself and @shared).`,
-    }));
-
-/** Phase 3 lint exceptions (documented in docs/decisions.md, "Phase 3"). */
-const DOMAIN_EXCEPTIONS = [
-  { files: ['src/budget/domain/linkPicker.ts'], allow: { 'budget/data': ['connections.ts', 'rows.ts', 'mapping.ts'] } },
-  { files: ['src/budget/domain/linkPicker.test.ts'], allow: { 'budget/data': ['connections.ts', 'rows.ts'] } },
-  { files: ['src/budget/domain/connectionSpark.ts', 'src/budget/domain/connectionSpark.test.ts'], allow: { 'budget/data': ['rows.ts'] } },
-  { files: ['src/budget/domain/syncRun.ts', 'src/budget/domain/syncRun.test.ts', 'src/budget/domain/bankPage.ts'], allow: { 'budget/data': ['connections.ts'] } },
-  { files: ['src/budget/domain/connections.ts'], allow: { 'budget/data': ['connections.ts'], ui: ['avatar/types.ts'] } },
-  { files: ['src/budget/domain/people.ts'], allow: { ui: ['avatar/types.ts'] } },
-  { files: ['src/budget/domain/payments.test.ts'], allow: { 'budget/data': ['ledger.ts'] } },
-  { files: ['src/budget/domain/format.ts'], allow: { platform: ['date.ts'] } },
-  { files: ['src/budget/domain/import.ts'], allow: { 'budget/import': ['index.ts'] } },
-];
-
-const reactNativeMessage = 'budget/domain must stay pure: no react-native, expo or React imports.';
+/** domain/ is pure: only itself and @shared. */
+const domainZones = ['app', 'shell', 'features', 'state', 'ui', 'platform', ...DATA].map((from) =>
+  zone('domain', from, `domain/ must stay pure: it may not import ${from}/ (imports only itself and @shared).`),
+);
+const reactNativeMessage = 'domain/ must stay pure: no react-native, expo or React imports.';
 
 module.exports = defineConfig([
   expoConfig,
@@ -109,7 +85,7 @@ module.exports = defineConfig([
     },
   },
   {
-    files: ['src/budget/domain/**/*.{ts,tsx}'],
+    files: ['src/domain/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -121,7 +97,7 @@ module.exports = defineConfig([
           ],
         },
       ],
-      'import/no-restricted-paths': ['error', { zones: [...layerZones, ...domainZones()] }],
+      'import/no-restricted-paths': ['error', { zones: [...layerZones, ...domainZones] }],
     },
   },
   // Same as syscd-app: eslint-plugin-react-hooks v7 (via eslint-config-expo
@@ -135,8 +111,4 @@ module.exports = defineConfig([
       'react-hooks/refs': 'off',
     },
   },
-  ...DOMAIN_EXCEPTIONS.map(({ files, allow }) => ({
-    files,
-    rules: { 'import/no-restricted-paths': ['error', { zones: [...layerZones, ...domainZones(allow)] }] },
-  })),
 ]);

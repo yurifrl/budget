@@ -11,7 +11,7 @@
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:58.153Z",
-  "updated_at": "2026-11-18T06:36:16.340Z",
+  "updated_at": "2026-11-18T07:35:34.118Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -19,19 +19,14 @@
   "parent": null,
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Step 1 done: domain imports only itself + @shared (17 lint exceptions -> 0), singletons gone (prefs/flag labels/mask in budgetUi slice, one persistence listener state/budgetSettings), 3 import cycles broken + architecture.test.ts guard, engines documented (zeroSum canonical), fixtures moved, dead import.ts removed. Step 2 done: helper dedup, pt-BR centsFmt + Spending dates follow prefs, Portuguese strings -> English.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": "tk/budget-sfa",
-  "metadata": {
-    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-sfa",
-    "changeset": {
-      "base": "08ff6fdd6e426e89ed14ac84535115b6f071233d"
-    }
-  },
+  "branch": null,
+  "metadata": {},
   "attachments": [],
   "dependencies": [],
   "dependency_count": 0,

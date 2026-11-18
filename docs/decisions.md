@@ -972,3 +972,157 @@ assertions and 1 key-list assertion. Two assertions encoded the old design
 and were replaced by stronger ones: "connect-token is not an operation" (now:
 it is an api-only operation) and the restore request body (now: format 2 with
 amounts x10).
+
+## Phase 5a/5e: client domain purity and structure
+
+Branch `tk/budget-sfa` (tasks budget-sfa, budget-dqt). Behaviour-preserving
+except the intended fixes listed at the end. Split work (PlanScreen;
+AccountsScreen + register; ui/bits + MenuPanes; the other large screens) ran
+in four parallel sub-branches merged into the task branch before the moves.
+
+### Domain purity (5a)
+
+- `domain/` imports only itself and `@shared/*`; ESLint has no exceptions
+  (17 violating imports in 13 files before, 0 after) and
+  `src/architecture.test.ts` checks it independently.
+- Wire-typed helpers left the domain: `linkPicker`, `connectionSpark`,
+  `syncRun`, `bankPage`, `connections` are `features/banks/model/*` (they take
+  wire rows; only the bank screens and the account editor use them).
+  `bankPage.milliToCents` (a copy of `data/mapping`'s) was dropped. Avatar
+  types' one definition is `domain/avatar.ts`; `platform/date` became
+  `domain/date` (pure).
+- Singletons removed: `fmtPrefs`, `moneyMask`, `flagLabels` module state and
+  the `ui/stores` bridge. Formatters are pure (`formatMoneyWith(prefs, cents,
+  masked)` etc.; `moneyFormat(prefs, masked)` binds them). Prefs, flag labels
+  and the Hide Amounts mask live in the budgetUi slice; `state/budgetSettings`
+  is the one listener that loads the per-budget blob on every
+  `setActiveBudget` (stale loads dropped) and persists settings actions (same
+  sectioned patches the panes wrote; the Plan toolbar's toggles and the mask
+  stay unpersisted, as before). Components read `useMoneyFormat()`
+  (`ui/moneyFormat.tsx`, a context fed from the slice at the root), so a
+  change re-renders every formatter: this fixes budget-xef
+  (`docs/evidence/phase5e/xef-*.png`). Non-React callers (plan-edit labels,
+  overspend hints, quick math) take the formatter as a parameter defaulting
+  to pt-BR. Editing a non-active budget's format still writes only its blob.
+  `setFmtPrefs`/`setFlagLabels` remain as no-op exports only for
+  `data/settingsBlob.applyBudgetSettings` (data/ was not edited; budget-5rk).
+- Cycles: `madge --circular` found 3 (state/ui <-> planEdits, shell <->
+  MenuPanes, CategoryDropdown -> PayeeDropdown -> ManagePayeesModal ->
+  ManagePayeesScreen -> CategoryDropdown); all broken (`state/keys.ts`, shell
+  context in its own module, `transferPayeeName` from `@shared`). Guard:
+  `architecture.test.ts` (Tarjan over runtime imports under `src/`), 0 cycles.
+- Two engines: `domain/zeroSum.ts` (`computeBudgetMonth`) is canonical, per
+  `docs/budget-engine-spec.md` (copied from syscd with
+  `category-bundles-design.md`). `engine.ts` is not a second engine: it holds
+  helpers around it (balances, assigned lookups, target funding, Cost to Be
+  Me, group rollups over zeroSum figures, and the legacy `recomputeActivity`
+  data/mapping still calls). Nothing was provably dead, so nothing was
+  removed; the header now says so.
+- Dead/stray: `domain/import.ts` deleted; `seed.ts` and `zeroSum.fixtures.ts`
+  in `domain/__fixtures__/`; the payment move-money tests that used
+  `data/ledger` moved to `state/paymentMoves.test.ts`.
+
+### One definition per helper (G19)
+
+`monthOfDate` (engine, zeroSum, transfer), `monthKeyFromDate`/`currentMonthKey`
+(state/ui; data/mapping keeps its string version, not edited), `daysInMonth`
+(format, targets), month and weekday arrays (format, TargetEditor,
+DatePicker) are now in `domain/format.ts`; `categoryLabel` x2 in the
+registers -> `domain/register.registerCategoryCell` (the bundles one is a
+different function, kept); `amountStyle` x2 -> `ui/dropdown/dropdown.tsx`;
+`CASH_TYPES` -> `domain/types.CASH_ACCOUNT_TYPES` (data/mapping's copy left);
+`pairTransfers` x2 were a wrapper and its core, the wrapper is now
+`pairRegisterTransfers`; `milliToCents` x2 -> data/mapping's. The transfer
+TSV formatters stay separate on purpose (the archive's fixed format, pinned by
+`features/backup/transfer/tsv.test.ts`).
+
+### Structure (5e)
+
+Final layout and rules: `docs/architecture.md` ("client/"). 334 files moved
+with `git mv` (import specifiers rewritten by script, 833 of them), then
+cross-feature imports routed through new `features/<x>/index.ts` barrels.
+Kept in place for the data-layer work: `budget/data/`, `profile/api.ts` (and
+its pure `model.ts`), with one-line re-export shims under
+`budget/{domain,state,import}` so data/ compiles unchanged (budget-5rk).
+Shared widgets used by several features (category/account/date dropdowns,
+AmountPill, ClearedBadge, BalanceFormulaRow) moved to `ui/`; the People
+filter, picker and pane form a `people` feature. One theme file
+(`ui/theme.ts`, budget's tokens; the old shared theme's three differing
+values kept under their own names so profile and combobox look the same).
+Store, slice, history and store-backed hooks are `state/`; the DI runtime is
+`shell/runtime.ts`.
+
+God components, extracted test-first into pure functions (domain/*.ts or
+*.logic.ts) and thin hooks (no React test renderer in the repo):
+PlanScreen (`planFilter`, `planDrop`/`planGeometry` drop targets,
+`planSelection`, `planSections`, `planRow`; `usePlanDrag`, `usePlanRowMenus`,
+`usePlanSelection`, `usePlanUndo`, `usePlanNumpad`...), AccountsScreen
+(`register`, `registerSelection`, reconcile logic; `useRegisterFilter`,
+`useRegisterSelection`, `useReconcileSession`), InlineAddRow (`inlineAdd`,
+`useInlineAdd`), plus ManagePayees, AccountEditModal, ImportScreen,
+AddTransactionSheet, ConnectBank, the shell rail, ui/bits (one file per
+primitive in `ui/primitives/`) and MenuPanes (one file per pane in
+`features/settings/`).
+
+### Metrics (before = branch start 08ff6fd, after = this branch)
+
+| | before | after |
+|---|---|---|
+| largest non-data files | PlanScreen 2147, AccountsScreen 1651, InlineAddRow 892, MenuPanes 875, ManagePayees 843, shell 789, bits 777 | MoveMoneySheet 638, CategoryInspector 637, TargetEditor 560 |
+| files > 600 lines (excl. data/) | 11 | 2 |
+| longest component functions | PlanScreen 1351, AccountsScreen 1344, InlineAddRow 628, ManagePayeesBody 442, AccountEditModal 439, ImportScreen 426 | AccountsScreen 301, useInlineAdd 290, MobileMoveMoney 282 |
+| functions > 300 lines | 11 | 1 (301) |
+| test LOC in screens/features | 32 | 3088 (+ new domain tests) |
+| client tests | 666 | 1054 (after the 5c/5d merge) |
+| domain lint exceptions | 17 | 0 |
+| import cycles | 3 | 0 (guarded) |
+| hex literals outside theme files (quoted) | 165 | 75 (90 equal to a token replaced; the rest are avatar palettes, flag colors, tints; budget-65f) |
+| ESLint warnings | 10 | 0 |
+
+### Other items
+
+- Session token (G22): native stores it in the Keychain
+  (`platform/storage/secretStore.native.ts`, expo-secure-store ~58.0.3),
+  migrating an AsyncStorage copy on first read; web keeps the cookie path.
+  Same `sessionToken.ts` API, tested with an injected secret store. Not run on
+  a device (simulator not allowed).
+- Bugs fixed: budget-xef (format re-renders live), budget-xd6 (month note
+  follows the budget: `domain/noteDraft`, MonthSummary keyed by budget),
+  budget-fwf (New Budget refetches the list before switching, as Fresh Start
+  does), budget-ipa (Escape closes the Assign dropdown: `ui/escapeToClose`,
+  deferred so inner selects keep their own Escape). Left: budget-rnn,
+  budget-qal.
+
+### Intended visible changes
+
+1. Amounts and dates re-render on a format change (xef); the transaction
+   menu's match list (was a pt-BR/BRL Intl formatter and DD/MM) and
+   Spending's day headers (was `Intl` pt-BR long date, "2 de fevereiro de
+   2027") follow the prefs ("2 February 2027" / "February 2, 2027").
+2. Portuguese UI strings in English: Plan menus and forms (Excluir, Cancelar,
+   Ocultar, Restaurar, Renomear, "Nome do grupo/da categoria", the delete
+   confirmation), the month names of `formatMonth`/`formatMonthLong` (Fev,
+   Abr, Novembro... -> Feb, Apr, November: Plan header month labels, Reflect
+   axis, date picker title, Recent Moves), target badge labels ("por mês",
+   "até" -> "per month", "by") and one accessibility label.
+3. The four bug fixes above.
+
+### Regression pass (web, 2026-11-18, after merging main's 5c/5d)
+
+API from this tree on :3141 against `budgetnew_dev`, Expo web on :8141,
+`agent-browser` at 1440/900/390; shots in `docs/evidence/phase5e/<width>/`.
+The dev DB drifted a lot since the parity pass, so the same 15 routes x 3
+widths were also shot from `main` on the same API/DB/browser state and
+diffed pixel by pixel: 12 routes identical (0.00%) at every width; reflect
+differs only in month axis labels (Set/Out -> Sep/Oct), spending only in day
+headers ("2 de fevereiro de 2027" -> "2 February 2027"), profile only in the
+random avatar candidate seeds. Write flows, verified through the API/DB:
+assign/undo/redo, Escape on the Assign dropdown, move money, target, drag
+reorder, inline add/edit/delete, transfer (Casa; on Trabalho the API refuses
+every transfer because its transfer payees point at Casa accounts since the
+parity restore, budget-njc data), bulk flag, reconcile, payee merge, CSV
+import (3 rows), backup export, People add/rename/remove, New Budget stays
+(fwf), rename, switch, month note follows the switch (xd6), number and date
+format re-render live and persist (xef). Not run: iOS, auth-on sign-in,
+split editing, group drag. Seen, pre-existing on main: the add row defaults
+to a closed first account (budget-dho).
