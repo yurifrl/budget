@@ -1,0 +1,48 @@
+version: '3'
+
+# No root package.json: every package installs and runs from its own directory.
+
+vars:
+  PACKAGES: shared api client
+
+tasks:
+  default:
+    cmds:
+      - task --list --sort=none
+    silent: true
+
+  install:
+    desc: bun install in shared, api, client (shared first; client/api read its node_modules)
+    cmds:
+      - for: { var: PACKAGES }
+        cmd: cd {{.ITEM}} && bun install
+
+  test:
+    desc: bun test in every package
+    cmds:
+      - for: { var: PACKAGES }
+        cmd: cd {{.ITEM}} && bun test
+
+  typecheck:
+    desc: tsc --noEmit in every package
+    cmds:
+      - for: { var: PACKAGES }
+        cmd: cd {{.ITEM}} && bunx tsc --noEmit
+
+  lint:
+    desc: eslint in api and client
+    cmds:
+      - cd api && bunx eslint .
+      - cd client && bunx eslint .
+
+  api:
+    desc: Run the API (default port 3100, override with API_PORT)
+    dir: api
+    cmds:
+      - bun --watch src/index.ts
+
+  web:
+    desc: Run the Expo web dev server (Metro on 8091)
+    dir: client
+    cmds:
+      - bunx expo start --web --port 8091

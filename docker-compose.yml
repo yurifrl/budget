@@ -1,0 +1,47 @@
+# Local dev dependencies for Budget. DEV ONLY.
+#
+#   postgres  localhost:55432   database=budget  user=postgres
+#   temporal  localhost:57233 (gRPC)   UI http://localhost:58233
+#
+# Host ports and names are chosen so nothing collides with syscd-app
+# (5432 / 7233 / 8233, syscd-app_* volumes).
+name: budget
+
+services:
+  postgres:
+    image: postgres:18
+    container_name: budget-postgres
+    ports:
+      - "55432:5432"
+    environment:
+      POSTGRES_DB: budget
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Apple container volumes contain lost+found; init into a subdirectory.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - budget-postgres-data:/var/lib/postgresql/data
+
+  temporal:
+    image: temporalio/temporal:1.5.1
+    container_name: budget-temporal
+    command:
+      - server
+      - start-dev
+      - --ip
+      - 0.0.0.0
+      - --db-filename
+      - /data/temporal.db
+      - --namespace
+      - default
+    ports:
+      - "57233:7233"
+      - "58233:8233"
+    # Bind mount (gitignored): the image runs as uid 1000 and a named volume
+    # is root-owned. `mkdir -p .tmp/temporal` before first start.
+    volumes:
+      - ./.tmp/temporal:/data
+
+volumes:
+  budget-postgres-data:
+    name: budget-postgres-data

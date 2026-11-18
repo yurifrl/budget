@@ -1,0 +1,34 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+
+# generated native folders (expo prebuild)
+/client/ios
+/client/android
+
+# Native secrets
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# env
+.env
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# macOS
+.DS_Store
+
+# local Temporal dev server state
+.tmp/
