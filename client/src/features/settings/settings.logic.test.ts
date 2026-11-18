@@ -58,6 +58,8 @@ describe('archivedBudgetLabel', () => {
     const b = { name: 'Old', archived_at: '2026-01-02' };
     expect(archivedBudgetLabel(b, fmtDate)).toBe(`Old · ${fmtDate('2026-01-02')}`);
     expect(archivedBudgetLabel(b, fmtDate)).toBe('Old · 02/01/2026');
+    // The API sends a timestamp.
+    expect(archivedBudgetLabel({ name: 'Old', archived_at: '2026-11-18T22:03:58.457Z' }, fmtDate)).toBe('Old · 18/11/2026');
   });
   it('is the bare name without an archive date', () => {
     expect(archivedBudgetLabel({ name: 'Home', archived_at: null }, fmtDate)).toBe('Home');

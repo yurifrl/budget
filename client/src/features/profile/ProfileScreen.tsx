@@ -21,9 +21,11 @@ export function ProfileScreen() {
   const { data: me, isLoading, isError, refetch } = useGetMeQuery();
   const { signOut } = useAuthSession();
 
-  // Leave for the home route first, so the next sign-in starts there and not on this page.
+  // The next sign-in starts on the home page, not here. Web: the API's logout
+  // redirect already lands on the app root (and a route change now would
+  // cancel that navigation). Native: the router keeps its place, so leave first.
   const leave = () => {
-    router.dismissTo('/');
+    if (process.env.EXPO_OS !== 'web') router.dismissTo('/');
     void signOut();
   };
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'));

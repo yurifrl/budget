@@ -43,9 +43,11 @@ export function BudgetCard({ budget, archivedNote, onOpen, onPeople }: Props) {
           <Text style={styles.name} numberOfLines={1}>
             {budget.name}
           </Text>
-          <Text style={styles.caption} numberOfLines={2}>
-            {archivedNote ? `${archivedNote} · ${caption}` : caption}
-          </Text>
+          {(archivedNote ? [archivedNote, ...caption] : caption).map((line) => (
+            <Text key={line} style={styles.caption} numberOfLines={1} ellipsizeMode="middle">
+              {line}
+            </Text>
+          ))}
         </View>
         <Text style={styles.chevron}>{'›'}</Text>
       </Pressable>
@@ -77,7 +79,7 @@ const styles = StyleSheet.create({
   },
   main: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingLeft: 16, paddingRight: 10, minHeight: 68 },
   mainActive: { backgroundColor: colors.card2 },
-  text: { flex: 1, minWidth: 0, gap: 3 },
+  text: { flex: 1, minWidth: 0, gap: 2 },
   name: { color: colors.text, fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
   caption: { color: colors.muted, fontSize: 14, lineHeight: 19 },
   chevron: { color: colors.faint, fontSize: 22 },

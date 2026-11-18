@@ -23,7 +23,7 @@ import { pickImportFile } from '@/platform/import/pickImportFile';
 import type { PickedImportFile } from '@/platform/import/pickImportFile';
 import { useBudgetModel } from '@/state/useBudgetModel';
 import { usePeople } from '@/features/people';
-import { useRestoreBudgetMutation } from '@/budget/data/api';
+import { useGetBudgetsQuery, useRestoreBudgetMutation } from '@/budget/data/api';
 import {
   buildTransferZip,
   parseTransferFiles,
@@ -106,6 +106,8 @@ export function ExportImportScreen() {
   // Persons travel by email (ids aren't portable) and resolve against these members on import.
   const { people } = usePeople(model.budgetId);
   const [restore] = useRestoreBudgetMutation();
+  // Restoring replaces the whole budget: the owner's call (the API refuses anyone else).
+  const isOwner = useGetBudgetsQuery().data?.find((b) => b.id === model.budgetId)?.is_owner === true;
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -221,6 +223,11 @@ export function ExportImportScreen() {
       {exportError ? <Text style={styles.errorText}>{exportError}</Text> : null}
 
       <Text style={styles.sectionTitle}>Import</Text>
+      {!isOwner ? (
+        <Text style={styles.hint}>Only the owner of this budget can restore a backup into it.</Text>
+      ) : null}
+      {isOwner ? (
+      <>
       <Text style={styles.hint}>
         Restores the two backup tables into this budget. Everything currently in it — categories,
         accounts, payees, transactions and assignments — is replaced.
@@ -255,6 +262,8 @@ export function ExportImportScreen() {
           {pickedRegister ? pickedRegister.name : 'no file chosen'}
         </Text>
       </View>
+      </>
+      ) : null}
       {importError ? <Text style={styles.errorText}>{importError}</Text> : null}
       {restored ? (
         <Text style={styles.doneText}>

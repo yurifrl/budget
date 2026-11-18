@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  archivedNote,
   budgetCardActions,
   budgetCardCaption,
   budgetEntryRoute,
@@ -75,9 +76,18 @@ describe('card copy', () => {
   });
 
   test('caption: mine shows the people, shared shows who shared it and the people', () => {
-    expect(budgetCardCaption({ is_owner: true, owner: ana, member_count: 1 })).toBe('Only you');
-    expect(budgetCardCaption({ is_owner: true, owner: ana, member_count: 2 })).toBe('2 people');
-    expect(budgetCardCaption({ is_owner: false, owner: ana, member_count: 3 })).toBe('Shared by Ana Lima · 3 people');
+    expect(budgetCardCaption({ is_owner: true, owner: ana, member_count: 1 })).toEqual(['Only you']);
+    expect(budgetCardCaption({ is_owner: true, owner: ana, member_count: 2 })).toEqual(['2 people']);
+    expect(budgetCardCaption({ is_owner: false, owner: ana, member_count: 3 })).toEqual(['Shared by Ana Lima', '3 people']);
+  });
+});
+
+describe('archivedNote', () => {
+  const fmt = (iso: string) => iso.split('-').reverse().join('/');
+  test('the archive day from the timestamp; nothing for a live budget', () => {
+    expect(archivedNote('2026-11-18T22:03:58.457Z', fmt)).toBe('Archived 18/11/2026');
+    expect(archivedNote(null, fmt)).toBeUndefined();
+    expect(archivedNote(undefined, fmt)).toBeUndefined();
   });
 });
 

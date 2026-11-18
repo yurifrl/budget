@@ -18,7 +18,7 @@ import { colors, radius, spacing } from '@/ui/theme';
 
 import { BudgetCard } from './BudgetCard';
 import { CreateBudgetForm } from './CreateBudgetForm';
-import { EMPTY_BODY } from './home.logic';
+import { archivedNote, EMPTY_BODY } from './home.logic';
 import { PeopleSheet } from './PeopleSheet';
 import { useHome } from './useHome';
 
@@ -56,7 +56,7 @@ export function HomeScreen() {
       <BudgetCard
         key={b.id}
         budget={b}
-        archivedNote={archived && b.archived_at ? `Archived ${formatDate(b.archived_at)}` : undefined}
+        archivedNote={archived ? archivedNote(b.archived_at, formatDate) : undefined}
         onOpen={() => void home.open(b.id)}
         onPeople={() => setPeopleOf({ id: b.id, name: b.name })}
       />
@@ -125,7 +125,7 @@ export function HomeScreen() {
               {sections.mine.length ? (
                 cards(sections.mine)
               ) : (
-                <Text style={styles.sectionEmpty}>You do not own a budget. New budget creates one.</Text>
+                <Text style={styles.sectionEmpty}>None of your own yet. New budget creates one.</Text>
               )}
             </Section>
 

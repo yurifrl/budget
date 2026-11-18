@@ -55,10 +55,14 @@ export function sharedByLabel(owner: Row['owner']): string {
   return who ? `Shared by ${who}` : 'Shared with you';
 }
 
-/** The line under a card's name. */
-export function budgetCardCaption(b: Pick<Row, 'is_owner' | 'owner' | 'member_count'>): string {
-  const people = peopleLabel(b.member_count);
-  return b.is_owner ? people : `${sharedByLabel(b.owner)} · ${b.member_count} people`;
+/** The lines under a card's name: the people on it, preceded on a shared budget by who shared it. */
+export function budgetCardCaption(b: Pick<Row, 'is_owner' | 'owner' | 'member_count'>): string[] {
+  return b.is_owner ? [peopleLabel(b.member_count)] : [sharedByLabel(b.owner), `${b.member_count} people`];
+}
+
+/** Extra caption line of an archived budget (`archived_at` is a timestamp; the formatter takes a date). */
+export function archivedNote(archivedAt: string | null | undefined, formatDate: (iso: string) => string): string | undefined {
+  return archivedAt ? `Archived ${formatDate(archivedAt.slice(0, 10))}` : undefined;
 }
 
 export interface BudgetCardActions {

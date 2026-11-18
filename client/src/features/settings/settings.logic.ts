@@ -34,9 +34,9 @@ export function ownerOnlyHint(owner: { name: string | null; email: string | null
     : 'Only the owner can rename, archive or delete this budget.';
 }
 
-/** Row label of an archived budget: its name plus the archive date. */
+/** Row label of an archived budget: its name plus the archive date (`archived_at` is a timestamp; the formatter takes a date). */
 export function archivedBudgetLabel(b: Archivable, formatDate: (iso: string) => string): string {
-  return b.archived_at ? `${b.name} · ${formatDate(b.archived_at)}` : b.name;
+  return b.archived_at ? `${b.name} · ${formatDate(b.archived_at.slice(0, 10))}` : b.name;
 }
 
 /** Fresh Start explainer for the active budget (or the prompt to pick one). */
