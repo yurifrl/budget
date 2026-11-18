@@ -1,5 +1,35 @@
 # Changelog
 
+## v2026.11.18-02 2026-11-18 release
+
+### Changed
+
+- release: v2026.11.18-02
+- feat(settings): add settings menu to the app shell
+- chore(assets): add adaptive, tinted, and dark app icons
+- chore(client): add app config and asset type declarations
+- chore(admin): add favicon asset
+- feat(admin): add admin entry page
+- chore(issues): add budget task issue report
+- chore(history): record budget task history
+- chore(events): record task event log
+- chore(tasks): attach login flow evidence screenshots
+- chore(repo): add gitattributes for consistent file handling
+- client(eas): App Store Connect app id
+- docs: Access sign-in (architecture, decisions + threat model, env schema, MORNING steps, stub evidence)
+- client: LoginGate signs in with Cloudflare Access
+- api: sign in with Cloudflare Access
+- shared: GET /auth/providers contract ({ access, google })
+- client(eas): pin bun 1.4.4 on EAS builders (1.4.2 fails to link zod from shared/)
+- client: EAS project id
+- client: eas.json and an EAS pre-install hook that installs shared/ first
+- secrets: budget item holds the original Temporal password and deploy key; extra items archived
+- secrets: record single-item state; new deploy key public half; drop obsolete merge script
+- secrets: one 1Password item (budget) instead of three; merge script for items already created
+- docs: morning list rewritten for the owner; migration-plan status; tasks: close verified phases and follow-ups
+- chore(renovate): leave Expo SDK-managed minor/patch versions in client/ to expo install
+
+
 ## v2026.11.18-01 2026-11-18 release
 
 ### Changed
