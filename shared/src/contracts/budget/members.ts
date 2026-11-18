@@ -2,11 +2,13 @@ import { z } from '../../zod';
 
 import { defineOperation, EXPOSE_ALL, EXPOSE_NO_MCP } from '../../operation-contract';
 import { budgetId, uuidSchema } from './schemas';
+import { budgetMembersChangedSchema, budgetMembersSchema } from './outputs';
 
 export const membersList = defineOperation({
   name: 'budget_members_list',
   description: 'List who a budget is shared with, and whether the caller can manage the list.',
   input: z.object({ budget_id: budgetId }),
+  output: budgetMembersSchema,
   method: 'GET',
   path: '/budget-members',
   kind: 'read',
@@ -23,6 +25,7 @@ export const membersAdd = defineOperation({
     /** Display name; required when no email is given. Never overwrites an existing name. */
     name: z.string().trim().min(1).max(80).optional(),
   }),
+  output: budgetMembersChangedSchema,
   method: 'POST',
   path: '/budget-members',
   kind: 'write',
@@ -38,6 +41,7 @@ export const membersLinkEmail = defineOperation({
     user_id: uuidSchema,
     email: z.string().trim().toLowerCase().email().max(254),
   }),
+  output: budgetMembersChangedSchema,
   method: 'POST',
   path: '/budget-members/link-email',
   kind: 'write',
@@ -48,6 +52,7 @@ export const membersRename = defineOperation({
   name: 'budget_members_rename',
   description: 'Rename a person who has not signed in yet (placeholder or invitee). Signed-in users keep their own name.',
   input: z.object({ budget_id: budgetId, user_id: uuidSchema, name: z.string().trim().min(1).max(80) }),
+  output: budgetMembersChangedSchema,
   method: 'PATCH',
   path: '/budget-members',
   kind: 'write',
@@ -58,6 +63,7 @@ export const membersRemove = defineOperation({
   name: 'budget_members_remove',
   description: "Stop sharing a budget with a member (owner or admin only); the member's accounts fall back to Shared.",
   input: z.object({ budget_id: budgetId, user_id: uuidSchema }),
+  output: budgetMembersChangedSchema,
   method: 'DELETE',
   path: '/budget-members',
   query: ['budget_id', 'user_id'],

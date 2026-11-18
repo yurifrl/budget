@@ -11,6 +11,7 @@ import {
   subTxnListSchema,
   uuidSchema,
 } from './schemas';
+import { bulkImportResultSchema, noContent, transactionRowSchema } from './outputs';
 
 /**
  * Account balance deltas are always derived by the server from the stored
@@ -23,6 +24,7 @@ export const transactionsList = defineOperation({
   name: 'budget_transactions_list',
   description: 'List all live transactions of a budget (newest first) with their split legs. `amount` fields (parent and split legs) are signed milliunits (1/1000 of the currency unit, 12.34 = 12340; negative = money out).',
   input: z.object({ budget_id: budgetId }),
+  output: z.array(transactionRowSchema),
   method: 'GET',
   path: '/transactions',
   kind: 'read',
@@ -38,6 +40,7 @@ export const transactionsCreate = defineOperation({
     txn: createTxnSchema,
     subtransactions: subTxnListSchema.optional(),
   }),
+  output: transactionRowSchema,
   method: 'POST',
   path: '/transactions',
   status: 201,
@@ -50,6 +53,7 @@ export const transactionsBulk = defineOperation({
   description:
     'Import a batch of parsed statement rows into one account (inflow / outflow in integer MILLIUNITS, 12.34 = 12340); dedupes on import ids and stores rows uncleared + unapproved.',
   input: z.object({ budget_id: budgetId, account_id: uuidSchema, txns: z.array(bulkTxnSchema).min(1).max(2000) }),
+  output: bulkImportResultSchema,
   method: 'POST',
   path: '/transactions/bulk',
   status: 201,
@@ -67,6 +71,7 @@ export const transactionsUpdate = defineOperation({
     patch: patchTxnSchema,
     subtransactions: subTxnListSchema.optional(),
   }),
+  output: noContent,
   method: 'PATCH',
   path: '/transactions/:id',
   kind: 'write',
@@ -77,6 +82,7 @@ export const transactionsDelete = defineOperation({
   name: 'budget_transactions_delete',
   description: 'Delete a transaction (soft delete). Account balances are reversed automatically.',
   input: z.object({ id: uuidSchema, budget_id: budgetId }),
+  output: noContent,
   method: 'DELETE',
   path: '/transactions/:id',
   query: ['budget_id'],
@@ -99,6 +105,7 @@ export const transactionAdd = defineOperation({
     memo: z.string().max(500).optional(),
     cleared: clearedSchema.optional(),
   }),
+  output: transactionRowSchema,
   method: 'POST',
   path: '/transactions/add',
   status: 201,

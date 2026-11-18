@@ -5,7 +5,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { issueSession, verifyAccessToken, verifySession } from './auth';
 import { authConfig } from './config';
 import { googleConfigured, googleAuthUrl, exchangeCode } from './google';
+import { implement, mountOperations } from '../core/operation';
 import { errorResponse } from '../core/validate';
+import { authMe } from '@shared/contracts/user/me';
 import { safeReturnTo } from './return-to';
 import type { SessionPrincipal } from './types';
 import { EmailAlreadyProvisionedError, isGrantActive, resolveOrCreateSessionUser } from './store';
@@ -117,15 +119,20 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
   return next();
 };
 
-export function mountAuthRoutes(app: Hono): void {
-  app.get('/auth/me', async (c) => {
+/** GET /auth/me as an operation (mounted ahead of the auth middleware by mountAuthRoutes). */
+export const authOperations = [
+  implement(authMe, async (c) => {
     // Mirror authMiddleware: unconfigured local dev runs open, so the probe
     // must succeed or every client is gated out of an open API.
-    if (authDisabled()) return c.json({ email: 'dev@localhost' });
+    if (authDisabled()) return { email: 'dev@localhost' };
     // Session OR OAuth access token (the CLI's `whoami`); both resolve to an email.
     const user = await principalFromRequest(c);
-    return user ? c.json({ email: user.email }) : errorResponse(c, 401, 'unauthorized');
-  });
+    return user ? { email: user.email } : errorResponse(c, 401, 'unauthorized');
+  }),
+];
+
+export function mountAuthRoutes(app: Hono): void {
+  mountOperations(app, authOperations);
 
   app.get('/auth/google', (c) => {
     if (!googleConfigured()) return errorResponse(c, 503, 'google not configured');

@@ -20,6 +20,7 @@ const read = defineOperation({
   name: 'demo_items_list',
   description: 'List items.',
   input: z.object({ owner: z.string() }),
+  output: z.array(z.object({ owner: z.string() })),
   method: 'GET',
   path: '/items',
   kind: 'read',
@@ -29,6 +30,7 @@ const write = defineOperation({
   name: 'demo_items_create',
   description: 'Create an item.',
   input: z.object({ owner: z.string(), label: z.string().min(1) }),
+  output: z.object({ owner: z.string(), label: z.string(), auth: z.string().nullable() }),
   method: 'POST',
   path: '/items',
   status: 201,
@@ -155,6 +157,20 @@ describe('/mcp tools (generated from the catalog)', () => {
     expect(JSON.parse((r.content as { text: string }[])[0]!.text)).toEqual([{ owner: 'zed' }]);
     const w = await client.callTool({ name: 'demo_items_create', arguments: { owner: 'zed', label: 'x' } });
     expect(JSON.parse((w.content as { text: string }[])[0]!.text)).toEqual({ owner: 'zed', label: 'x', auth: 'Bearer rw' });
+    await client.close();
+  });
+
+  test('object outputs are advertised as outputSchema and returned as structuredContent; lists are not', async () => {
+    const client = await connect(app, 'rw');
+    const { tools } = await client.listTools();
+    const by = Object.fromEntries(tools.map((t) => [t.name, t]));
+    const out = by.demo_items_create!.outputSchema as { type: string; properties: Record<string, unknown> };
+    expect(out.type).toBe('object');
+    expect(Object.keys(out.properties).sort()).toEqual(['auth', 'label', 'owner']);
+    expect(by.demo_items_list!.outputSchema).toBeUndefined();
+    const w = await client.callTool({ name: 'demo_items_create', arguments: { owner: 'zed', label: 'y' } });
+    expect(w.isError).toBeFalsy();
+    expect(w.structuredContent).toEqual({ owner: 'zed', label: 'y', auth: 'Bearer rw' });
     await client.close();
   });
 

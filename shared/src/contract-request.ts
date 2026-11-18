@@ -1,31 +1,29 @@
 /**
- * TODO(dedupe): local copy of the client's core/api/contractRequest; move to shared/ once its owner allows it.
- * Turn an operation CONTRACT (shared/src/contracts/<feature>) plus its flat input
- * into an {@link ApiQuery}. The method, path template and the placement of each
- * input key (path / query / body / bodyKey) all come from the contract, so the
- * app never restates them. Contracts are zod-only: this file may import them
- * without pulling hono or pg into the Expo bundle.
+ * Turn an operation CONTRACT plus its flat input into a request description
+ * ({@link ContractRequest}). The method, path template and the placement of
+ * each input key (path / query / body / bodyKey) all come from the contract,
+ * so no client restates them. Used by the app's RTK Query slices and the
+ * admin SPA (the API places inputs with the same `inputLocations`).
  */
+import type { z } from './zod';
 
-import type { z } from '@shared/zod';
+import { inputLocations, type InputSchema, type OperationContract, type OutputSchema } from './operation-contract';
 
-import { inputLocations, type InputSchema, type OperationContract } from '@shared/operation-contract';
-
-
-/** Request description built from a contract (same shape as the client's ApiQuery). */
-export interface ApiQuery {
+/** HTTP request built from a contract (structurally the app's `ApiQuery`). */
+export interface ContractRequest {
   url: string;
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  /** Values are stringified by the caller; `undefined` entries are omitted. */
   params?: Record<string, string | number | boolean | undefined>;
   body?: unknown;
 }
 
-export function contractRequest<I extends InputSchema>(
-  contract: OperationContract<I>,
+export function contractRequest<I extends InputSchema, O extends OutputSchema>(
+  contract: OperationContract<I, O>,
   input: z.input<I>,
-): ApiQuery {
+): ContractRequest {
   const values = input as Record<string, unknown>;
-  const loc = inputLocations(contract as OperationContract);
+  const loc = inputLocations(contract as unknown as OperationContract);
 
   const url = contract.path.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_m, name: string) => {
     const value = values[name];
@@ -33,10 +31,10 @@ export function contractRequest<I extends InputSchema>(
     return encodeURIComponent(String(value));
   });
 
-  const request: ApiQuery = { url, method: contract.method };
+  const request: ContractRequest = { url, method: contract.method };
 
   if (loc.query.length > 0) {
-    const params: NonNullable<ApiQuery['params']> = {};
+    const params: NonNullable<ContractRequest['params']> = {};
     for (const key of loc.query) {
       const value = values[key];
       if (value !== undefined && value !== null) params[key] = value as string | number | boolean;

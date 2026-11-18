@@ -7,19 +7,18 @@
  */
 
 import type { BaseQueryFn } from '@reduxjs/toolkit/query';
+import type { ContractRequest } from '@shared/contract-request';
 
 import type { Container } from '../di/container';
 import { Tokens } from '../di/tokens';
 import { loadAuthHeaders } from '../storage/sessionToken';
 
-export interface ApiQuery {
-  url: string;
-  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
-  /** Values are stringified here; `undefined` entries are omitted from the URL. */
-  params?: Record<string, string | number | boolean | undefined>;
-  /** JSON-serialized, unless it is a Blob — then sent raw with the blob's own content type. */
-  body?: unknown;
-}
+/**
+ * One request: the shape `contractRequest` (shared) builds. Params are
+ * stringified here (`undefined` omitted); the body is JSON-serialized unless
+ * it is a Blob, which is sent raw with the blob's own content type.
+ */
+export type ApiQuery = ContractRequest;
 
 export interface ApiQueryError {
   /** HTTP status code, or the literal 'FETCH_ERROR' when fetch itself threw. */

@@ -41,7 +41,7 @@ interface Captured {
 let captured: Captured | null = null;
 
 /** Repo convention (core/api/baseQuery.test.ts): swap globalThis.fetch, restore in finally. */
-function stubFetchCapture(): () => void {
+function stubFetchCapture(reply: unknown = undefined): () => void {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = Object.assign(async (url: string | URL, init?: RequestInit) => {
     captured = {
@@ -49,7 +49,7 @@ function stubFetchCapture(): () => void {
       method: init?.method ?? 'GET',
       body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null,
     };
-    return new Response(null, { status: 204 });
+    return reply === undefined ? new Response(null, { status: 204 }) : Response.json(reply);
   }, originalFetch);
   return () => {
     globalThis.fetch = originalFetch;
@@ -57,8 +57,8 @@ function stubFetchCapture(): () => void {
 }
 
 
-async function run(thunk: (s: ReturnType<typeof makeStore>) => unknown): Promise<Captured> {
-  const restore = stubFetchCapture();
+async function run(thunk: (s: ReturnType<typeof makeStore>) => unknown, reply?: unknown): Promise<Captured> {
+  const restore = stubFetchCapture(reply);
   try {
     const store = makeStore();
     await (store.dispatch as (a: unknown) => { unwrap(): Promise<unknown> })(thunk(store)).unwrap();
@@ -215,5 +215,62 @@ describe('bundle endpoints', () => {
     const d = await run(() => budgetApi.endpoints.deleteBundle.initiate({ budgetId: 'b-1', bundleId: 'x-1' }));
     expect(d.method).toBe('DELETE');
     expect(d.url).toBe(`${BASE}/bundles/x-1?budget_id=b-1`);
+  });
+});
+
+describe('formerly hand-written URLs now come from contracts (same routes)', () => {
+  const cases: Array<[string, (s: ReturnType<typeof makeStore>) => unknown, string, string, Record<string, unknown> | null]> = [
+    ['getUsdBrlRate', () => budgetApi.endpoints.getUsdBrlRate.initiate(), 'GET', '/rates/usd-brl', null],
+    ['getMe', () => budgetApi.endpoints.getMe.initiate(), 'GET', '/auth/me', null],
+    ['getConnections', () => budgetApi.endpoints.getConnections.initiate(), 'GET', '/connections', null],
+    ['getConnection', () => budgetApi.endpoints.getConnection.initiate({ id: 'c-1' }), 'GET', '/connections/c-1', null],
+    [
+      'createConnectionToken',
+      () => budgetApi.endpoints.createConnectionToken.initiate({ provider: 'pluggy', itemId: 'it-1' }),
+      'POST',
+      '/connections/connect-token',
+      { provider: 'pluggy', itemId: 'it-1' },
+    ],
+    [
+      'registerConnection',
+      () => budgetApi.endpoints.registerConnection.initiate({ provider: 'pluggy', itemId: 'it-1' }),
+      'POST',
+      '/connections/items',
+      { provider: 'pluggy', itemId: 'it-1' },
+    ],
+    ['syncConnection', () => budgetApi.endpoints.syncConnection.initiate({ id: 'c-1', budgetId: 'b-1' }), 'POST', '/connections/c-1/sync', null],
+    ['reimportHistory', () => budgetApi.endpoints.reimportHistory.initiate({ id: 'c-1', budgetId: 'b-1' }), 'POST', '/connections/c-1/reimport', null],
+    ['disconnectConnection', () => budgetApi.endpoints.disconnectConnection.initiate({ id: 'c-1', budgetId: 'b-1' }), 'DELETE', '/connections/c-1', null],
+    ['getUpstreamAccounts', () => budgetApi.endpoints.getUpstreamAccounts.initiate(), 'GET', '/connections/upstream', null],
+    ['getConnectionSettings', () => budgetApi.endpoints.getConnectionSettings.initiate(), 'GET', '/connections/settings', null],
+    ['updateSyncWindow', () => budgetApi.endpoints.updateSyncWindow.initiate({ syncWindowDays: 90 }), 'PATCH', '/connections/settings', { syncWindowDays: 90 }],
+    [
+      'updateConnectionSyncWindow',
+      () => budgetApi.endpoints.updateConnectionSyncWindow.initiate({ id: 'c-1', syncWindowDays: null }),
+      'PATCH',
+      '/connections/c-1/settings',
+      { syncWindowDays: null },
+    ],
+  ];
+  // Endpoints with a transformResponse need a body to transform.
+  const replies: Record<string, unknown> = { registerConnection: { connection: {}, accounts: [] }, getUpstreamAccounts: [] };
+  for (const [name, thunk, method, path, body] of cases) {
+    test(`${name}: ${method} ${path}`, async () => {
+      const c = await run(thunk, replies[name]);
+      expect(c.method).toBe(method);
+      expect(c.url).toBe(`${BASE}${path}`);
+      expect(c.body).toEqual(body);
+    });
+  }
+});
+
+describe('the split slice is still one api', () => {
+  test('one reducer path, the same tag types, every endpoint reachable from budgetApi', () => {
+    expect(budgetApi.reducerPath).toBe('budgetApi');
+    const endpoints = Object.keys(budgetApi.endpoints);
+    expect(endpoints).toHaveLength(82);
+    for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget']) {
+      expect(endpoints).toContain(name);
+    }
   });
 });

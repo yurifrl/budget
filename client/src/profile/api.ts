@@ -1,9 +1,10 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 
 import { apiBaseQuery, type ApiQuery } from '@/platform/api/baseQuery';
-import { contractRequest } from '@/platform/api/contractRequest';
+import { contractRequest } from '@shared/contract-request';
 
 import { oauthGrantsList, oauthGrantsRevoke } from '@shared/contracts/oauth';
+import { meAvatarRemove, meGet, meUpdate } from '@shared/contracts/user';
 
 import type { ConnectedApp, Me } from './model';
 
@@ -23,11 +24,11 @@ export const profileApi = createApi({
   tagTypes: ['Me', 'Grants'],
   endpoints: (builder) => ({
     getMe: builder.query<Me, void>({
-      query: (): ApiQuery => ({ url: '/me' }),
+      query: (): ApiQuery => contractRequest(meGet, {}),
       providesTags: ['Me'],
     }),
     updateMe: builder.mutation<Me, { name?: string; avatar_seed?: string | null }>({
-      query: (body): ApiQuery => ({ url: '/me', method: 'PATCH', body }),
+      query: (body): ApiQuery => contractRequest(meUpdate, body),
       // Optimistic: show the new name / look immediately, roll back on failure.
       async onQueryStarted(patch, { dispatch, queryFulfilled }) {
         const undo = dispatch(
@@ -57,7 +58,7 @@ export const profileApi = createApi({
       invalidatesTags: ['Grants'],
     }),
     removeAvatar: builder.mutation<Me, void>({
-      query: (): ApiQuery => ({ url: '/me/avatar', method: 'DELETE' }),
+      query: (): ApiQuery => contractRequest(meAvatarRemove, {}),
       invalidatesTags: ['Me'],
     }),
   }),

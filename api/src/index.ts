@@ -15,6 +15,7 @@ import { apiBaseUrl, authDisabled, configureAuth, DEV_EMAIL, oauthResourceUrl } 
 import { defaultOAuthTtls } from './oauth';
 import { runMigrations } from './core/migrate';
 import { configureDb } from './core/db';
+import { configureOutputValidation } from './core/operation';
 import { configureJobs, createTemporalClient } from './jobs';
 
 // Unhandled rejections exit Bun with code 1 by default; log instead so a
@@ -31,6 +32,13 @@ configureDb({ connectionString: process.env.DATABASE_URL ?? '' });
 assertAuthEnv(process.env);
 const auth = configureAuth(authConfigFromEnv(process.env));
 configurePluggyEnv(process.env);
+// Dev-only response checking against the contracts' output schemas (G9):
+// API_VALIDATE_OUTPUT=warn|throw. Never in a cluster (production hot path).
+const validateOutput = process.env.API_VALIDATE_OUTPUT;
+if ((validateOutput === 'warn' || validateOutput === 'throw') && !process.env.KUBERNETES_SERVICE_HOST) {
+  configureOutputValidation(validateOutput);
+  console.log(`API_VALIDATE_OUTPUT=${validateOutput}: responses are checked against their contracts`);
+}
 await runMigrations();
 
 /**

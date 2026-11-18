@@ -2,6 +2,7 @@ import { z } from '../../zod';
 
 import { defineOperation, EXPOSE_ALL } from '../../operation-contract';
 import { budgetId, categorizationModeSchema, matchTypeSchema, nameSchema, uuidSchema } from './schemas';
+import { noContent, payeeAdminRowSchema, payeeMergedSchema, payeeRowSchema, payeeTxnPageSchema } from './outputs';
 
 const scoped = z.object({ id: uuidSchema, budget_id: budgetId });
 
@@ -10,6 +11,7 @@ export const payeesList = defineOperation({
   description:
     'List payees with transaction counts, last-used date and inferred category. hidden=false lists visible payees only, true hidden only.',
   input: z.object({ budget_id: budgetId, hidden: z.string().optional() }),
+  output: z.array(payeeAdminRowSchema),
   method: 'GET',
   path: '/payees',
   kind: 'read',
@@ -26,6 +28,7 @@ export const payeesCreate = defineOperation({
     hidden: z.boolean().optional(),
     categorization_mode: categorizationModeSchema.optional(),
   }),
+  output: payeeRowSchema,
   method: 'POST',
   path: '/payees',
   status: 201,
@@ -42,6 +45,7 @@ export const payeesTransactions = defineOperation({
     limit: z.coerce.number().int().min(1).max(200).default(50),
     offset: z.coerce.number().int().min(0).default(0),
   }),
+  output: payeeTxnPageSchema,
   method: 'GET',
   path: '/payees/:id/transactions',
   kind: 'read',
@@ -52,6 +56,7 @@ export const payeesRename = defineOperation({
   name: 'budget_payees_rename',
   description: 'Rename a payee.',
   input: scoped.extend({ name: nameSchema }),
+  output: noContent,
   method: 'PATCH',
   path: '/payees/:id/name',
   query: ['budget_id'],
@@ -63,6 +68,7 @@ export const payeesSetHidden = defineOperation({
   name: 'budget_payees_set_hidden',
   description: 'Hide or show a payee.',
   input: scoped.extend({ hidden: z.boolean() }),
+  output: noContent,
   method: 'PATCH',
   path: '/payees/:id/hidden',
   query: ['budget_id'],
@@ -77,6 +83,7 @@ export const payeesSetCategorization = defineOperation({
     categorization_mode: categorizationModeSchema.optional(),
     default_category_id: uuidSchema.nullable().optional(),
   }),
+  output: noContent,
   method: 'PATCH',
   path: '/payees/:id/categorization',
   query: ['budget_id'],
@@ -88,6 +95,7 @@ export const payeesDelete = defineOperation({
   name: 'budget_payees_delete',
   description: 'Delete a payee (soft delete; transactions keep their payee_id). Prefer merge.',
   input: scoped,
+  output: noContent,
   method: 'DELETE',
   path: '/payees/:id',
   query: ['budget_id'],
@@ -99,6 +107,7 @@ export const payeesMerge = defineOperation({
   name: 'budget_payees_merge',
   description: 'Merge a payee into target_id: re-points its transactions, then deletes it.',
   input: scoped.extend({ target_id: uuidSchema }),
+  output: payeeMergedSchema,
   method: 'POST',
   path: '/payees/:id/merge',
   query: ['budget_id'],
@@ -110,6 +119,7 @@ export const payeesSetRenameRule = defineOperation({
   name: 'budget_payees_set_rename_rule',
   description: "Set a payee's rename rule (imported text matching the condition resolves to this payee); empty condition clears it.",
   input: scoped.extend({ match_type: matchTypeSchema, condition: z.string().trim().max(200) }),
+  output: noContent,
   method: 'PUT',
   path: '/payees/:id/rename-rule',
   query: ['budget_id'],

@@ -856,3 +856,62 @@ for every statement touching `accounts`:
   unknown `0100_account_currency.sql` row in `schema_migrations` (phase 2
   findings), and the column name cannot collide with a future syscd
   migration number (0034+).
+
+## Phase 5c: contract outputs (G9)
+
+- `defineOperation` takes an optional `output` zod schema (the 2xx JSON body
+  after serialization; `z.null()` for a 204). **89 of the 96 catalog
+  operations have one: all 70 budget, all 14 connections, rates (1) and user
+  (4)**; jobs (5) and oauth (2) do not yet (admin / consent surfaces, outside
+  this phase; follow-up filed). Row schemas live in
+  `shared/src/contracts/{budget,connections}/outputs.ts`, transcribed from the
+  client's hand-written `rows.ts` / `connections.ts` and corrected where the
+  transcription met reality: `connections.client_user_id` and `.environment`
+  are nullable text (the client claimed a non-null enum); the USD/BRL rate
+  answers `{ rate, source, stale, fetched_at }` (the client's type claimed
+  `as_of`, which never existed); `connect-token`'s `clientId` is nullable.
+  Objects are non-strict (most reads are `SELECT *`), so a declared field that
+  is missing or mistyped fails, extra columns do not.
+- **Server checking.** `mountOperations` parses each handler result (JSON
+  round-tripped, or a returned JSON Response's body) with `output` when output
+  validation is on: `throw` under `bun test` (set by the preload, so a drift
+  is a 500 in whichever test exercised the handler: every one of the 800+ API
+  tests now doubles as an output check), `warn`/`throw` in local dev via
+  `API_VALIDATE_OUTPUT`, never in a cluster (`KUBERNETES_SERVICE_HOST` wins)
+  and off by default. `api/src/catalog-outputs.test.ts` seeds a budget (groups,
+  bundle, split, transfer, targets, notes, rule, placeholder member) and a
+  synced bank connection with a fake aggregator, then calls all 24 budget and
+  connections reads over HTTP and parses each answer; every list must come
+  back non-empty so its row schema met real rows. It also fails when a
+  budget/connections operation has no output or a read has no sample.
+- **MCP.** Tools whose `output` is a zod object advertise it as
+  `outputSchema` and return it as `structuredContent` (29 of the 66 MCP
+  tools; lists and 204s cannot, MCP requires an object schema). The SDK checks
+  the structured result against it.
+- **Client types.** `data/rows.ts` and `data/connections.ts` are now
+  `z.infer` aliases under the old names (hand-written duplicates deleted;
+  `ScheduledTransactionRow`, `PayeeLocationRow`, `ScheduledFrequency` were
+  unused and had no endpoint, so they went). The upstream-account `*Json`
+  types stay cents views of the wire types (`Omit<Wire, ...> & {...Cents}`),
+  because the domain and screens read cents. `accounts.currency` is optional
+  in the schema so pre-G1 fixtures outside `data/` stay valid.
+- **URLs.** The 13 hand-written URLs in `data/api.ts` are gone: 11
+  connections routes and `/rates/usd-brl` had contracts; two new contracts
+  describe existing routes unchanged: `connections_connect_token` (POST
+  `/connections/connect-token`, api-only; the handler became an operation)
+  and `user_auth_me` (GET `/auth/me`, api-only; mounted as an operation ahead
+  of the auth middleware, still answering 401 itself). `profile/api.ts` also
+  moved `/me` GET/PATCH and `/me/avatar` DELETE to their existing contracts
+  (the binary PUT `/me/avatar` stays hand-written).
+- **Slice split.** `data/api.ts` (1,228 lines) became a 116-line re-export of
+  one api assembled from `data/api/base.ts` (createApi: same reducer path,
+  base query, tag types, refetch policy) plus `budgets`, `members`, `plan`,
+  `payees`, `register`, `connections` injected in that order (each endpoint
+  block moved verbatim, 82 endpoints), and `data/api/types.ts`. No import
+  outside `data/` changed; hook names, tags, `keepUnusedDataFor` and
+  optimistic updates are identical. A test pins 82 endpoints on the one api.
+- **`contractRequest`** moved to `shared/src/contract-request.ts`; the client
+  copy (`platform/api/contractRequest.ts`) and the admin copy are deleted. The
+  client's `ApiQuery` is now an alias of shared `ContractRequest`.
+- **Errors (G12-low).** `{ error, code }`, see `shared/README.md`. The client's
+  `ApiQueryError` carries `code`; `apiErrorMessage` is unchanged.

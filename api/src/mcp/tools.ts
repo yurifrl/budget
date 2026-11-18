@@ -6,6 +6,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
+import { z } from '@shared/zod';
 import { ApiError } from '../core/client';
 import type { OperationContract } from '@shared/operation-contract';
 
@@ -26,6 +27,15 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+/**
+ * The tool's outputSchema: MCP requires an object schema, so only contracts
+ * whose `output` is a zod object get one (lists and 204s do not). The SDK
+ * then advertises it in tools/list and checks `structuredContent` against it.
+ */
+export function mcpOutputSchema(contract: OperationContract): z.ZodObject<z.ZodRawShape> | undefined {
+  return contract.output instanceof z.ZodObject ? (contract.output as z.ZodObject<z.ZodRawShape>) : undefined;
+}
+
 /** Register one tool per MCP-exposed operation on `server`; returns the tool names. */
 export function registerOperationTools(
   server: McpServer,
@@ -40,6 +50,7 @@ export function registerOperationTools(
       {
         description: contract.description,
         inputSchema: contract.input.shape,
+        ...(mcpOutputSchema(contract) ? { outputSchema: mcpOutputSchema(contract) } : {}),
         annotations: {
           readOnlyHint: contract.kind === 'read',
           destructiveHint: contract.kind === 'destructive',

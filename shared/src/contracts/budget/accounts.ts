@@ -2,11 +2,13 @@ import { z } from '../../zod';
 
 import { defineOperation, EXPOSE_ALL, EXPOSE_NO_MCP } from '../../operation-contract';
 import { ACCOUNT_TYPES, accountCurrencySchema, accountLinkSchema, budgetId, milliunitsSchema, personSchema, uuidSchema } from './schemas';
+import { accountRowSchema, noContent } from './outputs';
 
 export const accountsList = defineOperation({
   name: 'budget_accounts_list',
   description: 'List the accounts of a budget with their cleared/uncleared balances in integer MILLIUNITS (1/1000 of the currency unit; 12.34 = 12340) and their currency (ISO 4217 code; null = the budget\'s currency).',
   input: z.object({ budget_id: budgetId }),
+  output: z.array(accountRowSchema),
   method: 'GET',
   path: '/accounts',
   kind: 'read',
@@ -26,6 +28,7 @@ export const accountsCreate = defineOperation({
     user_id: personSchema,
     currency: accountCurrencySchema.optional(),
   }),
+  output: accountRowSchema,
   method: 'POST',
   path: '/accounts',
   status: 201,
@@ -48,6 +51,7 @@ export const accountsUpdate = defineOperation({
     currency: accountCurrencySchema.optional(),
     link: accountLinkSchema.optional(),
   }),
+  output: accountRowSchema,
   method: 'PATCH',
   path: '/accounts/:id',
   kind: 'write',
@@ -64,6 +68,7 @@ export const accountsReconcile = defineOperation({
     stated_balance: milliunitsSchema,
     reconcile_all: z.boolean().optional(),
   }),
+  output: noContent,
   method: 'PATCH',
   path: '/accounts/:id/reconcile',
   kind: 'write',
@@ -74,6 +79,7 @@ export const accountsDelete = defineOperation({
   name: 'budget_accounts_delete',
   description: 'Delete a CLOSED account and every transaction it held (soft delete).',
   input: z.object({ id: uuidSchema, budget_id: budgetId }),
+  output: noContent,
   method: 'DELETE',
   path: '/accounts/:id',
   query: ['budget_id'],

@@ -26,10 +26,15 @@ first. Details and trade-offs: `docs/decisions.md`.
 ## shared/
 
 `src/operation-contract.ts` (the contract type, `defineOperation`,
-`inputLocations`), `src/contracts/{budget,connections,rates,user,oauth,jobs}`
-(one operation contract per endpoint: method, path, zod input/output),
-`src/domain/{payees,transfers}` (pure logic both sides need),
-`src/validation.ts`, `src/zod.ts`. Lint: only zod, no React, hono or pg.
+`inputLocations`, `OperationOutput`), `src/contracts/{budget,connections,rates,user,oauth,jobs}`
+(one operation contract per endpoint: method, path, zod input and output;
+budget and connections keep their response row schemas in `outputs.ts`),
+`src/contract-request.ts` (the request builder every client uses),
+`src/errors.ts` (`{ error, code }`), `src/domain/{payees,transfers}` (pure
+logic both sides need), `src/validation.ts` (uuid, dates, `milliunitsSchema`,
+`currencyCodeSchema`, `MONEY_UNIT_RULE`), `src/zod.ts`. Lint: only zod, no
+React, hono or pg. Wire rules: every amount is integer milliunits with no
+unit suffix (phase 5d); see `shared/README.md`.
 
 ## api/ (hono, pg, Temporal, MCP SDK)
 
@@ -62,6 +67,19 @@ start at `0100`). One image runs both the API and the worker
   balance deltas, card-payment pairing. Budget reads/writes the connections
   tables only through `connections/ledger-reads.ts` (connections barrel). The
   two barrels import each other; neither runs the other's code at load time.
+- **Contracts at runtime.** `mountOperations` validates input; with output
+  validation on (the bun test preload sets `throw`; `API_VALIDATE_OUTPUT=warn|throw`
+  in local dev, ignored in a cluster) it also parses each handler result with
+  the contract's `output`. `catalog-outputs.test.ts` calls every budget and
+  connections read on seeded data and parses the answer. Errors are
+  `{ error, code }` (`HttpError(status, message, code?)`, `errorResponse`).
+  MCP tools advertise object outputs as `outputSchema`.
+- **Money.** Handlers and storage both use milliunits; the only unit
+  conversions left are at the Pluggy adapter (floats -> milliunits, once),
+  the `category_targets` table (cents) and legacy backups
+  (`upgradeRestorePayload`). `accounts.currency` (migration 0100) is an ISO
+  4217 label, NULL = the budget's currency; bank sync fills it from the
+  provider while it is NULL.
 - **Access.** `budgetAccess` authorises the `budget_id` in query/body; path
   `:id` routes re-scope by `budget_id` in SQL. `src/access.test.ts` drives
   every path-param operation from the catalog as a non-member and expects 404.
@@ -73,6 +91,11 @@ start at `0100`). One image runs both the API and the worker
 
 Expo Router app. As of phase 3: `src/app` routes, `store`, `budget`
 (lifted syscd budget module), `auth`, `profile`, `shell`, `ui`, `platform`.
+`budget/data` is the wire boundary: `data/api.ts` re-exports one RTK Query
+api assembled from `data/api/{base,budgets,members,plan,payees,register,connections}.ts`
+(`injectEndpoints`), every request built with `contractRequest`; `rows.ts`
+and `connections.ts` are `z.infer` types of the contracts' output schemas;
+`mapping.ts` converts wire milliunits to the domain's cents and back.
 The lint-enforced layering is in `client/eslint.config.js`, with documented
 phase 3 exceptions. The target structure (features/, domain/, data/, state/)
 arrives in phase 5. `client/VERSION` feeds the Expo app version.
@@ -82,8 +105,7 @@ arrives in phase 5. `client/VERSION` feeds the Expo app version.
 Hash-routed SPA (`Runs`, `RunDetail`) over the `jobs_*` contracts from
 `@shared/contracts/jobs`. API base URL: `VITE_API_URL` at build time, or a
 `/config.json` `{ "apiUrl": ... }` mounted into the image at runtime.
-`src/contractRequest.ts` is a local copy of the client's helper (follow-up:
-move it to `shared/`).
+Requests are built with `@shared/contract-request` (the copy is gone).
 
 ## Build, CI, release
 

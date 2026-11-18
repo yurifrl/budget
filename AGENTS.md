@@ -44,9 +44,12 @@ this Mac use `container build --dns 1.1.1.1 -f deploy/Dockerfile.<x> -t budget-<
 
 ## Adding an endpoint
 
-1. Contract in `shared/src/contracts/<feature>/<file>.ts` (zod input/output,
-   method, path, via `defineOperation`), exported from that feature's `index.ts`
-   barrel if it is a new file. Add a test next to it.
+1. Contract in `shared/src/contracts/<feature>/<file>.ts` via
+   `defineOperation`: zod `input` AND `output` (the 2xx JSON body; `z.null()`
+   for a 204; row schemas in that feature's `outputs.ts`), method, path, kind,
+   expose. Money is integer milliunits with no unit suffix in the field name
+   (`milliunitsSchema`; say so in the description). Export it from the
+   feature's `index.ts` barrel if it is a new file. Add a test next to it.
 2. Handler in `api/src/<feature>/`: `implement(contract, handler)` and mount it
    with `mountOperations` (see `api/src/rates/routes/rates.ts`); the router is
    mounted in `api/src/app.ts`. A new feature's contract barrel also goes into
@@ -56,10 +59,16 @@ this Mac use `container build --dns 1.1.1.1 -f deploy/Dockerfile.<x> -t budget-<
    `core/db`), rules in `budget/domain/`, multi-statement writes in
    `withTransaction(pool, fn)`. A path `:id` must be re-scoped by `budget_id`
    in SQL, and a new path-param operation needs a sample in
-   `api/src/access.test.ts` (the test fails until it has one).
+   `api/src/access.test.ts` (the test fails until it has one); a new read
+   needs a sample in `api/src/catalog-outputs.test.ts`. Tests check every
+   handler result against `output` (a mismatch is a 500 in the test). Errors:
+   throw `HttpError(status, message, code?)`; the body is `{ error, code }`.
 3. Client: build the request with `contractRequest(contract, input)`
-   (`client/src/platform/api/contractRequest.ts`) from an RTK Query slice, e.g.
-   under `client/src/budget/data`.
+   (`@shared/contract-request`) from an RTK Query slice: budget endpoints go in
+   the area file under `client/src/budget/data/api/` (`injectEndpoints`) and
+   are re-exported from `data/api.ts`; type the response from the contract
+   (`z.infer` of its row schema or `OperationOutput<typeof contract>`), never by
+   hand.
 4. New SQL: a migration `api/db/migrations/0100_*.sql` or higher, additive
    only, plus a `MIGRATION_SIGNATURES` entry in `api/src/core/migrate.ts`.
 

@@ -2,11 +2,13 @@ import { z } from '../../zod';
 
 import { defineOperation, EXPOSE_ALL } from '../../operation-contract';
 import { budgetId, nonNegativeMilliunitsSchema, snoozeMonthSchema, targetKindSchema, uuidSchema } from './schemas';
+import { categoryTargetRowSchema, noContent } from './outputs';
 
 export const categoryTargetsList = defineOperation({
   name: 'budget_category_targets_list',
   description: 'List the funding targets of a budget (amount in integer MILLIUNITS, 12.34 = 12340).',
   input: z.object({ budget_id: budgetId }),
+  output: z.array(categoryTargetRowSchema),
   method: 'GET',
   path: '/category-targets',
   kind: 'read',
@@ -25,6 +27,7 @@ export const categoryTargetsSet = defineOperation({
     snooze_month: snoozeMonthSchema,
     config: z.record(z.string(), z.unknown()).default({}),
   }),
+  output: categoryTargetRowSchema,
   method: 'PUT',
   path: '/category-targets/:categoryId',
   query: ['budget_id'],
@@ -36,6 +39,7 @@ export const categoryTargetsDelete = defineOperation({
   name: 'budget_category_targets_delete',
   description: 'Remove the funding target of one category.',
   input: z.object({ categoryId: uuidSchema, budget_id: budgetId }),
+  output: noContent,
   method: 'DELETE',
   path: '/category-targets/:categoryId',
   query: ['budget_id'],
