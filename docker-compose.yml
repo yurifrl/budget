@@ -28,7 +28,7 @@ services:
       - ./api/db/dev-initdb.sh:/docker-entrypoint-initdb.d/0000_stage.sh:ro
 
   temporal:
-    image: temporalio/temporal:1.5.1
+    image: temporalio/temporal:1.10.1
     container_name: budget-temporal
     command:
       - server
