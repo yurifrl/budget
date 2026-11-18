@@ -11,7 +11,7 @@
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:58.153Z",
-  "updated_at": "2026-11-18T03:09:58.153Z",
+  "updated_at": "2026-11-18T06:36:16.340Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -25,8 +25,13 @@
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
+  "branch": "tk/budget-sfa",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-sfa",
+    "changeset": {
+      "base": "08ff6fdd6e426e89ed14ac84535115b6f071233d"
+    }
+  },
   "attachments": [],
   "dependencies": [],
   "dependency_count": 0,

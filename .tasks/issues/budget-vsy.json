@@ -4,14 +4,14 @@
   "id": "budget-vsy",
   "title": "Phase 5c: contract outputs",
   "description": "",
-  "status": "open",
+  "status": "ready-to-review",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:58.468Z",
-  "updated_at": "2026-11-18T03:09:58.468Z",
+  "updated_at": "2026-11-18T08:35:54.466Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -19,14 +19,32 @@
   "parent": null,
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "The phase 5c work landed on branch tk/budget-ku4 as instructed (both phases in one worktree): commits 36f9950 (error codes), c50b6a1 (outputs, contractRequest, slice split), 2ec2ca5 (loose MCP schemas), merged to main in 9b19ca7. tk/budget-vsy itself carries no commits.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
+  "branch": "tk/budget-vsy",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-vsy",
+    "changeset": {
+      "base": "9b19ca7a6bc9c109130fae142b437cbc49fc2783"
+    },
+    "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
+    "finished_at": "2026-11-18T08:35:46.115Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 0,
+        "files": 0,
+        "additions": 0,
+        "deletions": 0
+      },
+      "head": "9b19ca7a6bc9c109130fae142b437cbc49fc2783",
+      "at": "2026-11-18T08:35:46.115Z"
+    }
+  },
   "attachments": [],
   "dependencies": [],
   "dependency_count": 0,

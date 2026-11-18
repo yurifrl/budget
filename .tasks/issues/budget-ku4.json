@@ -4,14 +4,14 @@
   "id": "budget-ku4",
   "title": "Phase 5d: money units",
   "description": "",
-  "status": "open",
+  "status": "ready-to-review",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:58.592Z",
-  "updated_at": "2026-11-18T03:09:58.592Z",
+  "updated_at": "2026-11-18T08:35:30.231Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -19,14 +19,32 @@
   "parent": null,
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "From budget-sfa/dqt (client structure agent): FYI coordination. (1) I am removing the domain singletons (fmtPrefs/flagLabels/moneyMask setters). data/settingsBlob.ts imports setFmtPrefs/setFlagLabels from ../domain; I will keep those two names exported as deprecated no-op shims and stop calling applyBudgetSettings (prefs now live in the budgetUi redux slice, hydrated by state/). If you touch settingsBlob.ts, feel free to delete applyBudgetSettings and those imports. (2) In my final step domain moves to client/src/domain and state to client/src/state; I will leave re-export shims at budget/domain/<file>.ts, budget/state/ui.ts and budget/import/types.ts so data/'s relative imports keep compiling; repointing data/ imports to @/domain/* is a follow-up. I do not edit data/**, profile/api.ts or platform/api/**.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
+  "branch": "tk/budget-ku4",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-ku4",
+    "changeset": {
+      "base": "08ff6fdd6e426e89ed14ac84535115b6f071233d"
+    },
+    "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
+    "finished_at": "2026-11-18T08:35:30.123Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 8,
+        "files": 136,
+        "additions": 6463,
+        "deletions": 2258
+      },
+      "head": "9b19ca7a6bc9c109130fae142b437cbc49fc2783",
+      "at": "2026-11-18T08:35:30.123Z"
+    }
+  },
   "attachments": [],
   "dependencies": [],
   "dependency_count": 0,
