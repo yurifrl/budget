@@ -21,6 +21,7 @@ export function LinkAccountSheet({
   institution,
   bank,
   currentAccountId,
+  currentBudgetId,
   accounts,
   upstream,
   onClose,
@@ -32,6 +33,8 @@ export function LinkAccountSheet({
   bank: UpstreamAccountJson | null;
   /** Budget account that follows `bank` today (change mode); null = first link. */
   currentAccountId?: string | null;
+  /** Budget `currentAccountId` lives in, when it is not the active one. */
+  currentBudgetId?: string;
   accounts: AccountRow[];
   upstream: ConnectionUpstreamJson[];
   onClose: () => void;
@@ -61,7 +64,7 @@ export function LinkAccountSheet({
               setError(null);
               const inst = bank.institution ?? institution;
               const failure = currentAccountId
-                ? await move(currentAccountId, accountId, connectionId, bank.externalId, inst)
+                ? await move(currentAccountId, accountId, connectionId, bank.externalId, inst, currentBudgetId)
                 : await link(accountId, connectionId, bank.externalId, inst);
               if (failure) setError(failure);
               else onClose();
@@ -144,8 +147,8 @@ export function UnlinkAccountSheet({
   onClose,
 }: {
   budgetId: string;
-  /** The budget account to unlink; null = sheet closed. */
-  account: { id: string; name: string } | null;
+  /** The budget account to unlink (and the budget it lives in); null = sheet closed. */
+  account: { id: string; name: string; budgetId: string } | null;
   onClose: () => void;
 }) {
   const { unlink, busy } = useAccountLink(budgetId);
@@ -161,7 +164,7 @@ export function UnlinkAccountSheet({
           error={error}
           onCancel={onClose}
           onConfirm={async () => {
-            const failure = await unlink(account.id);
+            const failure = await unlink(account.id, account.budgetId);
             if (failure) setError(failure);
             else onClose();
           }}

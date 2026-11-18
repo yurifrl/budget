@@ -43,12 +43,12 @@ export function OverviewTab({
   transactions: TransactionRow[];
   onOpenAccount: (accountId: string) => void;
 }) {
-  const linkedAccounts = linkedSummaryAccounts(summary.accounts, upstream, accounts);
+  const linkedAccounts = linkedSummaryAccounts(summary.accounts, upstream, accounts, budgetId);
   const unlinked = (upstream ?? []).filter((a) => a.linkedAccountId == null);
   // Link editing: the bank account being (re)linked and the account being unlinked.
-  const [linking, setLinking] = useState<{ bank: UpstreamAccountJson; currentAccountId: string | null } | null>(null);
+  const [linking, setLinking] = useState<{ bank: UpstreamAccountJson; currentAccountId: string | null; currentBudgetId?: string } | null>(null);
   const bankFor = (acct: ConnectionAccountSummaryJson) => upstream?.find((u) => u.externalId === acct.externalAccountId) ?? null;
-  const [unlinking, setUnlinking] = useState<{ id: string; name: string } | null>(null);
+  const [unlinking, setUnlinking] = useState<{ id: string; name: string; budgetId: string } | null>(null);
   return (
     <View style={styles.wrap}>
       <View style={styles.totals}>
@@ -72,8 +72,8 @@ export function OverviewTab({
               budgetAccount={accounts.find((a) => a.id === acct.accountId) ?? null}
               transactions={transactions}
               onPress={() => onOpenAccount(acct.accountId)}
-              onChange={() => bankFor(acct) && setLinking({ bank: bankFor(acct)!, currentAccountId: acct.accountId })}
-              onUnlink={() => setUnlinking({ id: acct.accountId, name: acct.name })}
+              onChange={() => bankFor(acct) && setLinking({ bank: bankFor(acct)!, currentAccountId: acct.accountId, currentBudgetId: acct.budgetId })}
+              onUnlink={() => setUnlinking({ id: acct.accountId, name: acct.name, budgetId: acct.budgetId })}
             />
           ))}
         </View>
@@ -116,6 +116,7 @@ export function OverviewTab({
         institution={institution}
         bank={linking?.bank ?? null}
         currentAccountId={linking?.currentAccountId ?? null}
+        currentBudgetId={linking?.currentBudgetId}
         accounts={accounts}
         upstream={allUpstream}
         onClose={() => setLinking(null)}
