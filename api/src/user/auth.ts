@@ -2,17 +2,30 @@ import { sign, verify } from 'hono/jwt';
 
 const ALG = 'HS256' as const;
 
-/** Stateless session: an HMAC-signed JWT stored in an httpOnly cookie. */
-export async function issueSession(secret: string, email: string, ttlSeconds: number): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  return sign({ sub: email.toLowerCase(), kind: 'session', iat: now, exp: now + ttlSeconds }, secret, ALG);
+/** Which sign-in minted a session. Only Access sessions are marked; unmarked = Google (or older). */
+export type SessionIdp = 'access';
+
+export interface SessionClaims {
+  email: string;
+  /** Present only on sessions minted by the Cloudflare Access sign-in. */
+  idp?: SessionIdp;
 }
 
-export async function verifySession(secret: string, token: string): Promise<{ email: string } | null> {
+/**
+ * Stateless session: an HMAC-signed JWT stored in an httpOnly cookie. `idp` is
+ * an additive, optional claim: sessions without it (Google, and every session
+ * minted before the claim existed) verify exactly as before.
+ */
+export async function issueSession(secret: string, email: string, ttlSeconds: number, idp?: SessionIdp): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  return sign({ sub: email.toLowerCase(), kind: 'session', ...(idp ? { idp } : {}), iat: now, exp: now + ttlSeconds }, secret, ALG);
+}
+
+export async function verifySession(secret: string, token: string): Promise<SessionClaims | null> {
   try {
     const p = await verify(token, secret, ALG);
     if (p.kind !== 'session' || typeof p.sub !== 'string') return null;
-    return { email: p.sub };
+    return p.idp === 'access' ? { email: p.sub, idp: 'access' } : { email: p.sub };
   } catch {
     return null;
   }
@@ -56,7 +69,7 @@ export async function issueAccessToken(
 
 /**
  * Signature, expiry, kind and audience only — whether the grant is still
- * live is a DB question answered by isGrantActive (store.ts).
+ * live is a DB question answered by activeGrant (store.ts).
  */
 export async function verifyAccessToken(
   secret: string,

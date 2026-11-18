@@ -51,6 +51,23 @@ describe('isAllowed', () => {
     configureAuth({ sessionSecret: SECRET, allowedEmails: [], googleClientId: 'cid' });
     const { isAllowed } = await loadAuthz();
     expect(isAllowed('a@b.com')).toBe(false);
+    expect(isAllowed('a@b.com', 'access')).toBe(false); // Access is not configured
+  });
+
+  it('an Access sign-in is not held to the Google list; a Google one still is', async () => {
+    const { googleAllowed } = await import('./config');
+    configureAuth({ sessionSecret: SECRET, allowedEmails: ['a@b.com'], googleClientId: 'cid', accessTeamDomain: 't.cloudflareaccess.com', accessAud: ['aud'] });
+    const { isAllowed } = await loadAuthz();
+    expect(isAllowed('new@person.com', 'access')).toBe(true);
+    expect(isAllowed('new@person.com')).toBe(false);
+    expect(isAllowed('new@person.com', 'google')).toBe(false);
+    expect(isAllowed('', 'access')).toBe(false);
+    expect(googleAllowed('new@person.com')).toBe(false);
+    expect(googleAllowed('A@B.com ')).toBe(true);
+    // Google with no list admits nobody, even next to Access.
+    configureAuth({ sessionSecret: SECRET, allowedEmails: [], googleClientId: 'cid', accessTeamDomain: 't.cloudflareaccess.com', accessAud: ['aud'] });
+    expect(googleAllowed('a@b.com')).toBe(false);
+    expect(isAllowed('a@b.com')).toBe(true); // Access-only deployment: pre-marker sessions keep working
   });
 });
 

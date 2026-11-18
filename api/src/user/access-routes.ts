@@ -4,7 +4,8 @@
  * otherwise every route here answers 404, as if not mounted.
  *
  *   GET  /auth/access?return_to=<api path | web-app URL>
- *        Cloudflare gates this path with the allow-list policy and adds
+ *        Cloudflare gates this path with the Access policy (the only list of
+ *        who may sign in this way: AUTH_ALLOWED_EMAILS is Google's) and adds
  *        `Cf-Access-Jwt-Assertion`. We verify it (./access.ts), resolve or
  *        create the user exactly like the Google callback, set the
  *        `budget_session` cookie and redirect to the validated return_to.
@@ -27,7 +28,7 @@ import { sign, verify } from 'hono/jwt';
 
 import { errorResponse } from '../core/validate';
 import { createAccessVerifier, type AccessIdentity, type AccessVerifier } from './access';
-import { accessConfigured, authConfig, isAllowed, type AuthConfig } from './config';
+import { accessConfigured, authConfig, type AuthConfig } from './config';
 import { safeLoginRedirect } from './return-to';
 import { mintSessionToken, setSessionCookie } from './session-cookie';
 import { EmailAlreadyProvisionedError, resolveOrCreateSessionUser } from './store';
@@ -57,7 +58,13 @@ function verifier(): AccessVerifier {
 
 type Verified = { ok: true; identity: AccessIdentity } | { ok: false; status: 401 | 403; message: string; code: string };
 
-/** Header-only assertion -> allow-listed, provisioned identity. */
+/**
+ * Header-only assertion -> provisioned identity. No API-side allow-list: the
+ * Cloudflare Access policy decided who reaches this route, and the verified
+ * assertion is the proof. Someone the app has never seen gets a user row here
+ * (role 'user', no budgets); an invited e-mail links to its pre-provisioned
+ * row, so the budgets shared with it are there on first sign-in.
+ */
 async function signInFromAssertion(c: Context): Promise<Verified> {
   const token = c.req.header(ACCESS_ASSERTION_HEADER);
   if (!token) {
@@ -69,7 +76,6 @@ async function signInFromAssertion(c: Context): Promise<Verified> {
     return { ok: false, status: 401, message: 'invalid Cloudflare Access assertion', code: 'access_assertion_invalid' };
   }
   const { identity } = result;
-  if (!isAllowed(identity.email)) return { ok: false, status: 403, message: 'not authorized', code: 'not_authorized' };
   try {
     // Same capture as the Google callback: links a pre-provisioned/invited
     // row by e-mail, fills a missing name only. No sub: the Access `sub` is
@@ -123,7 +129,7 @@ export function mountAccessRoutes(app: Hono): void {
     c.header('Cache-Control', 'no-store');
     const signedIn = await signInFromAssertion(c);
     if (!signedIn.ok) return errorResponse(c, signedIn.status, signedIn.message, signedIn.code);
-    await setSessionCookie(c, signedIn.identity.email);
+    await setSessionCookie(c, signedIn.identity.email, 'access');
     const cfg = authConfig();
     return c.redirect(safeLoginRedirect(c.req.query('return_to'), cfg.apiBaseUrl, cfg.appOrigin) ?? cfg.appOrigin);
   });
@@ -150,7 +156,7 @@ export function mountAccessRoutes(app: Hono): void {
     const body = (await c.req.json().catch(() => null)) as { code?: unknown } | null;
     const email = typeof body?.code === 'string' ? await redeemExchangeCode(body.code) : null;
     if (!email) return errorResponse(c, 400, 'sign-in expired, try again', 'invalid_code');
-    if (!isAllowed(email)) return errorResponse(c, 403, 'not authorized', 'not_authorized');
-    return c.json({ token: await mintSessionToken(email), email });
+    // The code was minted by /auth/access/native after a verified assertion.
+    return c.json({ token: await mintSessionToken(email, 'access'), email });
   });
 }
