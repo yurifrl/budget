@@ -60,8 +60,8 @@ export const operations: readonly AnyOperation[] = [
 /** Integration seam: the real accounts router, mounted by connections' tests. */
 export { default as accountsRouter } from './routes/accounts';
 
-/** Integration seam: pairs imported card-statement payments as transfers (connections sync). */
-export { linkCardPayments } from './domain/card-payments';
+/** Ledger write API for the connections sync engine (imported rows, payees, balances, card payments). */
+export * as ledger from './ledger';
 
 app.route('/budgets', budgets);
 app.route('/groups', groups);

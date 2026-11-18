@@ -197,3 +197,56 @@ export async function softDeleteTransactionInBudget(
   );
   return result.rows[0];
 }
+
+export interface ImportedTransaction {
+  budgetId: string;
+  accountId: string;
+  /** ISO date (YYYY-MM-DD). */
+  date: string;
+  /** Signed milliunits. */
+  amount: number;
+  payeeId: string | null;
+  importId: string;
+  /** Rule-rewritten payee name, or null; stored as import_payee_name and _original. */
+  importPayeeName: string | null;
+  cleared: 'cleared' | 'uncleared';
+}
+
+/**
+ * Bank-sync import row (connections sync): unapproved, uncategorized, no
+ * memo, cleared as the bank reports it. No ON CONFLICT: the caller looked
+ * the import_id up first. Returns the new id.
+ */
+export async function insertImportedTransaction(db: Queryable, t: ImportedTransaction): Promise<string> {
+  const inserted = await db.query<{ id: string }>(
+    `INSERT INTO transactions
+               (budget_id, account_id, date, amount, payee_id, category_id, memo,
+                cleared, approved, flag_color, flag_name, repeat, deleted,
+                import_id, import_payee_name, import_payee_name_original)
+             VALUES ($1, $2, $3, $4, $5, NULL, NULL,
+                     $8, false, NULL, NULL, 'never', false, $6, $7, $7)
+             RETURNING id`,
+    [t.budgetId, t.accountId, t.date, t.amount, t.payeeId, t.importId, t.importPayeeName, t.cleared],
+  );
+  return inserted.rows[0]!.id;
+}
+
+/** Refresh the sync-owned fields of an imported row (cleared/approved untouched; memo cleared). */
+export async function refreshImportedTransaction(
+  db: Queryable,
+  id: string,
+  f: { date: string; amount: number; payeeId: string | null; importPayeeName: string | null },
+): Promise<void> {
+  await db.query(
+    `UPDATE transactions
+           SET date = $2, amount = $3, memo = NULL, payee_id = $4,
+               import_payee_name = $5, import_payee_name_original = $5
+           WHERE id = $1`,
+    [id, f.date, f.amount, f.payeeId, f.importPayeeName],
+  );
+}
+
+/** Tombstone one row (no balance move: the caller derives and applies the delta). */
+export async function tombstoneTransaction(db: Queryable, id: string): Promise<void> {
+  await db.query('UPDATE public.transactions SET deleted = true WHERE id = $1', [id]);
+}

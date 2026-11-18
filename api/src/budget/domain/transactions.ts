@@ -42,10 +42,21 @@ export async function loadRenameRules(client: PoolClient, budgetId: string) {
   );
 }
 
-/** Create-or-find a payee by its rule-rewritten name; empty names stay null. */
-export async function upsertPayee(client: PoolClient, budgetId: string, effectiveName: string): Promise<string | null> {
-  const name = effectiveName.trim();
-  if (!name) return null;
+/**
+ * Create-or-find a payee by its rule-rewritten name; empty names stay null.
+ * The stored name is trimmed, except with `verbatim` (the connections sync
+ * path), which keeps the name exactly as given once it is non-blank — an
+ * `is` rule's replacement is a payee name used as-is there.
+ */
+export async function upsertPayee(
+  client: PoolClient,
+  budgetId: string,
+  effectiveName: string,
+  opts: { verbatim?: boolean } = {},
+): Promise<string | null> {
+  const trimmed = effectiveName.trim();
+  if (!trimmed) return null;
+  const name = opts.verbatim ? effectiveName : trimmed;
   const result = await client.query<{ id: string }>(
     `INSERT INTO payees (budget_id, name)
      VALUES ($1, $2)
