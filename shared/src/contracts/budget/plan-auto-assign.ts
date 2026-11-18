@@ -1,0 +1,19 @@
+import { z } from '../../zod';
+
+import { defineOperation, EXPOSE_NO_MCP } from '../../operation-contract';
+import { autoAssignRowSchema, budgetId, monthDateSchema } from './schemas';
+
+export const planAutoAssign = defineOperation({
+  name: 'budget_plan_auto_assign',
+  description:
+    'Persist the absolute assigned amounts (assign_cents, in CENTS; stored as milliunits) computed by one auto-assign strategy for a month, exactly as posted.',
+  input: z.object({
+    budget_id: budgetId,
+    month: monthDateSchema,
+    rows: z.array(autoAssignRowSchema).min(1).max(200),
+  }),
+  method: 'POST',
+  path: '/plan-auto-assign',
+  kind: 'write',
+  expose: EXPOSE_NO_MCP,
+});
