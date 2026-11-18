@@ -14,6 +14,7 @@
  * pushes sibling panes through `useMenuNav()` (see features/settings).
  */
 import Constants from 'expo-constants';
+import { Image } from 'expo-image';
 import { useEffect, useRef, useState } from 'react';
 import {
   Modal,
@@ -26,23 +27,23 @@ import {
   type ViewInstance,
 } from 'react-native';
 
+import logo from '../../assets/images/logo.png';
 import { MenuNavContext, type MenuNav, type MenuPane } from './menuNav';
 import { colors } from '@/ui/theme';
 
 export { useMenuNav, type MenuNav, type MenuPane } from './menuNav';
 
 /** The app's identity shown on the trigger (was the Budget entry of the Apps switcher). */
-const APP = { title: 'Budget', color: '#3a7bd5' };
+const APP = { title: 'Budget' };
 
+/** The app logo as a rounded tile (assets/images/logo.png, from brand/). */
 function AppBadge({ size = 30 }: { size?: number }) {
   return (
-    <View
-      style={[
-        styles.avatar,
-        { width: size, height: size, borderRadius: size * 0.27, backgroundColor: APP.color },
-      ]}>
-      <Text style={{ color: colors.white, fontWeight: '800', fontSize: size * 0.46 }}>{APP.title.charAt(0)}</Text>
-    </View>
+    <Image
+      source={logo}
+      accessibilityLabel={APP.title}
+      style={{ width: size, height: size, borderRadius: size * 0.27 }}
+    />
   );
 }
 
@@ -217,7 +218,6 @@ const styles = StyleSheet.create({
   rootRow: { flexDirection: 'row', alignItems: 'center', width: '100%' },
   rootCol: { flexDirection: 'column', alignItems: 'center', gap: 6 },
   gearSlot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  avatar: { alignItems: 'center', justifyContent: 'center' },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
