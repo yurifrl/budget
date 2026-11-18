@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 
-import { nativeSignInUrl, parseAuthCallback, webSignInUrl } from './nativeAuth';
+import { exchangeAccessCode, nativeSignInUrl, parseAuthCallback, webSignInUrl } from './nativeAuth';
 
 describe('parseAuthCallback', () => {
   it('parses a success redirect from the query string', () => {
@@ -48,5 +48,46 @@ describe('webSignInUrl', () => {
   it('joins the API base without double slashes', () => {
     expect(webSignInUrl('http://localhost:3000/')).toBe('http://localhost:3000/auth/google');
     expect(webSignInUrl('https://api.syscd.live')).toBe('https://api.syscd.live/auth/google');
+  });
+});
+
+describe('exchangeAccessCode', () => {
+  const realFetch = globalThis.fetch;
+  const withFetch = async (impl: typeof fetch, run: () => Promise<void>) => {
+    globalThis.fetch = impl;
+    try {
+      await run();
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  };
+
+  it('POSTs the code as JSON and returns the token', async () => {
+    let seen: { url: string; init?: RequestInit } | null = null;
+    await withFetch(
+      (async (url: string, init?: RequestInit) => {
+        seen = { url, init };
+        return new Response(JSON.stringify({ token: 'tok', email: 'a@b.com' }), { status: 200 });
+      }) as unknown as typeof fetch,
+      async () => {
+        expect(await exchangeAccessCode('https://api.test/', 'c0de')).toEqual({ token: 'tok' });
+      },
+    );
+    expect(seen!.url).toBe('https://api.test/auth/exchange');
+    expect(seen!.init?.method).toBe('POST');
+    expect(seen!.init?.body).toBe(JSON.stringify({ code: 'c0de' }));
+  });
+
+  it('surfaces the API error or the network failure', async () => {
+    await withFetch(
+      (async () => new Response(JSON.stringify({ error: 'sign-in expired, try again' }), { status: 400 })) as unknown as typeof fetch,
+      async () => expect(await exchangeAccessCode('https://api.test', 'x')).toEqual({ error: 'sign-in expired, try again' }),
+    );
+    await withFetch(
+      (async () => {
+        throw new Error('offline');
+      }) as unknown as typeof fetch,
+      async () => expect(await exchangeAccessCode('https://api.test', 'x')).toEqual({ error: 'offline' }),
+    );
   });
 });

@@ -74,3 +74,26 @@ export async function fetchSessionToken(
     return { error: e instanceof Error ? e.message : 'network error' };
   }
 }
+
+/**
+ * Cloudflare Access native flow: /auth/access/native hands the app a one-time
+ * exchange code (`state=access`) on its deep link; this swaps it for the
+ * session token. POST keeps the code out of URLs and logs.
+ */
+export async function exchangeAccessCode(
+  apiUrl: string,
+  code: string,
+): Promise<{ token: string } | { error: string }> {
+  try {
+    const res = await fetch(`${apiUrl.replace(/\/+$/, '')}/auth/exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const payload = (await res.json().catch(() => null)) as { token?: string; error?: string } | null;
+    if (!res.ok || !payload?.token) return { error: payload?.error ?? `HTTP ${res.status}` };
+    return { token: payload.token };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'network error' };
+  }
+}

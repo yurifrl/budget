@@ -1,26 +1,26 @@
-import { Platform, Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
-import * as Linking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
+import { Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import { useService } from '@/platform/di/ServiceContext';
 import { Tokens } from '@/platform/di/tokens';
 import { useAppDispatch } from '@/state/hooks';
 import { resetAppState } from '@/platform/state/reset';
-import { saveSessionToken } from '@/platform/storage/sessionToken';
 import { colors } from '@/ui/theme';
-import { fetchSessionToken, nativeSignInUrl, parseAuthCallback, webSignInUrl } from './nativeAuth';
+import { loginButtons } from './signIn.logic';
 import { useAuth } from './useAuth';
+import { useSignIn } from './useSignIn';
 
-/** Gates the app behind a Google sign-in when the API requires auth (401 on
- * the session probe). An API that never answers shows a retrying connector
- * instead — with auth disabled in dev the probe succeeds once the server is
- * up, so `task run`'s server/app race resolves itself without a sign-in ask. */
+/** Gates the app behind a sign-in when the API requires auth (401 on the
+ * session probe): Cloudflare Access (on web, automatically, once) and/or
+ * Google, whichever the API reports at /auth/providers. An API that never
+ * answers shows a retrying connector instead — with auth disabled in dev the
+ * probe succeeds once the server is up, so `task run`'s server/app race
+ * resolves itself without a sign-in ask. */
 export function LoginGate({ apiUrl, children }: { apiUrl: string; children: ReactNode }) {
   const storage = useService(Tokens.Storage);
   const { status, refresh } = useAuth(apiUrl, storage);
-  const [notice, setNotice] = useState<string | null>(null);
+  const { action, providers, notice, signIn } = useSignIn(apiUrl, status, storage, refresh);
   const dispatch = useAppDispatch();
 
   // The one place the signed-in identity is lost (sign-out / expired or
@@ -36,7 +36,7 @@ export function LoginGate({ apiUrl, children }: { apiUrl: string; children: Reac
     return () => clearInterval(timer);
   }, [status, refresh]);
 
-  if (status === 'loading') {
+  if (status === 'loading' || action.kind === 'pending' || action.kind === 'auto-redirect') {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.muted} />
@@ -64,55 +64,15 @@ export function LoginGate({ apiUrl, children }: { apiUrl: string; children: Reac
   }
 
   if (status === 'out') {
-    const signIn = async () => {
-      setNotice(null);
-      try {
-        await runSignIn();
-      } catch {
-        setNotice('Sign-in failed. Please try again.');
-      }
-    };
-    const runSignIn = async () => {
-      if (Platform.OS === 'web') {
-        // Web holds the API's httpOnly session cookie, so the cookie-based
-        // flow (/auth/google → /auth/google/callback → back to the app) is
-        // enough. The native endpoint would 400: it requires a deep-link
-        // redirect_uri. See server/authz.ts.
-        window.location.href = webSignInUrl(apiUrl);
-        return;
-      }
-      // Native: the API session is an httpOnly cookie scoped to the web
-      // origin, which this app's fetches can never see. Complete sign-in with
-      // a system browser (ASWebAuthenticationSession / Custom Tabs) and a
-      // stateless session token instead — see server/authz.ts.
-      const redirectUrl = Linking.createURL('/login');
-      const startUrl = `${nativeSignInUrl(apiUrl)}?redirect_uri=${encodeURIComponent(redirectUrl)}`;
-      const result = await WebBrowser.openAuthSessionAsync(startUrl, redirectUrl);
-      if (result.type !== 'success' || !result.url) {
-        setNotice('Sign-in cancelled.');
-        return;
-      }
-      const parsed = parseAuthCallback(result.url);
-      if (parsed.kind !== 'success') {
-        setNotice(parsed.error);
-        return;
-      }
-      const outcome = await fetchSessionToken(apiUrl, parsed.code, parsed.state);
-      if ('error' in outcome) {
-        setNotice(outcome.error);
-        return;
-      }
-      await saveSessionToken(storage, outcome.token);
-      refresh();
-    };
-
     return (
       <View style={styles.center}>
         <Text style={[styles.text, styles.title]}>Welcome to Budget</Text>
         <Text style={[styles.text, styles.subtitle]}>Sign in to continue</Text>
-        <Pressable style={styles.button} onPress={() => void signIn()}>
-          <Text style={[styles.text, styles.buttonText]}>Sign in with Google</Text>
-        </Pressable>
+        {loginButtons(providers).map((b) => (
+          <Pressable key={b.provider} style={styles.button} onPress={() => void signIn(b.provider)}>
+            <Text style={[styles.text, styles.buttonText]}>{b.label}</Text>
+          </Pressable>
+        ))}
         {notice ? <Text style={[styles.text, styles.notice]}>{notice}</Text> : null}
       </View>
     );
