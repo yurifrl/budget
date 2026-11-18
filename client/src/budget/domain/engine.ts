@@ -1,6 +1,13 @@
 /**
- * Budgeting engine — PURE functions. Bead ynabu-3dn.6, PDD §2.
- * SHARED CONTRACT. The single source of truth for derived values.
+ * Budgeting helpers around the engine — PURE functions. Bead ynabu-3dn.6, PDD §2.
+ *
+ * NOT a second engine: month figures (Available, overspending, card payment
+ * envelopes, Ready to Assign) come only from `zeroSum.ts`
+ * (`computeBudgetMonth`, docs/budget-engine-spec.md), which is canonical.
+ * This module holds what sits around it: account balances, per-month
+ * assigned lookups, target funding state, Cost to Be Me, the legacy
+ * `category.activity` recompute (used by data/mapping; the engine never
+ * reads it) and group rollups (which sum zeroSum figures).
  *
  * Design rules (from the bead):
  *  - Money in -> Ready to Assign pool -> user assigns until RTA = 0 (zero-based).
