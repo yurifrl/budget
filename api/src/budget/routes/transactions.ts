@@ -282,6 +282,16 @@ export const operations = [
         // Closed accounts are immutable — no moving rows into them (YNAB parity).
         if (acc.closed) throw new HttpError(409, 'account is closed');
       }
+      // A referenced category / matched counterpart must belong to this budget
+      // (create and bulk already check the category; an edit must too).
+      if (patch.category_id) {
+        if (!(await categoryInBudget(client, patch.category_id, budget_id))) throw new HttpError(400, 'category not found in budget');
+      }
+      if (patch.matched_transaction_id) {
+        if (!(await txnStore.transactionInBudget(client, patch.matched_transaction_id, budget_id))) {
+          throw new HttpError(400, 'matched transaction not found in budget');
+        }
+      }
       if (patch.category_id && (subtransactions?.length ?? 0) > 0) {
         throw new HttpError(400, 'split transactions cannot carry a category_id');
       }

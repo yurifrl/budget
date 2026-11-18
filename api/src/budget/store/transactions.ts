@@ -250,3 +250,9 @@ export async function refreshImportedTransaction(
 export async function tombstoneTransaction(db: Queryable, id: string): Promise<void> {
   await db.query('UPDATE public.transactions SET deleted = true WHERE id = $1', [id]);
 }
+
+/** Does the transaction exist in this budget (any state)? */
+export async function transactionInBudget(db: Queryable, id: string, budgetId: string): Promise<boolean> {
+  const r = await db.query('SELECT 1 FROM transactions WHERE id = $1 AND budget_id = $2', [id, budgetId]);
+  return r.rowCount !== 0;
+}
