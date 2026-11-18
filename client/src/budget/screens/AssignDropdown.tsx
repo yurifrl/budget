@@ -22,6 +22,7 @@ import { makeAssignEdit, newPlanEdit } from '../state/planEdits';
 import { recordPlanEdit } from '../state/ui';
 import { AutoAssignList } from './AutoAssignPanel';
 import { MoneyInput } from '../ui/bits';
+import { useEscapeToClose } from '../ui/escapeToClose';
 import { colors, radius } from '../ui/theme';
 import { ToDropdown } from './MoveMoneySheet';
 
@@ -120,6 +121,9 @@ export function AssignDropdownBody({
   onDone: () => void;
 }) {
   const [tab, setTab] = useState<AssignTab>('auto');
+  // Esc closes the dropdown (budget-ipa), after an open To select or the
+  // amount editor had the chance to claim it.
+  useEscapeToClose(onDone);
   return (
     <>
       <View style={styles.tabs}>
