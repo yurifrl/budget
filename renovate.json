@@ -14,6 +14,29 @@
       "groupName": "react-native core"
     },
     {
+      "description": "The Expo SDK decides these versions in client/ (expo-doctor fails CI on any other). Minor/patch moves go through `bunx expo install --check`, not Renovate; majors (SDK upgrades) still open, grouped above for RN core.",
+      "matchFileNames": [
+        "client/package.json"
+      ],
+      "matchPackageNames": [
+        "expo",
+        "expo-*",
+        "@expo/*",
+        "react",
+        "react-dom",
+        "react-native",
+        "react-native-*",
+        "@react-native-async-storage/async-storage",
+        "@types/react",
+        "eslint-config-expo"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "enabled": false
+    },
+    {
       "description": "expo-router is pinned to 58.0.23 on purpose: later 58.0.x patches replace the browser history entry on tab navigation (docs/evidence/parity/REPORT.md, regression 1). Unpin by hand after checking browser Back.",
       "matchPackageNames": [
         "expo-router"
