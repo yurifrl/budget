@@ -887,7 +887,12 @@ for every statement touching `accounts`:
 - **MCP.** Tools whose `output` is a zod object advertise it as
   `outputSchema` and return it as `structuredContent` (29 of the 66 MCP
   tools; lists and 204s cannot, MCP requires an object schema). The SDK checks
-  the structured result against it.
+  the structured result against it, and so do MCP clients: a zod object
+  exports `additionalProperties: false`, and rows carry more columns than
+  declared, so `scripts/e2e-api.sh` failed until `mcpOutputSchema` started
+  advertising a copy with every object loosened (`z.looseObject`). The
+  contract schemas themselves stay plain objects, so the client's inferred
+  types have no index signature.
 - **Client types.** `data/rows.ts` and `data/connections.ts` are now
   `z.infer` aliases under the old names (hand-written duplicates deleted;
   `ScheduledTransactionRow`, `PayeeLocationRow`, `ScheduledFrequency` were
