@@ -2,6 +2,8 @@
 import { collectContracts } from '../../operation-contract';
 
 import * as meContracts from './me';
+import * as providerContracts from './providers';
 
 export * from './me';
-export const contracts = collectContracts(meContracts);
+export * from './providers';
+export const contracts = collectContracts(meContracts, providerContracts);
