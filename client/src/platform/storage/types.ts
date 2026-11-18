@@ -13,3 +13,10 @@ export interface KVStore {
   /** Remove a key. */
   remove(key: string): Promise<void>;
 }
+
+/** Minimal string secret store for credentials (Keychain on iOS; see secretStore). */
+export interface SecretStore {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
+  remove(key: string): Promise<void>;
+}
