@@ -1,0 +1,1 @@
+{"issue_id":"budget-hd3","action":"save","at":"2026-11-18T11:23:51.869Z","actor":null,"data":{"status":"open","title":"api: treat empty PLUGGY_* / CLIENT_USER_ID env values as unset (PluggyEnvSchema takes '' literally: CLIENT_USER_ID='' replaces the syscd-app default, PLUGGY_SANDBOX='' fails parsing); External Secrets passes empty 1Password fields as ''"}}

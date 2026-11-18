@@ -4,22 +4,22 @@
   "id": "budget-nwc",
   "title": "Phase 5b: API structure",
   "description": "",
-  "status": "ready-to-review",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:58.311Z",
-  "updated_at": "2026-11-18T05:15:27.163Z",
+  "updated_at": "2026-11-18T11:22:48.309Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-18T11:22:48.007Z",
   "due_at": null,
   "defer_until": null,
   "parent": null,
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Phase 5b done: withTransaction, budget/store layer (no SQL in budget/routes, routes-no-sql.test.ts), ledger API for connections, access tests; merged from tk/budget-nwc (cc48597 ancestor of main) and refactor/store-finish (892673a). docs/decisions.md 'Phase 5b'. API 842 tests green in CI run 44292747999.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
@@ -29,7 +29,352 @@
   "metadata": {
     "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-nwc",
     "changeset": {
-      "base": "c44d6eea2750a93040df164057d8f9e474fd1ef9"
+      "base": "c44d6eea2750a93040df164057d8f9e474fd1ef9",
+      "head": "cc485975c690b12a2b81d413fc46d08a8a448d07",
+      "commits": [
+        {
+          "sha": "cc48597",
+          "subject": "docs: phase 5b (API structure) in architecture, decisions and the endpoint recipe"
+        },
+        {
+          "sha": "b8c2292",
+          "subject": "Merge main into tk/budget-nwc"
+        },
+        {
+          "sha": "2b971ae",
+          "subject": "api(budget): revision and payee-suggestions routes call the store"
+        },
+        {
+          "sha": "28d8e23",
+          "subject": "api(budget): members route calls store/members (SQL moved verbatim)"
+        },
+        {
+          "sha": "b58ec9b",
+          "subject": "api(budget): category-bundles route calls store/bundles (SQL moved verbatim)"
+        },
+        {
+          "sha": "3dea27f",
+          "subject": "api(budget): categories route calls store/categories; goalColumns to domain/category-goals"
+        },
+        {
+          "sha": "bbe2327",
+          "subject": "api(budget): payees route calls store/payees (SQL moved verbatim)"
+        },
+        {
+          "sha": "35d076e",
+          "subject": "api(core): the pool is configured by the entrypoint, not from DATABASE_URL at import (G16/G11)"
+        },
+        {
+          "sha": "c4cb26b",
+          "subject": "api(core): drop budget value schemas from core/validate; delete dead core/csv (G16)"
+        },
+        {
+          "sha": "6d06f3e",
+          "subject": "test(api): catalog-driven non-member access test for path-param operations (G14)"
+        },
+        {
+          "sha": "b862dd5",
+          "subject": "docs: phase 6 deploy record, morning checklist, 1Password item script"
+        },
+        {
+          "sha": "325da47",
+          "subject": "api: budget reads/writes connection tables only through the connections barrel"
+        },
+        {
+          "sha": "9eb944a",
+          "subject": "api: budget ledger write API; connections sync writes through it (G5)"
+        },
+        {
+          "sha": "e65d0fc",
+          "subject": "test(api): characterise the sync engine's payee/rename write path"
+        },
+        {
+          "sha": "ec3911d",
+          "subject": "api(budget): repeat-rule generation to domain/repeat-generation, SQL to store/repeat-rules"
+        },
+        {
+          "sha": "02dfa98",
+          "subject": "test(api): characterisation tests for repeat-rules routes and generation"
+        },
+        {
+          "sha": "a73b012",
+          "subject": "api(budget): store/budgets; budgets route calls the store"
+        },
+        {
+          "sha": "823c1a1",
+          "subject": "api(budget): store/transactions, store/categories, store/repeat-rules; transactions route calls the store"
+        },
+        {
+          "sha": "8bbcd88",
+          "subject": "deploy: images 2026.11.18"
+        },
+        {
+          "sha": "4609ab1",
+          "subject": "api(budget): store/accounts + store/payees; accounts route calls the store"
+        },
+        {
+          "sha": "fd59db2",
+          "subject": "docs: release notes v2026.11.18"
+        },
+        {
+          "sha": "3eb22c8",
+          "subject": "chore: ignore .worktrees in .gitignore"
+        },
+        {
+          "sha": "5275633",
+          "subject": "api: replace hand-rolled BEGIN/COMMIT/ROLLBACK blocks with withTransaction"
+        },
+        {
+          "sha": "3449c80",
+          "subject": "api(core): withTransaction helper and Queryable type"
+        }
+      ],
+      "files": [
+        {
+          "path": ".gitignore",
+          "status": "M"
+        },
+        {
+          "path": "AGENTS.md",
+          "status": "M"
+        },
+        {
+          "path": "CHANGELOG.md",
+          "status": "M"
+        },
+        {
+          "path": "api/eslint.config.js",
+          "status": "M"
+        },
+        {
+          "path": "api/scripts/e2e-connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/scripts/e2e-jobs.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/scripts/test-db-preload.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/card-payments.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/categorization.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/category-goals.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/category-goals.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/repeat-generation.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/ownership.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/assignments.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/categories.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/category-bundles.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payee-suggestions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/plan-auto-assign.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/repeat-rules.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/repeat-rules.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/revision.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/accounts.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/budgets.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/bundles.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/categories.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/members.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/repeat-rules.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/transactions.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/transactions.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/ledger-reads.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-payees.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/csv.ts",
+          "status": "D"
+        },
+        {
+          "path": "api/src/core/db.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/core/db.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/validate.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/validate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/profile-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/worker.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/MORNING.md",
+          "status": "A"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "k8s/values.yaml",
+          "status": "M"
+        },
+        {
+          "path": "scripts/create-1password-item.sh",
+          "status": "A"
+        }
+      ],
+      "counts": {
+        "additions": 3992,
+        "deletions": 1923
+      }
     },
     "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
     "finished_at": "2026-11-18T05:15:27.057Z",
@@ -43,6 +388,12 @@
       },
       "head": "cc485975c690b12a2b81d413fc46d08a8a448d07",
       "at": "2026-11-18T05:15:27.057Z"
+    },
+    "worktreePruned": {
+      "pruned": false,
+      "removedWorktree": false,
+      "removedBranch": false,
+      "reason": "worktree has uncommitted changes"
     }
   },
   "attachments": [],

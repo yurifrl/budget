@@ -4,22 +4,22 @@
   "id": "budget-sfa",
   "title": "Phase 5a: domain purity",
   "description": "",
-  "status": "ready-to-review",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:58.153Z",
-  "updated_at": "2026-11-18T10:46:23.538Z",
+  "updated_at": "2026-11-18T11:22:47.863Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-18T11:22:47.695Z",
   "due_at": null,
   "defer_until": null,
   "parent": null,
   "sprint": null,
   "labels": [],
-  "notes": "Step 1 done: domain imports only itself + @shared (17 lint exceptions -> 0), singletons gone (prefs/flag labels/mask in budgetUi slice, one persistence listener state/budgetSettings), 3 import cycles broken + architecture.test.ts guard, engines documented (zeroSum canonical), fixtures moved, dead import.ts removed. Step 2 done: helper dedup, pt-BR centsFmt + Spending dates follow prefs, Portuguese strings -> English.\nWork is on tk/budget-sfa, merged to main at 4c3532b (diff shows 0 because it is already merged; review range 08ff6fd..4c3532b). Follow-ups: budget-5rk, budget-u7c, budget-dho, budget-65f.",
+  "notes": "Step 1 done: domain imports only itself + @shared (17 lint exceptions -> 0), singletons gone (prefs/flag labels/mask in budgetUi slice, one persistence listener state/budgetSettings), 3 import cycles broken + architecture.test.ts guard, engines documented (zeroSum canonical), fixtures moved, dead import.ts removed. Step 2 done: helper dedup, pt-BR centsFmt + Spending dates follow prefs, Portuguese strings -> English.\nWork is on tk/budget-sfa, merged to main at 4c3532b (diff shows 0 because it is already merged; review range 08ff6fd..4c3532b). Follow-ups: budget-5rk, budget-u7c, budget-dho, budget-65f.\nPhase 5a done: client domain/ imports only itself and @shared (0 lint exceptions, architecture.test.ts guard, 0 import cycles), singletons removed; merged to main at 4c3532b. docs/decisions.md 'Phase 5a/5e'. Client 1054 tests pass; regression pass in docs/evidence/phase5e/.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
@@ -29,7 +29,14 @@
   "metadata": {
     "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-sfa",
     "changeset": {
-      "base": "007e796f18fe354f0facaa3c0167dca8802f3b81"
+      "base": "007e796f18fe354f0facaa3c0167dca8802f3b81",
+      "head": "007e796f18fe354f0facaa3c0167dca8802f3b81",
+      "commits": [],
+      "files": [],
+      "counts": {
+        "additions": 0,
+        "deletions": 0
+      }
     },
     "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
     "finished_at": "2026-11-18T10:44:29.931Z",
@@ -43,6 +50,12 @@
       },
       "head": "007e796f18fe354f0facaa3c0167dca8802f3b81",
       "at": "2026-11-18T10:44:29.931Z"
+    },
+    "worktreePruned": {
+      "pruned": false,
+      "removedWorktree": false,
+      "removedBranch": false,
+      "reason": "worktree has uncommitted changes"
     }
   },
   "attachments": [],

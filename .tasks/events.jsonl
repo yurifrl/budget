@@ -89,3 +89,37 @@
 {"seq":84,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T10:45:27.061Z","task":"budget-dqt","type":"task.report","actor":"yuri","data":{"changes":{"commits":0,"files":0,"additions":0,"deletions":0},"head":"08ff6fdd6e426e89ed14ac84535115b6f071233d","at":"2026-11-18T10:45:26.999Z"}}
 {"seq":85,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T10:46:23.545Z","task":"budget-sfa","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
 {"seq":86,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:11:02.456Z","task":"budget-ef9","type":"task.created","actor":"yuri","data":{"title":"client: align expo, @expo/ui, expo-file-system, expo-web-browser to SDK-58 versions after 2026-11-19 12:00 UTC (48h package-age gate) and drop them from expo.install.exclude","status":"open","owner":null,"assignee":null}}
+{"seq":87,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:46.859Z","task":"budget-xsp","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":88,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:46.859Z","task":"budget-xsp","type":"task.update","actor":"yuri","data":{"fields":["metadata.worktreePruned","notes"]}}
+{"seq":89,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:47.101Z","task":"budget-yue","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":90,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:47.101Z","task":"budget-yue","type":"task.update","actor":"yuri","data":{"fields":["metadata.worktreePruned","notes"]}}
+{"seq":91,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:47.323Z","task":"budget-qps","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":92,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:47.323Z","task":"budget-qps","type":"task.update","actor":"yuri","data":{"fields":["metadata.worktreePruned","notes"]}}
+{"seq":93,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:47.556Z","task":"budget-z1t","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":94,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:47.556Z","task":"budget-z1t","type":"task.update","actor":"yuri","data":{"fields":["metadata.worktreePruned","notes"]}}
+{"seq":95,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:47.869Z","task":"budget-sfa","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":96,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:47.869Z","task":"budget-sfa","type":"task.update","actor":"yuri","data":{"fields":["metadata.changeset","metadata.worktreePruned","notes"]}}
+{"seq":97,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:48.321Z","task":"budget-nwc","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":98,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:48.321Z","task":"budget-nwc","type":"task.update","actor":"yuri","data":{"fields":["metadata.changeset","metadata.worktreePruned","notes"]}}
+{"seq":99,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:48.569Z","task":"budget-vsy","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":100,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:48.569Z","task":"budget-vsy","type":"task.update","actor":"yuri","data":{"fields":["metadata.worktreePruned","notes"]}}
+{"seq":101,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:49.071Z","task":"budget-ku4","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":102,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:49.071Z","task":"budget-ku4","type":"task.update","actor":"yuri","data":{"fields":["metadata.changeset","metadata.worktreePruned","notes"]}}
+{"seq":103,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:49.332Z","task":"budget-dqt","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":104,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:22:49.332Z","task":"budget-dqt","type":"task.update","actor":"yuri","data":{"fields":["metadata.worktreePruned","notes"]}}
+{"seq":105,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:02.996Z","task":"budget-p00","type":"task.status","actor":"yuri","data":{"from":"open","to":"closed"}}
+{"seq":106,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:02.996Z","task":"budget-p00","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
+{"seq":107,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.159Z","task":"budget-rxp","type":"task.status","actor":"yuri","data":{"from":"open","to":"closed"}}
+{"seq":108,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.159Z","task":"budget-rxp","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
+{"seq":109,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.319Z","task":"budget-njc","type":"task.status","actor":"yuri","data":{"from":"open","to":"closed"}}
+{"seq":110,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.319Z","task":"budget-njc","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
+{"seq":111,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.473Z","task":"budget-xef","type":"task.status","actor":"yuri","data":{"from":"open","to":"closed"}}
+{"seq":112,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.473Z","task":"budget-xef","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
+{"seq":113,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.630Z","task":"budget-xd6","type":"task.status","actor":"yuri","data":{"from":"open","to":"closed"}}
+{"seq":114,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.630Z","task":"budget-xd6","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
+{"seq":115,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.768Z","task":"budget-fwf","type":"task.status","actor":"yuri","data":{"from":"open","to":"closed"}}
+{"seq":116,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.768Z","task":"budget-fwf","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
+{"seq":117,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.910Z","task":"budget-ipa","type":"task.status","actor":"yuri","data":{"from":"open","to":"closed"}}
+{"seq":118,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:03.910Z","task":"budget-ipa","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
+{"seq":119,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:04.076Z","task":"budget-u1n","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
+{"seq":120,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-18T11:23:51.875Z","task":"budget-hd3","type":"task.created","actor":"yuri","data":{"title":"api: treat empty PLUGGY_* / CLIENT_USER_ID env values as unset (PluggyEnvSchema takes '' literally: CLIENT_USER_ID='' replaces the syscd-app default, PLUGGY_SANDBOX='' fails parsing); External Secrets passes empty 1Password fields as ''","status":"open","owner":null,"assignee":null}}

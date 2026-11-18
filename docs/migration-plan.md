@@ -3,7 +3,11 @@
 Source: `../syscd-app` at `8e79a31` (2026-11-17). Target: this repo (`budget/`).
 Nothing in `syscd-app` changes until the final, separately approved phase.
 
-Status: plan only. No code has been copied yet.
+Status (2026-11-18): phases 0 to 5 (5a to 5e) are complete and merged on `main`.
+Phase 6 (deploy) is partly done: release `2026.11.18-01` is built and declared in
+home-systems, but the app cannot start until the owner creates its secrets
+(`docs/MORNING.md`); the iOS pass and cutover are open. Phase 7 (remove budget
+from syscd-app) has not started and needs its own approval.
 
 Evidence comes from three read-only audits of `syscd-app` (client module,
 server, build/infra). File references below are paths in `syscd-app` unless

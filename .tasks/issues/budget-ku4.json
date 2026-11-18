@@ -4,22 +4,22 @@
   "id": "budget-ku4",
   "title": "Phase 5d: money units",
   "description": "",
-  "status": "ready-to-review",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:58.592Z",
-  "updated_at": "2026-11-18T08:35:30.231Z",
+  "updated_at": "2026-11-18T11:22:49.064Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-18T11:22:48.707Z",
   "due_at": null,
   "defer_until": null,
   "parent": null,
   "sprint": null,
   "labels": [],
-  "notes": "From budget-sfa/dqt (client structure agent): FYI coordination. (1) I am removing the domain singletons (fmtPrefs/flagLabels/moneyMask setters). data/settingsBlob.ts imports setFmtPrefs/setFlagLabels from ../domain; I will keep those two names exported as deprecated no-op shims and stop calling applyBudgetSettings (prefs now live in the budgetUi redux slice, hydrated by state/). If you touch settingsBlob.ts, feel free to delete applyBudgetSettings and those imports. (2) In my final step domain moves to client/src/domain and state to client/src/state; I will leave re-export shims at budget/domain/<file>.ts, budget/state/ui.ts and budget/import/types.ts so data/'s relative imports keep compiling; repointing data/ imports to @/domain/* is a follow-up. I do not edit data/**, profile/api.ts or platform/api/**.",
+  "notes": "From budget-sfa/dqt (client structure agent): FYI coordination. (1) I am removing the domain singletons (fmtPrefs/flagLabels/moneyMask setters). data/settingsBlob.ts imports setFmtPrefs/setFlagLabels from ../domain; I will keep those two names exported as deprecated no-op shims and stop calling applyBudgetSettings (prefs now live in the budgetUi redux slice, hydrated by state/). If you touch settingsBlob.ts, feel free to delete applyBudgetSettings and those imports. (2) In my final step domain moves to client/src/domain and state to client/src/state; I will leave re-export shims at budget/domain/<file>.ts, budget/state/ui.ts and budget/import/types.ts so data/'s relative imports keep compiling; repointing data/ imports to @/domain/* is a follow-up. I do not edit data/**, profile/api.ts or platform/api/**.\nPhase 5d done: every wire amount is integer milliunits with no unit suffix (36 fields, 16 operations), legacy format-1 backups upgraded on restore, migration 0100 accounts.currency; merged to main in 9b19ca7. docs/decisions.md 'Phase 5d' and 'G1'; end-to-end check in docs/evidence/phase5d/. Released as 2026.11.18-01.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
@@ -29,7 +29,592 @@
   "metadata": {
     "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-ku4",
     "changeset": {
-      "base": "08ff6fdd6e426e89ed14ac84535115b6f071233d"
+      "base": "08ff6fdd6e426e89ed14ac84535115b6f071233d",
+      "head": "9b19ca7a6bc9c109130fae142b437cbc49fc2783",
+      "commits": [
+        {
+          "sha": "9b19ca7",
+          "subject": "Merge tk/budget-ku4: phases 5d (money units) and 5c (contract outputs), G1 currency, error codes"
+        },
+        {
+          "sha": "e194615",
+          "subject": "docs: phase 5c/5d checks, end-to-end evidence and follow-ups"
+        },
+        {
+          "sha": "9a665ac",
+          "subject": "docs: note the loosened MCP output schemas"
+        },
+        {
+          "sha": "2ec2ca5",
+          "subject": "fix(mcp): advertise output schemas with loose objects"
+        },
+        {
+          "sha": "c50b6a1",
+          "subject": "feat: contract outputs, contract-built requests, split budgetApi (phase 5c, G9)"
+        },
+        {
+          "sha": "36f9950",
+          "subject": "feat(api,shared,client): machine-readable error code next to {error}"
+        },
+        {
+          "sha": "949e70d",
+          "subject": "feat(api,shared): accounts.currency (G1, migration 0100)"
+        },
+        {
+          "sha": "854ea58",
+          "subject": "feat(api,shared,client): milliunits for every amount on the wire (phase 5d, G7)"
+        }
+      ],
+      "files": [
+        {
+          "path": "AGENTS.md",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/db/migrations/0100_account_currency.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/scripts/e2e-mcp.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/scripts/test-db-preload.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/app.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/category-goals.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/category-goals.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/repeat-generation.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transactions.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/money-units.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/ownership.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ownership.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts-currency.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-export.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-export.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore-legacy.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budgets.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/category-targets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/fixtures/syscd-backup-v1.json",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/plan-auto-assign.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/repeat-rules.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/repeat-rules.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/revision.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/small-areas.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/export.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/operations.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-card-payments.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-currency.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-payees.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/operation.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/operation.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/test-op.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/core/validate.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/validate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/mcp/mcp.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/mcp/tools.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/mcp/tools.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/authz.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/authz.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/middleware.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/store.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/base.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/budgets.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/connections.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/members.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/plan.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/register.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/types.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/connections.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/mapping.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/mapping.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/rows.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/transfer/payload.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.body.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/api/contractRequest.ts",
+          "status": "D"
+        },
+        {
+          "path": "client/src/profile/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/evidence/phase5d/accounts-add-12.34-filled.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/phase5d/accounts-added-12.34.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/phase5d/accounts-after-writes.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/phase5d/accounts-before-writes.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/phase5d/accounts-edited-56.78.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/phase5d/accounts-transfer.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/phase5d/plan-after-writes.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/phase5d/plan-assigned-100.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/phase5d/plan-before-writes.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/phase5d/plan-move-25.50-form.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/phase5d/plan-moved-25.50.png",
+          "status": "A"
+        },
+        {
+          "path": "shared/README.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contract-request.test.ts",
+          "status": "R057"
+        },
+        {
+          "path": "shared/src/contract-request.ts",
+          "status": "R058"
+        },
+        {
+          "path": "shared/src/contracts/budget/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/assignments.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/budget-export.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/categories.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/category-bundles.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/category-notes.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/category-targets.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/groups.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/month-notes.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/payee-suggestions.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/plan-auto-assign.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/repeat-rules.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/revision.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/schemas.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transactions.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/rates/rates.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/me.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/money-and-outputs.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/operation-contract.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/validation.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 6463,
+        "deletions": 2258
+      }
     },
     "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
     "finished_at": "2026-11-18T08:35:30.123Z",
@@ -43,6 +628,12 @@
       },
       "head": "9b19ca7a6bc9c109130fae142b437cbc49fc2783",
       "at": "2026-11-18T08:35:30.123Z"
+    },
+    "worktreePruned": {
+      "pruned": false,
+      "removedWorktree": false,
+      "removedBranch": false,
+      "reason": "worktree has uncommitted changes"
     }
   },
   "attachments": [],
