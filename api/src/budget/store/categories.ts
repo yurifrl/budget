@@ -125,3 +125,9 @@ export async function softDeleteCategory(db: Queryable, id: string, budgetId: st
   ]);
   return result.rowCount !== 0;
 }
+
+/** Does the category exist in this budget and is it live (not deleted)? */
+export async function liveCategoryInBudget(db: Queryable, categoryId: string, budgetId: string): Promise<boolean> {
+  const cat = await db.query('SELECT 1 FROM categories WHERE id = $1 AND budget_id = $2 AND deleted = false', [categoryId, budgetId]);
+  return cat.rowCount !== 0;
+}
