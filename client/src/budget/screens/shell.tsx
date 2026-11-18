@@ -17,284 +17,34 @@
  * (budget/ui/MenuPanes) — one portal menu, nothing paints over it.
  */
 
-import { Link, Tabs, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SettingsMenu, type MenuPane } from '@/shell/SettingsMenu';
-import { MeAvatarButton } from '@/profile';
-import { IconSymbol } from '@/ui/icon-symbol';
 import { useService } from '@/platform/di/ServiceContext';
 import { Tokens } from '@/platform/di/tokens';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { useMedia } from '@/ui/media';
 
-import { useGetAccountsQuery, useGetBudgetsQuery } from '../data/api';
-import { milliToCents } from '../data/mapping';
-import type { AccountRow } from '../data/rows';
-import { workingBalance } from '../domain/engine';
-import { useMoneyFormat, useMoneyMask } from '../model/useDisplayPrefs';
+import { useGetBudgetsQuery } from '../data/api';
+import { useMoneyMask } from '../model/useDisplayPrefs';
 import type { Transaction } from '../domain/types';
 import { restoreActiveBudget, switchBudget } from '../state/thunks';
-import {
-  selectActiveBudgetId,
-  selectShowClosedAccounts,
-} from '../state/ui';
-import { personLabel } from '../domain/people';
+import { selectActiveBudgetId } from '../state/ui';
 import { useBudgetRevisionWatcher } from '../model/useBudgetRevisionWatcher';
-import { usePeople } from '../model/usePeople';
-import { AccountOwnerFace } from '../ui/PersonFace';
 import { colors, radius } from '../ui/theme';
-import { AccountEditModal } from './AccountEditModal';
-import { AddAccountModal } from './AddAccountModal';
 import { AddTransactionSheet } from './AddTransactionSheet';
 import { budgetMenuPanes } from '../ui/MenuPanes';
+import { BudgetRail } from './rail/BudgetRail';
+import { BudgetTabs } from './rail/BudgetTabs';
+import { fallbackBudgetId } from './rail/rail.logic';
 import { ShellContext, type BudgetShellState } from './shellContext';
 
 export { useBudgetShell, type BudgetShellState } from './shellContext';
 
-const NAV_LINKS = [
-  { route: '/plan', label: 'Plan', icon: 'list.bullet' },
-  { route: '/reflect', label: 'Reflect', icon: 'chart.bar.fill' },
-  { route: '/accounts', label: 'All Accounts', icon: 'building.columns.fill' },
-] as const;
-
 /** KVStore keys persisting the rail's collapse states (desktop) across reloads. */
 const RAIL_COLLAPSED_KEY = 'budget.shell.railCollapsed';
-/** Per-account-group chevron collapse (CASH/CREDIT/...), shared with the osb spec. */
-const GROUP_COLLAPSED_KEY = 'budget.sidebar.collapsedAccountGroups';
-
-/** Rail section order: CLOSED always last. */
-const GROUP_ORDER: Record<string, number> = { CASH: 0, CREDIT: 1, CLOSED: 2 };
-
-/** Display label per cash-family account type (the rail splits CASH by type). */
-const TYPE_LABEL: Partial<Record<AccountRow['type'], string>> = {
-  checking: 'Checking',
-  savings: 'Savings',
-  cash: 'Cash',
-};
-
-/**
- * Left rail (desktop) / drawer content (tablet & phone).
- *
- * The one navigation surface: nav links, grouped clickable accounts (the old
- * in-screen AccountsSidebar merged here), and — desktop only — a collapse
- * toggle that turns the rail into an icon strip (state persisted via KVStore).
- * `collapsed` undefined = no toggle (drawer mode).
- */
-function BudgetRail({
-  onNavigate,
-  secondary,
-  collapsed,
-  onSetCollapsed,
-  topInset = 0,
-  bottomInset = 0,
-  openRequest,
-  onOpenRequestHandled,
-}: {
-  onNavigate: () => void;
-  openRequest?: { paneId: string } | null;
-  onOpenRequestHandled?: () => void;
-  /** Panes for the settings menu (budget settings). */
-  secondary: MenuPane[];
-  collapsed?: boolean;
-  onSetCollapsed?: (v: boolean) => void;
-  /** Extra top padding in drawer mode so the menu pill clears the status bar. */
-  topInset?: number;
-  /** Extra bottom padding in drawer mode so the footer clears the home indicator. */
-  bottomInset?: number;
-}) {
-  const { formatMoney } = useMoneyFormat();
-  const router = useRouter();
-  const pathname = usePathname();
-  // Account selection lives in the URL (?account=) so the register on
-  // /accounts can react to rail picks from any tab.
-  // Global, not local: the rail mounts in the Tabs layout (parent route) and
-  // expo-router's useLocalSearchParams there doesn't see child-screen query
-  // params (?account=<id> on /accounts) — useGlobalSearchParams does.
-  const { account: accountParam } = useGlobalSearchParams<{ account?: string }>();
-  const storage = useService(Tokens.Storage);
-  const [groupCollapsed, setGroupCollapsed] = useState<Record<string, boolean>>({});
-  useEffect(() => {
-    void storage.get<Record<string, boolean>>(GROUP_COLLAPSED_KEY, {}).then(setGroupCollapsed);
-  }, [storage]);
-  const toggleGroup = (group: string) => {
-    setGroupCollapsed((prev) => {
-      const next = { ...prev, [group]: !prev[group] };
-      void storage.set(GROUP_COLLAPSED_KEY, next);
-      return next;
-    });
-  };
-
-  const budgetId = useAppSelector((s) => selectActiveBudgetId(s));
-  const accounts = useGetAccountsQuery(budgetId ? { budgetId } : { budgetId: '' }, { skip: !budgetId });
-  const { personOf, me } = usePeople(budgetId);
-  const showClosedAccounts = useAppSelector((s) =>
-    selectShowClosedAccounts(s),
-  );
-  const groups = useMemo(() => {
-    // Cash-family accounts split per type (Checking/Savings/Cash — a raw
-    // CASH bucket reads wrong when every account is checking); CREDIT and
-    // CLOSED stay whole, CLOSED rendering only when the Settings toggle
-    // enables it AND closed accounts exist (YNAB parity, osb).
-    const all = (accounts.data ?? []).filter(
-      (a) => showClosedAccounts || a.account_group !== 'CLOSED',
-    );
-    const sections: { key: string; label: string; accs: AccountRow[] }[] = [];
-    const push = (key: string, label: string, a: AccountRow) => {
-      const existing = sections.find((s) => s.key === key);
-      if (existing) existing.accs.push(a);
-      else sections.push({ key, label, accs: [a] });
-    };
-    for (const a of all) {
-      if (a.account_group === 'CASH') {
-        push(`CASH:${a.type}`, TYPE_LABEL[a.type] ?? 'Cash', a);
-      } else {
-        push(a.account_group, a.account_group === 'CREDIT' ? 'Credit Cards' : 'Closed', a);
-      }
-    }
-    // YNAB order: cash-family sections, CREDIT, then CLOSED always last.
-    return sections.sort(
-      (x, y) => (GROUP_ORDER[x.key.split(':')[0]] ?? 9) - (GROUP_ORDER[y.key.split(':')[0]] ?? 9),
-    );
-  }, [accounts.data, showClosedAccounts]);
-
-  const selectAccount = (id: string | null) => {
-    router.navigate({ pathname: '/accounts', params: id ? { account: id } : {} } as never);
-    onNavigate();
-  };
-
-  // YNAB parity: right-click (web) / long-press (native) an account row → Edit
-  // Account; a + Add Account button sits under the last group.
-  const [editAccount, setEditAccount] = useState<AccountRow | null>(null);
-  const [addAccountOpen, setAddAccountOpen] = useState(false);
-
-  const isCollapsed = collapsed === true;
-
-  return (
-    <View style={[styles.rail, { paddingTop: 13 + topInset }, isCollapsed && styles.railCollapsed]}>
-      {/* The PROMINENT control: the settings-menu trigger with the rail's
-          ⚙ beside/under it; budget settings ride inside the menu as panes. */}
-      <View style={[styles.switchRow, isCollapsed && styles.switchRowCollapsed]}>
-        <SettingsMenu
-          compact={isCollapsed}
-          panes={secondary}
-          openRequest={openRequest}
-          onOpenRequestHandled={onOpenRequestHandled}
-        />
-      </View>
-      <View style={styles.nav}>
-        {NAV_LINKS.map((l) => {
-          const active = pathname.startsWith(l.route);
-          return (
-            <Link
-              key={l.route}
-              href={l.route}
-              onPress={() => onNavigate()}
-              style={[styles.navLink, isCollapsed && styles.navLinkIcon, active && styles.navLinkActive]}
-              accessibilityLabel={l.label}>
-              {isCollapsed ? (
-                <IconSymbol size={20} name={l.icon} color={active ? colors.text : colors.muted} />
-              ) : (
-                <Text style={[styles.navLinkText, active && { color: colors.text }]}>{l.label}</Text>
-              )}
-            </Link>
-          );
-        })}
-      </View>
-      {isCollapsed ? (
-        <View style={{ flex: 1 }} />
-      ) : (
-        <ScrollView style={styles.accts}>
-          {groups.map(({ key, label, accs }) => {
-            const open = !groupCollapsed[key];
-            return (
-              <View key={key}>
-                <Pressable style={styles.acctGroupRow} onPress={() => toggleGroup(key)}>
-                  <Text style={styles.acctGroupText}>{open ? '▾' : '▸'}</Text>
-                  <Text style={[styles.acctGroupText, { flex: 1 }]}>{label}</Text>
-                  {(() => {
-                    const groupTotal = accs.reduce(
-                      (sum, a) => sum + milliToCents(a.cleared_balance) + milliToCents(a.uncleared_balance),
-                      0,
-                    );
-                    return (
-                      <Text style={[styles.acctGroupText, groupTotal < 0 && styles.acctBalanceNeg]}>
-                        {formatMoney(groupTotal)}
-                      </Text>
-                    );
-                  })()}
-                </Pressable>
-                {open
-                  ? accs.map((a) => {
-                      const bal = workingBalance({
-                        clearedBalance: milliToCents(a.cleared_balance),
-                        unclearedBalance: milliToCents(a.uncleared_balance),
-                      } as never);
-                      return (
-                        <Pressable
-                          key={a.id}
-                          onPress={() => selectAccount(a.id)}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            setEditAccount(a);
-                          }}
-                          onLongPress={() => setEditAccount(a)}
-                          accessibilityLabel={`Open account ${a.name}`}
-                          style={[styles.acctRow, accountParam === a.id && styles.acctRowSelected]}>
-                          <View style={styles.acctNameCol}>
-                            <Text style={styles.acctName} numberOfLines={1}>
-                              {a.name}
-                            </Text>
-                          </View>
-                          <AccountOwnerFace person={personOf(a.user_id)} />
-                          <Text style={[styles.acctBalance, bal < 0 && styles.acctBalanceNeg]}>
-                            {formatMoney(bal)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })
-                  : null}
-              </View>
-            );
-          })}
-          <Pressable
-            style={styles.addAccountBtn}
-            onPress={() => setAddAccountOpen(true)}
-            accessibilityLabel="Add Account">
-            <Text style={styles.addAccountText}>＋ Add Account</Text>
-          </Pressable>
-        </ScrollView>
-      )}
-      <View style={[styles.railFoot, { paddingBottom: bottomInset }, isCollapsed && styles.railFootCenter]}>
-        {editAccount && budgetId ? (
-          <AccountEditModal account={editAccount} budgetId={budgetId} onClose={() => setEditAccount(null)} />
-        ) : null}
-        {addAccountOpen && budgetId ? (
-          <AddAccountModal budgetId={budgetId} visible onClose={() => setAddAccountOpen(false)} />
-        ) : null}
-        {/* Profile entry: the viewer's avatar + name (the rail is also the tablet/phone drawer). */}
-        <View style={isCollapsed ? undefined : styles.footMe}>
-          <MeAvatarButton size={isCollapsed ? 24 : 28} />
-          {isCollapsed || !me ? null : (
-            <Text style={styles.footMeName} numberOfLines={1}>
-              {personLabel(me)}
-            </Text>
-          )}
-        </View>
-        {collapsed != null ? (
-          <Pressable
-            style={[styles.railFootToggle, isCollapsed && styles.railFootToggleIcon]}
-            onPress={() => onSetCollapsed?.(!collapsed)}
-            accessibilityLabel={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-            <IconSymbol size={18} name={collapsed ? 'chevron.right' : 'chevron.left'} color={colors.muted} />
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-}
 
 export function BudgetLayout() {
   const media = useMedia();
@@ -364,10 +114,9 @@ export function BudgetLayout() {
     // archived rows: while Budgets refetches after a fresh-start the
     // not-yet-listed replacement must not be bounced back to data[0] —
     // which an archive reorder makes an archived budget.
-    if (!restored || !budgets.data?.length) return;
-    if (!budgetId || !budgets.data.some((b) => b.id === budgetId)) {
-      void dispatch(switchBudget(budgets.data.find((b) => !b.archived_at)?.id ?? budgets.data[0].id));
-    }
+    if (!restored) return;
+    const fallback = fallbackBudgetId(budgets.data, budgetId);
+    if (fallback) void dispatch(switchBudget(fallback));
   }, [restored, budgetId, budgets.data, dispatch]);
 
   const router = useRouter();
@@ -416,105 +165,7 @@ export function BudgetLayout() {
           />
         ) : null}
         <View style={{ flex: 1 }}>
-          <Tabs
-            screenOptions={{
-              headerShown: false,
-              tabBarActiveTintColor: colors.indigo2,
-              tabBarInactiveTintColor: colors.faint,
-              tabBarStyle: isPhone
-                ? {
-                    backgroundColor: 'rgba(10,12,18,.96)',
-                    borderTopColor: colors.border,
-                    borderTopWidth: 1,
-                  }
-                : { display: 'none' },
-            }}>
-            <Tabs.Screen
-              name="index"
-              options={{
-                title: 'Home',
-                tabBarIcon: ({ color }) => <IconSymbol size={22} name="house.fill" color={color} />,
-              }}
-            />
-            <Tabs.Screen
-              name="plan"
-              options={{
-                title: 'Plan',
-                tabBarIcon: ({ color }) => <IconSymbol size={22} name="list.bullet" color={color} />,
-              }}
-            />
-            <Tabs.Screen
-              name="spending"
-              options={{
-                title: 'Spending',
-                tabBarIcon: ({ color }) => <IconSymbol size={22} name="creditcard.fill" color={color} />,
-              }}
-            />
-            <Tabs.Screen
-              name="accounts"
-              options={{
-                title: 'Accounts',
-                tabBarIcon: ({ color }) => (
-                  <IconSymbol size={22} name="building.columns.fill" color={color} />
-                ),
-              }}
-            />
-            <Tabs.Screen
-              name="reflect"
-              options={{
-                title: 'Reflect',
-                tabBarIcon: ({ color }) => <IconSymbol size={22} name="chart.bar.fill" color={color} />,
-              }}
-            />
-            {/* Import is a destination page, not a tab. SDK 58 makes `href: null`
-                screens unreachable (focused hidden tabs redirect to the first
-                visible tab), so these stay registered but render no tab button;
-                on the phone bar their slots also collapse to zero width. */}
-            <Tabs.Screen
-              name="import"
-              options={{
-                tabBarButton: () => null,
-                tabBarItemStyle: { display: 'none' },
-              }}
-            />
-            <Tabs.Screen
-              name="backup"
-              options={{
-                tabBarButton: () => null,
-                tabBarItemStyle: { display: 'none' },
-              }}
-            />
-            <Tabs.Screen
-              name="payees"
-              options={{
-                tabBarButton: () => null,
-                tabBarItemStyle: { display: 'none' },
-              }}
-            />
-            <Tabs.Screen
-              name="connect-bank"
-              options={{
-                tabBarButton: () => null,
-                tabBarItemStyle: { display: 'none' },
-              }}
-            />
-            {/* Per-bank settings: pushed with ?id=<connectionId>, never a tab. */}
-            <Tabs.Screen
-              name="connection"
-              options={{
-                tabBarButton: () => null,
-                tabBarItemStyle: { display: 'none' },
-              }}
-            />
-            {/* Linked-account detail: pushed with ?account=<id>, never a tab. */}
-            <Tabs.Screen
-              name="linked-account"
-              options={{
-                tabBarButton: () => null,
-                tabBarItemStyle: { display: 'none' },
-              }}
-            />
-          </Tabs>
+          <BudgetTabs isPhone={isPhone} />
         </View>
 
         {/* Tablet/phone chrome: ☰ opens the rail drawer (Settings lives there). */}
@@ -596,17 +247,6 @@ export function BudgetLayout() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: 'row', backgroundColor: colors.bg },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  footMe: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
-  footMeName: { color: colors.muted, fontSize: 12, fontWeight: '600', flexShrink: 1 },
-  switchRowCollapsed: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 6,
-  },
   maskBanner: {
     position: 'absolute',
     left: 0,
@@ -624,72 +264,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  rail: {
-    width: 236,
-    height: '100%',
-    backgroundColor: colors.railBg,
-    borderRightWidth: 1,
-    borderRightColor: colors.border,
-    paddingVertical: 13,
-    paddingHorizontal: 11,
-    gap: 4,
-  },
-  nav: { marginTop: 14, gap: 2 },
-  navLink: { paddingVertical: 9, paddingHorizontal: 12, borderRadius: radius.sm },
-  navLinkActive: { backgroundColor: colors.indigoSoft },
-  navLinkText: { color: colors.muted, fontSize: 14, fontWeight: '600' },
-  accts: { marginTop: 16, flex: 1 },
-  acctGroupRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  acctGroupText: {
-    color: colors.faint,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  acctRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    gap: 8,
-  },
-  acctName: { color: colors.text, fontSize: 13, flex: 1 },
-  acctNameCol: { flex: 1, gap: 1 },
-  acctBalance: { color: colors.greenPillFg, fontSize: 13, fontVariant: ['tabular-nums'] },
-  acctBalanceNeg: { color: colors.redFg },
-  addAccountBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  addAccountText: { color: colors.indigo3, fontSize: 13, fontWeight: '600' },
-  railCollapsed: { width: 64, paddingHorizontal: 8 },
-  navLinkIcon: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 0 },
-  acctRowSelected: { backgroundColor: colors.indigo2 + '2e' },
-  railFoot: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  railFootCenter: { justifyContent: 'center', gap: 2 },
-  railFootToggle: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  railFootToggleIcon: { width: 22 },
   chromeBtn: {
     position: 'absolute',
     width: 34,
