@@ -475,8 +475,13 @@ worklets). Left as is: the phase copies syscd's versions.
 
 ### Smoke test
 
-The API on `main` is still the phase 0 hello app, so the full walk against a
-real API (level 2) was not possible. Reached level 1: the web export (API
+Level 2 (the walk against the real API) was not run. When this phase started,
+`main` only had the phase 0 hello API; the phase 2 API landed on `main` while
+it ran and was merged in at the end. Booting it needs `DATABASE_URL` for
+`budgetnew_dev`: the shared Postgres on :5432 rejected `postgres` without a
+password (`auth_failed`), no credentials were in the environment, syscd's
+`.env` is off-limits, and `api/` was not to be touched (its `node_modules` on
+`main` predates phase 2 and lacks `pg`). Reached level 1: the web export (API
 URL `http://localhost:3100`, nothing listening) served on :8092 boots with no
 page errors and shows "Can't reach the API" / `http://localhost:3100`
 (`docs/evidence/phase3/level1-cannot-reach-api-1440.png`).
