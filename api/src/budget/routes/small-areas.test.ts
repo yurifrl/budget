@@ -103,7 +103,7 @@ describe.skipIf(!dbReady)('small budget areas (characterisation)', () => {
     expect((await op('budget_groups_rename', { id: g1, budget_id: B, name: 'Renamed' })).status).toBe(204);
     const miss = await op('budget_groups_rename', { id: crypto.randomUUID(), budget_id: B, name: 'x' });
     expect(miss.status).toBe(404);
-    expect(miss.json).toEqual({ error: 'category group not found' });
+    expect(miss.json).toEqual({ error: 'category group not found', code: 'not_found' });
     expect((await op('budget_groups_rename', { id: otherGroup, budget_id: B, name: 'x' })).status).toBe(404);
     const row = await pool.query('SELECT name FROM category_groups WHERE id = $1', [g1]);
     expect(row.rows[0].name).toBe('Renamed');
@@ -148,7 +148,7 @@ describe.skipIf(!dbReady)('small budget areas (characterisation)', () => {
       rows: [{ category_id: c2, assigned: 50 }, { category_id: otherCat, assigned: 50 }],
     });
     expect(bad.status).toBe(400);
-    expect(bad.json).toEqual({ error: 'category not found in budget' });
+    expect(bad.json).toEqual({ error: 'category not found in budget', code: 'bad_request' });
     const none = await pool.query(`SELECT 1 FROM assignments WHERE budget_id = $1 AND month = '2026-04-01'`, [B]);
     expect(none.rowCount).toBe(0);
   });
@@ -165,7 +165,7 @@ describe.skipIf(!dbReady)('small budget areas (characterisation)', () => {
     expect((await op('budget_category_targets_delete', { categoryId: c1, budget_id: B })).status).toBe(204);
     const miss = await op('budget_category_targets_delete', { categoryId: c1, budget_id: B });
     expect(miss.status).toBe(404);
-    expect(miss.json).toEqual({ error: 'target not found' });
+    expect(miss.json).toEqual({ error: 'target not found', code: 'not_found' });
   });
 
   test('category notes: set upserts per month, list by month, 404 for foreign category', async () => {

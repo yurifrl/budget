@@ -18,7 +18,7 @@
 
 import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
-import { HttpError } from '../../core/validate';
+import { HttpError, errorResponse } from '../../core/validate';
 import type { IdentityUser } from '../../user';
 import { budgetRestore } from '@shared/contracts/budget';
 import { upgradeRestorePayload } from '@shared/contracts/budget/schemas';
@@ -56,8 +56,8 @@ export const operations = [
   implement(budgetRestore, async (c, { budget_id: budgetId, ...input }) => {
     const payload = upgradeRestorePayload(input);
     const user: IdentityUser | undefined = c.get('user');
-    if (!user) return c.json({ error: 'unauthorized' }, 401);
-    if (!(await isBudgetOwnerOrAdmin(user, budgetId))) return c.json({ error: 'not found' }, 404);
+    if (!user) return errorResponse(c, 401, 'unauthorized');
+    if (!(await isBudgetOwnerOrAdmin(user, budgetId))) return errorResponse(c, 404, 'not found');
 
     return withTransaction(pool, async (client) => {
 

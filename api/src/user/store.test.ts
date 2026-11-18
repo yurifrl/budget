@@ -139,7 +139,7 @@ describe.skipIf(!reachable)('gated chain (criterion 2: per-request authority rea
 
     const denied = await app.request('/admin', { headers });
     expect(denied.status).toBe(403);
-    expect(await denied.json()).toEqual({ error: 'forbidden' });
+    expect(await denied.json()).toEqual({ error: 'forbidden', code: 'forbidden' });
 
     await pool.query(`update public.users set role = 'admin' where email = 'user@x.com'`);
     const promoted = await app.request('/admin', { headers });

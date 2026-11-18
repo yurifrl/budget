@@ -1,5 +1,6 @@
 import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
+import { errorResponse } from '../../core/validate';
 import {
   budgetArchive,
   budgetCreate,
@@ -26,7 +27,7 @@ export const operations = [
    */
   implement(budgetList, async (c) => {
     const user: IdentityUser | undefined = c.get('user');
-    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    if (!user) return errorResponse(c, 401, 'unauthorized');
 
     const principal = c.get('principal');
     // The dev bypass (auth unconfigured, no principal, the synthetic dev user)
@@ -64,14 +65,14 @@ export const operations = [
    */
   implement(budgetFreshStart, async (c, body) => {
     const user: IdentityUser | undefined = c.get('user');
-    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    if (!user) return errorResponse(c, 401, 'unauthorized');
     return withTransaction(pool, async (client) => {
       const current = await budgetsStore.lockOwnedBudget(client, body.budget_id, user);
       // Early exits happen before any write: the transaction only holds the
       // row lock, so the COMMIT withTransaction issues has the same effect as
       // the explicit ROLLBACK these exits used to send.
-      if (!current) return c.json({ error: 'not_found' }, 404);
-      if (current.archived_at !== null) return c.json({ error: 'already_archived' }, 409);
+      if (!current) return errorResponse(c, 404, 'not_found');
+      if (current.archived_at !== null) return errorResponse(c, 409, 'already_archived', 'already_archived');
       // "Casa" → "Casa 2026-10-24 14:05" — the timestamp is the access key for
       // the archive (visible in the switcher row itself), so it lands in the
       // name AND the archived_at column.
@@ -92,7 +93,7 @@ export const operations = [
 
   implement(budgetCreate, async (c, body) => {
     const user: IdentityUser | undefined = c.get('user');
-    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    if (!user) return errorResponse(c, 401, 'unauthorized');
     return withTransaction(pool, async (client) => {
       // Ownership resolves from the request identity — never the client body.
       const budget = await budgetsStore.insertBudget(client, body.name, user.id);
@@ -108,9 +109,9 @@ export const operations = [
    */
   implement(budgetRename, async (c, body) => {
     const user: IdentityUser | undefined = c.get('user');
-    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    if (!user) return errorResponse(c, 401, 'unauthorized');
     const updated = await budgetsStore.renameOwnedBudget(pool, body.id, body.name, user);
-    if (!updated) return c.json({ error: 'not_found' }, 404);
+    if (!updated) return errorResponse(c, 404, 'not_found');
     return c.json(updated);
   }),
 
@@ -122,9 +123,9 @@ export const operations = [
    */
   implement(budgetArchive, async (c, { id }) => {
     const user: IdentityUser | undefined = c.get('user');
-    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    if (!user) return errorResponse(c, 401, 'unauthorized');
     const archived = await budgetsStore.archiveOwnedBudget(pool, id, user);
-    if (!archived) return c.json({ error: 'not_found' }, 404);
+    if (!archived) return errorResponse(c, 404, 'not_found');
     return c.json(archived);
   }),
 
@@ -134,9 +135,9 @@ export const operations = [
    */
   implement(budgetUnarchive, async (c, { id }) => {
     const user: IdentityUser | undefined = c.get('user');
-    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    if (!user) return errorResponse(c, 401, 'unauthorized');
     const restored = await budgetsStore.unarchiveOwnedBudget(pool, id, user);
-    if (!restored) return c.json({ error: 'not_found' }, 404);
+    if (!restored) return errorResponse(c, 404, 'not_found');
     return c.json(restored);
   }),
 
@@ -148,9 +149,9 @@ export const operations = [
    */
   implement(budgetDelete, async (c, { id }) => {
     const user: IdentityUser | undefined = c.get('user');
-    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    if (!user) return errorResponse(c, 401, 'unauthorized');
     const deleted = await budgetsStore.deleteOwnedBudget(pool, id, user);
-    if (!deleted) return c.json({ error: 'not_found' }, 404);
+    if (!deleted) return errorResponse(c, 404, 'not_found');
     return c.json({ deleted: true });
   }),
 ];

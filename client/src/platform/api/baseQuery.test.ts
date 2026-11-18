@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { BaseQueryApi } from '@reduxjs/toolkit/query';
 
-import { apiBaseQuery, type ApiQuery } from './baseQuery';
+import { apiBaseQuery, apiErrorMessage, type ApiQuery } from './baseQuery';
 import { Container } from '../di/container';
 import { Tokens } from '../di/tokens';
 import type { KVStore } from '../storage/types';
@@ -83,6 +83,19 @@ describe('apiBaseQuery', () => {
       expect(result).toEqual({
         error: { status: 400, message: 'budget_id is required' },
       });
+    } finally {
+      restore();
+    }
+  });
+
+  test('4xx carries the machine-readable code next to the message', async () => {
+    const restore = stubFetch(async () =>
+      new Response(JSON.stringify({ error: 'account is closed', code: 'conflict' }), { status: 409 }),
+    );
+    try {
+      const result = await call({ url: '/transactions', method: 'POST' }, makeApi());
+      expect(result).toEqual({ error: { status: 409, message: 'account is closed', code: 'conflict' } });
+      expect(apiErrorMessage((result as { error: unknown }).error)).toBe('account is closed');
     } finally {
       restore();
     }

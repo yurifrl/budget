@@ -5,6 +5,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { issueSession, verifyAccessToken, verifySession } from './auth';
 import { authConfig } from './config';
 import { googleConfigured, googleAuthUrl, exchangeCode } from './google';
+import { errorResponse } from '../core/validate';
 import { safeReturnTo } from './return-to';
 import type { SessionPrincipal } from './types';
 import { EmailAlreadyProvisionedError, isGrantActive, resolveOrCreateSessionUser } from './store';
@@ -104,11 +105,11 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     // fails closed. No credentials at all → 401 at the gate as today.
     const auth = c.req.header('Authorization');
     if (auth?.startsWith('Bearer ')) return next();
-    return c.json({ error: 'unauthorized' }, 401);
+    return errorResponse(c, 401, 'unauthorized');
   }
   // Access tokens carry a scope: without `write` the grant is read-only.
   if (claims.scope !== undefined && !SAFE_METHODS.has(c.req.method) && !claims.scope.split(' ').includes('write')) {
-    return c.json({ error: 'insufficient_scope' }, 403);
+    return errorResponse(c, 403, 'insufficient_scope', 'insufficient_scope');
   }
   // Principal claims feed the identity seam: requireUser resolves the
   // DB-authoritative user row from these per request (D-05).
@@ -123,11 +124,11 @@ export function mountAuthRoutes(app: Hono): void {
     if (authDisabled()) return c.json({ email: 'dev@localhost' });
     // Session OR OAuth access token (the CLI's `whoami`); both resolve to an email.
     const user = await principalFromRequest(c);
-    return user ? c.json({ email: user.email }) : c.json({ error: 'unauthorized' }, 401);
+    return user ? c.json({ email: user.email }) : errorResponse(c, 401, 'unauthorized');
   });
 
   app.get('/auth/google', (c) => {
-    if (!googleConfigured()) return c.json({ error: 'google not configured' }, 503);
+    if (!googleConfigured()) return errorResponse(c, 503, 'google not configured');
     const state = crypto.randomUUID();
     setCookie(c, STATE_COOKIE, state, {
       httpOnly: true,
@@ -204,7 +205,7 @@ export function mountAuthRoutes(app: Hono): void {
    * personal allowlisted app.
    */
   app.get('/auth/google/native', (c) => {
-    if (!googleConfigured()) return c.json({ error: 'google not configured' }, 503);
+    if (!googleConfigured()) return errorResponse(c, 503, 'google not configured');
     const appUri = c.req.query('redirect_uri') ?? '';
     const schemes = authConfig().nativeRedirectSchemes;
     if (!schemes.some((p) => appUri.toLowerCase().startsWith(p.toLowerCase()))) {
@@ -233,15 +234,15 @@ export function mountAuthRoutes(app: Hono): void {
     const expected = sep < 0 ? null : Buffer.from(exchangeTicket(state.slice(0, sep)));
     const got = sep < 0 ? null : Buffer.from(state.slice(sep + 1));
     if (!expected || !got || expected.length !== got.length || !timingSafeEqual(expected, got)) {
-      return c.json({ error: 'login expired, try again' }, 400);
+      return errorResponse(c, 400, 'login expired, try again');
     }
     const id = await exchangeCode(c.req.query('code') ?? '', `${apiBaseUrl()}/auth/google/native/callback`);
-    if (!id || !id.emailVerified) return c.json({ error: 'could not verify your Google account' }, 401);
-    if (!isAllowed(id.email)) return c.json({ error: 'not authorized' }, 403);
+    if (!id || !id.emailVerified) return errorResponse(c, 401, 'could not verify your Google account');
+    if (!isAllowed(id.email)) return errorResponse(c, 403, 'not authorized');
     try {
       await resolveOrCreateSessionUser(id.email, { sub: id.sub, name: id.name });
     } catch (err) {
-      if (err instanceof EmailAlreadyProvisionedError) return c.json({ error: 'email already provisioned' }, 403);
+      if (err instanceof EmailAlreadyProvisionedError) return errorResponse(c, 403, 'email already provisioned');
       throw err;
     }
     return c.json({ token: await issueSession(secret(), id.email, ttlSeconds()), email: id.email });

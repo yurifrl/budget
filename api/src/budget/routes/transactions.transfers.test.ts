@@ -269,7 +269,7 @@ for (const lane of ['client', 'none'] as const) {
       // Moving it onto its own peer would be a self-transfer: rejected, nothing changes.
       const self = await patch(body!.id, { account_id: A.itau });
       expect(self.status).toBe(400);
-      expect(await self.json()).toEqual({ error: 'cannot transfer to the same account' });
+      expect(await self.json()).toEqual({ error: 'cannot transfer to the same account', code: 'bad_request' });
       await expectLedgerConsistent(all);
       await remove(body!.id);
     });
@@ -347,7 +347,7 @@ for (const lane of ['client', 'none'] as const) {
       const before = (await pool!.query('SELECT count(*)::int AS n FROM transactions WHERE budget_id = $1', [budgetId])).rows[0].n;
       const self = await create({ account_id: A.itau });
       expect(self.res.status).toBe(400);
-      expect(await self.res.json()).toEqual({ error: 'cannot transfer to the same account' });
+      expect(await self.res.json()).toEqual({ error: 'cannot transfer to the same account', code: 'bad_request' });
 
       const split = await send('POST', '/transactions', {
         budget_id: budgetId,
@@ -358,7 +358,7 @@ for (const lane of ['client', 'none'] as const) {
         ],
       });
       expect(split.status).toBe(400);
-      expect(await split.json()).toEqual({ error: 'a transfer cannot be split' });
+      expect(await split.json()).toEqual({ error: 'a transfer cannot be split', code: 'bad_request' });
 
       const after = (await pool!.query('SELECT count(*)::int AS n FROM transactions WHERE budget_id = $1', [budgetId])).rows[0].n;
       expect(after).toBe(before);

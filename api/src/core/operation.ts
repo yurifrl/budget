@@ -11,7 +11,7 @@
  *  - a `Response`  -> passed through untouched (custom status/headers);
  *  - `undefined`   -> 204 No Content;
  *  - anything else -> JSON with the contract's `status` (default 200).
- * Failures throw `HttpError` (-> `{ error }` via httpOnError).
+ * Failures throw `HttpError` (-> `{ error, code }` via httpOnError).
  */
 import type { Context, Hono, MiddlewareHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -50,7 +50,7 @@ async function readBody(c: Context): Promise<unknown> {
   try {
     return JSON.parse(text);
   } catch {
-    throw new HttpError(400, 'request body must be valid JSON');
+    throw new HttpError(400, 'request body must be valid JSON', 'invalid_input');
   }
 }
 
@@ -64,7 +64,7 @@ async function parseInput<I extends InputSchema>(c: Context, contract: Operation
     raw[contract.bodyKey] = body;
   } else if (loc.body.length > 0) {
     if (body !== undefined && (body === null || typeof body !== 'object' || Array.isArray(body))) {
-      throw new HttpError(400, 'request body must be a JSON object');
+      throw new HttpError(400, 'request body must be a JSON object', 'invalid_input');
     }
     const obj = (body ?? {}) as Record<string, unknown>;
     for (const key of loc.body) if (key in obj) raw[key] = obj[key];
