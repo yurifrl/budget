@@ -290,6 +290,32 @@ describe.skipIf(!dbReady)('transaction writes: server-derived deltas (client-sup
     expect(await balances(lanes.client.a)).toEqual(after);
   });
 
+  test('pin (syscd parity): a future-dated manual create/delete without deltas moves the cached balance', async () => {
+    const before = await balances(lanes.server.a);
+    const res = await send('POST', '/transactions', {
+      budget_id: budgetId,
+      txn: {
+        account_id: lanes.server.a,
+        date: '2099-02-01',
+        payee: '',
+        category_id: null,
+        memo: '',
+        outflow_cents: 500,
+        inflow_cents: 0,
+        cleared: 'uncleared',
+        approved: true,
+        flag: null,
+        repeat: '',
+      },
+    });
+    expect(res.status).toBe(201);
+    const after = await balances(lanes.server.a);
+    expect(after.uncleared - before.uncleared).toBe(-5000);
+    const id = ((await res.json()) as { id: string }).id;
+    expect((await send('DELETE', `/transactions/${id}?budget_id=${budgetId}`)).status).toBe(204);
+    expect(await balances(lanes.server.a)).toEqual(before);
+  });
+
   test('deleting a pending upcoming occurrence derives no delta (its delta was withheld)', async () => {
     const accountId = lanes.server.a;
     const before = await balances(accountId);

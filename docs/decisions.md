@@ -222,10 +222,11 @@ server. The input schemas are not strict, so a request that still carries
 `deltas` is accepted and the key is ignored (stripped), not rejected. Tests:
 `shared/src/contracts/budget/transactions.test.ts` and, against a real DB,
 `api/src/budget/domain/transactions.test.ts` ("client-supplied deltas are
-ignored"). A consequence: an empty `deltas: []` can no longer mean "move
-nothing", so a manually created future-dated row now counts toward the account
-balance (one `fresh-start` test expectation changed accordingly).
-`balanceDeltaSchema` stays in `shared/src/validation.ts`, unused.
+ignored"). Not a divergence from syscd: its no-deltas path (`server/budget/routes/transactions.ts:112,500-506,567`,
+`deriveDeltas` at `domain/transactions.ts:132`, no date logic) already moves the cached
+balance for a future-dated manual row. The old `fresh-start` test only skipped that
+because it sent explicit `deltas: []`; its expectation changed accordingly and a
+parity test pins the real behaviour. `balanceDeltaSchema` stays in `shared/src/validation.ts`, unused.
 
 ### Contracts and imports
 
