@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { assocRules, makeDraftRows } from "./assoc";
 import type { PayeeRow } from "../data/rows";
-import type { ImportParseResult } from "./types";
+import type { ImportParseResult } from "../domain/importTypes";
 
 const parsed: ImportParseResult = {
   rows: [

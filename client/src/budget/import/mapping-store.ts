@@ -8,7 +8,7 @@
 
 import { token } from '@/platform/di/container';
 import type { KVStore } from '@/platform/storage/types';
-import type { CsvMapping } from './types';
+import type { CsvMapping } from '../domain/importTypes';
 
 export interface ImportMappingStore {
   /** Load the saved mapping for an account; null when none saved yet. */

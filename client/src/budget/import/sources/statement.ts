@@ -7,7 +7,7 @@
 import { parseImportCsv } from './generic-csv';
 import { parseItauExtratoTxt, parseItauExtratoXls, parseItauFaturaXls } from './itau';
 import { detectNubankLayout, parseNubankCsv } from './nubank';
-import type { ImportParseResult } from '../types';
+import type { ImportParseResult } from '../../domain/importTypes';
 
 // ---------------------------------------------------------------------------
 // Statement dispatcher: route by filename extension, like ynabu's parser

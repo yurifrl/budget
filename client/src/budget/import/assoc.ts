@@ -6,7 +6,7 @@
  */
 
 import type { PayeeRow } from '../data/rows';
-import type { ImportRow } from './types';
+import type { ImportRow } from '../domain/importTypes';
 
 /**
  * One review row: a parsed statement row the user can edit in place, exclude,

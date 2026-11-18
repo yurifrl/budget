@@ -32,7 +32,7 @@ export type {
   CsvMapping,
   ImportParseResult,
   ImportRow,
-} from './types';
+} from '../domain/importTypes';
 export {
   createImportMappingStore,
   emptyMapping,

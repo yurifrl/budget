@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx';
 
 import { parseImportDate } from '../util/date';
 import { parseImportAmount } from '../util/money';
-import type { ImportParseResult, ImportRow } from '../types';
+import type { ImportParseResult, ImportRow } from '../../domain/importTypes';
 
 // ---------------------------------------------------------------------------
 // Itaú extrato TXT: "dd/mm/yyyy;payee;value" — signed pt-BR amounts

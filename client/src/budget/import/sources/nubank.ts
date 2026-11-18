@@ -8,7 +8,7 @@
 import { parseCsv, sniffDelimiter } from '../util/csv';
 import { parseImportDate } from '../util/date';
 import { parseImportAmount } from '../util/money';
-import type { ImportParseResult, ImportRow } from '../types';
+import type { ImportParseResult, ImportRow } from '../../domain/importTypes';
 
 /** A parsed row that also carries the dedupe key used by the bulk endpoint. */
 export interface NubankRow extends ImportRow {

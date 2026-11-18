@@ -7,7 +7,7 @@
 import { parseCsv, sniffDelimiter } from '../util/csv';
 import { parseImportDate } from '../util/date';
 import { parseImportAmount } from '../util/money';
-import type { ColumnKey, CsvMapping, ImportParseResult, ImportRow } from '../types';
+import type { ColumnKey, CsvMapping, ImportParseResult, ImportRow } from '../../domain/importTypes';
 
 // ---------------------------------------------------------------------------
 // Header detection and column mapping
