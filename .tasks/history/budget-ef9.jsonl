@@ -1,0 +1,1 @@
+{"issue_id":"budget-ef9","action":"save","at":"2026-11-18T11:11:02.451Z","actor":null,"data":{"status":"open","title":"client: align expo, @expo/ui, expo-file-system, expo-web-browser to SDK-58 versions after 2026-11-19 12:00 UTC (48h package-age gate) and drop them from expo.install.exclude"}}

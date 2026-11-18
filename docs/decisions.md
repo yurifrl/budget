@@ -547,6 +547,47 @@ accounts is in `docs/MORNING.md`.
   red on that one step; every other job passed (shared, api incl. e2e,
   admin, three Docker builds).
 
+### expo-doctor: aligned versions and declared pins (2026-11-18, wrap-up)
+
+CI's `client` job ran `bunx expo-doctor`, which failed on 11 packages that
+differ from the versions Expo's SDK-58 list expects. Each was resolved one
+way or the other; the step stays blocking.
+
+Aligned to the SDK-expected version (`bunx expo install`; these are
+downgrades from syscd's versions): `react` / `react-dom` 19.3.1 -> 19.3.0,
+`react-native-gesture-handler` 3.5.0 -> ~3.3.0, `react-native-svg` 15.16.1
+-> 15.16.0, `react-native-worklets` 0.13.1 -> 0.13.0. After the change:
+client tsc clean, eslint clean, `bun test` 1054 pass, web export (1946
+modules) and iOS export (2451 modules) bundle, and a web smoke against a local
+API on `budgetnew_dev` behaved like the build from `main` side by side: rail
+navigation and browser Back (same history lengths and Back targets in both),
+a category drag reorder (persisted, then put back), and a number-format
+change that survived a reload (then put back). iOS was not run.
+
+Declared as intentional pins in `client/package.json` `expo.install.exclude`
+(the mechanism Expo documents for this; expo-doctor and `expo install
+--check` skip them):
+
+- `expo-router` (58.0.23, expected ~58.0.32): the browser-Back fix, see
+  `docs/evidence/parity/REPORT.md` regression 1. Later patches replace the
+  history entry on tab navigation.
+- `@react-native-async-storage/async-storage` (3.1.1, expected 2.2.0):
+  syscd ships 3.1.1; going to 2.x is a major downgrade of the storage layer
+  (where the native session token migrates from), not worth the risk for a
+  version check.
+- `expo` (58.0.25 -> ~58.0.26), `@expo/ui` (58.0.28 -> ~58.0.29),
+  `expo-file-system` (58.0.13 -> ~58.0.14), `expo-web-browser` (58.0.8 ->
+  ~58.1.0): the expected versions were published on 2026-11-17 around
+  12:00 UTC. This machine's package installer refuses packages younger than
+  48 hours (supply-chain policy, not bypassed), so they cannot be installed
+  before 2026-11-19 12:00 UTC. Temporary: after that date remove these four
+  from the exclude list and run `bunx expo install expo @expo/ui
+  expo-file-system expo-web-browser` (follow-up `budget-ef9`).
+
+Note that the expected versions come from Expo's servers and move whenever
+Expo publishes an SDK-58 patch, so this check can turn red again without a
+commit here; the fix is the same choice (align, or declare the pin).
+
 ## Phase 5b: API structure
 
 Behaviour-preserving: the API runs against the same database as syscd, so no
