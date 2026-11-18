@@ -32,6 +32,7 @@ async function exercise(client: Client, label: string): Promise<void> {
   say(`[${label}] sample: ${names.slice(0, 5).join(', ')}`);
   const read = await client.callTool({ name: 'budget_list', arguments: {} });
   say(`[${label}] call budget_list -> isError=${read.isError ?? false} ${redact(JSON.stringify(read.content)).slice(0, 160)}`);
+  if (read.isError) throw new Error(`[${label}] budget_list failed`);
   if (!names.includes('budget_transaction_add')) {
     say(`[${label}] (read-only grant: no write tool listed)`);
     return;
@@ -41,7 +42,7 @@ async function exercise(client: Client, label: string): Promise<void> {
     arguments: { budget_id, account_id, amount: -2500, payee: `E2E MCP ${label}`, memo: `hobj e2e ${label}` },
   });
   say(`[${label}] call budget_transaction_add -> isError=${write.isError ?? false} ${redact(JSON.stringify(write.content)).slice(0, 160)}`);
-  if (read.isError || write.isError) throw new Error(`[${label}] a tool call failed`);
+  if (write.isError) throw new Error(`[${label}] budget_transaction_add failed`);
 }
 
 /**
