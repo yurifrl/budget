@@ -920,3 +920,55 @@ for every statement touching `accounts`:
   client's `ApiQuery` is now an alias of shared `ContractRequest`.
 - **Errors (G12-low).** `{ error, code }`, see `shared/README.md`. The client's
   `ApiQueryError` carries `code`; `apiErrorMessage` is unchanged.
+
+### Phase 5c/5d checks (2026-11-18, branch `tk/budget-ku4`)
+
+| Check | Result |
+|---|---|
+| `bunx tsc --noEmit` shared / api / client / admin | clean |
+| `bunx eslint .` shared / api / client | 0 errors; client 8 warnings (was 10; none new) |
+| `bun test` shared | 43 pass (was 34) |
+| `BUDGET_REQUIRE_TEST_DB=1 bun test` api | 838 pass, 0 fail (was 785), with output validation on |
+| `bun test` client | 679 pass (was 666; 5 contractRequest tests moved to shared) |
+| admin `vite build` | built |
+| `scripts/e2e-api.sh` (psql shimmed with `pg`; no psql on this host) | exit 0: OAuth consent, 66 MCP tools rw / 24 ro, `budget_transaction_add` with `amount` in milliunits |
+| `expo export --platform web` | 1812 modules |
+| Real stack: API on :3197 against `budgetnew_dev` (migrator applied `0100_account_currency.sql`), web export on :8197; the pre-change build (08ff6fd) on :3198/:8198 against the same database | see below |
+
+End to end with `agent-browser` at 1440x900 on the Trabalho budget, all
+through the new UI, verified through the API:
+
+- add a transaction of 12,34 on Carteira: stored `12340`;
+- edit it to 56,78: stored `56780`;
+- assign 100,00 to Psiquiatra: assignment `100000`;
+- move 25,50 from Mercado to Transporte: `750000 -> 724500` and
+  `300000 -> 325500` (exactly 25500);
+- transfer 10,00 Carteira -> Itau Cartão: legs `-10000` / `+10000`, linked
+  both ways. (A first try to Poupança Nubank answered 400 "transfer account
+  not found in budget" on the old and the new API alike: Trabalho's transfer
+  payees for two accounts point at Casa's accounts, a pre-existing restore
+  bug, follow-up `budget-njc`.)
+- Plan and Accounts rendered by the new and the old build, same data, before
+  and after the writes: the page text is identical (151 amount strings on
+  Plan, 95/98 on Accounts) and the 1440 screenshots are pixel-identical (0
+  differing pixels). The parity screenshots in `docs/evidence/parity/1440`
+  show other data (the parity walk changed it), so the old build on the same
+  database is the baseline. The API ran with `API_VALIDATE_OUTPUT=warn`: 0
+  output-schema warnings over the whole session.
+- The test writes were reverted afterwards (rows deleted, assignments reset).
+
+Screenshots: `docs/evidence/phase5d/`. Follow-ups: `budget-njc` (restore
+transfer-payee scope), `budget-fys` (currency UI), `budget-vyz` (jobs/oauth
+outputs), `budget-ows` (currency at link time).
+
+### Assertions converted
+
+Unit changes converted 22 expected values in existing assertions (api 15:
+domain deltas 1, export 5, category targets 2, Pluggy adapter 7; client 7:
+request bodies 2, mapping 4, contractRequest 1) plus 1 rename-only
+(`usedCents` -> `used`, null); every input literal in tests was scaled x10
+explicitly. The error-code change added `code` to 15 exact error-body
+assertions and 1 key-list assertion. Two assertions encoded the old design
+and were replaced by stronger ones: "connect-token is not an operation" (now:
+it is an api-only operation) and the restore request body (now: format 2 with
+amounts x10).
