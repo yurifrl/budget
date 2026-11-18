@@ -18,10 +18,18 @@ tasks:
         cmd: cd {{.ITEM}} && bun install
 
   test:
-    desc: bun test in every package
+    desc: bun test in every package (api tests need Postgres on localhost:5432; DB budgetnew_test*)
     cmds:
       - for: { var: PACKAGES }
         cmd: cd {{.ITEM}} && bun test
+
+  test:api:
+    desc: bun test in api only, with the DB-backed suites required (no silent skips)
+    dir: api
+    env:
+      BUDGET_REQUIRE_TEST_DB: '1'
+    cmds:
+      - bun test
 
   typecheck:
     desc: tsc --noEmit in every package
@@ -30,16 +38,26 @@ tasks:
         cmd: cd {{.ITEM}} && bunx tsc --noEmit
 
   lint:
-    desc: eslint in api and client
+    desc: eslint in shared, api and client
     cmds:
+      - cd shared && bunx eslint .
       - cd api && bunx eslint .
       - cd client && bunx eslint .
 
   api:
-    desc: Run the API (default port 3100, override with API_PORT)
+    desc: Run the API in local auth-off mode (default port 3100, override with API_PORT). Needs DATABASE_URL (e.g. budgetnew_dev).
     dir: api
+    env:
+      # Explicit local-dev opt-in; the server refuses to boot without auth config otherwise.
+      AUTH_DISABLED_OK: '1'
     cmds:
       - bun --watch src/index.ts
+
+  worker:
+    desc: Run the jobs worker (Temporal worker + outbox relay; retries until Temporal is up)
+    dir: api
+    cmds:
+      - bun --watch src/worker.ts
 
   web:
     desc: Run the Expo web dev server (Metro on 8091)

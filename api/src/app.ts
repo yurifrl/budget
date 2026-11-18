@@ -1,38 +1,125 @@
+/**
+ * Builds the full HTTP app: middleware, auth routes, feature mounts. Pure —
+ * no env access, no side effects, no server startup — so entrypoints
+ * (index.ts) and tests can both consume it.
+ *
+ * Registration order preserves URL behavior exactly:
+ *  - `/health` responds before the auth gate (public liveness probe).
+ *  - Pre-gate: auth routes + the two agent-client sinks that do their own
+ *    auth (channel config, connections webhook).
+ *  - `authMiddleware` + `requireUser` gate everything mounted after them.
+ *  - Post-gate: budget (its routers carry their own prefixes), rates,
+ *    connections routes, jobs admin.
+ */
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
-import { helloGet, type HelloOutput } from '@shared/contracts/hello';
-import { inputLocations, type OperationContract } from '@shared/operation-contract';
-import type { z } from '@shared/zod';
+import budget from './budget';
+import connections, { webhook as connectionsWebhook } from './connections';
+import { contracts } from './catalog';
+import { createMcpRouter } from './mcp/index';
+import { createOAuthRouter, grantsRoutes, type OAuthConfig } from './oauth';
+import jobs from './jobs';
+import rates from './rates';
+import { authMiddleware, mountAuthRoutes } from './user/authz';
+import { accessPrincipal, authDisabled, profileRoutes, requireUser } from './user';
+import { httpOnError } from './core/validate';
 
-type Handler<C extends OperationContract> = (input: z.output<C['input']>) => unknown | Promise<unknown>;
-
-/**
- * Minimal phase-0 stand-in for syscd's `implement()`: mount one contract as a
- * Hono route, gathering input from path/query/body and validating it with the
- * contract's zod schema (from shared/'s zod instance).
- */
-function mount<C extends OperationContract>(app: Hono, contract: C, handler: Handler<C>): void {
-  const honoPath = contract.path;
-  app.on(contract.method, honoPath, async (c) => {
-    const loc = inputLocations(contract);
-    const raw: Record<string, unknown> = {};
-    for (const k of loc.path) raw[k] = c.req.param(k);
-    for (const k of loc.query) {
-      const v = c.req.query(k);
-      if (v !== undefined) raw[k] = v;
-    }
-    if (contract.method !== 'GET' && loc.body.length > 0) Object.assign(raw, await c.req.json());
-    const parsed = contract.input.safeParse(raw);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
-    const result = await handler(parsed.data as z.output<C['input']>);
-    return c.json(result as object, contract.status ?? 200);
-  });
+interface BuildAppParams {
+  /** First CORS origin; the fixed local-dev origins are always included. */
+  appOrigin: string;
+  /** Extra CORS origins (the admin SPA); read from ADMIN_ORIGIN in the entrypoint. */
+  adminOrigins?: string[];
+  /** Release version (root VERSION file) reported by the public /health probe. */
+  version: string;
+  /** OAuth authorization-server config; omitted = AS not mounted. */
+  oauth?: OAuthConfig;
+  /** Issuer origin for the /mcp 401 challenge; omitted = /mcp not mounted. */
+  mcpIssuer?: string;
 }
 
-export function createApp(): Hono {
+export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssuer }: BuildAppParams): Hono {
   const app = new Hono();
-  app.use('*', cors());
-  mount(app, helloGet, ({ name }): HelloOutput => ({ message: `Hello, ${name ?? 'world'}!` }));
+
+  app.use(
+    cors({
+      origin: [
+        appOrigin,
+        ...adminOrigins,
+        'http://localhost:8081',
+        'http://localhost:8082',
+        'http://localhost:19006',
+        'http://localhost:8091', // budget web dev server (task web)
+        'http://localhost:3100',
+        'http://localhost:5174', // admin SPA dev server (task admin)
+      ],
+      allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization', 'Mcp-Session-Id', 'MCP-Protocol-Version'],
+      exposeHeaders: ['WWW-Authenticate'],
+      credentials: true,
+    }),
+  );
+
+  // Simple healthcheck (public, pre-gate) — carries the release version so
+  // the app's /stats page can show which API build it is talking to.
+  app.get('/health', (c) => c.json({ ok: true, version }));
+
+  // Agent (hermes) client routes
+  mountAuthRoutes(app);
+
+  // OAuth authorization server (discovery, registration, consent, tokens):
+  // pre-gate, each endpoint authenticates itself.
+  if (oauth) app.route('/', createOAuthRouter(oauth));
+
+  // MCP endpoint (Streamable HTTP): pre-gate, does its own OAuth-access-token
+  // check; tools execute by dispatching back into this app with the bearer.
+  if (mcpIssuer) {
+    app.route(
+      '/',
+      createMcpRouter({
+        contracts,
+        dispatch: (req) => Promise.resolve(app.fetch(req)),
+        resourceMetadataUrl: `${mcpIssuer}/.well-known/oauth-protected-resource`,
+        authenticate: accessPrincipal,
+        authDisabled,
+      }),
+    );
+  }
+
+  // Connections webhook sink (agents POST status updates; route does its own
+  // adapter secret check)
+  app.route('/connections', connectionsWebhook);
+
+  // Everything below requires a valid, allow-listed session.
+  app.use('*', authMiddleware);
+  // Identity seam (D-05): after the gate, every principal resolves to a
+  // DB-authoritative user row; roles/status are read per request.
+  app.use('*', requireUser);
+
+  // Profile + avatars (/me, /users/:id/avatar)
+  app.route('/', profileRoutes);
+
+  // Connected apps (OAuth grants of the caller)
+  app.route('/', grantsRoutes);
+
+  // Budget routes
+  app.route('/', budget);
+
+  // Rates routes
+  app.route('/rates', rates);
+
+  // Connections routes
+  app.route('/connections', connections);
+
+  // Jobs admin routes (requireAdmin is applied by the router itself)
+  app.route('/jobs', jobs);
+
+  app.onError(httpOnError);
+
+  // 404 handler
+  app.notFound((c) => {
+    return c.json({ error: 'not found' }, 404);
+  });
+
   return app;
 }

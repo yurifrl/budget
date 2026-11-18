@@ -3,18 +3,31 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "bun src/index.ts",
+    "server": "bun src/index.ts",
+    "worker": "bun src/worker.ts",
+    "cli": "bun src/cli.ts",
+    "mcp": "bun src/mcp.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@temporalio/activity": "^1.25.0",
+    "@temporalio/client": "^1.25.0",
+    "@temporalio/common": "^1.25.0",
     "@temporalio/worker": "^1.25.0",
     "@temporalio/workflow": "^1.25.0",
-    "hono": "^4.13.13"
+    "hono": "^4.13.13",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/bun": "^1.4.3",
+    "@types/pg": "^8.23.1",
     "eslint": "^9.39.5",
+    "eslint-import-resolver-typescript": "~4.4.0",
+    "eslint-plugin-import": "^2.32.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.2"
   },

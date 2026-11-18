@@ -11,11 +11,22 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { helloGet } from '@shared/contracts/hello';
+import { defineOperation, EXPOSE_ALL } from '@shared/operation-contract';
 import { z as sharedZ } from '@shared/zod';
 
 import apiPkg from '../../package.json';
 import { registerOperationTools } from './tools';
+
+// Local probe contract (the phase 0 hello contract no longer ships in api/).
+const helloGet = defineOperation({
+  name: 'hello_get',
+  description: 'Zod-identity probe.',
+  input: sharedZ.object({ name: sharedZ.string().min(1).optional() }),
+  method: 'GET',
+  path: '/hello',
+  kind: 'read',
+  expose: EXPOSE_ALL,
+});
 
 const apiDir = path.resolve(import.meta.dir, '../..');
 const sharedZodDir = realpathSync(path.resolve(apiDir, '../shared/node_modules/zod'));

@@ -1,7 +1,7 @@
 import { z } from '../../zod';
 
 import { defineOperation, EXPOSE_ALL, EXPOSE_NO_MCP } from '../../operation-contract';
-import { balanceDeltasSchema, clearedSchema, isoDateSchema } from '../../validation';
+import { clearedSchema, isoDateSchema } from '../../validation';
 import {
   budgetId,
   bulkTxnSchema,
@@ -12,11 +12,11 @@ import {
 } from './schemas';
 
 /**
- * Account balance deltas are OPTIONAL on every transaction write: when absent
- * the server derives them (domain/transactions.deriveDeltas); when supplied
- * they are applied verbatim, as the Expo client sends today.
+ * Account balance deltas are always derived by the server from the stored
+ * rows (domain/transactions.deriveDeltas). Clients cannot supply them: the
+ * schemas below are non-strict, so a stray `deltas` key is stripped, never
+ * applied.
  */
-const deltas = balanceDeltasSchema.optional();
 
 export const transactionsList = defineOperation({
   name: 'budget_transactions_list',
@@ -31,11 +31,10 @@ export const transactionsList = defineOperation({
 export const transactionsCreate = defineOperation({
   name: 'budget_transactions_create',
   description:
-    'Create a transaction. inflow_cents / outflow_cents are non-negative CENTS (inflow XOR outflow); deltas, when supplied, are balance changes in CENTS. Account balances are updated automatically unless deltas are supplied.',
+    'Create a transaction. inflow_cents / outflow_cents are non-negative CENTS (inflow XOR outflow). Account balances are updated automatically.',
   input: z.object({
     budget_id: budgetId,
     txn: createTxnSchema,
-    deltas,
     subtransactions: subTxnListSchema.optional(),
   }),
   method: 'POST',
@@ -60,12 +59,11 @@ export const transactionsBulk = defineOperation({
 export const transactionsUpdate = defineOperation({
   name: 'budget_transactions_update',
   description:
-    'Edit a transaction with a partial patch (and optionally replace its split legs); inflow_cents / outflow_cents in CENTS. Account balances are re-derived unless deltas are supplied (deltas are in CENTS).',
+    'Edit a transaction with a partial patch (and optionally replace its split legs); inflow_cents / outflow_cents in CENTS. Account balances are re-derived automatically.',
   input: z.object({
     id: uuidSchema,
     budget_id: budgetId,
     patch: patchTxnSchema,
-    deltas,
     subtransactions: subTxnListSchema.optional(),
   }),
   method: 'PATCH',
@@ -76,8 +74,8 @@ export const transactionsUpdate = defineOperation({
 
 export const transactionsDelete = defineOperation({
   name: 'budget_transactions_delete',
-  description: 'Delete a transaction (soft delete). Account balances are reversed unless deltas are supplied (deltas are in CENTS).',
-  input: z.object({ id: uuidSchema, budget_id: budgetId, deltas }),
+  description: 'Delete a transaction (soft delete). Account balances are reversed automatically.',
+  input: z.object({ id: uuidSchema, budget_id: budgetId }),
   method: 'DELETE',
   path: '/transactions/:id',
   query: ['budget_id'],
