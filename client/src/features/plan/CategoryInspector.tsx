@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
   },
   kindChipActive: { backgroundColor: colors.indigo, borderColor: colors.indigo },
   kindText: { color: colors.muted, fontSize: 12, fontWeight: '600' },
-  kindTextActive: { color: '#fff' },
+  kindTextActive: { color: colors.white },
   helpLine: { color: colors.faint, fontSize: 11, marginTop: 6, lineHeight: 16 },
   targetText: { color: colors.muted, fontSize: 13, lineHeight: 19 },
   targetPress: { alignSelf: 'flex-start', marginTop: 6 },

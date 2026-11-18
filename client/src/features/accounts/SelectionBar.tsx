@@ -295,7 +295,7 @@ export function SelectionBar({
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel="Clear selection">
-          <Ionicons name="close" size={16} color="#fff" />
+          <Ionicons name="close" size={16} color={colors.white} />
         </Pressable>
         <Text style={styles.count} accessibilityLiveRegion="polite">
           {count === 1 ? '1 Transaction' : `${count} Transactions`}
@@ -307,7 +307,7 @@ export function SelectionBar({
             onPress={() => openMenu('categorize', catRef.current)}
             accessibilityRole="button"
             accessibilityLabel="Categorize selected transactions">
-            <Ionicons name="checkbox" size={15} color="#fff" />
+            <Ionicons name="checkbox" size={15} color={colors.white} />
             <Text style={styles.barBtnText}>Categorize</Text>
           </Pressable>
         </View>
@@ -317,7 +317,7 @@ export function SelectionBar({
             onPress={() => openMenu('flag', flagRef.current)}
             accessibilityRole="button"
             accessibilityLabel="Flag selected transactions">
-            <Ionicons name="flag" size={15} color="#fff" />
+            <Ionicons name="flag" size={15} color={colors.white} />
             <Text style={styles.barBtnText}>Flag</Text>
           </Pressable>
         </View>
@@ -328,7 +328,7 @@ export function SelectionBar({
             onPress={() => openMenu('more', moreRef.current)}
             accessibilityRole="button"
             accessibilityLabel="More actions">
-            <Ionicons name="ellipsis-horizontal" size={15} color="#fff" />
+            <Ionicons name="ellipsis-horizontal" size={15} color={colors.white} />
             <Text style={styles.barBtnText}>More</Text>
           </Pressable>
         </View>
@@ -373,7 +373,7 @@ export function SelectionCheckbox({
       accessibilityLabel={label}
       style={styles.checkCell}>
       <View style={[styles.checkbox, checked && styles.checkboxOn, disabled && styles.checkboxLocked]}>
-        {checked ? <Ionicons name="checkmark" size={12} color="#fff" /> : null}
+        {checked ? <Ionicons name="checkmark" size={12} color={colors.white} /> : null}
       </View>
     </Pressable>
   );
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOpacity: 0.35,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -413,8 +413,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   barBtnPressed: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  barBtnText: { color: '#fff', fontSize: 14 },
-  count: { color: '#fff', fontSize: 14, fontWeight: '600', marginLeft: 4, marginRight: 6 },
+  barBtnText: { color: colors.white, fontSize: 14 },
+  count: { color: colors.white, fontSize: 14, fontWeight: '600', marginLeft: 4, marginRight: 6 },
   divider: { width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 6 },
   scrim: { flex: 1 },
   menu: {
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border2,
     paddingVertical: 6,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOpacity: 0.4,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
   menuEmpty: { color: colors.muted, fontSize: 12, paddingHorizontal: 12, paddingVertical: 8 },
   keycaps: { flexDirection: 'row', gap: 4, marginLeft: 'auto', flexShrink: 0 },
   keycap: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 1,

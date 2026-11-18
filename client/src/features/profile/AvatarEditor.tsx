@@ -89,7 +89,7 @@ export function AvatarEditor({ me }: { me: Me }) {
         <Avatar person={me} label={displayName(me)} size={HERO} ring={colors.indigo} />
         {busy ? (
           <View style={styles.spinner}>
-            <ActivityIndicator color="#fff" size="large" />
+            <ActivityIndicator color={colors.white} size="large" />
           </View>
         ) : null}
         <View style={styles.editBadge}>
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  editGlyph: { color: '#fff', fontSize: 16, lineHeight: 18 },
+  editGlyph: { color: colors.white, fontSize: 16, lineHeight: 18 },
   actions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' },
   looksHead: {
     alignSelf: 'stretch',

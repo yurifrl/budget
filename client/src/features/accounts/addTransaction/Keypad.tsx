@@ -30,7 +30,7 @@ export function Keypad({
             style={[
               styles.keyText,
               isKeypadOpKey(k) && { color: colors.indigo2 },
-              k === 'done' && { color: '#fff', fontSize: 15, fontWeight: '700' },
+              k === 'done' && { color: colors.white, fontSize: 15, fontWeight: '700' },
             ]}>
             {k}
           </Text>

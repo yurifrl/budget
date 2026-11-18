@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
   },
-  barBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  barBtnText: { color: colors.white, fontSize: 13, fontWeight: '700' },
   barLink: { paddingHorizontal: 6, paddingVertical: 5 },
   barLinkText: { color: colors.indigo3, fontSize: 13, fontWeight: '600' },
   backdrop: {

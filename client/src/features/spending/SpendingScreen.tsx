@@ -179,5 +179,5 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 12,
   },
-  approveBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  approveBtnText: { color: colors.white, fontSize: 12, fontWeight: '700' },
 });

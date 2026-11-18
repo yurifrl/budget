@@ -26,7 +26,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: 'center',
   },
-  btnIndigoText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  btnIndigoText: { color: colors.white, fontWeight: '700', fontSize: 13 },
   btnIndigoOff: { opacity: 0.5 },
   btnIndigoTextOff: { opacity: 0.8 },
   btnGhost: {

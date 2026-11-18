@@ -72,7 +72,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  deleteText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  deleteText: { color: colors.white, fontSize: 12, fontWeight: '700' },
   ghostBtn: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   ghostText: { color: colors.muted, fontSize: 12, fontWeight: '700' },
   connBox: { gap: 8 },
@@ -91,7 +91,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  chooseBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  chooseBtnText: { color: colors.white, fontSize: 12, fontWeight: '700' },
   linkBtn: {
     alignSelf: 'flex-start',
     borderWidth: 1,
@@ -124,7 +124,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  indigoText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  indigoText: { color: colors.white, fontSize: 12, fontWeight: '700' },
   confirmScrim: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(11,14,20,.78)',

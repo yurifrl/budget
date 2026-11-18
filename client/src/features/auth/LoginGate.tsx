@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '700' },
   subtitle: { fontSize: 15, opacity: 0.7, marginBottom: 8 },
   button: { backgroundColor: '#1a73e8', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  buttonText: { color: colors.white, fontSize: 16, fontWeight: '600' },
   hint: { fontSize: 13, opacity: 0.6, textAlign: 'center' },
   notice: { fontSize: 13, color: colors.redFg, textAlign: 'center' },
 });

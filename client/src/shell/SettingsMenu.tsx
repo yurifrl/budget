@@ -27,6 +27,7 @@ import {
 } from 'react-native';
 
 import { MenuNavContext, type MenuNav, type MenuPane } from './menuNav';
+import { colors } from '@/ui/theme';
 
 export { useMenuNav, type MenuNav, type MenuPane } from './menuNav';
 
@@ -40,7 +41,7 @@ function AppBadge({ size = 30 }: { size?: number }) {
         styles.avatar,
         { width: size, height: size, borderRadius: size * 0.27, backgroundColor: APP.color },
       ]}>
-      <Text style={{ color: '#fff', fontWeight: '800', fontSize: size * 0.46 }}>{APP.title.charAt(0)}</Text>
+      <Text style={{ color: colors.white, fontWeight: '800', fontSize: size * 0.46 }}>{APP.title.charAt(0)}</Text>
     </View>
   );
 }
@@ -235,17 +236,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     borderRadius: 10,
   },
-  kicker: { fontSize: 9, color: '#7d6ff0', letterSpacing: 1.2, fontWeight: '700' },
-  name: { fontSize: 14, color: '#eef1f7', fontWeight: '700' },
-  caret: { color: '#98a2b5', marginLeft: 8 },
+  kicker: { fontSize: 9, color: colors.indigo2, letterSpacing: 1.2, fontWeight: '700' },
+  name: { fontSize: 14, color: colors.text, fontWeight: '700' },
+  caret: { color: colors.muted, marginLeft: 8 },
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(4, 6, 12, 0.55)' },
   menu: {
     position: 'absolute',
     width: MENU_W,
     borderRadius: 12,
-    backgroundColor: '#161a24',
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#333c50',
+    borderColor: colors.border2,
     padding: 6,
   },
   menuHead: {
@@ -261,16 +262,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headBtnText: { color: '#98a2b5', fontSize: 16, fontWeight: '700' },
+  headBtnText: { color: colors.muted, fontSize: 16, fontWeight: '700' },
   menuHeader: {
     flex: 1,
     textAlign: 'center',
     fontSize: 9,
-    color: '#5f6878',
+    color: colors.faint,
     letterSpacing: 1.2,
     fontWeight: '700',
   },
-  menuHeaderVersion: { color: '#98a2b5', fontSize: 8, letterSpacing: 0.8 },
+  menuHeaderVersion: { color: colors.muted, fontSize: 8, letterSpacing: 0.8 },
   paneBody: { maxHeight: PANE_MAX_BODY },
   paneContent: { gap: 2, paddingBottom: 4 },
   gearBtn: {
@@ -279,5 +280,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gearGlyph: { color: '#98a2b5', fontSize: 30, lineHeight: 34 },
+  gearGlyph: { color: colors.muted, fontSize: 30, lineHeight: 34 },
 });

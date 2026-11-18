@@ -509,6 +509,6 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   confirmBtnDim: { opacity: 0.4 },
-  confirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  confirmBtnText: { color: colors.white, fontSize: 15, fontWeight: '800' },
   confirmError: { color: colors.redFg, fontSize: 12, marginTop: 8, textAlign: 'center' },
 });

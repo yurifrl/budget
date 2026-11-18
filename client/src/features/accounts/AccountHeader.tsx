@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   },
   unclearedRowOn: { backgroundColor: colors.indigo },
   unclearedText: { color: colors.indigo3, fontSize: 12, fontWeight: '700' },
-  unclearedTextOn: { color: '#fff' },
+  unclearedTextOn: { color: colors.white },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   subtitle: { color: colors.faint, fontSize: 12, marginTop: 2 },
   iconBtn: { padding: 4, borderRadius: radius.sm },

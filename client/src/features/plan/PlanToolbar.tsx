@@ -53,7 +53,7 @@ export function PlanToolbar({ grid }: { grid: ToolbarGrid }) {
           accessibilityRole="button"
           accessibilityLabel="Add category group"
           onPress={() => add.setAddingGroup('toolbar')}>
-          <PlusCircleIcon color="#fff" />
+          <PlusCircleIcon color={colors.white} />
           <Text style={styles.toolbarAddText}>Category Group</Text>
         </Pressable>
         {add.addingGroup === 'toolbar' ? (
@@ -185,7 +185,7 @@ function PlanFilterChips() {
           key={f.key}
           onPress={() => dispatch(setPlanFilter(f.key))}
           style={[styles.chip, filter === f.key && styles.chipActive]}>
-          <Text style={[styles.chipText, filter === f.key && { color: '#fff' }]}>{f.label}</Text>
+          <Text style={[styles.chipText, filter === f.key && { color: colors.white }]}>{f.label}</Text>
         </Pressable>
       ))}
     </ScrollView>

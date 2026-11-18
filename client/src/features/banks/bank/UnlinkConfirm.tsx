@@ -45,5 +45,5 @@ const styles = StyleSheet.create({
   ghost: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   ghostText: { color: colors.muted, fontSize: 12, fontWeight: '700' },
   danger: { backgroundColor: colors.redFg, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
-  dangerText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  dangerText: { color: colors.white, fontSize: 12, fontWeight: '700' },
 });

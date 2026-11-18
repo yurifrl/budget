@@ -14,6 +14,7 @@ import { MenuRow } from './menuRows';
 import { refetchBudgets } from './refetchBudgets';
 import { deleteBudgetNote, isDeleteArmed } from './settings.logic';
 import { s } from './styles';
+import { colors } from '@/ui/theme';
 
 /**
  * Typed-confirmation modal for permanent budget deletion: a "Delete Budget…"
@@ -58,7 +59,7 @@ export function DeleteBudgetModal({ target, onClose }: { target: BudgetRow; onCl
         value={confirmText}
         onChangeText={setConfirmText}
         placeholder='Type "delete" to confirm'
-        placeholderTextColor="#5f6878"
+        placeholderTextColor={colors.faint}
         autoCapitalize="none"
         autoCorrect={false}
         style={s.input}

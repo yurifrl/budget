@@ -26,7 +26,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  toolbarAddText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  toolbarAddText: { color: colors.white, fontSize: 13, fontWeight: '700' },
   toolbarLink: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 6 },
   toolbarLinkText: { color: colors.indigo2, fontSize: 13, fontWeight: '600' },
   topbar: {
@@ -143,7 +143,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 2,
   },
-  bundleDropChipText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  bundleDropChipText: { color: colors.white, fontSize: 11, fontWeight: '700' },
   trowDragging: {
     backgroundColor: colors.card2,
     opacity: 0.88,
@@ -183,7 +183,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxOn: { backgroundColor: colors.indigo, borderColor: colors.indigo },
-  checkMark: { color: '#fff', fontSize: 11, fontWeight: '800', marginTop: -1 },
+  checkMark: { color: colors.white, fontSize: 11, fontWeight: '800', marginTop: -1 },
   checkboxHidden: { opacity: 0 },
   trowInner: { flexDirection: 'row', alignItems: 'center' },
   catName: { color: colors.text, fontWeight: '600', fontSize: 14, flexShrink: 1 },

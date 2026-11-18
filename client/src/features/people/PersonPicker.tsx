@@ -91,5 +91,5 @@ const styles = StyleSheet.create({
   },
   chipOn: { borderColor: colors.indigo2, backgroundColor: colors.indigo },
   chipText: { color: colors.muted, fontSize: 12, flexShrink: 1 },
-  chipTextOn: { color: '#fff', fontWeight: '700' },
+  chipTextOn: { color: colors.white, fontWeight: '700' },
 });

@@ -79,7 +79,7 @@ export function PersonFilterBar({
               onPress={() => dispatch(setPersonFilter(o.key))}
               style={[styles.chip, on && styles.chipActive]}>
               {o.face}
-              <Text style={[styles.chipText, on && { color: '#fff' }]} numberOfLines={1}>
+              <Text style={[styles.chipText, on && { color: colors.white }]} numberOfLines={1}>
                 {o.label}
               </Text>
             </Pressable>

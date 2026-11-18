@@ -46,6 +46,11 @@ export const colors = {
   appRailBg: '#070910',
   railBg: '#0a0c13',
 
+  /** Text and glyphs on saturated fills (buttons, badges, avatars). */
+  white: '#fff',
+  /** Shadows and scrims. */
+  black: '#000',
+
   /** The pre-merge shared theme's indigoSoft (Profile's selected chip). */
   indigoSoftCool: '#212745',
 } as const;

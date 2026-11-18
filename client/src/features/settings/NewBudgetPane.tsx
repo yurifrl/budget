@@ -10,6 +10,7 @@ import { switchBudget } from '@/state/thunks';
 import { MenuRow } from './menuRows';
 import { refetchBudgets } from './refetchBudgets';
 import { s } from './styles';
+import { colors } from '@/ui/theme';
 
 /** New Budget form (the old 'new' view) — create, switch, close. */
 export function NewBudgetPane() {
@@ -41,7 +42,7 @@ export function NewBudgetPane() {
         value={name}
         onChangeText={setName}
         placeholder="Budget name"
-        placeholderTextColor="#5f6878"
+        placeholderTextColor={colors.faint}
         onSubmitEditing={create}
         style={s.input}
         accessibilityLabel="New budget name"

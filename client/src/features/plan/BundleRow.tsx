@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 2,
   },
-  dropChipText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  dropChipText: { color: colors.white, fontSize: 11, fontWeight: '700' },
   menuBtn: {
     paddingHorizontal: 8,
     paddingVertical: 2,

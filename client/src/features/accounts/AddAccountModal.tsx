@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   },
   typeChipOn: { borderColor: colors.indigo2, backgroundColor: colors.indigo },
   typeText: { color: colors.muted, fontSize: 12 },
-  typeTextOn: { color: '#fff', fontWeight: '700' },
+  typeTextOn: { color: colors.white, fontWeight: '700' },
   error: { color: colors.redFg, fontSize: 12, marginBottom: 8 },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
   ghostBtn: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
@@ -253,5 +253,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  indigoText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  indigoText: { color: colors.white, fontSize: 12, fontWeight: '700' },
 });

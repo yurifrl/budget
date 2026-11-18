@@ -187,5 +187,5 @@ const styles = StyleSheet.create({
   ghostText: { color: colors.muted, fontSize: 12, fontWeight: '700' },
   primary: { flexShrink: 1, backgroundColor: colors.indigo, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 10 },
   primaryOff: { backgroundColor: colors.border2, opacity: 0.7 },
-  primaryText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  primaryText: { color: colors.white, fontSize: 12, fontWeight: '700' },
 });

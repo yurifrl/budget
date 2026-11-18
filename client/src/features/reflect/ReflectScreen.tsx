@@ -165,7 +165,7 @@ export function ReflectScreen() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
         {([3, 6, 0] as Range[]).map((r) => (
           <Pressable key={r} onPress={() => setRange(r)} style={[styles.chip, range === r && styles.chipActive]}>
-            <Text style={[styles.chipText, range === r && { color: '#fff' }]}>
+            <Text style={[styles.chipText, range === r && { color: colors.white }]}>
               {r === 0 ? 'All time' : `Last ${r} months`}
             </Text>
           </Pressable>
@@ -175,7 +175,7 @@ export function ReflectScreen() {
             key={a.id}
             onPress={() => setAccountFilter(accountFilter === a.id ? null : a.id)}
             style={[styles.chip, accountFilter === a.id && styles.chipActive]}>
-            <Text style={[styles.chipText, accountFilter === a.id && { color: '#fff' }]}>{a.name}</Text>
+            <Text style={[styles.chipText, accountFilter === a.id && { color: colors.white }]}>{a.name}</Text>
           </Pressable>
         ))}
         {report !== 'networth'
@@ -186,7 +186,7 @@ export function ReflectScreen() {
                   key={`${sel.kind}:${sel.id}`}
                   onPress={() => setCategoryFilter(active ? null : sel)}
                   style={[styles.chip, active && styles.chipActive]}>
-                  <Text style={[styles.chipText, active && { color: '#fff' }]}>{label}</Text>
+                  <Text style={[styles.chipText, active && { color: colors.white }]}>{label}</Text>
                 </Pressable>
               );
             })

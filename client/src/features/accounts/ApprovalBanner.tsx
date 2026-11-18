@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 14,
   },
-  viewText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  viewText: { color: colors.white, fontWeight: '700', fontSize: 12 },
   dismiss: { paddingHorizontal: 6, paddingVertical: 2 },
   dismissText: { color: colors.muted, fontSize: 14 },
 });

@@ -93,7 +93,7 @@ export function ScheduledSection({
                   >
                     <View style={[styles.box, checked && styles.boxChecked]}>
                       {checked ? (
-                        <Ionicons name="checkmark" size={13} color="#fff" />
+                        <Ionicons name="checkmark" size={13} color={colors.white} />
                       ) : null}
                     </View>
                   </Pressable>
@@ -112,7 +112,7 @@ export function ScheduledSection({
                     <Ionicons
                       name="repeat"
                       size={13}
-                      color={checked ? '#fff' : colors.muted}
+                      color={checked ? colors.white : colors.muted}
                     />
                   ) : null}
                   <Text
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
   },
-  textOn: { color: '#fff', fontWeight: '600' },
+  textOn: { color: colors.white, fontWeight: '600' },
   amount: {
     color: colors.text,
     fontSize: 13,

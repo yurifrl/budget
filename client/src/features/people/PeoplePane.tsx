@@ -179,7 +179,7 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
           accessibilityRole="button"
           accessibilityLabel="Add Person"
           style={({ pressed }) => [s.addBtn, (pressed || !!adding) && s.addBtnPressed]}>
-          {adding ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.addBtnText}>Add Person</Text>}
+          {adding ? <ActivityIndicator size="small" color={colors.white} /> : <Text style={s.addBtnText}>Add Person</Text>}
         </Pressable>
       </View>
       {!canManage ? <Text style={s.hint}>Only the owner can remove people.</Text> : null}
@@ -385,7 +385,7 @@ const s = StyleSheet.create({
   btnGhost: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 7, borderWidth: 1, borderColor: colors.border2 },
   btnGhostText: { color: colors.muted, fontSize: 12, fontWeight: '600' },
   btnDanger: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 7, backgroundColor: colors.red },
-  btnDangerText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  btnDangerText: { color: colors.white, fontSize: 12, fontWeight: '700' },
   form: { marginTop: 14, gap: 8 },
   formTitle: { color: colors.faint, fontSize: 10, fontWeight: '700', letterSpacing: 1.4, paddingHorizontal: 4 },
   input: {
@@ -402,5 +402,5 @@ const s = StyleSheet.create({
   errorText: { color: colors.redFg, fontSize: 12, paddingHorizontal: 2 },
   addBtn: { height: 38, borderRadius: 8, backgroundColor: colors.indigo, alignItems: 'center', justifyContent: 'center' },
   addBtnPressed: { opacity: 0.7 },
-  addBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  addBtnText: { color: colors.white, fontSize: 14, fontWeight: '700' },
 });

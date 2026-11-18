@@ -154,5 +154,5 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
-  mergeBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  mergeBtnText: { color: colors.white, fontSize: 12, fontWeight: '700' },
 });

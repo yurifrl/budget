@@ -22,6 +22,7 @@ import { BudgetManageSection } from './BudgetManageSection';
 import { MenuRow, Seg } from './menuRows';
 import { fmtPreviewText } from './settings.logic';
 import { s } from './styles';
+import { colors } from '@/ui/theme';
 
 /** Plan Settings: name PATCH + format prefs with live preview. */
 export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
@@ -84,7 +85,7 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
         value={planName}
         onChangeText={setPlanName}
         placeholder="Budget name"
-        placeholderTextColor="#5f6878"
+        placeholderTextColor={colors.faint}
         onSubmitEditing={rename}
         style={s.input}
         accessibilityLabel="Budget name"

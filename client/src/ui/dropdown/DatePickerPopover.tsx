@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   },
   daySelected: {
     backgroundColor: colors.indigo,
-    color: '#fff',
+    color: colors.white,
     borderRadius: 6,
     width: 24,
     height: 22,

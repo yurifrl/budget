@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     maxHeight: 192,
     overflow: 'scroll',
     paddingVertical: 3,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOpacity: 0.18,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     marginLeft: 'auto',
   },
-  repeatMakeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  repeatMakeText: { color: colors.white, fontSize: 12, fontWeight: '700' },
   repeatStop: {
     borderWidth: 1,
     borderColor: colors.border,

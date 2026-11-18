@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   ghostBtn: { borderWidth: 1, borderColor: colors.border2, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   ghostBtnText: { color: colors.indigo3, fontSize: 12, fontWeight: '700' },
   primaryBtn: { flex: 1, alignItems: 'center', backgroundColor: colors.indigo, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10 },
-  primaryBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  primaryBtnText: { color: colors.white, fontSize: 12, fontWeight: '700' },
   cardOff: { borderStyle: 'dashed', backgroundColor: colors.bg },
   cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   flex: { flex: 1, minWidth: 0 },

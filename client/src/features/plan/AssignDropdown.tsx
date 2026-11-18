@@ -198,6 +198,6 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 16,
   },
-  footerAssignText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  footerAssignText: { color: colors.white, fontSize: 13, fontWeight: '700' },
   footerBtnDisabled: { opacity: 0.45 },
 });
