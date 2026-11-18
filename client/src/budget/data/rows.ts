@@ -19,6 +19,7 @@ import type {
   accountRowSchema,
   accountTypeSchema,
   assignmentRowSchema,
+  budgetListRowSchema,
   budgetRowSchema,
   bundleRowSchema,
   categoryRowSchema,
@@ -43,6 +44,8 @@ export type DateFormat = z.infer<typeof dateFormatSchema>;
 /** YNAB CurrencyFormat. */
 export type CurrencyFormat = z.infer<typeof currencyFormatSchema>;
 export type BudgetRow = z.infer<typeof budgetRowSchema>;
+/** GET /budgets row: the budget plus `is_owner`, `owner` and `member_count` (home page, owner-only actions). */
+export type BudgetListRow = z.infer<typeof budgetListRowSchema>;
 export type GroupRow = z.infer<typeof groupRowSchema>;
 /** YNAB goal type. TB=target balance, TBD=target balance by date, MF=monthly funding, NEED=plan your spending, DEBT=debt payoff. */
 export type GoalType = z.infer<typeof goalTypeSchema>;

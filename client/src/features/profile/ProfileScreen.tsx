@@ -21,6 +21,11 @@ export function ProfileScreen() {
   const { data: me, isLoading, isError, refetch } = useGetMeQuery();
   const { signOut } = useAuthSession();
 
+  // Leave for the home route first, so the next sign-in starts there and not on this page.
+  const leave = () => {
+    router.dismissTo('/');
+    void signOut();
+  };
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
   return (
@@ -63,7 +68,7 @@ export function ProfileScreen() {
               >
                 <Text style={ui.buttonText}>Connected apps</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => void signOut()} style={ui.button}>
+              <Pressable accessibilityRole="button" onPress={leave} style={ui.button}>
                 <Text style={ui.buttonText}>Sign out</Text>
               </Pressable>
             </>

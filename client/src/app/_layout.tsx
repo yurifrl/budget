@@ -1,9 +1,10 @@
 /**
  * Composition root: builds the runtime (DI container + static store) once and
  * wraps the app in its providers — gesture handler, safe area, DI services,
- * redux, navigation theme — behind the LoginGate. The budget shell (rail /
- * drawer / tabs) is the `(budget)` group's layout; profile and connected apps
- * are full-screen stack pages above it.
+ * redux, navigation theme — behind the LoginGate. `index` is the home page
+ * (my budgets / shared with me), where a signed-in person starts and picks a
+ * budget; the budget shell (rail / drawer / tabs) is the `(budget)` group's
+ * layout; profile and connected apps are full-screen stack pages.
  */
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -20,7 +21,7 @@ import { Tokens } from '@/platform/di/tokens';
 import { createRuntime } from '@/shell/runtime';
 
 export const unstable_settings = {
-  anchor: '(budget)',
+  anchor: 'index',
 };
 
 const runtime = createRuntime();
@@ -38,7 +39,10 @@ export default function RootLayout() {
             <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
               <LoginGate apiUrl={apiUrl}>
                 <Stack>
-                  <Stack.Screen name="(budget)" options={{ headerShown: false }} />
+                  <Stack.Screen name="index" options={{ headerShown: false }} />
+                  {/* No edge-swipe back: the budget's screens are tabs, so a
+                      swipe anywhere would drop the person out of the budget. */}
+                  <Stack.Screen name="(budget)" options={{ headerShown: false, gestureEnabled: false }} />
                   <Stack.Screen name="profile" options={{ headerShown: false }} />
                   <Stack.Screen name="connected-apps" options={{ headerShown: false }} />
                 </Stack>

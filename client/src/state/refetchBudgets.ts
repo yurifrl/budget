@@ -1,7 +1,7 @@
-import type { AppDispatch } from '@/state/hooks';
+import type { AppDispatch } from './hooks';
 
 import { budgetApi } from '@/budget/data/api';
-import type { BudgetRow } from '@/budget/data/rows';
+import type { BudgetListRow } from '@/budget/data/rows';
 
 /**
  * Force-refetch the Budgets list and resolve the fresh rows. Same rule
@@ -9,7 +9,7 @@ import type { BudgetRow } from '@/budget/data/rows';
  * in flight lets the shell's stale-list reconcile bounce the active id back
  * to data[0] — which a fresh archive just made an archived budget.
  */
-export async function refetchBudgets(dispatch: AppDispatch): Promise<BudgetRow[]> {
+export async function refetchBudgets(dispatch: AppDispatch): Promise<BudgetListRow[]> {
   return dispatch(
     budgetApi.endpoints.getBudgets.initiate(undefined, { forceRefetch: true }),
   ).unwrap();

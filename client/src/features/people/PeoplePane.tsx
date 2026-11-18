@@ -7,8 +7,8 @@
  * A person may have no email yet (a placeholder: "Gabriele" before they
  * connect). Placeholders show a "No email" badge and a "Link email" action;
  * linking an email that already belongs to a signed-in user merges the two.
- * An invited person (email, never signed in) carries "Invited" — they must
- * also be on the AUTH_ALLOWED_EMAILS allow-list to log in.
+ * An invited person (email, never signed in) carries "Invited"; the budget is
+ * on their home page at their first sign-in (decisions.md, "Multi-user").
  *
  * Add flow: name and/or email (domain/people `checkInvite`) → request; while in
  * flight a ghost row shows the person, then swaps to the real row (the mutation
@@ -125,7 +125,8 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
       </View>
       {people.some((p) => personStatus(p) === 'invited') ? (
         <Text style={s.hint}>
-          Invited people can’t sign in until their email is on the sign-in allow-list (AUTH_ALLOWED_EMAILS).
+          Invited people find this budget on their home page when they sign in with that email. Adding them sends
+          no message and does not give them a login.
         </Text>
       ) : null}
       {people.some((p) => personStatus(p) === 'placeholder') ? (

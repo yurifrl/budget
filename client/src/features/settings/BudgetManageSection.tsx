@@ -10,7 +10,7 @@ import { clearActiveBudget } from '@/state/thunks';
 import { selectActiveBudgetId } from '@/state/ui';
 import { DeleteBudgetModal } from './DeleteBudgetModal';
 import { MenuRow } from './menuRows';
-import { refetchBudgets } from './refetchBudgets';
+import { refetchBudgets } from '@/state/refetchBudgets';
 import { manageBudgetHint } from './settings.logic';
 import { s } from './styles';
 

@@ -1,18 +1,18 @@
 /**
  * The front door: what a signed-out person (or anyone while the API cannot
- * be reached) sees. One component for web and iOS. Wide windows split into a
- * brand pane and a content pane; narrower ones stack, with the actions at the
+ * be reached) sees. One component for web and iOS, inside the frame it
+ * shares with the home page (ui/BrandedPage): wide windows split into a brand
+ * pane and a content pane; narrower ones stack, with the actions at the
  * bottom of the screen within thumb reach. What it says comes from
  * landing.logic.ts; how sign-in happens (redirect or in-app browser) is the
  * caller's business.
  */
 import { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { BrandedPage } from '@/ui/BrandedPage';
 import { useMedia } from '@/ui/media';
 import { colors, radius, spacing } from '@/ui/theme';
-import logo from '../../../assets/images/logo.png';
 import { landingLayout, PRODUCT_NAME, type LandingView } from './landing.logic';
 import type { LoginButton } from './signIn.logic';
 
@@ -25,7 +25,6 @@ interface Props {
 }
 
 export function LandingPage({ view, onSignIn, onRetry }: Props) {
-  const insets = useSafeAreaInsets();
   const split = landingLayout(useMedia()) === 'split';
   // Native: the in-app browser is open until the flow resolves; no double starts.
   const [busy, setBusy] = useState<Provider | null>(null);
@@ -80,41 +79,10 @@ export function LandingPage({ view, onSignIn, onRetry }: Props) {
     </View>
   );
 
-  if (split) {
-    return (
-      <View style={[styles.screen, styles.row]}>
-        <View style={[styles.brandPane, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}>
-          <Brand />
-          <Text style={styles.wordmark}>{PRODUCT_NAME}</Text>
-        </View>
-        <View style={styles.contentPane}>
-          <ScrollView contentContainerStyle={styles.contentPaneInner}>{content}</ScrollView>
-        </View>
-      </View>
-    );
-  }
-
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[
-        styles.stack,
-        { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg },
-      ]}>
-      <View style={styles.stackColumn}>
-        <Brand named />
-        {content}
-      </View>
-    </ScrollView>
-  );
-}
-
-function Brand({ named = false }: { named?: boolean }) {
-  return (
-    <View style={styles.brand}>
-      <Image source={logo} accessibilityLabel={named ? undefined : PRODUCT_NAME} style={styles.logo} />
-      {named ? <Text style={styles.brandName}>{PRODUCT_NAME}</Text> : null}
-    </View>
+    <BrandedPage productName={PRODUCT_NAME} split={split}>
+      {content}
+    </BrandedPage>
   );
 }
 
@@ -152,29 +120,6 @@ function ActionButton({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  row: { flexDirection: 'row' },
-
-  // Wide: a darker brand field on the left, the words and the action on the right.
-  brandPane: {
-    flex: 5,
-    minWidth: 0,
-    backgroundColor: colors.appRailBg,
-    paddingHorizontal: 56,
-    justifyContent: 'space-between',
-  },
-  wordmark: { color: colors.text, fontSize: 112, lineHeight: 112, fontWeight: '800', letterSpacing: -4 },
-  contentPane: { flex: 6, minWidth: 0 },
-  contentPaneInner: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 72, paddingVertical: spacing.xl },
-
-  // Narrow: one column, brand on top, content pushed to the bottom.
-  stack: { flexGrow: 1, paddingHorizontal: spacing.lg },
-  stackColumn: { flex: 1, width: '100%', maxWidth: 520, alignSelf: 'center', justifyContent: 'space-between', gap: 40 },
-
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  logo: { width: 44, height: 44, borderRadius: 12 },
-  brandName: { color: colors.text, fontSize: 20, fontWeight: '700', letterSpacing: -0.3 },
-
   content: { gap: spacing.md },
   contentSplit: { maxWidth: 460 },
   contentStacked: {},

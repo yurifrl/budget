@@ -20,7 +20,7 @@ import { useFmtPrefs, useMoneyMask } from '@/state/useDisplayPrefs';
 import { selectActiveBudgetId, setFmtPrefs } from '@/state/ui';
 import { BudgetManageSection } from './BudgetManageSection';
 import { MenuRow, Seg } from './menuRows';
-import { fmtPreviewText } from './settings.logic';
+import { canManageBudget, fmtPreviewText, ownerOnlyHint } from './settings.logic';
 import { s } from './styles';
 import { colors } from '@/ui/theme';
 
@@ -33,6 +33,7 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
     selectActiveBudgetId(s),
   );
   const activeBudget = budgets.data?.find((b) => b.id === budgetId);
+  const isOwner = canManageBudget(activeBudget);
   const [renameBudget] = useRenameBudgetMutation();
   const [planName, setPlanName] = useState(activeBudget?.name ?? '');
   const [saved, setSaved] = useState(false);
@@ -81,6 +82,14 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
   return (
     <>
       <Text style={s.sectionLabel}>PLAN NAME</Text>
+      {!isOwner ? (
+        <>
+          <Text style={s.accountEmail}>{activeBudget?.name ?? ''}</Text>
+          <Text style={s.hint}>{ownerOnlyHint(activeBudget?.owner)}</Text>
+        </>
+      ) : null}
+      {isOwner ? (
+      <>
       <TextInput
         value={planName}
         onChangeText={setPlanName}
@@ -93,6 +102,8 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
       {error ? <Text style={s.errorText}>{error}</Text> : null}
       {saved ? <Text style={s.savedText}>Saved.</Text> : null}
       <MenuRow label="Rename Budget" emphasized onPress={rename} />
+      </>
+      ) : null}
 
       <Text style={s.sectionLabel}>CURRENCY</Text>
       <Seg<FmtCurrency>
@@ -143,12 +154,16 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
         {fmtPreviewText(currentFmt, masked)}
       </Text>
 
-      <Text style={s.sectionLabel}>MANAGE BUDGET</Text>
-      {budgetId ? (
-        <BudgetManageSection budgetId={budgetId} />
-      ) : (
-        <Text style={s.hint}>Switch to a budget first.</Text>
-      )}
+      {isOwner ? (
+        <>
+          <Text style={s.sectionLabel}>MANAGE BUDGET</Text>
+          {budgetId ? (
+            <BudgetManageSection budgetId={budgetId} />
+          ) : (
+            <Text style={s.hint}>Switch to a budget first.</Text>
+          )}
+        </>
+      ) : null}
     </>
   );
 }

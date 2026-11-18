@@ -9,7 +9,7 @@ import { useFreshStartBudgetMutation, useGetBudgetsQuery } from '@/budget/data/a
 import { switchBudget } from '@/state/thunks';
 import { selectActiveBudgetId } from '@/state/ui';
 import { MenuRow } from './menuRows';
-import { refetchBudgets } from './refetchBudgets';
+import { refetchBudgets } from '@/state/refetchBudgets';
 import { freshStartHint } from './settings.logic';
 import { s } from './styles';
 

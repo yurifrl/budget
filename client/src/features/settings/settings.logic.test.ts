@@ -4,15 +4,32 @@ import { MONEY_MASK_TEXT, formatDateWith } from '@/domain/format';
 import { DEFAULT_FMT_PREFS } from '@/domain/fmtPrefs';
 import {
   archivedBudgetLabel,
+  canManageBudget,
   deleteBudgetNote,
   fmtPreviewText,
   freshStartHint,
   isDeleteArmed,
   manageBudgetHint,
+  ownerOnlyHint,
   splitBudgets,
 } from './settings.logic';
 
 const fmtDate = (iso: string) => formatDateWith(DEFAULT_FMT_PREFS, iso);
+
+describe('owner-only actions', () => {
+  it('only the owner manages the budget; unknown counts as not the owner', () => {
+    expect(canManageBudget({ is_owner: true })).toBe(true);
+    expect(canManageBudget({ is_owner: false })).toBe(false);
+    expect(canManageBudget(undefined)).toBe(false);
+    expect(canManageBudget(null)).toBe(false);
+  });
+
+  it('the hint names the owner when known', () => {
+    expect(ownerOnlyHint({ name: ' Ana ', email: 'ana@x.test' })).toBe('Only the owner (Ana) can rename, archive or delete this budget.');
+    expect(ownerOnlyHint({ name: null, email: 'ana@x.test' })).toContain('(ana@x.test)');
+    expect(ownerOnlyHint(null)).toBe('Only the owner can rename, archive or delete this budget.');
+  });
+});
 
 describe('splitBudgets', () => {
   const rows = [

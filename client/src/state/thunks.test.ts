@@ -77,8 +77,18 @@ describe('restoreActiveBudget', () => {
 
     expect(s.getState()[BUDGET_UI_KEY].activeBudgetId).toBe('b-1');
     expect(action.type).toBe(restoreActiveBudget.fulfilled.type);
-    // `undefined` would break the shell's first-budget fallback contract.
+    // `undefined` is not a storage answer; the shell's gate reads the store, not this.
     expect(action.payload).toBe(null);
+  });
+
+  test('a budget already chosen this session (home page) is not overridden by the stored one', async () => {
+    const { storage } = makeStorage({ stored: 'b-old' });
+    const s = makeStore(storage);
+    s.dispatch(setActiveBudget('b-picked'));
+
+    await s.dispatch(restoreActiveBudget());
+
+    expect(s.getState()[BUDGET_UI_KEY].activeBudgetId).toBe('b-picked');
   });
 
   test('propagates storage.get rejection instead of resolving silently', async () => {

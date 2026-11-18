@@ -24,10 +24,10 @@ export function BudgetTabs({ isPhone }: { isPhone: boolean }) {
           : { display: 'none' },
       }}>
       <Tabs.Screen
-        name="index"
+        name="overview"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={22} name="house.fill" color={color} />,
+          title: 'Overview',
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="square.grid.2x2.fill" color={color} />,
         }}
       />
       <Tabs.Screen
