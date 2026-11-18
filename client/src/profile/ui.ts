@@ -16,7 +16,7 @@ export const ui = StyleSheet.create({
   button: {
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: radius.r,
+    borderRadius: radius.card10,
     borderWidth: 1,
     borderColor: colors.border2,
     backgroundColor: colors.card2,

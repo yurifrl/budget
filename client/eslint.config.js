@@ -119,13 +119,14 @@ module.exports = defineConfig([
     },
   },
   // Temporary (phase 5a, removed when domain/ moves to src/domain in 5e):
-  // the avatar types' one definition is in budget/domain.
+  // the avatar types' one definition is in budget/domain, and the one theme
+  // uses domain types.
   {
-    files: ['src/ui/avatar/types.ts'],
+    files: ['src/ui/avatar/types.ts', 'src/ui/theme.ts'],
     rules: {
       'import/no-restricted-paths': [
         'error',
-        { zones: layerZones.map((z) => (z.target === `${SRC}/ui` && z.from === `${SRC}/budget` ? { ...z, except: ['domain/avatar.ts'] } : z)) },
+        { zones: layerZones.map((z) => (z.target === `${SRC}/ui` && z.from === `${SRC}/budget` ? { ...z, except: ['domain/avatar.ts', 'domain/types.ts'] } : z)) },
       ],
     },
   },

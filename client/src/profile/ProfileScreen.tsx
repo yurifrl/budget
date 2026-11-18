@@ -81,6 +81,6 @@ const styles = StyleSheet.create({
   errorCard: { alignItems: 'center' },
   identity: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   name: { color: colors.text, fontSize: 24, fontWeight: '800' },
-  badge: { backgroundColor: colors.indigoSoft, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  badge: { backgroundColor: colors.indigoSoftCool, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { color: colors.indigo2, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
 });
