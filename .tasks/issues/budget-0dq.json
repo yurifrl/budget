@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-0dq",
+  "title": "Sign in with Cloudflare Access",
+  "description": "",
+  "status": "ready-to-review",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-18T13:29:57.168Z",
+  "updated_at": "2026-11-18T13:48:01.298Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Merged to main (ff, 5f6ba2f..4dba40f). shared 45, api 895 (BUDGET_REQUIRE_TEST_DB=1), client 1070 pass; tsc+eslint clean; e2e-api.sh exit 0; expo export web+ios OK; stub browser check in docs/evidence/access-signin/.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-0dq",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-0dq",
+    "changeset": {
+      "base": "9aa25ad5c0df46de3bedae6150b54400472eced5"
+    },
+    "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
+    "finished_at": "2026-11-18T13:48:01.199Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 5,
+        "files": 32,
+        "additions": 1792,
+        "deletions": 103
+      },
+      "head": "4dba40f960b3a2a86e6ba048cde44343fbfcac1e",
+      "at": "2026-11-18T13:48:01.199Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-00d451",
+      "name": "01-auto-signed-in.png",
+      "mime": "image/png",
+      "size": 66212,
+      "sha256": "b692dc4db9b4ce90e7b0eafe048cf4556a696d9acdc1124eb3104857c1e0ceb3",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c2a3e2",
+      "name": "02-loop-guard-login.png",
+      "mime": "image/png",
+      "size": 17972,
+      "sha256": "da5e77095db11aee010c422af4c4b785f8a697cbec458c8dd62684cb014f1c63",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}
