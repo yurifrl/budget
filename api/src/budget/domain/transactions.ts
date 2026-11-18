@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import type { Queryable } from '../../core/db';
 import type { z } from '@shared/zod';
 import { applyRules, type RenameRule } from '@shared/domain/payees';
 import { HttpError } from '../../core/validate';
@@ -32,7 +33,7 @@ export async function insertSubTxns(
   }
 }
 
-export async function loadRenameRules(client: PoolClient, budgetId: string) {
+export async function loadRenameRules(client: Queryable, budgetId: string) {
   // Per-payee rules: the payee's name is the rename target.
   return client.query<RenameRule>(
     `SELECT name as replacement, rename_match_type as match_type, rename_condition as condition
