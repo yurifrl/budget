@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ConnectionSyncStatusJson, SyncRunJson, SyncState, SyncStatusJson } from '../data/connections';
+import type { ConnectionSyncStatusJson, SyncRunJson, SyncState, SyncStatusJson } from '../../data/connections';
 import { awaitSyncRun, describeSyncOutcome, schedulerBanner, syncStateView } from './syncRun';
 
 const run = (over: Partial<SyncRunJson> = {}): SyncRunJson => ({

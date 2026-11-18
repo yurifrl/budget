@@ -6,7 +6,7 @@
  * caller injects `fetchStatus`.
  */
 
-import type { ConnectionJson, SyncCountsJson, SyncRunJson, SyncState, SyncStatusJson } from '../data/connections';
+import type { ConnectionJson, SyncCountsJson, SyncRunJson, SyncState, SyncStatusJson } from '../../data/connections';
 
 export type SyncRunOutcome =
   | { kind: 'done'; run: SyncRunJson | null }

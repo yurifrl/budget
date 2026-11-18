@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { DropdownShell, dropdownStyles, pressNoBlur, useDropdownPortal, type DropdownKeyEvent } from './dropdown';
-import { transferPayeeName } from './PayeeDropdown';
+import { transferPayeeName } from '@shared/domain/transfers';
 
 import { categoryLabel } from '../../domain/bundles';
 import { useMoneyFormat } from '../../model/useDisplayPrefs';

@@ -11,7 +11,7 @@ import { useCallback } from 'react';
 import { useAppDispatch } from '@/store/hooks';
 
 import { budgetApi, useLazyGetSyncStatusQuery, useReimportHistoryMutation, useSyncConnectionMutation } from '../../data/api';
-import { awaitSyncRun, describeSyncOutcome } from '../../domain/syncRun';
+import { awaitSyncRun, describeSyncOutcome } from '../../model/banks/syncRun';
 
 export type SyncMode = 'sync' | 'reimport';
 

@@ -30,7 +30,7 @@ import {
 } from './people';
 import type { Account, Budget, Category, Transaction } from './types';
 import { computeBudgetMonth, categoryFigures } from './zeroSum';
-import { payId, scenario } from './zeroSum.fixtures';
+import { payId, scenario } from './__fixtures__/zeroSum.fixtures';
 
 const mk = (user_id: string, email: string | null, name: string | null, extra: Partial<Person> = {}): Person => ({
   user_id,

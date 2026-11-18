@@ -57,7 +57,7 @@ import {
   setShowHiddenCategories,
   setShowProgressBars,
 } from '../state/ui';
-import { useBudgetShell } from '../screens/shell';
+import { useBudgetShell } from '../screens/shellContext';
 import { OverlaySheet } from './bits';
 import { PeoplePane } from './PeoplePane';
 import { toAvatarPerson } from '../domain/people';

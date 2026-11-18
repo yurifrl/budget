@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { syncWindowLabel } from '../../domain/connections';
+import { syncWindowLabel } from '../../model/banks/connections';
 import { colors, radius } from '../../ui/theme';
 
 /** The preset pills offered; 0 = All history (no lower bound). */

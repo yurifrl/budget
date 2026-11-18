@@ -25,7 +25,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppSelector } from '@/store/hooks';
 
 import { useGetAccountsQuery, useGetConnectionsQuery } from '../data/api';
-import { connectionStatusView } from '../domain/connections';
+import { connectionStatusView } from '../model/banks/connections';
 import { computeRunningBalances, workingBalance } from '../domain/engine';
 import { useMoneyFormat } from '../model/useDisplayPrefs';
 import type { Budget, Transaction } from '../domain/types';

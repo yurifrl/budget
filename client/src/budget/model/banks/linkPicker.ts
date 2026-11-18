@@ -6,9 +6,9 @@
  * Everything is flattened into `LinkOption`s so one component renders both.
  */
 
-import type { ConnectionAccountSummaryJson, ConnectionUpstreamJson, UpstreamAccountJson } from '../data/connections';
-import type { AccountRow } from '../data/rows';
-import { milliToCents } from '../data/mapping';
+import type { ConnectionAccountSummaryJson, ConnectionUpstreamJson, UpstreamAccountJson } from '../../data/connections';
+import type { AccountRow } from '../../data/rows';
+import { milliToCents } from '../../data/mapping';
 import { creditView, type CreditView } from './connections';
 
 /** Budget-side working balance (cleared + uncleared) in cents. */

@@ -12,7 +12,7 @@
  * - `build()` snapshots: account `clearedBalance` is the sum (inflow - outflow)
  *   of that account's non-upcoming transactions; `unclearedBalance` is 0.
  */
-import type { Account, Budget, Category, CategoryGroup, MonthKey, Transaction } from "./types";
+import type { Account, Budget, Category, CategoryGroup, MonthKey, Transaction } from "../types";
 
 export const SPEND_GROUP_ID = "g-spend";
 export const PAY_GROUP_ID = "g-pay";

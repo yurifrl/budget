@@ -7,7 +7,7 @@
 
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { LinkOption } from '../../domain/linkPicker';
+import type { LinkOption } from '../../model/banks/linkPicker';
 import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 

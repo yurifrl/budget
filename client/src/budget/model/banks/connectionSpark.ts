@@ -5,7 +5,7 @@
  * any surface (rows, detail pages, widgets).
  */
 
-import type { AccountRow, TransactionRow } from '../data/rows';
+import type { AccountRow, TransactionRow } from '../../data/rows';
 
 /**
  * Bucket signed transaction amounts into `days` daily slots ending today —

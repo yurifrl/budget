@@ -9,7 +9,7 @@ import { StyleSheet, View } from 'react-native';
 
 import type { ConnectionUpstreamJson, UpstreamAccountJson } from '../../data/connections';
 import type { AccountRow } from '../../data/rows';
-import { accountOptionGroups, comparableBankCents, upstreamOptionGroups, workingBalanceCents } from '../../domain/linkPicker';
+import { accountOptionGroups, comparableBankCents, upstreamOptionGroups, workingBalanceCents } from '../../model/banks/linkPicker';
 import { OverlaySheet } from '../../ui/bits';
 import { LinkPicker } from './LinkPicker';
 import { UnlinkConfirm } from './UnlinkConfirm';

@@ -9,7 +9,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import type { Account, Budget, Category, CategoryGroup, Transaction } from '../domain/types';
 import { TRANSFER_PAYEE_PREFIX } from '@shared/domain/transfers';
 import { budgetToPayload } from './payload';
-import { dateIn, payId, scenario } from '../domain/zeroSum.fixtures';
+import { dateIn, payId, scenario } from '../domain/__fixtures__/zeroSum.fixtures';
 import { buildTransferZip, parseTransferFiles, PLAN_SUFFIX, REGISTER_SUFFIX } from './transfer';
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "bun:test";
 import { budgetMonth, categoryFigures, computeBudgetMonth, sumFigures } from "./zeroSum";
-import { dateIn, payId, scenario } from "./zeroSum.fixtures";
+import { dateIn, payId, scenario } from "./__fixtures__/zeroSum.fixtures";
 
 const JUN = 202606;
 const JUL = 202607;

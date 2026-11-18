@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 
 import { useGetSyncStatusQuery } from '../../data/api';
 import type { ConnectionSyncStatusJson } from '../../data/connections';
-import { hasActiveRun, schedulerBanner } from '../../domain/syncRun';
+import { hasActiveRun, schedulerBanner } from '../../model/banks/syncRun';
 
 const FAST_MS = 3_000;
 const SLOW_MS = 15_000;

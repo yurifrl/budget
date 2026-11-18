@@ -6,7 +6,7 @@
 
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { CreditView } from '../../domain/connections';
+import type { CreditView } from '../../model/banks/connections';
 import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 

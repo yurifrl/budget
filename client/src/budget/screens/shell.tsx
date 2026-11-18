@@ -18,7 +18,7 @@
  */
 
 import { Link, Tabs, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -50,43 +50,9 @@ import { AccountEditModal } from './AccountEditModal';
 import { AddAccountModal } from './AddAccountModal';
 import { AddTransactionSheet } from './AddTransactionSheet';
 import { budgetMenuPanes } from '../ui/MenuPanes';
+import { ShellContext, type BudgetShellState } from './shellContext';
 
-export interface BudgetShellState {
-  isPhone: boolean;
-  isTablet: boolean;
-  isDesktop: boolean;
-  /** Top padding screens need to clear the ☰/⋯ chrome row (safe-area aware). */
-  contentTopPad: number;
-  /** Open the calculator add-transaction sheet; `prefill` seeds a new entry
-   * (mobile category detail "＋ Transaction" pre-picks the category). */
-  openAddTransaction: (prefill?: { categoryId?: string | null }) => void;
-  /** Open the calculator sheet pre-filled to edit an existing transaction. */
-  openEditTransaction: (txn: Transaction) => void;
-  /** Open the CSV import-transactions sheet. */
-  openImportTransactions: () => void;
-  /** Open the Manage Payees page (/payees route). */
-  openPayees: () => void;
-  /** Collapse the chrome overlaying content: the drawer (tablet/phone). No-op on
-   * desktop, where the rail sits beside content and must keep the user's
-   * persisted collapse preference. */
-  closeSidebar: () => void;
-  /** True while the plan screen's row-tap numpad panel is open: the shell
-   * parks its FAB (and anything else bottom-anchored) so it stops covering
-   * the panel's keypad. */
-  numpadOpen: boolean;
-  /** Screens with a bottom panel report it here (mount → true, unmount → false). */
-  setNumpadOpen: (open: boolean) => void;
-  /** Open the settings menu on the People pane (add/remove who shares this budget). */
-  openPeople: () => void;
-}
-
-const ShellContext = createContext<BudgetShellState | null>(null);
-
-export function useBudgetShell(): BudgetShellState {
-  const ctx = useContext(ShellContext);
-  if (!ctx) throw new Error('useBudgetShell must be used inside the budget shell');
-  return ctx;
-}
+export { useBudgetShell, type BudgetShellState } from './shellContext';
 
 const NAV_LINKS = [
   { route: '/plan', label: 'Plan', icon: 'list.bullet' },

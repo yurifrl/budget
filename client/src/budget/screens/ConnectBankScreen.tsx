@@ -39,8 +39,8 @@ import {
   oauthRelayUrl,
   requiresReauth,
   widgetItemId,
-} from '../domain/connections';
-import { connectionSparkData } from '../domain/connectionSpark';
+} from '../model/banks/connections';
+import { connectionSparkData } from '../model/banks/connectionSpark';
 import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { selectActiveBudgetId } from '../state/ui';
 import { LinkedBy } from '../ui/LinkedBy';
@@ -53,7 +53,7 @@ import { ConnectionRowButtons } from './connect-bank/ConnectionRowButtons';
 import { UpstreamAccountsList } from './connect-bank/UpstreamAccountsList';
 import { useConnectionActions } from './connect-bank/useConnectionActions';
 import { useSyncStatus } from './connect-bank/useSyncStatus';
-import { canRequestSync, syncStateView } from '../domain/syncRun';
+import { canRequestSync, syncStateView } from '../model/banks/syncRun';
 import { ConnectBankWidget } from './ConnectBankWidget';
 import { useBudgetShell } from './shell';
 

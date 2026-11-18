@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ConnectionUpstreamJson, UpstreamAccountJson } from '../data/connections';
-import type { AccountRow } from '../data/rows';
+import type { ConnectionUpstreamJson, UpstreamAccountJson } from '../../data/connections';
+import type { AccountRow } from '../../data/rows';
 import {
   accountOptionGroups,
   linkedSummaryAccounts,

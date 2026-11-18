@@ -31,7 +31,7 @@ import {
   useGetAccountsQuery,
   useGetConnectionsQuery,
 } from "../data/api";
-import { connectionStatusView, formatSyncStamp } from "../domain/connections";
+import { connectionStatusView, formatSyncStamp } from "../model/banks/connections";
 import { AccountEditModal } from "./AccountEditModal";
 import { computeRunningBalances, workingBalance } from "../domain/engine";
 import { todayIso } from "../domain/format";

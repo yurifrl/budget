@@ -22,7 +22,6 @@ import { createPortalOnWeb } from '@/ui/portal';
 import { ManagePayeesModal } from '../ManagePayeesModal';
 import { transferPayeeName } from '@shared/domain/transfers';
 
-export { transferPayeeName };
 
 type ItemKind = 'selected' | 'transfer' | 'payee';
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { bankDisplayName, milliToCents, txnStateView } from './bankPage';
+import { milliToCents } from '../../data/mapping';
+import { bankDisplayName, txnStateView } from './bankPage';
 
 describe('bankDisplayName', () => {
   test('title-cases raw lowercase ids, keeps real names', () => {

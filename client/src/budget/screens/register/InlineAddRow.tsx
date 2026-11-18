@@ -13,7 +13,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import { DatePickerPopover } from './DatePickerPopover';
 import { pressNoBlur } from './dropdown';
-import { PayeeDropdown, transferPayeeName } from './PayeeDropdown';
+import { transferPayeeName } from '@shared/domain/transfers';
+import { PayeeDropdown } from './PayeeDropdown';
 import { AccountDropdown } from './AccountDropdown';
 import { CategoryDropdown } from './CategoryDropdown';
 

@@ -21,7 +21,8 @@ import { assignedInMonth } from '../domain/engine';
 import { DEFAULT_MONEY_FORMAT, type MoneyFormat } from '../domain/format';
 import { multiMoveMoneyUpdates, type MovePair } from '../data/ledger';
 import type { Budget, Cents, MonthKey } from '../domain/types';
-import { BUDGET_UI_KEY, type BudgetUiRootState } from './ui';
+import { BUDGET_UI_KEY } from './keys';
+import type { BudgetUiRootState } from './ui';
 
 /** Stack depth cap — YNAB keeps a bounded recent-history too. */
 export const PLAN_EDIT_HISTORY_LIMIT = 50;

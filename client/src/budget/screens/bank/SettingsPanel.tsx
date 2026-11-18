@@ -7,7 +7,7 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import type { ConnectionJson } from '../../data/connections';
-import { requiresReauth, syncWindowLabel } from '../../domain/connections';
+import { requiresReauth, syncWindowLabel } from '../../model/banks/connections';
 import { colors, radius } from '../../ui/theme';
 import { GhostButton, IndigoButton } from '../../ui/bits';
 import { SyncWindowControl } from '../connect-bank/SyncWindowControl';

@@ -8,7 +8,7 @@ import { Text, View } from 'react-native';
 import { Avatar } from '@/ui/avatar/Avatar';
 
 import type { LinkedByJson } from '../data/connections';
-import { linkedByView } from '../domain/connections';
+import { linkedByView } from '../model/banks/connections';
 import { colors } from './theme';
 
 export function LinkedBy({ linkedBy, size = 16 }: { linkedBy: LinkedByJson | null | undefined; size?: number }) {

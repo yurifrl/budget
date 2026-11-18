@@ -9,7 +9,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { ConnectionUpstreamJson } from '../../data/connections';
 import type { AccountRow } from '../../data/rows';
-import { creditSummary } from '../../domain/connections';
+import { creditSummary } from '../../model/banks/connections';
 import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors } from '../../ui/theme';
 

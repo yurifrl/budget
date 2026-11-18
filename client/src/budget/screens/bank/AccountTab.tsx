@@ -10,7 +10,8 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 
 import type { ConnectionTxnJson } from '../../data/connections';
 import { useGetConnectionTransactionsInfiniteQuery } from '../../data/api';
-import { milliToCents, txnStateView, type TxnStateTone } from '../../domain/bankPage';
+import { milliToCents } from '../../data/mapping';
+import { txnStateView, type TxnStateTone } from '../../model/banks/bankPage';
 import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 import { AmountPill } from '../register/AmountPill';

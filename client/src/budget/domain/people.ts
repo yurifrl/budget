@@ -6,7 +6,7 @@
  * together with the budget-wide "by person" filter (Plan, Reflect, Spending).
  */
 
-import type { AvatarPerson, PersonAvatar } from '@/ui/avatar/types';
+import type { AvatarPerson, PersonAvatar } from './avatar';
 
 import { recomputeActivity } from './engine';
 import { categoryFigures, sumFigures, type BudgetMonth } from './zeroSum';

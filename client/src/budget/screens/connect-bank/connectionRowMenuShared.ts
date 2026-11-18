@@ -4,7 +4,7 @@
  * Symbols). Also owns the Remove confirmation copy shared with the settings page.
  */
 
-import { requiresReauth } from '../../domain/connections';
+import { requiresReauth } from '../../model/banks/connections';
 
 /** The row's menu action kinds, shared across platforms. */
 export type ConnectionRowActionKind = 'sync' | 'reimport' | 'reconnect' | 'settings' | 'disconnect';

@@ -25,8 +25,8 @@ import {
   useGetUpstreamAccountsQuery,
   useUpdateConnectionSyncWindowMutation,
 } from '../data/api';
-import { bankDisplayName } from '../domain/bankPage';
-import { connectionStatusView, formatSyncStamp, humanizeConnectionError } from '../domain/connections';
+import { bankDisplayName } from '../model/banks/bankPage';
+import { connectionStatusView, formatSyncStamp, humanizeConnectionError } from '../model/banks/connections';
 import { selectActiveBudgetId } from '../state/ui';
 import { colors, radius } from '../ui/theme';
 import { GhostButton, IndigoButton, OverlaySheet } from '../ui/bits';
@@ -35,7 +35,7 @@ import { OverviewTab } from './bank/OverviewTab';
 import { SettingsPanel } from './bank/SettingsPanel';
 import { useConnectionActions } from './connect-bank/useConnectionActions';
 import { useSyncStatus } from './connect-bank/useSyncStatus';
-import { canRequestSync, syncStateView } from '../domain/syncRun';
+import { canRequestSync, syncStateView } from '../model/banks/syncRun';
 import { useBudgetShell } from './shell';
 
 const STATUS_BG = { ok: colors.greenPillBg, warn: colors.yellowPillBg, bad: colors.redPillBg, off: colors.grayPillBg } as const;

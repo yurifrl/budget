@@ -3,8 +3,8 @@
  * transaction-state presentation, milliunit conversion. No React, no I/O.
  */
 
-import type { ConnectionTxnState } from '../data/connections';
-import type { Cents } from './types';
+import type { ConnectionTxnState } from '../../data/connections';
+import type { Cents } from '../../domain/types';
 
 /**
  * Human bank name. Providers sometimes hand back a raw lowercase id
@@ -23,11 +23,6 @@ export function bankDisplayName(institution: string | null | undefined, provider
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
-}
-
-/** Server amounts are signed MILLIUNITS (cents x 10); the app formats cents. */
-export function milliToCents(milli: number): Cents {
-  return Math.round(milli / 10);
 }
 
 export type TxnStateTone = 'neutral' | 'warn' | 'bad';

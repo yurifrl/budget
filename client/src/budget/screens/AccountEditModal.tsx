@@ -22,9 +22,9 @@ import {
 } from '../data/api';
 import { AccountRow } from '../data/rows';
 import { milliToCents } from '../data/mapping';
-import { connectionStatusView, requiresReauth } from '../domain/connections';
+import { connectionStatusView, requiresReauth } from '../model/banks/connections';
 import { useMoneyFormat } from '../model/useDisplayPrefs';
-import { upstreamOption } from '../domain/linkPicker';
+import { upstreamOption } from '../model/banks/linkPicker';
 import { KeyboardModalFrame } from '../ui/KeyboardModalFrame';
 import { LinkedBy } from '../ui/LinkedBy';
 import { colors } from '../ui/theme';

@@ -10,9 +10,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ConnectionAccountSummaryJson, ConnectionCountsJson, ConnectionSummaryJson, ConnectionUpstreamJson, UpstreamAccountJson } from '../../data/connections';
 import type { AccountRow, TransactionRow } from '../../data/rows';
-import { accountActivity, balanceReconcile } from '../../domain/connectionSpark';
-import { creditView } from '../../domain/connections';
-import { linkedSummaryAccounts } from '../../domain/linkPicker';
+import { accountActivity, balanceReconcile } from '../../model/banks/connectionSpark';
+import { creditView } from '../../model/banks/connections';
+import { linkedSummaryAccounts } from '../../model/banks/linkPicker';
 import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 import { BankBalanceCard } from './BankBalanceCard';

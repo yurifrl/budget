@@ -4,7 +4,7 @@ import type { Budget, MonthKey } from "./types";
 
 import { availableBreakdown } from "./inspector";
 import { computeBudgetMonth } from "./zeroSum";
-import { dateIn, payId, scenario } from "./zeroSum.fixtures";
+import { dateIn, payId, scenario } from "./__fixtures__/zeroSum.fixtures";
 
 const AUG = 202608;
 const SEP = 202609;

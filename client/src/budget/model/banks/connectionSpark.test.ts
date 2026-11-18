@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { accountActivity, balanceReconcile, connectionActivitySeries, connectionSparkData } from './connectionSpark';
-import type { AccountRow, TransactionRow } from '../data/rows';
+import type { AccountRow, TransactionRow } from '../../data/rows';
 
 /** One day ago, as the helpers' "today" anchor is the real clock. */
 function daysAgo(n: number): string {

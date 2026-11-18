@@ -23,7 +23,9 @@ import {
   type PlanEditsState,
 } from './planEdits';
 
-export const BUDGET_UI_KEY = 'budgetUi';
+import { BUDGET_UI_KEY } from './keys';
+
+export { BUDGET_UI_KEY };
 
 /** Plan screen filter chips (mirrors the mock: All / Underfunded / …). */
 export type PlanFilter = 'all' | 'underfunded' | 'overfunded' | 'money-available' | 'snoozed';

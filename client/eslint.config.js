@@ -55,10 +55,8 @@ const layerZones = [
 ];
 
 /**
- * budget/domain is meant to be pure: no React Native / Expo / React, and no
- * imports from the rest of the client (only itself and @shared). The copied
- * code does not meet that yet (migration-plan G10); the exceptions below are
- * the narrowest per-file allowances, to be removed in phase 5a.
+ * budget/domain is pure: no React Native / Expo / React, and no imports from
+ * the rest of the client (only itself and @shared). No exceptions.
  */
 const DOMAIN = `${SRC}/budget/domain`;
 const domainForbidden = [
@@ -72,28 +70,13 @@ const domainForbidden = [
   'ui',
   'platform',
 ];
-const domainZones = (allow = {}) =>
+const domainZones = () =>
   domainForbidden
-    .filter((from) => allow[from] !== '*')
     .map((from) => ({
       target: DOMAIN,
       from: `${SRC}/${from}`,
-      ...(allow[from] ? { except: allow[from] } : {}),
       message: `budget/domain must stay pure: it may not import ${from}/ (imports only itself and @shared).`,
     }));
-
-/** Phase 3 lint exceptions (documented in docs/decisions.md, "Phase 3"). */
-const DOMAIN_EXCEPTIONS = [
-  { files: ['src/budget/domain/linkPicker.ts'], allow: { 'budget/data': ['connections.ts', 'rows.ts', 'mapping.ts'] } },
-  { files: ['src/budget/domain/linkPicker.test.ts'], allow: { 'budget/data': ['connections.ts', 'rows.ts'] } },
-  { files: ['src/budget/domain/connectionSpark.ts', 'src/budget/domain/connectionSpark.test.ts'], allow: { 'budget/data': ['rows.ts'] } },
-  { files: ['src/budget/domain/syncRun.ts', 'src/budget/domain/syncRun.test.ts', 'src/budget/domain/bankPage.ts'], allow: { 'budget/data': ['connections.ts'] } },
-  { files: ['src/budget/domain/connections.ts'], allow: { 'budget/data': ['connections.ts'], ui: ['avatar/types.ts'] } },
-  { files: ['src/budget/domain/people.ts'], allow: { ui: ['avatar/types.ts'] } },
-  { files: ['src/budget/domain/payments.test.ts'], allow: { 'budget/data': ['ledger.ts'] } },
-  { files: ['src/budget/domain/format.ts'], allow: { platform: ['date.ts'] } },
-  { files: ['src/budget/domain/import.ts'], allow: { 'budget/import': ['index.ts'] } },
-];
 
 const reactNativeMessage = 'budget/domain must stay pure: no react-native, expo or React imports.';
 
@@ -135,8 +118,15 @@ module.exports = defineConfig([
       'react-hooks/refs': 'off',
     },
   },
-  ...DOMAIN_EXCEPTIONS.map(({ files, allow }) => ({
-    files,
-    rules: { 'import/no-restricted-paths': ['error', { zones: [...layerZones, ...domainZones(allow)] }] },
-  })),
+  // Temporary (phase 5a, removed when domain/ moves to src/domain in 5e):
+  // the avatar types' one definition is in budget/domain.
+  {
+    files: ['src/ui/avatar/types.ts'],
+    rules: {
+      'import/no-restricted-paths': [
+        'error',
+        { zones: layerZones.map((z) => (z.target === `${SRC}/ui` && z.from === `${SRC}/budget` ? { ...z, except: ['domain/avatar.ts'] } : z)) },
+      ],
+    },
+  },
 ]);

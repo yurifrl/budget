@@ -8,10 +8,10 @@
  * are classified.
  */
 
-import type { AvatarPerson } from '@/ui/avatar/types';
+import type { AvatarPerson } from '../../domain/avatar';
 
-import type { CreditDetailsJson, LinkedByJson } from '../data/connections';
-import { personLabel, toAvatarPerson } from './people';
+import type { CreditDetailsJson, LinkedByJson } from '../../data/connections';
+import { personLabel, toAvatarPerson } from '../../domain/people';
 
 /**
  * Generic connection lifecycle statuses (server/connections/types.ts) that

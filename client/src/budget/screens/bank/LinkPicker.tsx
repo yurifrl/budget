@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import type { LinkOptionGroup } from '../../domain/linkPicker';
+import type { LinkOptionGroup } from '../../model/banks/linkPicker';
 import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 import { LinkOptionCard } from './LinkOptionCard';

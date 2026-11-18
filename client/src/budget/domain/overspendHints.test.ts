@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { creditOverspendHint, overspendHint, underfundedHint } from "./overspendHints";
 import type { MonthKey } from "./types";
 import { computeBudgetMonth } from "./zeroSum";
-import { dateIn, payId, scenario } from "./zeroSum.fixtures";
+import { dateIn, payId, scenario } from "./__fixtures__/zeroSum.fixtures";
 
 const JUN: MonthKey = 202606;
 const nb = (s: string) => s.replace(/ /g, " ");

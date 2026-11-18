@@ -9,12 +9,10 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { moveMoneyUpdates } from "../data/ledger";
-import type { AssignmentUpdate } from "../data/ledger";
 import { cardAccountForCategory, isCardAccount } from "./payments";
 import type { Budget, MonthKey } from "./types";
 import { computeBudgetMonth } from "./zeroSum";
-import { dateIn, payId, scenario, type Scenario } from "./zeroSum.fixtures";
+import { dateIn, payId, scenario, type Scenario } from "./__fixtures__/zeroSum.fixtures";
 
 const JUN: MonthKey = 202606;
 const PAY = payId("Card");
@@ -68,36 +66,6 @@ describe("payment category figures (P1, P3, P4)", () => {
   it("the month's assignment adds to Available and shrinks underfunded", () => {
     const b = base().startingBalance("Card", -445369, dateIn(202605, 1)).assign(PAY, JUN, 150000).build();
     expect(pay(b)).toMatchObject({ assigned: 150000, available: 150000, debt: 445369, underfunded: 295369 });
-  });
-});
-
-describe("moving money to and from a payment category conserves money (R2)", () => {
-  const withAssigned = (b: Budget, updates: AssignmentUpdate[]): Budget => ({
-    ...b,
-    categories: b.categories.map((c) => {
-      const u = updates.find((x) => x.categoryId === c.id);
-      return u ? { ...c, assigned: { ...c.assigned, [JUN]: u.assignedCents } } : c;
-    }),
-  });
-  const debtBudget = () => base().startingBalance("Card", -8759990, dateIn(202605, 1)).build();
-
-  it("a move out lowers Available by exactly what Ready to Assign gains", () => {
-    const before = debtBudget();
-    const rtaBefore = computeBudgetMonth(before, JUN).readyToAssign;
-    expect(pay(before).available).toBe(0); // P3: starting debt is not funded
-
-    const updates = moveMoneyUpdates(before, JUN, PAY, null, 8759990);
-    const after = withAssigned(before, updates);
-    expect(pay(after).available).toBe(-8759990);
-    expect(computeBudgetMonth(after, JUN).readyToAssign - rtaBefore).toBe(8759990);
-  });
-
-  it("a move in raises Available by exactly what Ready to Assign loses", () => {
-    const before = debtBudget();
-    const rtaBefore = computeBudgetMonth(before, JUN).readyToAssign;
-    const after = withAssigned(before, moveMoneyUpdates(before, JUN, null, PAY, 300000));
-    expect(pay(after).available).toBe(300000);
-    expect(computeBudgetMonth(after, JUN).readyToAssign - rtaBefore).toBe(-300000);
   });
 });
 

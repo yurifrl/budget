@@ -21,7 +21,7 @@ import {
   scenario,
   truncateBudget,
   type Scenario,
-} from "./zeroSum.fixtures";
+} from "./__fixtures__/zeroSum.fixtures";
 import type { Budget, MonthKey } from "./types";
 
 const R = (reais: number): number => Math.round(reais * 100);

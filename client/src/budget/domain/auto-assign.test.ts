@@ -7,7 +7,7 @@ import {
   buildAutoAssignSnapshot,
   type AutoAssignSnapshot,
 } from "./auto-assign";
-import { dateIn, payId, scenario } from "./zeroSum.fixtures";
+import { dateIn, payId, scenario } from "./__fixtures__/zeroSum.fixtures";
 
 /** Quick category literal: `assigned`/`activity` per YYYYMM key; `available` is the engine's figure (set it where a strategy reads it). */
 function cat(partial: Partial<AutoAssignCategory>): AutoAssignCategory {

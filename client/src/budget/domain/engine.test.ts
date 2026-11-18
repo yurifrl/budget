@@ -12,7 +12,7 @@ import {
 import { createSeedBudget } from "./seed";
 import type { Budget, Category, CategoryTarget, MonthKey } from "./types";
 import { budgetMonth, categoryFigures, computeBudgetMonth } from "./zeroSum";
-import { dateIn, payId, scenario } from "./zeroSum.fixtures";
+import { dateIn, payId, scenario } from "./__fixtures__/zeroSum.fixtures";
 
 const M: MonthKey = 202606;
 const PREV: MonthKey = 202605;
