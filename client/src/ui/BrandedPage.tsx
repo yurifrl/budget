@@ -41,6 +41,7 @@ export function BrandedPage({ productName, split, align = 'anchored', trailing, 
         </View>
         <View style={styles.contentPane}>
           <ScrollView
+      keyboardShouldPersistTaps="handled"
             contentContainerStyle={[
               styles.contentPaneInner,
               top && styles.contentPaneInnerTop,
@@ -56,6 +57,7 @@ export function BrandedPage({ productName, split, align = 'anchored', trailing, 
 
   return (
     <ScrollView
+      keyboardShouldPersistTaps="handled"
       style={styles.screen}
       contentContainerStyle={[
         styles.stack,
