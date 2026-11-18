@@ -1,7 +1,7 @@
 /**
  * OAuth 2.1 authorization server for MCP clients and the CLI. We are our own
  * AS (public clients, PKCE S256, rotating refresh tokens); only the human
- * login is delegated to the existing Google flow in server/user. Mount
+ * login is delegated to the app sign-in in user/ (Cloudflare Access or Google). Mount
  * BEFORE the auth gate — these endpoints authenticate themselves.
  */
 import { Hono } from 'hono';

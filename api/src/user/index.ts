@@ -24,5 +24,5 @@ export { personAvatarSql, toPersonAvatar } from './avatar';
 export type { PersonAvatar, PersonAvatarRow } from './avatar';
 export { personPendingSql, personRefSql, toPersonRef } from './person';
 export type { PersonRef, PersonRefRow } from './person';
-export { configureAuth, authConfig, DEFAULT_AUTH_CONFIG } from './config';
+export { configureAuth, authConfig, accessConfigured, DEFAULT_AUTH_CONFIG } from './config';
 export type { AuthConfig } from './config';

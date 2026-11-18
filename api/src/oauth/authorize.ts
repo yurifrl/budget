@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 
-import { authDisabled, cookieSessionUser, isAllowed, resolveOrCreateSessionUser, safeReturnTo } from '../user';
+import { accessConfigured, authDisabled, cookieSessionUser, isAllowed, resolveOrCreateSessionUser, safeReturnTo } from '../user';
 import { CHALLENGE_RE, hmacBase64Url, safeEqual } from './crypto';
 import { DEFAULT_SCOPE, SCOPES, type OAuthConfig } from './config';
 import { renderConsent, renderError } from './consent-page';
@@ -103,12 +103,13 @@ export function authorizeRoutes(cfg: OAuthConfig): Hono {
     }
     const email = await approver(c, cfg);
     if (!email) {
-      // Reuse the existing Google login; it returns here via a validated
-      // same-origin relative return_to.
+      // Reuse the app's sign-in (Cloudflare Access when configured, else
+      // Google); both return here via a validated same-origin relative return_to.
       const url = new URL(c.req.url);
       const returnTo = safeReturnTo(`${url.pathname}${url.search}`);
       if (!returnTo) return c.html(renderError('Request too large to resume after login.'), 400);
-      return c.redirect(`/auth/google?return_to=${encodeURIComponent(returnTo)}`);
+      const login = accessConfigured() ? '/auth/access' : '/auth/google';
+      return c.redirect(`${login}?return_to=${encodeURIComponent(returnTo)}`);
     }
     const exp = Math.floor(Date.now() / 1000) + CONSENT_TTL_SECONDS;
     const q = parsed.req;

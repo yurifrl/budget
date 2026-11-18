@@ -2,13 +2,16 @@ import type { Context, Hono, MiddlewareHandler } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { issueSession, verifyAccessToken, verifySession } from './auth';
-import { authConfig } from './config';
+import { verifyAccessToken, verifySession } from './auth';
+import { mountAccessRoutes } from './access-routes';
+import { accessConfigured, authConfig, isAllowed } from './config';
 import { googleConfigured, googleAuthUrl, exchangeCode } from './google';
 import { implement, mountOperations } from '../core/operation';
 import { errorResponse } from '../core/validate';
 import { authMe } from '@shared/contracts/user/me';
+import { authProviders } from '@shared/contracts/user/providers';
 import { safeReturnTo } from './return-to';
+import { mintSessionToken, setSessionCookie } from './session-cookie';
 import type { SessionPrincipal } from './types';
 import { EmailAlreadyProvisionedError, isGrantActive, resolveOrCreateSessionUser } from './store';
 
@@ -21,7 +24,6 @@ const secret = () => authConfig().sessionSecret;
 const cookieDomain = () => authConfig().cookieDomain;
 const appBaseUrl = () => authConfig().appOrigin;
 export const apiBaseUrl = () => authConfig().apiBaseUrl;
-const ttlSeconds = () => authConfig().sessionTtlDays * 86400;
 
 /** Machine-to-machine bearer token for agent clients (hermes); unset = disabled. */
 export function serviceTokenMatches(candidate: string): boolean {
@@ -30,10 +32,7 @@ export function serviceTokenMatches(candidate: string): boolean {
   return timingSafeEqual(Buffer.from(candidate), Buffer.from(token));
 }
 
-/** Email is authorized when it appears in the allowlist (case-insensitive). */
-export function isAllowed(email: string): boolean {
-  return authConfig().allowedEmails.includes(email.toLowerCase());
-}
+export { isAllowed };
 
 /**
  * Auth is bypassed only when the entrypoint says so (`authDisabled`): local
@@ -129,13 +128,19 @@ export const authOperations = [
     const user = await principalFromRequest(c);
     return user ? { email: user.email } : errorResponse(c, 401, 'unauthorized');
   }),
+  // Which sign-in the client should start (LoginGate). Pre-gate and open.
+  implement(authProviders, () => ({ access: accessConfigured(), google: googleConfigured() })),
 ];
 
 export function mountAuthRoutes(app: Hono): void {
   mountOperations(app, authOperations);
+  mountAccessRoutes(app);
+
+  // Google routes answer 404 (as if not mounted) unless Google is configured.
+  const googleOff = (c: Context) => errorResponse(c, 404, 'not found');
 
   app.get('/auth/google', (c) => {
-    if (!googleConfigured()) return errorResponse(c, 503, 'google not configured');
+    if (!googleConfigured()) return googleOff(c);
     const state = crypto.randomUUID();
     setCookie(c, STATE_COOKIE, state, {
       httpOnly: true,
@@ -157,6 +162,7 @@ export function mountAuthRoutes(app: Hono): void {
   });
 
   app.get('/auth/google/callback', async (c) => {
+    if (!googleConfigured()) return googleOff(c);
     const state = c.req.query('state');
     const cookieState = getCookie(c, STATE_COOKIE);
     deleteCookie(c, STATE_COOKIE, { path: '/' });
@@ -182,14 +188,7 @@ export function mountAuthRoutes(app: Hono): void {
       throw err;
     }
 
-    setCookie(c, COOKIE(), await issueSession(secret(), id.email, ttlSeconds()), {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'Lax',
-      domain: cookieDomain(),
-      path: '/',
-      maxAge: ttlSeconds(),
-    });
+    await setSessionCookie(c, id.email);
     return c.redirect(returnTo ? `${apiBaseUrl()}${returnTo}` : appBaseUrl());
   });
 
@@ -212,7 +211,7 @@ export function mountAuthRoutes(app: Hono): void {
    * personal allowlisted app.
    */
   app.get('/auth/google/native', (c) => {
-    if (!googleConfigured()) return errorResponse(c, 503, 'google not configured');
+    if (!googleConfigured()) return googleOff(c);
     const appUri = c.req.query('redirect_uri') ?? '';
     const schemes = authConfig().nativeRedirectSchemes;
     if (!schemes.some((p) => appUri.toLowerCase().startsWith(p.toLowerCase()))) {
@@ -223,6 +222,7 @@ export function mountAuthRoutes(app: Hono): void {
   });
 
   app.get('/auth/google/native/callback', (c) => {
+    if (!googleConfigured()) return googleOff(c);
     const raw = c.req.query('state') ?? '';
     const sep = raw.lastIndexOf('|');
     const appUri = sep >= 0 ? raw.slice(0, sep) : '';
@@ -236,6 +236,7 @@ export function mountAuthRoutes(app: Hono): void {
 
   /** Exchange a native-flow code for a stateless session token (Bearer auth). */
   app.get('/auth/token', async (c) => {
+    if (!googleConfigured()) return googleOff(c);
     const state = c.req.query('state') ?? '';
     const sep = state.lastIndexOf('.');
     const expected = sep < 0 ? null : Buffer.from(exchangeTicket(state.slice(0, sep)));
@@ -252,7 +253,7 @@ export function mountAuthRoutes(app: Hono): void {
       if (err instanceof EmailAlreadyProvisionedError) return errorResponse(c, 403, 'email already provisioned');
       throw err;
     }
-    return c.json({ token: await issueSession(secret(), id.email, ttlSeconds()), email: id.email });
+    return c.json({ token: await mintSessionToken(id.email), email: id.email });
   });
 }
 

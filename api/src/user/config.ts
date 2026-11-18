@@ -31,6 +31,20 @@ export interface AuthConfig {
   nativeRedirectSchemes: string[];
   /** Machine-to-machine bearer for agent clients; empty = lane disabled. */
   serviceToken: string;
+  /**
+   * Cloudflare Access team domain (`<team>.cloudflareaccess.com`, no scheme).
+   * With `accessAud` non-empty, Access is a sign-in provider (/auth/access).
+   */
+  accessTeamDomain: string;
+  /** AUD tags of the Access applications whose assertions are accepted. */
+  accessAud: string[];
+  /**
+   * JWKS URL override for local dev and tests (a fake signer). '' = the team's
+   * real `/cdn-cgi/access/certs`. The entrypoint refuses it in a cluster.
+   */
+  accessCertsUrl: string;
+  /** fetch used for the JWKS (tests inject a fake); undefined = global fetch. */
+  accessFetch?: typeof fetch;
 }
 
 export const DEFAULT_AUTH_CONFIG: AuthConfig = {
@@ -46,6 +60,9 @@ export const DEFAULT_AUTH_CONFIG: AuthConfig = {
   googleClientSecret: '',
   nativeRedirectSchemes: ['exp://', 'budgetapp://'],
   serviceToken: '',
+  accessTeamDomain: '',
+  accessAud: [],
+  accessCertsUrl: '',
 };
 
 let current: AuthConfig = DEFAULT_AUTH_CONFIG;
@@ -57,3 +74,19 @@ export function configureAuth(config: Partial<AuthConfig>): AuthConfig {
 }
 
 export const authConfig = (): AuthConfig => current;
+
+/** Cloudflare Access sign-in is on: a team domain and at least one AUD tag. */
+export const accessConfigured = (): boolean => !!current.accessTeamDomain && current.accessAud.length > 0;
+
+/**
+ * Email is authorized to hold a session. With an API-side allow-list
+ * (AUTH_ALLOWED_EMAILS) it must be on it, whatever the provider. Without one,
+ * only an Access deployment admits anyone: the Cloudflare policy that gates
+ * /auth/access is the list. No list and no Access = nobody (fail closed).
+ */
+export function isAllowed(email: string): boolean {
+  const e = email.toLowerCase().trim();
+  if (!e) return false;
+  if (current.allowedEmails.length > 0) return current.allowedEmails.includes(e);
+  return accessConfigured();
+}

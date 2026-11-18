@@ -13,8 +13,9 @@ const FULL = {
 describe('checkAuthEnv (fail-closed startup guard)', () => {
   it('refuses to boot with no auth env and no explicit opt-in', () => {
     const errs = checkAuthEnv({});
-    expect(errs.length).toBe(4);
+    expect(errs.length).toBe(2);
     expect(errs.join('\n')).toContain('AUTH_DISABLED_OK=1');
+    expect(errs.join('\n')).toContain('no sign-in provider');
   });
 
   it('allows auth-off boot only with AUTH_DISABLED_OK=1 and no auth env', () => {
@@ -76,5 +77,57 @@ describe('authConfigFromEnv', () => {
     expect(cfg.cookieDomain).toBe('.syscd.live');
     expect(cfg.appOrigin).toBe('http://localhost:8091');
     expect(cfg.sessionTtlDays).toBe(7);
+  });
+});
+
+describe('checkAuthEnv: provider matrix (Cloudflare Access / Google)', () => {
+  const K8S = { KUBERNETES_SERVICE_HOST: '10.0.0.1' };
+  const ACCESS = { ACCESS_TEAM_DOMAIN: 'syscd.cloudflareaccess.com', ACCESS_AUD: 'aud-web, aud-native' };
+  const GOOGLE = { GOOGLE_CLIENT_ID: 'cid', GOOGLE_CLIENT_SECRET: 'csec', AUTH_ALLOWED_EMAILS: 'a@b.com' };
+  const S = { SESSION_SECRET: SECRET };
+
+  const cases: [string, Record<string, string>, boolean][] = [
+    ['Access only', { ...ACCESS, ...S }, true],
+    ['Access only + allow-list', { ...ACCESS, AUTH_ALLOWED_EMAILS: 'a@b.com', ...S }, true],
+    ['Google only', { ...GOOGLE, ...S }, true],
+    ['both', { ...ACCESS, ...GOOGLE, ...S }, true],
+    ['neither', { ...S }, false],
+    ['only an allow-list', { AUTH_ALLOWED_EMAILS: 'a@b.com', ...S }, false],
+    ['Access: team domain only', { ACCESS_TEAM_DOMAIN: 'syscd.cloudflareaccess.com', ...S }, false],
+    ['Access: AUD only', { ACCESS_AUD: 'aud', ...S }, false],
+    ['Access: AUD only commas', { ACCESS_TEAM_DOMAIN: 'syscd.cloudflareaccess.com', ACCESS_AUD: ' , ', ...S }, false],
+    ['Access: team domain with scheme', { ...ACCESS, ACCESS_TEAM_DOMAIN: 'https://syscd.cloudflareaccess.com', ...S }, false],
+    ['Google: id only', { GOOGLE_CLIENT_ID: 'cid', AUTH_ALLOWED_EMAILS: 'a@b.com', ...S }, false],
+    ['Google: no allow-list', { GOOGLE_CLIENT_ID: 'cid', GOOGLE_CLIENT_SECRET: 'csec', ...S }, false],
+    ['full Access + half Google', { ...ACCESS, GOOGLE_CLIENT_ID: 'cid', ...S }, false],
+    ['full Google + half Access', { ...GOOGLE, ACCESS_AUD: 'aud', ...S }, false],
+    ['Access without a strong SESSION_SECRET', { ...ACCESS, SESSION_SECRET: 'short' }, false],
+  ];
+
+  for (const [name, env, boots] of cases) {
+    it(`${name}: ${boots ? 'boots' : 'refuses'} (locally and in a cluster)`, () => {
+      expect(checkAuthEnv(env).length === 0).toBe(boots);
+      expect(checkAuthEnv({ ...env, ...K8S }).length === 0).toBe(boots);
+    });
+  }
+
+  it('Access env present turns the auth-off opt-in back into full rules', () => {
+    expect(authDisabledFromEnv({ AUTH_DISABLED_OK: '1', ACCESS_AUD: 'x' })).toBe(false);
+    expect(checkAuthEnv({ AUTH_DISABLED_OK: '1', ACCESS_AUD: 'x' }).length).toBeGreaterThan(0);
+  });
+
+  it('refuses the ACCESS_CERTS_URL override in a cluster and never builds it there', () => {
+    const env = { ...ACCESS, ...S, ACCESS_CERTS_URL: 'http://127.0.0.1:9/certs' };
+    expect(checkAuthEnv(env)).toEqual([]);
+    expect(checkAuthEnv({ ...env, ...K8S })).toContain('ACCESS_CERTS_URL (dev/test JWKS override) is not allowed in a cluster');
+    expect(authConfigFromEnv(env).accessCertsUrl).toBe('http://127.0.0.1:9/certs');
+    expect(authConfigFromEnv({ ...env, ...K8S }).accessCertsUrl).toBe('');
+  });
+
+  it('builds the Access config: lower-cased team, AUD tags kept as written', () => {
+    const cfg = authConfigFromEnv({ ACCESS_TEAM_DOMAIN: 'Syscd.CloudflareAccess.com', ACCESS_AUD: ' AbC1 ,def2,, ', ...S });
+    expect(cfg.accessTeamDomain).toBe('syscd.cloudflareaccess.com');
+    expect(cfg.accessAud).toEqual(['AbC1', 'def2']);
+    expect(cfg.allowedEmails).toEqual([]);
   });
 });
