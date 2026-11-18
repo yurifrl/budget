@@ -4,14 +4,14 @@
   "id": "budget-dqt",
   "title": "Phase 5e: client structure",
   "description": "",
-  "status": "open",
+  "status": "ready-to-review",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:58.717Z",
-  "updated_at": "2026-11-18T06:36:21.975Z",
+  "updated_at": "2026-11-18T10:45:27.053Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -30,6 +30,19 @@
     "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-dqt",
     "changeset": {
       "base": "08ff6fdd6e426e89ed14ac84535115b6f071233d"
+    },
+    "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
+    "finished_at": "2026-11-18T10:45:26.999Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 0,
+        "files": 0,
+        "additions": 0,
+        "deletions": 0
+      },
+      "head": "08ff6fdd6e426e89ed14ac84535115b6f071233d",
+      "at": "2026-11-18T10:45:26.999Z"
     }
   },
   "attachments": [],
