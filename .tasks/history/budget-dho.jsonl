@@ -1,0 +1,1 @@
+{"issue_id":"budget-dho","action":"save","at":"2026-11-18T10:30:32.369Z","actor":null,"data":{"status":"open","title":"client: inline add row defaults to the first account even when it is closed (Casa: Carteira), so saving fails with 'account is closed' (pre-existing, same on main)"}}

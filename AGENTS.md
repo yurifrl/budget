@@ -72,6 +72,33 @@ this Mac use `container build --dns 1.1.1.1 -f deploy/Dockerfile.<x> -t budget-<
 4. New SQL: a migration `api/db/migrations/0100_*.sql` or higher, additive
    only, plus a `MIGRATION_SIGNATURES` entry in `api/src/core/migrate.ts`.
 
+## Adding a client screen or feature
+
+Layout and rules: `docs/architecture.md` ("client/"). In `client/src`:
+
+1. Pick the feature (`features/<x>/`) or create one: a directory with an
+   `index.ts` that exports what routes, the shell and other features may use.
+   ESLint reads the feature list from disk; other code may import it only as
+   `@/features/<x>`.
+2. Screen component in `features/<x>/<Name>Screen.tsx`, exported from the
+   barrel. Route: `src/app/(budget)/<route>.tsx` containing only
+   `export { NameScreen as default } from '@/features/<x>';` (outside the rail:
+   `src/app/<route>.tsx`, registered in `app/_layout.tsx`'s Stack).
+3. Keep components small (aim: no function over ~300 lines, no file over
+   ~600): stateful logic in `useXxx.ts` hooks next to the screen, pure rules
+   in `domain/<name>.ts` (budget logic, no wire types, only `./` and
+   `@shared/*` imports) or `<name>.logic.ts` next to the component (view
+   logic, may use wire types); both with `*.test.ts` (no React renderer in
+   the repo: test the pure part, keep hooks thin).
+4. Data: RTK Query hooks from `@/budget/data/api`; store-backed hooks from
+   `@/state/*` (`useBudgetModel`, `useBudgetMonth`, `useDisplayPrefs`); money
+   and dates only through `useMoneyFormat()` (`@/ui/moneyFormat`), never a
+   local `Intl` formatter; shell services through `useBudgetShell()`
+   (`@/shell/context`); colors from `@/ui/theme`.
+5. Shared widgets used by several features go to `ui/` (which may import
+   only `domain/` and `platform/`). `src/architecture.test.ts` fails on import
+   cycles. Run `bunx tsc --noEmit`, `bunx eslint .`, `bun test` in `client/`.
+
 ## Shared machine rules
 
 - Never bind or stop syscd-app's ports: 3000, 8081, 5174, 5432, 7233, 8233.
