@@ -1107,6 +1107,22 @@ primitive in `ui/primitives/`) and MenuPanes (one file per pane in
    "até" -> "per month", "by") and one accessibility label.
 3. The four bug fixes above.
 
-### Checks and regression pass
+### Regression pass (web, 2026-11-18, after merging main's 5c/5d)
 
-See `docs/evidence/phase5e/REPORT.md`.
+API from this tree on :3141 against `budgetnew_dev`, Expo web on :8141,
+`agent-browser` at 1440/900/390; shots in `docs/evidence/phase5e/<width>/`.
+The dev DB drifted a lot since the parity pass, so the same 15 routes x 3
+widths were also shot from `main` on the same API/DB/browser state and
+diffed pixel by pixel: 12 routes identical (0.00%) at every width; reflect
+differs only in month axis labels (Set/Out -> Sep/Oct), spending only in day
+headers ("2 de fevereiro de 2027" -> "2 February 2027"), profile only in the
+random avatar candidate seeds. Write flows, verified through the API/DB:
+assign/undo/redo, Escape on the Assign dropdown, move money, target, drag
+reorder, inline add/edit/delete, transfer (Casa; on Trabalho the API refuses
+every transfer because its transfer payees point at Casa accounts since the
+parity restore, budget-njc data), bulk flag, reconcile, payee merge, CSV
+import (3 rows), backup export, People add/rename/remove, New Budget stays
+(fwf), rename, switch, month note follows the switch (xd6), number and date
+format re-render live and persist (xef). Not run: iOS, auth-on sign-in,
+split editing, group drag. Seen, pre-existing on main: the add row defaults
+to a closed first account (budget-dho).
