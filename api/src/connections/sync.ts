@@ -14,15 +14,15 @@
  * blocked and left authoritative, upstream-deleted rows are tombstoned unless
  * blocked. All writes of one account batch commit in a single server-side
  * transaction, so a partial failure cannot leave balance caches half-moved.
+ *
+ * Every write into budget's tables (payees, imported rows, refreshes,
+ * tombstones, balance deltas, card-payment pairing) goes through budget's
+ * `ledger` API (src/budget/ledger.ts, via the budget barrel). The shadow
+ * table `connection_transactions` is this feature's own.
  */
 
-import type { PoolClient } from 'pg';
-
-import type { RenameRule } from '@shared/domain/payees';
-import { applyRules } from '@shared/domain/payees';
 import { pool } from '../core/db';
-import { applyBalanceDeltas } from '../budget/domain/transactions';
-import { linkCardPayments } from '../budget';
+import { ledger } from '../budget';
 import { HttpError } from '../core/validate';
 import { getConnectionByUser, setConnectionInstitution, withLinkedBy, type ConnectionRow, type ConnectionWithLinker } from './store';
 import { ALL_HISTORY_DAYS, effectiveSyncWindowDays, getSyncWindowDays } from './settings';
@@ -100,53 +100,6 @@ const samePayload = (a: OwnedPayload, b: OwnedPayload): boolean =>
 
 /** Upstream cents → storage milliunits (×10, the boundary conversion). */
 const milliFromUpstream = (cents: number): number => Math.round(cents) * 10;
-
-/**
- * Rule-rewritten payee resolution for one budget, cached per raw name.
- * A sync batch repeats payees heavily; rules are read once. Mirrors
- * `resolvePayeeId` in budget/domain/transactions (create-or-find, rule-rewritten
- * name is the stored name, empty effective names stay null).
- */
-class PayeeResolver {
-  private readonly cache = new Map<string, { id: string | null; name: string }>();
-
-  constructor(
-    private readonly client: PoolClient,
-    private readonly budgetId: string,
-  ) {}
-
-  private rules: RenameRule[] | null = null;
-
-  async resolve(rawName: string): Promise<{ id: string | null; name: string }> {
-    const name = rawName.trim();
-    if (!name) return { id: null, name: '' };
-    if (!this.cache.has(name)) {
-      if (!this.rules) {
-        const found = await this.client.query<RenameRule>(
-          `SELECT name as replacement, rename_match_type as match_type, rename_condition as condition
-           FROM payees WHERE budget_id = $1 AND deleted = false AND rename_condition IS NOT NULL
-           ORDER BY created_at`,
-          [this.budgetId],
-        );
-        this.rules = found.rows;
-      }
-      const effective = applyRules(this.rules, name);
-      if (!effective.trim()) {
-        this.cache.set(name, { id: null, name: '' });
-      } else {
-        const result = await this.client.query<{ id: string }>(
-          `INSERT INTO payees (budget_id, name)
-           VALUES ($1, $2)
-           ON CONFLICT (budget_id, name) DO UPDATE SET name = $2
-           RETURNING id`,
-          [this.budgetId, effective],
-        );
-        this.cache.set(name, { id: result.rows[0].id, name: effective });
-      }
-    }
-    return this.cache.get(name)!;
-  }
-}
 
 /**
  * Per-account balance delta accumulators, in CENTS, bucketed by the row's
@@ -319,7 +272,8 @@ async function syncOnce(
       const seen = new Set(upstream.transactions.map((txn) => txn.externalId));
 
       input.onProgress?.();
-      const resolver = new PayeeResolver(pg, acc.budget_id);
+      // Budget's ledger API: rename rules + create-or-find, cached per batch.
+      const resolver = ledger.createImportPayeeResolver(pg, acc.budget_id);
       const deltas: AccountDeltas = { cleared_delta: 0, uncleared_delta: 0 };
 
       for (const txn of upstream.transactions) {
@@ -347,31 +301,22 @@ async function syncOnce(
           // timestamp would mismatch itself on the very next pull.
           const cleared = txn.cleared ? 'cleared' : 'uncleared';
           const payee = await resolver.resolve(txn.description);
-          const inserted = await pg.query<{ id: string }>(
-            `INSERT INTO transactions
-               (budget_id, account_id, date, amount, payee_id, category_id, memo,
-                cleared, approved, flag_color, flag_name, repeat, deleted,
-                import_id, import_payee_name, import_payee_name_original)
-             VALUES ($1, $2, $3, $4, $5, NULL, NULL,
-                     $8, false, NULL, NULL, 'never', false, $6, $7, $7)
-             RETURNING id`,
-            [
-              acc.budget_id,
-              acc.id,
-              txn.date.slice(0, 10),
-              milli,
-              payee.id,
-              importId,
-              payee.name || null,
-              cleared,
-            ],
-          );
+          const insertedId = await ledger.insertImportedTransaction(pg, {
+            budgetId: acc.budget_id,
+            accountId: acc.id,
+            date: txn.date.slice(0, 10),
+            amount: milli,
+            payeeId: payee.id,
+            importId,
+            importPayeeName: payee.name || null,
+            cleared,
+          });
           await pg.query(
             `INSERT INTO connection_transactions
                (transaction_id, provider, external_transaction_id, last_synced_payload, blocked)
              VALUES ($1, $2, $3, $4, false)`,
             [
-              inserted.rows[0]!.id,
+              insertedId,
               row.provider,
               txn.externalId,
               JSON.stringify({ date: txn.date.slice(0, 10), amount: milli, memo: '', payee: payee.name }),
@@ -416,13 +361,12 @@ async function syncOnce(
 
         // Upstream changed a row the user left untouched → refresh the owned
         // fields; cleared/approved state is preserved.
-        await pg.query(
-          `UPDATE transactions
-           SET date = $2, amount = $3, memo = NULL, payee_id = $4,
-               import_payee_name = $5, import_payee_name_original = $5
-           WHERE id = $1`,
-          [existing.id, txn.date.slice(0, 10), milli, upstreamPayee.id, upstreamPayee.name || null],
-        );
+        await ledger.refreshImportedTransaction(pg, existing.id, {
+          date: txn.date.slice(0, 10),
+          amount: milli,
+          payeeId: upstreamPayee.id,
+          importPayeeName: upstreamPayee.name || null,
+        });
         await pg.query(
           `UPDATE connection_transactions
            SET last_synced_payload = $2, updated_at = now()
@@ -462,14 +406,14 @@ async function syncOnce(
       ).rows : [];
       for (const trackedRow of tracked) {
         if (seen.has(trackedRow.external_transaction_id)) continue;
-        await pg.query('UPDATE public.transactions SET deleted = true WHERE id = $1', [trackedRow.id]);
+        await ledger.tombstoneTransaction(pg, trackedRow.id);
         const bucket = trackedRow.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';
         deltas[bucket] -= Number(trackedRow.amount) / 10;
         result.deleted += 1;
       }
 
       if (deltas.cleared_delta !== 0 || deltas.uncleared_delta !== 0) {
-        await applyBalanceDeltas(pg, acc.budget_id, [
+        await ledger.applyBalanceDeltas(pg, acc.budget_id, [
           {
             account_id: acc.id,
             cleared_delta: deltas.cleared_delta,
@@ -482,7 +426,7 @@ async function syncOnce(
     // Pair imported card-statement payments (cash outflow + card inflow) as
     // transfers; idempotent, so it also backfills rows imported earlier.
     for (const budgetId of new Set(stillLinked.filter((a) => fetched.has(a.id)).map((a) => a.budget_id))) {
-      await linkCardPayments(pg, budgetId);
+      await ledger.linkCardPayments(pg, budgetId);
     }
 
     await pg.query(

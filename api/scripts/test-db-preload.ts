@@ -7,9 +7,12 @@
  *   2. if a migration fails (0010 is a seed-data migration and needs rows),
  *      apply db/seed/*.sql once and retry it
  *
- * On any failure the original DATABASE_URL is restored and this module
- * imports NOTHING from `src/` — the regular tests then hit the dev DB
- * or skip, exactly as before this preload existed.
+ * Then it hands the database to src/core/db via configureDb() — core reads
+ * no env itself; this preload is the test suite's entrypoint. On any failure
+ * the original DATABASE_URL is restored and, if one was set, configured
+ * instead — the regular tests then hit the dev DB or skip, exactly as before
+ * this preload existed. With no database configured at all, pool use throws
+ * and the DB-backed suites skip (or fail under BUDGET_REQUIRE_TEST_DB=1).
  */
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -159,6 +162,7 @@ async function bootstrap(
 export async function setup(): Promise<void> {
   if (!isolationAvailable()) {
     fatalIfRequired(`DATABASE_URL already points at ${TEST_DB}; isolation unavailable`);
+    await configurePool(DEV_DATABASE_URL);
     return;
   }
 
@@ -177,10 +181,12 @@ export async function setup(): Promise<void> {
           // Suites that full-table-wipe (user/) must never run against a
           // shared dev DB; they gate on this marker and skip when absent.
           process.env.BUDGET_TEST_DB_ISOLATED = '1';
+          await configurePool(TEST_DATABASE_URL);
           return;
         }
         // Unreachable test DB → keep dev env; DB-backed tests skip as before.
         fatalIfRequired('the test database is unreachable');
+        await configurePool(DEV_DATABASE_URL);
         return;
       } finally {
         await client.end().catch(() => undefined);
@@ -195,6 +201,14 @@ export async function setup(): Promise<void> {
   );
   fatalIfRequired(`isolation failed: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
   process.env.DATABASE_URL = DEV_DATABASE_URL;
+  await configurePool(DEV_DATABASE_URL);
+}
+
+/** Hand the database to src/core/db (the only import from src/). No URL: leave it unconfigured. */
+async function configurePool(connectionString: string): Promise<void> {
+  if (!connectionString) return;
+  const { configureDb } = await import('../src/core/db');
+  configureDb({ connectionString });
 }
 
 await setup();

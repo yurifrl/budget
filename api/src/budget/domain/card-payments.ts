@@ -17,6 +17,7 @@
  */
 import type { PoolClient } from 'pg';
 
+import { blockImportShadows, blockedImportShadowIds } from '../../connections';
 import { ensureTransferPayee } from './transfers';
 
 /** One transaction plus the account facts the matcher needs. Amount in milliunits. */
@@ -88,7 +89,8 @@ interface CandidateSql {
   split_count: string;
   transfer_account_id: string | null;
   transfer_transaction_id: string | null;
-  untouched: boolean;
+  /** Untouched apart from the sync shadow's `blocked` flag (connections owns that table). */
+  untouched_ledger: boolean;
 }
 
 /**
@@ -99,7 +101,7 @@ interface CandidateSql {
  * must be bank-imported (`import_id`), its payee must still be the bank text
  * (`import_payee_name[_original]`; the app's unlink/edit flows leave a
  * `Transfer : ...` or user-chosen payee behind) and the sync shadow must not
- * be `blocked`. Linking rewrites the payee exactly as app-made transfers do
+ * be `blocked` (read through the connections barrel). Linking rewrites the payee exactly as app-made transfers do
  * (`Transfer : <other account>`); the bank text stays in `import_payee_name*`
  * and the shadow row is blocked so later syncs leave the linked rows frozen.
  * Amounts, dates, cleared state, approval and import ids are not touched.
@@ -113,17 +115,20 @@ export async function linkCardPayments(client: PoolClient, budgetId: string): Pr
             (SELECT count(*) FROM subtransactions s WHERE s.transaction_id = t.id AND NOT s.deleted)::text AS split_count,
             t.transfer_account_id, t.transfer_transaction_id,
             (t.import_id IS NOT NULL
-             AND COALESCE(cs.blocked, false) = false
-             AND (t.payee_id IS NULL OR p.name IN (t.import_payee_name, t.import_payee_name_original))) AS untouched
+             AND (t.payee_id IS NULL OR p.name IN (t.import_payee_name, t.import_payee_name_original))) AS untouched_ledger
      FROM transactions t
      JOIN accounts a ON a.id = t.account_id
      LEFT JOIN payees p ON p.id = t.payee_id
-     LEFT JOIN connection_transactions cs ON cs.transaction_id = t.id
      WHERE t.budget_id = $1 AND NOT t.deleted AND NOT a.deleted AND NOT a.closed
        AND t.transfer_account_id IS NULL AND t.transfer_transaction_id IS NULL AND t.category_id IS NULL`,
     [budgetId],
   );
   const byId = new Map(found.rows.map((r) => [r.id, r]));
+  // A blocked sync shadow (a user edit the sync froze) also makes a row "touched".
+  const blocked = await blockedImportShadowIds(
+    client,
+    found.rows.filter((r) => r.untouched_ledger).map((r) => r.id),
+  );
   const pairs = matchCardPayments(
     found.rows.map((r) => ({
       id: r.id,
@@ -137,7 +142,7 @@ export async function linkCardPayments(client: PoolClient, budgetId: string): Pr
       splitCount: Number(r.split_count),
       transferAccountId: r.transfer_account_id,
       transferTransactionId: r.transfer_transaction_id,
-      untouched: r.untouched,
+      untouched: r.untouched_ledger && !blocked.has(r.id),
     })),
   );
   for (const { outflowId, inflowId } of pairs) {
@@ -153,10 +158,7 @@ export async function linkCardPayments(client: PoolClient, budgetId: string): Pr
       `UPDATE transactions SET transfer_account_id = $2, transfer_transaction_id = $3, payee_id = $4 WHERE id = $1`,
       [inn.id, out.account_id, out.id, inPayee],
     );
-    await client.query(
-      `UPDATE connection_transactions SET blocked = true, updated_at = now() WHERE transaction_id = ANY($1)`,
-      [[out.id, inn.id]],
-    );
+    await blockImportShadows(client, [out.id, inn.id]);
   }
   return pairs.length;
 }

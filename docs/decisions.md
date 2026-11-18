@@ -546,3 +546,129 @@ accounts is in `docs/MORNING.md`.
   non-blocking was not done (left for the owner to decide), so `main` CI is
   red on that one step; every other job passed (shared, api incl. e2e,
   admin, three Docker builds).
+
+## Phase 5b: API structure
+
+Behaviour-preserving: the API runs against the same database as syscd, so no
+migrations, no contract changes, same SQL effects and HTTP responses. Moved
+SQL is byte-identical modulo indentation (checked by extracting every SQL
+literal of the old route files and finding it in the new tree: 0 missing).
+
+### withTransaction (G6)
+
+`core/db.ts`: `withTransaction(pool, fn)` runs BEGIN, `fn(client)`, COMMIT;
+on a throw it ROLLBACKs and rethrows the same error; the client is always
+released (destroyed if ROLLBACK itself failed, and then the original error is
+still the one thrown; the old blocks threw the ROLLBACK error in that
+double-fault case). Nesting is rejected by the type: `db` must be a Pool, so
+code inside a transaction passes its client to store functions instead.
+28 blocks converted (budget routes 20, `budget/ownership` 1, oauth 2, user 4,
+`core/migrate` 1). Post-commit work stays after the transaction, as before:
+the account read-back in accounts create/update, and repeat-rule
+materialization after rule create (it runs on its own connection and must see
+the committed rule). Kept hand-rolled: `connections/sync.ts` (the race path
+ROLLBACKs and returns null for a retry, and the `beforeCommit` cancellation
+hook sits next to COMMIT on purpose) and `jobs/relay.ts` (rollback-and-return
+of an error result, never a throw). Fresh-start's two early exits
+(`not_found`, `already_archived`) used to send an explicit ROLLBACK; they now
+return before any write and let withTransaction COMMIT a transaction that
+only holds the row lock (same effect).
+
+### Store layer (G6)
+
+`budget/store/<area>.ts`: accounts, budgets, bundles, categories, members,
+payees, repeat-rules, transactions. Functions take a `Queryable` and typed
+params and return rows. Routes parse, authorise, call store/domain, shape
+the response. Moved out of route files: `generateDueOccurrences` /
+`generateAllBudgets` to `budget/domain/repeat-generation.ts` (the barrel's
+tick imports it from there), `goalColumns` to `budget/domain/category-goals.ts`.
+The PATCH /transactions set-clause builder became `updateTransactionSet`
+(ordered entries; renders the same statement, unit-tested).
+
+`(client|pool|db|pg).query` calls in `budget/routes/*.ts` (non-test): 252 in
+18 files before, 31 in 8 files after. Still holding SQL: `budget-restore.ts`
+(11), `groups.ts` (5), `category-targets.ts` (4), `assignments.ts` (3),
+`category-notes.ts` (3), `month-notes.ts` (2), `plan-auto-assign.ts` (2),
+`budget-export.ts` (1). Those areas have little direct test coverage;
+characterisation tests come first when they move.
+
+### Ledger API (G5)
+
+`budget/ledger.ts`, exported from the budget barrel as `ledger`, is the only
+way connections writes budget's tables: `createImportPayeeResolver`,
+`insertImportedTransaction`, `refreshImportedTransaction`,
+`tombstoneTransaction`, `applyBalanceDeltas`, `linkCardPayments`. Payee
+resolution is built on budget's own `loadRenameRules` + `applyRules` +
+`upsertPayee`. Line-by-line diff of sync's deleted `PayeeResolver` against
+budget's helpers:
+
+- rename-rule query: identical text (whitespace only);
+- payee upsert statement: identical;
+- **name trimming differs**: budget's `upsertPayee` trims the effective name
+  before storing it; sync stored it verbatim once non-blank (an `is` rule's
+  replacement is a payee name used as-is, e.g. `" Padded "`). Kept via
+  `upsertPayee(..., { verbatim: true })`, pinned by
+  `connections/sync-payees.test.ts`;
+- sync loads the rules once per resolver (lazily, on the first non-blank
+  name) and caches per raw name; kept in the resolver. Budget's
+  `resolvePayeeId` still loads per call;
+- sync stores the rule-rewritten name in `import_payee_name(_original)` and
+  the shadow payload; `/bulk` stores the raw statement text. Different on
+  purpose, both kept;
+- the import row: sync inserts cleared-as-reported, unapproved, no
+  memo/category, no ON CONFLICT (it looked the import id up first); `/bulk`
+  inserts uncleared with ON CONFLICT DO NOTHING. Two store functions, each
+  with its original SQL.
+
+Connections exposes `connections/ledger-reads.ts` (barrel):
+`findUserConnection` (account linking), `blockedImportShadowIds` and
+`blockImportShadows` (card-payment pairing). `card-payments.ts` no longer
+joins `connection_transactions`: the candidate query computes the untouched
+flag without the shadow and the blocked set is applied in JS
+(`connection_transactions.transaction_id` is the primary key, so the join
+never duplicated rows; same result). Still in budget SQL: the accounts list's
+display LEFT JOIN on `connections`/`users` for `linked_by`, and the copy of
+`accounts.connection_id` in fresh start (budget's own column). Still in
+connections SQL: the reads that join `transactions` with the shadow table
+(existing-row lookup, tombstone sweep, linked accounts). The ESLint
+`connections -> budget/domain` exception is gone. The two barrels import each
+other; neither uses the other's exports at module evaluation, so the cycle is
+inert.
+
+### Access checks (G14)
+
+No runtime change. `src/access.test.ts` takes every budget/connections
+operation with a path param from the contract catalog (38) and runs it as a
+non-member: (A) the 11 without `budget_id` (budgets/:id, connections/:id)
+answer 404; (B) the 27 with `budget_id`, sent with the attacker's own budget
+id and the victim's row id, answer 404, leave the victim budget unchanged
+(row-level JSON snapshot), leak nothing, and create no cross-budget pointer.
+All pass: no hole found. A new path-param operation fails the coverage test
+until it has a sample. Body-carried ids (e.g. `categories reorder`
+`group_id`) are not covered yet (follow-up).
+
+### Core hygiene (G16, G11)
+
+- `core/db.ts` reads no env. The pool is an unconfigured `AppPool` (a real
+  pg Pool whose `connect()` rejects until `configureDb({ connectionString })`).
+  `index.ts` and `worker.ts` call it first with `DATABASE_URL` (same boot
+  error message when it is missing), so do `scripts/e2e-jobs.ts` and
+  `e2e-connections.ts`. The bun test preload configures the throwaway test
+  database (or the dev one on fallback); with nothing configured, DB suites
+  skip (or fail under `BUDGET_REQUIRE_TEST_DB=1`). A Proxy wrapper was tried
+  first and dropped: `spyOn(pool, 'query')` does not land on a Proxy.
+- `core/validate.ts` no longer re-exports the budget value schemas (cents,
+  cleared, flag, dates); only the id validators. `core/csv.ts` (syscd's
+  health CSV parser, no importer) deleted.
+- `process.env` in `src/<feature>/` and `src/core/`: only `core/test-gate.ts`
+  (test-only gate, reads the preload's markers).
+
+### Repeat-rule tick (G15): not moved
+
+Moving it needs a budget workflow in the Temporal bundle (a new jobs seam),
+an activity over `generateAllBudgets`, interval support and schedule removal
+in `ensureSchedule` (cron only today), and the env switch moving from the API
+to the worker; none of that schedule code has unit tests (only the
+Temporal-backed e2e). Left as the in-process tick (`BUDGET_REPEAT_TICK=0` in
+production); follow-up filed.
+

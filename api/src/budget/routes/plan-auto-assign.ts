@@ -1,4 +1,4 @@
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { planAutoAssign } from '@shared/contracts/budget';
@@ -12,9 +12,7 @@ export const operations = [
    * absolute assigned amounts for a month, exactly as posted.
    */
   implement(planAutoAssign, async (_c, { budget_id, month, rows }) => {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
       for (const row of rows) {
         const catCheck = await client.query(
           'SELECT 1 FROM categories WHERE id = $1 AND budget_id = $2 AND deleted = false',
@@ -30,13 +28,7 @@ export const operations = [
           [budget_id, month, row.category_id, row.assign_cents * 10],
         );
       }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 ];
 

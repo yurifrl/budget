@@ -24,14 +24,12 @@ const features = fs
  * What `feature` may import from `other` (paths relative to src/<other>):
  * the public barrel only, plus the documented seams.
  *
- * - connections -> budget/domain: the sync balance-write path (sync.ts).
  * - Workflow seam: Temporal bundles ONE workflow file (jobs/workflows/index.ts)
  *   in a sandbox that cannot load a feature barrel (pg, hono), so jobs
  *   re-exports each feature's pure `workflows.ts`, and that file imports the
  *   shared plumbing `jobs/workflows/tracked.ts`.
  */
 function allowedFrom(feature, other) {
-  if (feature === 'connections' && other === 'budget') return ['domain', 'index.ts'];
   if (feature === 'jobs' && other === 'connections') return ['index.ts', 'workflows.ts'];
   if (feature === 'connections' && other === 'jobs') return ['index.ts', 'workflows/tracked.ts'];
   return ['index.ts'];

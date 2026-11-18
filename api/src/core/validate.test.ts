@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { z } from '@shared/zod';
 
-import { centsSchema, HttpError, parseValue, uuidSchema } from './validate';
+import { centsSchema } from '@shared/validation';
+import { HttpError, parseValue, uuidSchema } from './validate';
 
 const schema = z.object({
   budget_id: uuidSchema,

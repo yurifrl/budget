@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 
 import { serviceTokenMatches } from './authz';
-import { pool } from '../core/db';
+import { pool, withTransaction } from '../core/db';
 
 import type { IdentityRole, IdentityUser } from './types';
 
@@ -84,39 +84,37 @@ export async function resolveOrCreateSessionUser(
   const normalized = email.toLowerCase().trim();
   const sub = identity?.sub ?? null;
   const name = identity?.name ?? null;
-  const client = await pool.connect();
   try {
-    await client.query('begin');
-    await client.query('select pg_advisory_xact_lock($1)', [BOOTSTRAP_LOCK_KEY]);
-    const upsert = await client.query<UpsertRow>(
-      `insert into public.users (id, google_sub, email, name)
-       values (gen_random_uuid(), $1, $2, $3)
-       on conflict (email) do update
-         set google_sub = coalesce(public.users.google_sub, excluded.google_sub),
-             name = coalesce(public.users.name, excluded.name),
-             last_seen_at = now()
-       returning id, email, name, google_sub, role, status, (xmax = 0) as inserted`,
-      [sub, normalized, name],
-    );
-    const resolved = mapRow(upsert.rows[0]);
-    // Collision policy: a row holding a different non-null google_sub is a
-    // colliding identity, not a backfill.
-    if (sub && resolved.googleSub && resolved.googleSub !== sub) {
-      throw new EmailAlreadyProvisionedError();
-    }
-    if (upsert.rows[0].inserted && opts?.seedEligible !== false) {
-      const promoted = await client.query<{ role: IdentityRole }>(
-        `update public.users set role = 'admin'
-         where id = $1 and not exists (select 1 from public.users where role = 'admin')
-         returning role`,
-        [resolved.id],
+    return await withTransaction(pool, async (client) => {
+      await client.query('select pg_advisory_xact_lock($1)', [BOOTSTRAP_LOCK_KEY]);
+      const upsert = await client.query<UpsertRow>(
+        `insert into public.users (id, google_sub, email, name)
+         values (gen_random_uuid(), $1, $2, $3)
+         on conflict (email) do update
+           set google_sub = coalesce(public.users.google_sub, excluded.google_sub),
+               name = coalesce(public.users.name, excluded.name),
+               last_seen_at = now()
+         returning id, email, name, google_sub, role, status, (xmax = 0) as inserted`,
+        [sub, normalized, name],
       );
-      if (promoted.rows[0]) resolved.role = promoted.rows[0].role;
-    }
-    await client.query('commit');
-    return resolved;
+      const resolved = mapRow(upsert.rows[0]);
+      // Collision policy: a row holding a different non-null google_sub is a
+      // colliding identity, not a backfill.
+      if (sub && resolved.googleSub && resolved.googleSub !== sub) {
+        throw new EmailAlreadyProvisionedError();
+      }
+      if (upsert.rows[0].inserted && opts?.seedEligible !== false) {
+        const promoted = await client.query<{ role: IdentityRole }>(
+          `update public.users set role = 'admin'
+           where id = $1 and not exists (select 1 from public.users where role = 'admin')
+           returning role`,
+          [resolved.id],
+        );
+        if (promoted.rows[0]) resolved.role = promoted.rows[0].role;
+      }
+      return resolved;
+    });
   } catch (err) {
-    await client.query('rollback').catch(() => {});
     if (err instanceof EmailAlreadyProvisionedError) throw err;
     const pgErr = err as { code?: string; constraint?: string };
     if (pgErr.code === '23505' && pgErr.constraint === GOOGLE_SUB_UNIQUE_CONSTRAINT) {
@@ -126,8 +124,6 @@ export async function resolveOrCreateSessionUser(
       throw new EmailAlreadyProvisionedError();
     }
     throw err;
-  } finally {
-    client.release();
   }
 }
 
@@ -293,9 +289,7 @@ export async function linkEmailToPlaceholder(
   rawEmail: string,
 ): Promise<{ id: string; merged: boolean }> {
   const email = rawEmail.toLowerCase().trim();
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
+  return withTransaction(pool, async (client) => {
     const ph = await client.query<{ name: string | null }>(
       'select name from public.users where id = $1 and email is null for update',
       [placeholderId],
@@ -313,14 +307,8 @@ export async function linkEmailToPlaceholder(
       await client.query('delete from public.users where id = $1', [placeholderId]);
       result = { id: intoId, merged: true };
     }
-    await client.query('commit');
     return result;
-  } catch (err) {
-    await client.query('rollback').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /**

@@ -1,12 +1,12 @@
 /**
- * Request-input validation shared by the route modules.
+ * Request-input validation shared by the feature routers: HttpError, body and
+ * value parsing with readable 400 messages, the uuid path-param guard and the
+ * shared JSON error mapper.
  *
- * The budget routes pass `budget_id` and friends straight into Postgres uuid
- * columns; an unvalidated literal makes Postgres raise 22P02 and the route
- * surfaces a 500. Guard at the boundary instead.
- *
- * Zod schemas run on every write path (POST/PATCH bodies) and throw
- * HttpError(400) so index.ts's onError returns JSON — never a pg error.
+ * Ids go straight into Postgres uuid columns; an unvalidated literal makes
+ * Postgres raise 22P02 and the route surfaces a 500. Guard at the boundary.
+ * Domain value schemas (cents, cleared, flag, dates) live in
+ * `@shared/validation` and the feature contracts, not here.
  */
 
 import type { Context } from 'hono';
@@ -14,17 +14,9 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from '@shared/zod';
 import { isUuid } from '@shared/validation';
 
-// The pure validators moved to shared/; re-exported so call sites are unchanged.
-export {
-  UUID_RE,
-  centsSchema,
-  clearedSchema,
-  flagSchema,
-  isUuid,
-  isoDateSchema,
-  monthDateSchema,
-  uuidSchema,
-} from '@shared/validation';
+// Generic id validators (shared/); budget value schemas are imported from
+// @shared/validation by the code that needs them.
+export { UUID_RE, isUuid, uuidSchema } from '@shared/validation';
 
 /** An error carrying the HTTP status it should surface as. */
 export class HttpError extends Error {

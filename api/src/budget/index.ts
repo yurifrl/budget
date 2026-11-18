@@ -14,7 +14,8 @@ import categoryBundles, { operations as categoryBundlesOps } from './routes/cate
 import categories, { operations as categoriesOps } from './routes/categories';
 import accounts, { operations as accountsOps } from './routes/accounts';
 import transactions, { operations as transactionsOps } from './routes/transactions';
-import repeatRules, { generateAllBudgets, operations as repeatRulesOps } from './routes/repeat-rules';
+import repeatRules, { operations as repeatRulesOps } from './routes/repeat-rules';
+import { generateAllBudgets } from './domain/repeat-generation';
 import assignments, { operations as assignmentsOps } from './routes/assignments';
 import members, { operations as membersOps } from './routes/members';
 import budgetExport, { operations as budgetExportOps } from './routes/budget-export';
@@ -59,8 +60,8 @@ export const operations: readonly AnyOperation[] = [
 /** Integration seam: the real accounts router, mounted by connections' tests. */
 export { default as accountsRouter } from './routes/accounts';
 
-/** Integration seam: pairs imported card-statement payments as transfers (connections sync). */
-export { linkCardPayments } from './domain/card-payments';
+/** Ledger write API for the connections sync engine (imported rows, payees, balances, card payments). */
+export * as ledger from './ledger';
 
 app.route('/budgets', budgets);
 app.route('/groups', groups);

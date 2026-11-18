@@ -38,10 +38,36 @@ outbox relay), `cli.ts`, `mcp.ts` (stdio). Features: `core` (db, migrate,
 operation helpers), `user`, `oauth`, `mcp`, `cli`, `jobs`, `budget`,
 `connections`, `rates`. `catalog.ts` lists every shared contract; the CLI and
 MCP tools are generated from it. `core` imports no feature; a feature imports
-another only through its `index.ts` (a few seams are listed in
-`decisions.md`). Postgres schema: `db/migrations` (33 files shared with the
-running syscd database; new ones start at `0100`). One image runs both the API
-and the worker (`bun src/worker.ts`). Release version: `api/VERSION`.
+another only through its `index.ts` (the remaining seams are the Temporal
+workflow-bundle ones, listed in `decisions.md`). Postgres schema:
+`db/migrations` (33 files shared with the running syscd database; new ones
+start at `0100`). One image runs both the API and the worker
+(`bun src/worker.ts`). Release version: `api/VERSION`.
+
+- **Database.** `core/db.ts` exports one `pool` and reads no env: each
+  entrypoint (and the e2e scripts, and the bun test preload) calls
+  `configureDb({ connectionString })` before the first query; until then the
+  pool rejects. `withTransaction(pool, fn)` is the only BEGIN/COMMIT/ROLLBACK
+  helper (two hand-rolled blocks are left on purpose: connections sync and
+  the jobs relay). `Queryable` = pool or checked-out client.
+- **Budget layers.** `budget/routes/*` parse, authorise (`budgetAccess` via
+  `budgetRouter`) and shape responses; `budget/store/<area>.ts` holds the SQL
+  (functions taking a `Queryable` and typed params); `budget/domain/*` holds
+  the rules (balance deltas, transfers, card payments, repeat-rule
+  generation, category goals). Not every route file is migrated yet (see the
+  phase 5b list in `decisions.md`).
+- **Budget and connections.** Connections writes into budget's tables only
+  through `ledger` (`budget/ledger.ts`, exported from the budget barrel):
+  payee resolution with rename rules, imported-row insert/refresh/tombstone,
+  balance deltas, card-payment pairing. Budget reads/writes the connections
+  tables only through `connections/ledger-reads.ts` (connections barrel). The
+  two barrels import each other; neither runs the other's code at load time.
+- **Access.** `budgetAccess` authorises the `budget_id` in query/body; path
+  `:id` routes re-scope by `budget_id` in SQL. `src/access.test.ts` drives
+  every path-param operation from the catalog as a non-member and expects 404.
+- **Repeat-rule tick.** Still an in-process interval in the API
+  (`BUDGET_REPEAT_TICK`, off in production); the generation code is
+  `budget/domain/repeat-generation.ts`.
 
 ## client/ (in flux)
 

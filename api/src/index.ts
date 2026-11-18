@@ -14,6 +14,7 @@ import { configurePluggyEnv } from './connections';
 import { apiBaseUrl, authDisabled, configureAuth, DEV_EMAIL, oauthResourceUrl } from './user';
 import { defaultOAuthTtls } from './oauth';
 import { runMigrations } from './core/migrate';
+import { configureDb } from './core/db';
 import { configureJobs, createTemporalClient } from './jobs';
 
 // Unhandled rejections exit Bun with code 1 by default; log instead so a
@@ -21,6 +22,9 @@ import { configureJobs, createTemporalClient } from './jobs';
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled rejection:', reason);
 });
+
+// Database first (same failure order as when core/db read DATABASE_URL at import).
+configureDb({ connectionString: process.env.DATABASE_URL ?? '' });
 
 // Auth: refuse to boot unless fully configured (or AUTH_DISABLED_OK=1 locally),
 // then inject the config object; features never read env themselves.

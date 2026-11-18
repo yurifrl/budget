@@ -14,7 +14,7 @@
  * transactions before commit (recomputeAccountBalances).
  */
 
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import type { IdentityUser } from '../../user';
@@ -61,9 +61,7 @@ export const operations = [
     if (!user) return c.json({ error: 'unauthorized' }, 401);
     if (!(await isBudgetOwnerOrAdmin(user, budgetId))) return c.json({ error: 'not found' }, 404);
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
 
       // Budget must exist; budgetAccess already proved ownership for non-admins.
       const budget = await client.query('SELECT 1 FROM budgets WHERE id = $1', [budgetId]);
@@ -250,7 +248,6 @@ export const operations = [
       // inserts above bypass that path, so rebuild them from the restored ledger.
       await recomputeAccountBalances(client, budgetId);
 
-      await client.query('COMMIT');
       return {
         groups: payload.groups.length,
         categories: payload.categories.length,
@@ -258,12 +255,7 @@ export const operations = [
         transactions: payload.transactions.length,
         assignments: payload.assignments.length,
       };
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 ];
 

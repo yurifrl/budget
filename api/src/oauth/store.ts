@@ -1,4 +1,4 @@
-import { pool } from '../core/db';
+import { pool, withTransaction } from '../core/db';
 
 import { randomToken, sha256Hex } from './crypto';
 
@@ -52,9 +52,7 @@ export interface NewCode {
 /** Approve: create the grant and a single-use code bound to it. Returns the raw code. */
 export async function createGrantAndCode(n: NewCode): Promise<string> {
   const code = randomToken();
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
+  return withTransaction(pool, async (client) => {
     // Opportunistic cleanup keeps the code table small without a scheduler.
     await client.query(`delete from public.oauth_codes where expires_at < now() - interval '1 day'`);
     const { rows } = await client.query<{ id: string }>(
@@ -68,14 +66,8 @@ export async function createGrantAndCode(n: NewCode): Promise<string> {
        values ($1, $2, $3, $4, now() + make_interval(secs => $5))`,
       [sha256Hex(code), rows[0]!.id, n.redirectUri, n.codeChallenge, n.codeTtlSeconds],
     );
-    await client.query('commit');
     return code;
-  } catch (err) {
-    await client.query('rollback').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export interface RedeemedGrant {
@@ -157,9 +149,7 @@ export interface RotatedGrant {
 export async function rotateRefreshToken(token: string, clientId: string): Promise<RotatedGrant | null> {
   const hash = sha256Hex(token);
   const next = randomToken();
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
+  return withTransaction(pool, async (client) => {
     const { rows } = await client.query<{ grant_id: string; email: string; client_id: string; scope: string }>(
       `update public.oauth_refresh_tokens t
           set used_at = now()
@@ -176,7 +166,6 @@ export async function rotateRefreshToken(token: string, clientId: string): Promi
         sha256Hex(next),
         r.grant_id,
       ]);
-      await client.query('commit');
       return { grantId: r.grant_id, email: r.email, clientId: r.client_id, scope: r.scope, refreshToken: next };
     }
     // Reuse detection: a rotated token for THIS client presented again.
@@ -186,14 +175,8 @@ export async function rotateRefreshToken(token: string, clientId: string): Promi
           and id = (select grant_id from public.oauth_refresh_tokens where token_hash = $1 and used_at is not null)`,
       [hash, clientId],
     );
-    await client.query('commit');
     return null;
-  } catch (err) {
-    await client.query('rollback').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export async function revokeGrant(grantId: string): Promise<void> {

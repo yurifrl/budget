@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
-import { pool } from './db';
+import { pool, withTransaction } from './db';
 
 const MIGRATIONS_DIR = join(import.meta.dir, '..', '..', 'db', 'migrations');
 
@@ -154,18 +154,14 @@ async function applyMigrations(): Promise<void> {
   for (const file of migrationFiles()) {
     if (applied.has(file)) continue;
     const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
-    const client = await pool.connect();
     try {
-      await client.query('begin');
-      await client.query(sql);
-      await client.query('insert into schema_migrations (filename) values ($1)', [file]);
-      await client.query('commit');
+      await withTransaction(pool, async (client) => {
+        await client.query(sql);
+        await client.query('insert into schema_migrations (filename) values ($1)', [file]);
+      });
       console.log(`migrated ${file}`);
     } catch (err) {
-      await client.query('rollback');
       throw new Error(`migration ${file} failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      client.release();
     }
   }
 }

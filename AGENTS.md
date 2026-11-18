@@ -51,6 +51,12 @@ this Mac use `container build --dns 1.1.1.1 -f deploy/Dockerfile.<x> -t budget-<
    with `mountOperations` (see `api/src/rates/routes/rates.ts`); the router is
    mounted in `api/src/app.ts`. A new feature's contract barrel also goes into
    `api/src/catalog.ts`; the CLI and MCP tools are generated from the catalog.
+   In `budget/`: the handler only parses, authorises and shapes the response;
+   SQL goes in `budget/store/<area>.ts` (functions taking a `Queryable` from
+   `core/db`), rules in `budget/domain/`, multi-statement writes in
+   `withTransaction(pool, fn)`. A path `:id` must be re-scoped by `budget_id`
+   in SQL, and a new path-param operation needs a sample in
+   `api/src/access.test.ts` (the test fails until it has one).
 3. Client: build the request with `contractRequest(contract, input)`
    (`client/src/platform/api/contractRequest.ts`) from an RTK Query slice, e.g.
    under `client/src/budget/data`.
