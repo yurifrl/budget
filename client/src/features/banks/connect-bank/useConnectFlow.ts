@@ -18,7 +18,7 @@ import {
   useSyncConnectionMutation,
 } from '@/budget/data/api';
 import { buildWidgetUrl } from '../model/connections';
-import { initialFlowTarget, widgetStep, type ConnectFlowTarget } from './connectBank.logic';
+import { initialFlowTarget, stepSuccessRoute, widgetStep, type ConnectFlowTarget } from './connectBank.logic';
 
 export type ConnectFlow = ReturnType<typeof useConnectFlow>;
 
@@ -96,6 +96,18 @@ export function useConnectFlow({
     router.replace('/accounts' as Href);
   }, [router]);
 
+  /** A bank was registered: end the flow and land on Connect Bank (replace,
+   *  for the same stale-history reason as landOnAccounts). */
+  const landOnConnectBank = useCallback(
+    (route: string) => {
+      setFlow(null);
+      setWidgetUrl(null);
+      setConnectToken(null);
+      router.replace(route as Href);
+    },
+    [router],
+  );
+
   const onWidgetMessage = useCallback(
     async (data: unknown) => {
       const step = widgetStep(data, { flow, connectionId: connectionIdState, busy });
@@ -138,12 +150,13 @@ export function useConnectFlow({
           itemId: step.itemId,
         }).unwrap();
         await syncConnection({ id: registered.connection.id, budgetId: budgetId ?? '' }).unwrap();
-        landOnAccounts();
+        const route = stepSuccessRoute(step);
+        if (route) landOnConnectBank(route);
       } catch (err) {
         setError(apiErrorMessage(err, 'could not register the connected bank'));
       }
     },
-    [budgetId, connectionIdState, finish, flow, busy, registerConnection, setError, syncConnection, landOnAccounts],
+    [budgetId, connectionIdState, finish, flow, busy, registerConnection, setError, syncConnection, landOnConnectBank],
   );
 
   /** Start the widget flow for a row (re-auth) or a new connection. */

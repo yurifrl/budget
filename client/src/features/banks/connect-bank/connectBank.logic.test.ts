@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ConnectionJson, UpstreamAccountJson } from '@/budget/data/connections';
 import {
+  stepSuccessRoute,
   banksHint,
   connectionName,
   connectionSubline,
@@ -114,5 +115,16 @@ describe('row strings', () => {
     expect(linkedAccountCount({ accounts: [acc('a'), acc(null), acc('b')] })).toBe(2);
     expect(linkedAccountCount({ accounts: null })).toBe(0);
     expect(linkedAccountCount(undefined)).toBe(0);
+  });
+});
+
+describe('stepSuccessRoute', () => {
+  test('sends a registered bank to /connect-bank', () => {
+    expect(stepSuccessRoute({ kind: 'register' })).toBe('/connect-bank');
+  });
+  test('navigates nowhere on cancel, refresh, oauth or ignore', () => {
+    for (const kind of ['closed', 'refresh', 'oauth', 'ignore'] as const) {
+      expect(stepSuccessRoute({ kind })).toBeNull();
+    }
   });
 });

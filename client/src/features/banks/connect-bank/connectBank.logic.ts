@@ -49,6 +49,18 @@ export function widgetStep(
   return itemId ? { kind: 'register', itemId } : { kind: 'ignore' };
 }
 
+/** The Connect Bank route; a registered new bank lands here. */
+export const CONNECT_BANK_ROUTE = '/connect-bank';
+
+/**
+ * Where the app goes once a widget step has been fully handled: a registered
+ * bank lands on Connect Bank; cancel (closed), re-auth refresh (stays on the
+ * screen) and everything else navigate nowhere.
+ */
+export function stepSuccessRoute(step: Pick<WidgetStep, 'kind'>): typeof CONNECT_BANK_ROUTE | null {
+  return step.kind === 'register' ? CONNECT_BANK_ROUTE : null;
+}
+
 /**
  * Disconnected rows are the graveyard of removed banks — their history lives
  * on in the ledger, but the list shows live banks only.
