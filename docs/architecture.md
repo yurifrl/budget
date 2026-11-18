@@ -88,7 +88,8 @@ start at `0100`). One image runs both the API and the worker
   (`user/authz.ts`: `/auth/google*`, `/auth/token`). A provider's routes
   answer 404 unless it is configured; `GET /auth/providers` says which are on
   and the client's `LoginGate` picks (web + Access: one automatic redirect,
-  loop-guarded). The OAuth consent page hands logged-out browsers to Access
+  loop-guarded, and none after an explicit sign-out until a sign-in button is
+  pressed; signed out or unreachable it shows `features/auth/LandingPage`). The OAuth consent page hands logged-out browsers to Access
   when configured, else Google. `isAllowed` (`user/config.ts`) is the one
   allow-list rule: on `AUTH_ALLOWED_EMAILS` when set, otherwise everyone
   only when Access is on (its policy is the list). `requireUser` reads

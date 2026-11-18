@@ -1267,6 +1267,29 @@ JWKS for its own key and injects a signed assertion on `/auth/access*`:
 cookie, the app came back signed out once and showed the error screen (no
 second redirect); `03` the "Sign in" button then signed in.
 
+## Landing page and sign-out (2026-11-18)
+
+- `features/auth/LandingPage.tsx` is the one signed-out screen on web and
+  iOS (split panes from the `lg` breakpoint, a single column below it). It
+  also carries the sign-in error and the "Can't reach the API" state. What
+  the gate shows is decided in `landing.logic.ts` (`gateView`): the page never
+  renders while the session probe, the providers request or a redirect is
+  still in flight.
+- The client had no sign-out. Profile now has "Sign out" (`useAuthSession()`
+  from the auth barrel, provided by `LoginGate`). Web: set
+  `localStorage['budget.signedOutOnPurpose']`, then navigate to the API's
+  existing `GET /auth/logout` (drops the cookie, redirects to the app).
+  Native: drop the stored token and re-probe.
+- Without the mark a web sign-out behind Access would be undone at once by
+  the automatic redirect. `decideSignIn` therefore returns `show-login` (no
+  error) while the mark is set, ahead of the loop guard. Pressing a sign-in
+  button or any successful sign-in clears it. localStorage rather than
+  sessionStorage so that closing the tab does not undo the sign-out.
+- Sign-out ends the Budget session only; the Cloudflare Access session stays,
+  so "Sign in" afterwards is usually one click with no Cloudflare prompt.
+- Browser check used `docs/evidence/landing-login/stub-api.ts` (auth surface
+  only, no Postgres), not the real API.
+
 ## Workflow bundle built into the image (2026-11-18)
 
 The Temporal worker used to bundle its workflows with webpack on every boot

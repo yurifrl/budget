@@ -1,27 +1,32 @@
-import { Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { useService } from '@/platform/di/ServiceContext';
 import { Tokens } from '@/platform/di/tokens';
 import { useAppDispatch } from '@/state/hooks';
 import { resetAppState } from '@/platform/state/reset';
 import { colors } from '@/ui/theme';
-import { loginButtons } from './signIn.logic';
+import { AuthSessionContext } from './authSession';
+import { gateView } from './landing.logic';
+import { LandingPage } from './LandingPage';
 import { useAuth } from './useAuth';
 import { useSignIn } from './useSignIn';
 
 /** Gates the app behind a sign-in when the API requires auth (401 on the
- * session probe): Cloudflare Access (on web, automatically, once) and/or
- * Google, whichever the API reports at /auth/providers. An API that never
- * answers shows a retrying connector instead — with auth disabled in dev the
- * probe succeeds once the server is up, so `task run`'s server/app race
- * resolves itself without a sign-in ask. */
+ * session probe): Cloudflare Access (on web, automatically, once, unless the
+ * person signed out on purpose) and/or Google, whichever the API reports at
+ * /auth/providers. Signed out, or with an API that never answers, the
+ * LandingPage is shown (the unreachable state retries by itself: with auth
+ * disabled in dev the probe succeeds once the server is up, so `task run`'s
+ * server/app race resolves without a sign-in ask). What to show is decided
+ * in landing.logic.ts. */
 export function LoginGate({ apiUrl, children }: { apiUrl: string; children: ReactNode }) {
   const storage = useService(Tokens.Storage);
   const { status, refresh } = useAuth(apiUrl, storage);
-  const { action, providers, notice, signIn } = useSignIn(apiUrl, status, storage, refresh);
+  const { action, providers, notice, signIn, signOut } = useSignIn(apiUrl, status, storage, refresh);
   const dispatch = useAppDispatch();
+  const session = useMemo(() => ({ signOut }), [signOut]);
 
   // The one place the signed-in identity is lost (sign-out / expired or
   // rejected session): drop every module's cached data so the next sign-in
@@ -36,62 +41,21 @@ export function LoginGate({ apiUrl, children }: { apiUrl: string; children: Reac
     return () => clearInterval(timer);
   }, [status, refresh]);
 
-  if (status === 'loading' || action.kind === 'pending' || action.kind === 'auto-redirect') {
+  const view = gateView({ status, action, providers, notice, apiUrl, dev: __DEV__ });
+
+  if (view.kind === 'loading') {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.muted} />
       </View>
     );
   }
-
-  if (status === 'unreachable') {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.muted} />
-        <Text style={[styles.text, styles.heading]}>Can&apos;t reach the API</Text>
-        <Text style={[styles.text, styles.subtitle]}>{apiUrl}</Text>
-        {__DEV__ ? (
-          <Text style={[styles.text, styles.hint]}>
-            Start it with `task api`. If the URL looks wrong, restart Expo with `bun start --clear`.
-          </Text>
-        ) : null}
-        <Pressable style={styles.button} onPress={() => refresh(true)}>
-          <Text style={[styles.text, styles.buttonText]}>Retry now</Text>
-        </Pressable>
-        <Text style={[styles.text, styles.hint]}>Retrying automatically…</Text>
-      </View>
-    );
+  if (view.kind === 'landing') {
+    return <LandingPage view={view.view} onSignIn={signIn} onRetry={() => refresh(true)} />;
   }
-
-  if (status === 'out') {
-    return (
-      <View style={styles.center}>
-        <Text style={[styles.text, styles.title]}>Welcome to Budget</Text>
-        <Text style={[styles.text, styles.subtitle]}>Sign in to continue</Text>
-        {loginButtons(providers).map((b) => (
-          <Pressable key={b.provider} style={styles.button} onPress={() => void signIn(b.provider)}>
-            <Text style={[styles.text, styles.buttonText]}>{b.label}</Text>
-          </Pressable>
-        ))}
-        {notice ? <Text style={[styles.text, styles.notice]}>{notice}</Text> : null}
-      </View>
-    );
-  }
-
-  return <>{children}</>;
+  return <AuthSessionContext.Provider value={session}>{children}</AuthSessionContext.Provider>;
 }
 
-// Plain RN primitives on the app's dark palette (was ThemedText / the
-// navigation theme in syscd): `text` mirrors ThemedText's default type,
-// `heading` its `subtitle` type.
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, backgroundColor: colors.bg },
-  text: { color: colors.text, fontSize: 16, lineHeight: 24 },
-  heading: { fontSize: 20, fontWeight: 'bold' },
-  title: { fontSize: 28, fontWeight: '700' },
-  subtitle: { fontSize: 15, opacity: 0.7, marginBottom: 8 },
-  button: { backgroundColor: '#1a73e8', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 },
-  buttonText: { color: colors.white, fontSize: 16, fontWeight: '600' },
-  hint: { fontSize: 13, opacity: 0.6, textAlign: 'center' },
-  notice: { fontSize: 13, color: colors.redFg, textAlign: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
 });

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radius } from '@/ui/theme';
 
+import { useAuthSession } from '@/features/auth';
 import { useGetMeQuery } from '@/profile/api';
 import { AvatarEditor } from './AvatarEditor';
 import { displayName } from '@/profile/model';
@@ -18,6 +19,7 @@ export function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data: me, isLoading, isError, refetch } = useGetMeQuery();
+  const { signOut } = useAuthSession();
 
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
@@ -60,6 +62,9 @@ export function ProfileScreen() {
                 style={ui.button}
               >
                 <Text style={ui.buttonText}>Connected apps</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => void signOut()} style={ui.button}>
+                <Text style={ui.buttonText}>Sign out</Text>
               </Pressable>
             </>
           )}
