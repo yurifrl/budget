@@ -78,5 +78,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     apiUrl: process.env.EXPO_PUBLIC_API_URL,
     connectionsProvider: process.env.EXPO_PUBLIC_CONNECTIONS_PROVIDER ?? 'pluggy',
     // eas.projectId: set once the owner creates the EAS project.
+    eas: {
+      projectId: "50bed3e7-7524-4497-9b9d-e4fdd6bad820"
+    },
   },
 });
