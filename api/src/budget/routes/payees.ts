@@ -1,4 +1,4 @@
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { applyRules, type RenameRule } from '@shared/domain/payees';
@@ -244,9 +244,7 @@ export const operations = [
   implement(payeesMerge, async (_c, { id, budget_id, target_id }) => {
     if (target_id === id) throw new HttpError(400, 'cannot merge a payee into itself');
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
       const rows = await client.query<{ id: string; name: string }>(
         `SELECT id, name FROM payees
          WHERE id = ANY($1::uuid[]) AND budget_id = $2 AND deleted = false
@@ -261,14 +259,8 @@ export const operations = [
         [target_id, id],
       );
       await client.query('UPDATE payees SET deleted = true WHERE id = $1', [id]);
-      await client.query('COMMIT');
       return { merged_transactions: merged.rowCount ?? 0, source_deleted: true };
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 
   // per-payee renaming rule (the payee's own name is the rename target)

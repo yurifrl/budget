@@ -1,4 +1,4 @@
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import {
@@ -113,9 +113,7 @@ export const operations = [
   // Bulk-reorder categories (plan-grid drag): one UPDATE per move in a single
   // transaction; every id must belong to this budget or nothing is written.
   implement(categoriesReorder, async (_c, { budget_id, moves }) => {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
       let updated = 0;
       for (const move of moves) {
         const result = await client.query(
@@ -127,13 +125,7 @@ export const operations = [
       if (updated !== moves.length) throw new HttpError(404, 'category not found');
       // A category moved to another group leaves its bundle (bundles stay within one group).
       await normalizeBundles(client, budget_id);
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 
   implement(categoriesSetHidden, async (_c, { id, budget_id, hidden }) => {

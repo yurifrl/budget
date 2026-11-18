@@ -1,4 +1,4 @@
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { assignmentsBatch, assignmentsList, assignmentsSet } from '@shared/contracts/budget';
 import { budgetRouter } from '../router';
@@ -25,9 +25,7 @@ export const operations = [
   }),
 
   implement(assignmentsBatch, async (_c, { budget_id, month, updates }) => {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
       for (const u of updates) {
         await client.query(
           `INSERT INTO assignments (budget_id, month, category_id, budgeted)
@@ -37,13 +35,7 @@ export const operations = [
           [budget_id, month, u.category_id, u.budgeted],
         );
       }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 ];
 

@@ -14,7 +14,7 @@
  * entry balance delta is reversed.
  */
 
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { repeatRulesCreate, repeatRulesDelete, repeatRulesGenerate, repeatRulesList } from '@shared/contracts/budget';
@@ -36,9 +36,7 @@ export interface GenerationResult {
  * occurrences within the horizon. Idempotent.
  */
 export async function generateDueOccurrences(budgetId: string): Promise<GenerationResult> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  return withTransaction(pool, async (client) => {
     const today = new Date().toISOString().slice(0, 10);
 
     // 1) Occurrences whose date has passed become ordinary entered
@@ -125,14 +123,8 @@ export async function generateDueOccurrences(budgetId: string): Promise<Generati
       }
     }
 
-    await client.query('COMMIT');
     return { flipped: flipped.rowCount ?? 0, created };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /** Boot/interval tick: generate every budget that has live rules. */
@@ -162,10 +154,7 @@ export const operations = [
     if (body.inflow_cents > 0 && body.outflow_cents > 0) {
       throw new HttpError(400, 'inflow_cents and outflow_cents cannot both be positive');
     }
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
+    const ruleId = await withTransaction(pool, async (client) => {
       // Referenced account must belong to this budget; otherwise the rule
       // would generate cross-budget transactions.
       const accCheck = await client.query('SELECT 1 FROM accounts WHERE id = $1 AND budget_id = $2', [
@@ -269,27 +258,21 @@ export const operations = [
         ruleId = rule.rows[0].id;
       }
 
-      await client.query('COMMIT');
-      // Materialize due occurrences right away so the register shows the
-      // upcoming instances immediately (Make Repeating keeps the entered txn
-      // and schedules the series). Generation is idempotent.
-      await generateDueOccurrences(body.budget_id);
-      const created = await pool.query('SELECT * FROM txn_repeat_rules WHERE id = $1', [ruleId]);
-      return created.rows[0];
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+      return ruleId;
+    });
+
+    // Materialize due occurrences right away so the register shows the
+    // upcoming instances immediately (Make Repeating keeps the entered txn
+    // and schedules the series). Generation is idempotent.
+    await generateDueOccurrences(body.budget_id);
+    const created = await pool.query('SELECT * FROM txn_repeat_rules WHERE id = $1', [ruleId]);
+    return created.rows[0];
   }),
 
   implement(repeatRulesGenerate, async (_c, { budget_id }) => generateDueOccurrences(budget_id)),
 
   implement(repeatRulesDelete, async (_c, { id, budget_id: budgetId }) => {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
       const rule = await client.query(
         'UPDATE txn_repeat_rules SET deleted = true WHERE id = $1 AND budget_id = $2 AND deleted = false RETURNING id',
         [id, budgetId],
@@ -304,13 +287,7 @@ export const operations = [
       // Surviving rows (the anchor / entered instances) become free-standing
       // transactions again — no dangling reference to a dead rule.
       await client.query('UPDATE transactions SET repeat_rule_id = NULL WHERE repeat_rule_id = $1', [id]);
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 ];
 

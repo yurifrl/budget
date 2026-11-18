@@ -1,4 +1,4 @@
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import {
@@ -125,9 +125,7 @@ export const operations = [
     ]);
     if ((owner.rowCount ?? 0) > 0) throw new HttpError(400, 'the owner cannot be removed');
     // Their accounts and categories fall back to Shared in the same transaction as the removal.
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    await withTransaction(pool, async (client) => {
       await client.query('DELETE FROM public.budget_members WHERE budget_id = $1 AND user_id = $2', [budgetId, userId]);
       await client.query('UPDATE public.accounts SET user_id = NULL WHERE budget_id = $1 AND user_id = $2', [
         budgetId,
@@ -137,13 +135,7 @@ export const operations = [
         budgetId,
         userId,
       ]);
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
     return { members: await listMembers(budgetId, user.id) };
   }),
 ];

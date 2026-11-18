@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg';
 
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { bundlesCreate, bundlesDelete, bundlesList, bundlesRename, categoriesSetBundle } from '@shared/contracts/budget';
@@ -39,18 +39,10 @@ async function assignCategories(
 }
 
 async function inTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  return withTransaction(pool, async (client) => {
     const result = await fn(client);
-    await client.query('COMMIT');
     return result;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export const operations = [

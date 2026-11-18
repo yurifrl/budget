@@ -1,4 +1,4 @@
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import {
   budgetArchive,
@@ -69,9 +69,7 @@ export const operations = [
   implement(budgetFreshStart, async (c, body) => {
     const user: IdentityUser | undefined = c.get('user');
     if (!user) return c.json({ error: 'unauthorized' }, 401);
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
       const current = await client.query<Pick<BudgetRow, 'id' | 'name' | 'archived_at'>>(
         `SELECT id, name, archived_at FROM public.budgets
          WHERE id = $1
@@ -79,6 +77,8 @@ export const operations = [
          FOR UPDATE`,
         [body.budget_id, user.id, user.role],
       );
+      // Early exits end the transaction here; the COMMIT withTransaction then
+      // issues is a no-op (server WARNING), as before the refactor.
       if (current.rows.length === 0) {
         await client.query('ROLLBACK');
         return c.json({ error: 'not_found' }, 404);
@@ -382,22 +382,14 @@ export const operations = [
         [newId],
       );
 
-      await client.query('COMMIT');
       return c.json({ archived: archived.rows[0], created });
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 
   implement(budgetCreate, async (c, body) => {
     const user: IdentityUser | undefined = c.get('user');
     if (!user) return c.json({ error: 'unauthorized' }, 401);
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
       // Ownership resolves from the request identity — never the client body.
       const budgetResult = await client.query<BudgetRow>(
         'INSERT INTO budgets (name, owner_user_id) VALUES ($1, $2) RETURNING id, name',
@@ -413,14 +405,8 @@ export const operations = [
         'Geral',
         0,
       ]);
-      await client.query('COMMIT');
       return c.json(budget);
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 
   /**

@@ -1,4 +1,4 @@
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { accountsCreate, accountsDelete, accountsList, accountsReconcile, accountsUpdate } from '@shared/contracts/budget';
@@ -72,9 +72,7 @@ async function ensureCardPaymentCategory(client: Queryable, budgetId: string, na
 const createAccount = implement(
   accountsCreate,
   async (_c, { budget_id, name, type, on_budget, balance_cents, user_id }) => {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    const accountId = await withTransaction(pool, async (client) => {
       const budgetCheck = await client.query('SELECT 1 FROM budgets WHERE id = $1', [budget_id]);
       if (budgetCheck.rowCount === 0) throw new HttpError(404, 'budget not found');
 
@@ -114,15 +112,11 @@ const createAccount = implement(
         await client.query('UPDATE accounts SET uncleared_balance = $1 WHERE id = $2', [deltaMilli, accountId]);
       }
 
-      await client.query('COMMIT');
-      const row = await client.query('SELECT * FROM accounts WHERE id = $1', [accountId]);
-      return row.rows[0];
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+      return accountId;
+    });
+    // Read back after COMMIT (as before the withTransaction refactor).
+    const row = await pool.query('SELECT * FROM accounts WHERE id = $1', [accountId]);
+    return row.rows[0];
   },
 );
 
@@ -131,9 +125,7 @@ const updateAccount = implement(
   async (c, { id: accountId, budget_id, name, note, closed, working_balance_cents, link, user_id }) => {
     const user = c.get('user');
     if (!user) throw new HttpError(401, 'unauthorized');
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    await withTransaction(pool, async (client) => {
       const accResult = await client.query<{ budget_id: string; closed: boolean; name: string; type: AccountType; on_budget: boolean }>(
         'SELECT budget_id, closed, name, type, on_budget FROM accounts WHERE id = $1',
         [accountId],
@@ -245,24 +237,18 @@ const updateAccount = implement(
         }
       }
 
-      await client.query('COMMIT');
-      const row = await client.query('SELECT * FROM accounts WHERE id = $1', [accountId]);
-      return row.rows[0];
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+      return accountId;
+    });
+    // Read back after COMMIT (as before the withTransaction refactor).
+    const row = await pool.query('SELECT * FROM accounts WHERE id = $1', [accountId]);
+    return row.rows[0];
   },
 );
 
 const reconcileAccount = implement(
   accountsReconcile,
   async (_c, { id: accountId, budget_id, stated_balance_cents, reconcile_all }) => {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
       const accResult = await client.query<{
         budget_id: string;
         closed: boolean;
@@ -290,7 +276,6 @@ const reconcileAccount = implement(
           'UPDATE accounts SET cleared_balance = cleared_balance + uncleared_balance, uncleared_balance = 0, last_reconciled_at = NOW() WHERE id = $1',
           [accountId],
         );
-        await client.query('COMMIT');
         return;
       }
 
@@ -331,13 +316,7 @@ const reconcileAccount = implement(
         statedMilli,
         accountId,
       ]);
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   },
 );
 
@@ -356,9 +335,7 @@ const reconcileAccount = implement(
  * DELETE /transactions/:id.
  */
 const deleteAccount = implement(accountsDelete, async (_c, { id: accountId, budget_id: budgetId }) => {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  return withTransaction(pool, async (client) => {
     const acc = (
       await client.query<{ budget_id: string; closed: boolean; name: string; transfer_payee_id: string | null }>(
         'SELECT budget_id, closed, name, transfer_payee_id FROM accounts WHERE id = $1 AND deleted = false FOR UPDATE',
@@ -411,13 +388,7 @@ const deleteAccount = implement(accountsDelete, async (_c, { id: accountId, budg
       [acc.transfer_payee_id],
     );
 
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 });
 
 export const operations = [

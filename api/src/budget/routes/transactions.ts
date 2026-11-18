@@ -1,6 +1,6 @@
 import type { z } from '@shared/zod';
 
-import { pool } from '../../core/db';
+import { pool, withTransaction } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import {
@@ -37,9 +37,7 @@ async function createTransaction(
   txn: CreateTxn,
   subtransactions: z.output<typeof subTxnListSchema> | undefined,
 ) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  return withTransaction(pool, async (client) => {
     // Referenced account/category must belong to this budget; otherwise the
     // insert would silently create a cross-budget transaction.
     const accCheck = await client.query<{ closed: boolean }>(
@@ -111,14 +109,8 @@ async function createTransaction(
       ...deriveDeltas(null, { account_id: txn.account_id, amount: result.rows[0].amount, cleared: txn.cleared }),
       ...mirrorDeltas,
     ]);
-    await client.query('COMMIT');
     return created;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export const operations = [
@@ -192,9 +184,7 @@ export const operations = [
    * uncleared + unapproved so it surfaces in the review flow.
    */
   implement(transactionsBulk, async (_c, { budget_id, account_id, txns }) => {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
       // Referenced account must belong to this budget; otherwise the insert
       // would silently create a cross-budget transaction.
       const accCheck = await client.query<{ closed: boolean }>(
@@ -313,23 +303,15 @@ export const operations = [
       }
       // Imported statement payments (cash outflow + card inflow) become transfers.
       if (imported > 0) await linkCardPayments(client, budget_id);
-      await client.query('COMMIT');
       return { imported, duplicates };
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 
   implement(transactionsUpdate, async (_c, { id, budget_id, patch, subtransactions }) => {
     if (bothPositive({ inflow_cents: patch.inflow_cents ?? 0, outflow_cents: patch.outflow_cents ?? 0 })) {
       throw new HttpError(400, ONE_WAY_ERROR);
     }
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
 
       // The transaction must exist, belong to this budget, and not be deleted;
       // otherwise the update would silently mutate another budget's row.
@@ -498,13 +480,7 @@ export const operations = [
         [id],
       );
       await applyBalanceDeltas(client, budget_id, [...deriveDeltas(existing, after.rows[0] ?? null), ...mirrorDeltas]);
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 
   implement(transactionsDelete, async (_c, { id, budget_id: budgetId }) => {
@@ -512,9 +488,7 @@ export const operations = [
     // reversal from the deleted row.
     // Soft-delete scoped to the budget; 404 rather than a silent no-op on a
     // foreign or already-deleted row.
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(pool, async (client) => {
       const result = await client.query<
         {
           repeat_rule_id: string | null;
@@ -527,7 +501,6 @@ export const operations = [
         [id, budgetId],
       );
       if (result.rowCount === 0) {
-        await client.query('ROLLBACK');
         throw new HttpError(404, 'transaction not found');
       }
       // Deleting a pending upcoming occurrence must not resurrect it: the
@@ -558,13 +531,7 @@ export const operations = [
         ...(deleted.upcoming ? [] : deriveDeltas(deleted, null)),
         ...mirrorDeltas,
       ]);
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }),
 ];
 

@@ -16,7 +16,7 @@
 
 import type { MiddlewareHandler } from 'hono';
 
-import { pool } from '../core/db';
+import { pool, withTransaction } from '../core/db';
 import type { IdentityUser } from '../user';
 import { isUuid } from '../core/validate';
 
@@ -74,9 +74,7 @@ export async function isBudgetOwnerOrAdmin(user: IdentityUser, budgetId: string)
  * owned data is a no-op update plus an already-satisfied ALTER.
  */
 export async function claimUnownedBudgets(ownerId: string): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  return withTransaction(pool, async (client) => {
     await client.query(
       `UPDATE public.budgets
          SET owner_user_id = $1, claimed_at = now()
@@ -98,13 +96,7 @@ export async function claimUnownedBudgets(ownerId: string): Promise<void> {
         'ALTER TABLE public.budgets ALTER COLUMN owner_user_id SET NOT NULL',
       );
     }
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /**

@@ -3,7 +3,7 @@
  * avatar seed) and uploaded photo. Reads derive the avatar through the shared
  * {@link personAvatarSql} so the rule lives in one place.
  */
-import { pool } from '../core/db';
+import { pool, withTransaction } from '../core/db';
 import { personAvatarSql, toPersonAvatar, type PersonAvatar, type PersonAvatarRow } from './avatar';
 import type { IdentityRole } from './types';
 
@@ -45,9 +45,7 @@ export type ProfilePatch = {
  * "use this avatar" is one atomic act, never a half-state.
  */
 export async function updateProfile(userId: string, patch: ProfilePatch): Promise<Profile | null> {
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
+  await withTransaction(pool, async (client) => {
     if (patch.name !== undefined) {
       await client.query('update public.users set name = $2 where id = $1', [userId, patch.name]);
     }
@@ -55,13 +53,7 @@ export async function updateProfile(userId: string, patch: ProfilePatch): Promis
       await client.query('update public.users set avatar_seed = $2 where id = $1', [userId, patch.avatar_seed]);
       await removePhoto(client, userId);
     }
-    await client.query('commit');
-  } catch (err) {
-    await client.query('rollback').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
   return getProfile(userId);
 }
 
@@ -73,9 +65,7 @@ async function removePhoto(db: Queryable, userId: string): Promise<void> {
 }
 
 export async function setAvatarPhoto(userId: string, contentType: string, bytes: Uint8Array): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
+  return withTransaction(pool, async (client) => {
     await client.query(
       `insert into public.user_avatars (user_id, content_type, bytes) values ($1, $2, $3)
        on conflict (user_id) do update set content_type = excluded.content_type,
@@ -83,13 +73,7 @@ export async function setAvatarPhoto(userId: string, contentType: string, bytes:
       [userId, contentType, Buffer.from(bytes)],
     );
     await client.query('update public.users set avatar_version = avatar_version + 1 where id = $1', [userId]);
-    await client.query('commit');
-  } catch (err) {
-    await client.query('rollback').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export async function removeAvatarPhoto(userId: string): Promise<void> {
