@@ -5,6 +5,7 @@
   "scripts": {
     "server": "bun src/index.ts",
     "worker": "bun src/worker.ts",
+    "build:workflows": "bun scripts/build-workflow-bundle.ts",
     "cli": "bun src/cli.ts",
     "mcp": "bun src/mcp.ts",
     "test": "bun test",

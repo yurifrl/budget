@@ -21,6 +21,10 @@ COPY shared/src shared/src
 # api/tsconfig.json carries the @shared/* path that bun resolves at runtime.
 COPY api/tsconfig.json api/
 COPY api/src api/src
+# Pre-build the Temporal workflow bundle so the worker loads a file instead of
+# running webpack at every boot (that peak got the worker OOMKilled).
+COPY api/scripts/build-workflow-bundle.ts api/scripts/
+RUN cd api && bun run build:workflows && test -s dist/workflow-bundle.js
 # Migrations are read from api/db/migrations at boot; VERSION feeds /health.
 COPY api/db/migrations api/db/migrations
 COPY api/VERSION api/

@@ -2,9 +2,9 @@
  * Hosts the Temporal worker (SDK import #3). Boot never depends on Temporal:
  * connect/create failures are logged and retried with backoff until stopped.
  */
-import { fileURLToPath } from 'node:url';
-
 import { NativeConnection, Worker } from '@temporalio/worker';
+
+import { workflowSource } from './workflows/source';
 
 export interface WorkerHostOptions {
   address: string;
@@ -37,6 +37,9 @@ export function startWorkerHost(opts: WorkerHostOptions): { stop(): Promise<void
       };
     });
 
+  const source = workflowSource();
+  log(`jobs worker: workflows from ${'workflowBundle' in source ? `pre-built bundle ${source.workflowBundle.codePath}` : 'source (bundling at start)'}`);
+
   const loop = (async () => {
     let backoff = 1_000;
     while (!stopped) {
@@ -48,7 +51,7 @@ export function startWorkerHost(opts: WorkerHostOptions): { stop(): Promise<void
           connection,
           namespace: opts.namespace,
           taskQueue: opts.taskQueue,
-          workflowsPath: fileURLToPath(new URL('./workflows/index.ts', import.meta.url)),
+          ...source,
           activities: opts.activities,
         });
         const extra = await Promise.all(

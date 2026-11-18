@@ -1266,3 +1266,19 @@ JWKS for its own key and injects a signed assertion on `/auth/access*`:
 `01` signed in automatically on first visit; `02` with the proxy dropping the
 cookie, the app came back signed out once and showed the error screen (no
 second redirect); `03` the "Sign in" button then signed in.
+
+## Workflow bundle built into the image (2026-11-18)
+
+The Temporal worker used to bundle its workflows with webpack on every boot
+(`workflowsPath`). In the cluster that peak got `budget-worker` OOMKilled at its
+384Mi limit about 28 s after each start, as soon as Temporal was reachable.
+
+Now `deploy/Dockerfile.api` runs `bun run build:workflows`
+(`api/scripts/build-workflow-bundle.ts` -> `api/dist/workflow-bundle.js`) and the
+worker loads that file (`api/src/jobs/workflows/source.ts`: bundle if the file
+exists, otherwise bundle at start, which is what local dev and tests do).
+
+Measured locally (macOS arm64, worker connected and polling, peak RSS):
+181 MB with the pre-built bundle, 327 MB without. `scripts/e2e-jobs.ts` passes
+against a worker running from the bundle.
+
