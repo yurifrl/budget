@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-hg2",
+  "title": "api: build the Temporal workflow bundle into the image (worker OOMs bundling at boot)",
+  "description": "",
+  "status": "ready-to-review",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-18T19:22:00.994Z",
+  "updated_at": "2026-11-18T19:30:09.058Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": null,
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-hg2",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-hg2",
+    "changeset": {
+      "base": "a42ea4e278447674a8658baceccee408ed6fafd5"
+    },
+    "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
+    "finished_at": "2026-11-18T19:30:08.985Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 7,
+        "additions": 86,
+        "deletions": 3
+      },
+      "head": "a1340ab8e18d7a679ac40d773efca218f85c0cd2",
+      "at": "2026-11-18T19:30:08.985Z"
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}
