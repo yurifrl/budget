@@ -1,5 +1,15 @@
 # Changelog
 
+## v2026.11.18-03 2026-11-18 release
+
+### Changed
+
+- release: v2026.11.18-03
+- tasks: budget-hg2 ready for review
+- api: build the Temporal workflow bundle into the image; worker loads it instead of bundling at boot
+- ci(release): check out before the app job's first step (client/ workdir must exist)
+
+
 ## v2026.11.18-02 2026-11-18 release
 
 ### Changed
