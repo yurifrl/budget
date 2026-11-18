@@ -11,7 +11,7 @@ export async function listTargets(db: Queryable, budgetId: string) {
 
 export async function upsertTarget(
   db: Queryable,
-  t: { budgetId: string; categoryId: string; kind: string; amountCents: number; snoozeMonth: string | null; configJson: string },
+  t: { budgetId: string; categoryId: string; kind: string; amountCents: number; snoozeMonth: number | null; configJson: string },
 ) {
   const result = await db.query(
     `INSERT INTO category_targets (budget_id, category_id, kind, amount_cents, snooze_month, config)
