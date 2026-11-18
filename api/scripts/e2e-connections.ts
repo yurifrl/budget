@@ -23,12 +23,14 @@ import { setAggregators, type AggregatorEntry } from '../src/connections/registr
 import * as store from '../src/connections/store';
 import type { BankAggregator } from '../src/connections/types';
 import { CONNECTIONS_SWEEP_CRON, CONNECTIONS_SWEEP_SCHEDULE_ID, PLUGGY_ACTIVITIES_PER_SECOND, PLUGGY_QUEUE_SUFFIX } from '../src/connections';
-import { pool } from '../src/core/db';
+import { configureDb, pool } from '../src/core/db';
 import { runMigrations } from '../src/core/migrate';
 import { httpOnError } from '../src/core/validate';
 import { configureJobs, createTemporalClient, startRelay } from '../src/jobs';
 import { createLedgerActivities } from '../src/jobs/activities';
 import { startWorkerHost } from '../src/jobs/worker-host';
+
+configureDb({ connectionString: process.env.DATABASE_URL ?? '' });
 
 const PROVIDER = 'e2efake';
 const USER_ID = '00000000-0000-4000-8000-00000000e2e1';

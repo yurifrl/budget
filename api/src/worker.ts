@@ -10,7 +10,7 @@
  */
 import { hostname } from 'node:os';
 
-import { pool } from './core/db';
+import { configureDb, pool } from './core/db';
 import { runMigrations } from './core/migrate';
 import { createConnectionsActivities } from './connections/activities';
 import {
@@ -27,6 +27,8 @@ import { startWorkerHost } from './jobs/worker-host';
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled rejection:', reason);
 });
+
+configureDb({ connectionString: process.env.DATABASE_URL ?? '' });
 
 const address = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
 const namespace = process.env.TEMPORAL_NAMESPACE || 'default';

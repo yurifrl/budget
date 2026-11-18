@@ -4,12 +4,13 @@
  * Enqueues jobs_noop runs (success, failure, cancel) and waits for the ledger.
  *   DATABASE_URL=... JOBS_INSTANCE_ID=e2e bun scripts/e2e-jobs.ts
  */
-import { pool } from '../src/core/db';
+import { configureDb, pool } from '../src/core/db';
 import { runMigrations } from '../src/core/migrate';
 import { configureJobs, createTemporalClient, enqueueJob } from '../src/jobs';
 
 const instanceId = process.env.JOBS_INSTANCE_ID || 'budget-local';
 configureJobs({ instanceId });
+configureDb({ connectionString: process.env.DATABASE_URL ?? '' });
 await runMigrations();
 const temporal = createTemporalClient({
   address: process.env.TEMPORAL_ADDRESS || 'localhost:7233',

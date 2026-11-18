@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { pool, withTransaction } from './db';
+import { configureDb, pool, withTransaction } from './db';
 import { dbReady } from './test-gate';
 
 const table = `wtx_probe_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
@@ -75,5 +75,17 @@ describe.skipIf(!dbReady)('withTransaction', () => {
     expect(await count()).toBe(before);
     // The client went back to the pool: no more checked out than before.
     expect(pool.totalCount - pool.idleCount).toBeLessThanOrEqual(checkedOut);
+  });
+});
+
+describe('configureDb', () => {
+  test('an empty connection string is refused with the old boot message', () => {
+    expect(() => configureDb({ connectionString: '' })).toThrow('DATABASE_URL is required');
+  });
+
+  test.skipIf(!dbReady)('re-configuring with the same string is a no-op; another string throws', () => {
+    const current = process.env.DATABASE_URL!;
+    expect(() => configureDb({ connectionString: current })).not.toThrow();
+    expect(() => configureDb({ connectionString: 'postgres://elsewhere/db' })).toThrow('already configured');
   });
 });
