@@ -1,0 +1,6 @@
+{
+  "prefix": "budget",
+  "storage": {
+    "backend": "file"
+  }
+}
