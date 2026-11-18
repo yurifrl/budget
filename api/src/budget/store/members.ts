@@ -38,14 +38,20 @@ export async function addMember(db: Queryable, budgetId: string, userId: string)
   await db.query('INSERT INTO public.budget_members (budget_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [budgetId, userId]);
 }
 
-export async function isBudgetOwner(db: Queryable, budgetId: string, userId: string): Promise<boolean> {
-  const owner = await db.query('SELECT 1 FROM public.budgets WHERE id = $1 AND owner_user_id = $2', [budgetId, userId]);
-  return (owner.rowCount ?? 0) > 0;
-}
-
-/** Remove a member; their accounts and categories fall back to Shared. Call inside one transaction. */
+/**
+ * Remove a member; their accounts and categories fall back to Shared, and
+ * accounts linked to THEIR bank connections are unlinked (the rows and their
+ * history stay): a removed person's bank must stop feeding a budget they can
+ * no longer see, and they could not unlink it themselves any more. Call
+ * inside one transaction.
+ */
 export async function removeMemberAndUnassign(db: Queryable, budgetId: string, userId: string): Promise<void> {
   await db.query('DELETE FROM public.budget_members WHERE budget_id = $1 AND user_id = $2', [budgetId, userId]);
+  await db.query(
+    `UPDATE public.accounts SET connection_id = NULL, external_account_id = NULL, institution = NULL
+      WHERE budget_id = $1 AND connection_id IN (SELECT id FROM public.connections WHERE user_id = $2)`,
+    [budgetId, userId],
+  );
   await db.query('UPDATE public.accounts SET user_id = NULL WHERE budget_id = $1 AND user_id = $2', [budgetId, userId]);
   await db.query('UPDATE public.categories SET user_id = NULL WHERE budget_id = $1 AND user_id = $2', [budgetId, userId]);
 }

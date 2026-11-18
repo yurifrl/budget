@@ -23,7 +23,7 @@ import type { IdentityUser } from '../../user';
 import { budgetRestore } from '@shared/contracts/budget';
 import { upgradeRestorePayload } from '@shared/contracts/budget/schemas';
 import { recomputeAccountBalances } from '../domain/transactions';
-import { isBudgetMember, isBudgetOwnerOrAdmin } from '../ownership';
+import { isBudgetMember, isBudgetOwner } from '../ownership';
 import { budgetRouter } from '../router';
 import {
   budgetExists,
@@ -57,11 +57,11 @@ export const operations = [
     const payload = upgradeRestorePayload(input);
     const user: IdentityUser | undefined = c.get('user');
     if (!user) return errorResponse(c, 401, 'unauthorized');
-    if (!(await isBudgetOwnerOrAdmin(user, budgetId))) return errorResponse(c, 404, 'not found');
+    if (!(await isBudgetOwner(user.id, budgetId))) return errorResponse(c, 404, 'not found');
 
     return withTransaction(pool, async (client) => {
 
-      // Budget must exist; budgetAccess already proved ownership for non-admins.
+      // Budget must exist (the owner check above already proved it).
       if (!(await budgetExists(client, budgetId))) throw new HttpError(404, 'budget not found');
 
       await wipeBudgetData(client, budgetId);
@@ -223,5 +223,5 @@ export const operations = [
   }),
 ];
 
-// Owner-or-admin scoping like every budget-data route (USER-05) comes from budgetRouter.
+// Owner-or-member scoping comes from budgetRouter (USER-05); the handler then requires the owner.
 export default budgetRouter('/budgets/restore', operations);
