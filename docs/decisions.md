@@ -672,3 +672,29 @@ to the worker; none of that schedule code has unit tests (only the
 Temporal-backed e2e). Left as the in-process tick (`BUDGET_REPEAT_TICK=0` in
 production); follow-up filed.
 
+
+### Phase 5b follow-up
+
+- **Store layer finished.** `budget-restore`, `groups`, `category-targets`,
+  `assignments`, `category-notes`, `month-notes`, `plan-auto-assign` and
+  `budget-export` call `budget/store/{restore,groups,category-targets,
+  assignments,notes,export}.ts` (plus `liveCategoryInBudget` in
+  `store/categories.ts`). No file under `budget/routes/` holds SQL any more;
+  `budget/routes-no-sql.test.ts` fails on a `.query(` call or an SQL statement
+  in a string literal there. The 42 SQL literals of the eight old files were
+  extracted and each found unchanged (whitespace-normalised) in the new tree.
+  `routes/small-areas.test.ts` pins the previously untested areas.
+- **Access test covers body/query ids.** `access.test.ts` section C derives
+  every uuid-typed input field that is not a path param or `budget_id` from the
+  contract schemas (`z.toJSONSchema` + the uuid pattern) and fails until each
+  has an attack case (member of A supplies B's id) or an allow-list reason (none
+  today). It asserts the status, that B and A are unchanged, that no
+  response leaks B names, and that no A row points at a B row (19 pointer
+  columns plus person ids). It found four holes, all also in syscd-app and
+  fixed with the neighbours' predicate: `assignments` set/batch accepted a
+  foreign `category_id` (now 400 `category not found in budget`, like
+  plan-auto-assign); `categories reorder` accepted a foreign `moves[].group_id`
+  (404 like create); `transactions` PATCH accepted a foreign `patch.category_id`
+  (400 like create) and a foreign `patch.matched_transaction_id` (400). The
+  checks are any-state (tombstoned rows of the same budget still pass), so
+  legitimate requests are unchanged.
