@@ -360,6 +360,7 @@ function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const live = budgetId === activeBudgetId;
   const fmt = useFmtPrefs();
+  const [masked] = useMoneyMask();
   // Non-live targets are configured straight from their saved blob: the
   // global fmt store belongs to the ACTIVE budget and must not be touched.
   const [blobFmt, setBlobFmt] = useState<FmtPrefs>(DEFAULT_FMT_PREFS);
@@ -460,7 +461,7 @@ function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
         }}
       />
       <Text style={s.preview}>
-        {formatMoneyWith(currentFmt, 131451)} · {formatDateWith(currentFmt, '2026-06-30')}
+        {formatMoneyWith(currentFmt, 131451, masked)} · {formatDateWith(currentFmt, '2026-06-30')}
       </Text>
 
       <Text style={s.sectionLabel}>MANAGE BUDGET</Text>
