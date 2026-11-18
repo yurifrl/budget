@@ -129,7 +129,7 @@ shell/      BudgetLayout (rail / drawer / tabs, sheets it hosts), rail/,
             SettingsMenu (pane-stack host), runtime.ts (DI container + store),
             context.ts (useBudgetShell) and menuNav.ts (useMenuNav): the only
             shell files features may import
-features/   plan accounts banks payees import backup reflect spending
+features/   home plan accounts banks payees import backup reflect spending
             settings people auth profile: each holds its screens, components,
             hooks (useXxx.ts) and feature-local logic (*.logic.ts + tests);
             index.ts is its public surface
@@ -164,6 +164,23 @@ and `shell/menuNav.ts`; the shell imports features through barrels too.
 no React/RN/Expo. `architecture.test.ts` fails on any runtime import cycle
 under `src/` and on a non-pure domain import.
 
+- **Navigation and the active budget.** The root stack is `index` (the home
+  page, `features/home`), `(budget)` (the shell), `profile`, `connected-apps`.
+  `/` is always the home page: "My budgets" (`is_owner`), "Shared with me"
+  (with the owner), archived ones collapsed, create, invite (the People pane
+  of `features/people` in a sheet), profile and sign out; with zero budgets
+  it is the first-run page. It shares its frame with the landing page
+  (`ui/BrandedPage`). Opening or creating a budget there is the only way one
+  becomes active: `switchBudget` (redux + KV key `budget.activeBudgetId`),
+  then push `/overview` (phone) or `/plan`. Budget routes carry no budget
+  id; a reload or deep link inside `(budget)` restores the persisted id
+  (`restoreActiveBudget`), and `shellGate` (`shell/rail/rail.logic.ts`)
+  decides: render the shell, wait, or redirect to `/` (no id, stale id, zero
+  budgets, list failed). The shell never picks a budget. The way back is one
+  tap: the rail's "All budgets" row, and a house button beside the menu
+  button on tablet/phone. Owner-only controls (rename, archive, delete, Fresh
+  Start, restoring a backup, removing a person) are not rendered for members
+  (`is_owner` on the list row, `can_manage` on members).
 - **Wire boundary.** `budget/data`: `data/api.ts` re-exports one RTK Query
   api assembled from `data/api/{base,budgets,members,plan,payees,register,connections}.ts`
   (`injectEndpoints`), every request built with `contractRequest`; `rows.ts`

@@ -1433,3 +1433,58 @@ no budgets gets `[]`. Nothing creates a budget on their behalf.
 - MCP tools and the CLI call the HTTP API with the caller's bearer, so they
   pass through the same guards.
 
+## Home page (budget-ygu, 2026-11-18)
+
+The client half of "Multi-user". Before: after sign-in the app dropped into
+the budget shell at `/` and the shell chose a budget by itself (the persisted
+one, else the first non-archived one; `fallbackBudgetId`). A person with no
+budgets got a shell with spinners in it.
+
+- **`/` is the home page, for everyone, every time.** The budget's phone
+  landing tab moved from `/` to `/overview` (tab label "Overview"; "Home" now
+  means one thing). Considered and dropped: keeping `/` as the budget and
+  showing home only after a sign-in. It needs a "just signed in" flag, and a
+  person with one shared and one own budget would never see the list again
+  unless they went looking. The cost of the choice: one more tap after a cold
+  start for someone with a single budget.
+- **The active budget stays out of the URL.** Budget routes are `/plan`,
+  `/accounts?account=` and so on, as before; the id is persisted (KV
+  `budget.activeBudgetId`) by `switchBudget`. Putting it in the path would be
+  the proper deep link, and is a rewrite of every route and link in the shell.
+  So a deep link opens "the budget this device last had open"; with none, or
+  one the person cannot reach any more, it lands on home.
+- **The shell never picks a budget** (`shellGate` replaces
+  `fallbackBudgetId`). An id missing from a list that is still being fetched
+  waits instead of bouncing (budget-fwf); creating a budget refetches the list
+  before switching, on home as in the settings menu
+  (`state/refetchBudgets.ts`). Archiving or deleting the active budget, or
+  losing access to it, sends the person home rather than into some other
+  budget. `restoreActiveBudget` no longer overrides a budget chosen in this
+  session (home switches, then the shell mounts and restores).
+- **Archived budgets** keep the treatment the switcher gave them: their own
+  section (collapsed on home), name plus archive date, still openable. The
+  date was printed from the raw timestamp (`18T22:03:58.457Z/11/2026`) in the
+  switcher; both places cut it to the day now.
+- **Inviting is the existing People pane**, opened in a sheet from a card.
+  Any member may add a person (the API's rule), so every live card has the
+  button: "Invite" for the owner, "People" for a member. The pane's old line
+  about `AUTH_ALLOWED_EMAILS` was wrong since "Multi-user"; it now says what
+  happens (the budget is on the invitee's home page at their sign-in; nothing
+  is sent). Member add/remove/link invalidate the Budgets list, which carries
+  `member_count`.
+- **Owner-only controls are absent, not disabled, for members**: Fresh Start
+  row, rename field, archive/delete section (Plan Settings shows the name and
+  who the owner is), backup import. Format prefs stay: they are per device.
+- **The sync-window control needed no change.** The pills in
+  `SyncWindowControl` / `bank/SettingsPanel` / `ConnectionSettingsScreen`
+  write the per-bank window (`PATCH /connections/:id/settings`, the caller's
+  own connection). Nothing in the client calls the admin-only
+  `PATCH /connections/settings`; `useUpdateSyncWindowMutation` is exported and
+  unused. Checked against the running API as a non-admin: the app-wide PATCH
+  answers 403, the app-wide GET (shown as "Default (...)") 200.
+- **Sign-out from Profile** lands on home at the next sign-in: on web the
+  API's logout redirect goes to the app root; on native the router is moved
+  to `/` first.
+
+Evidence: `docs/evidence/home-page/` (screenshots; `access-proxy.ts` is the
+Access stub with `/__as?email=` to switch identity).
