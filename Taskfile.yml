@@ -140,7 +140,7 @@ tasks:
       - docker build -f deploy/Dockerfile.admin -t budget-admin:dev .
 
   release:
-    desc: Bump api/VERSION (UTC date; -NN suffix for same-day re-releases), commit and push to main. CI tags, builds the web/api/admin images, pins k8s/values.yaml and creates the GitHub release
+    desc: Bump api/VERSION and client/VERSION in lockstep (UTC date; -NN suffix for same-day re-releases), commit and push to main. CI tags, builds the web/api/admin images, pins k8s/values.yaml and creates the GitHub release
     cmds:
       - |
         branch="$(git rev-parse --abbrev-ref HEAD)"
@@ -149,6 +149,6 @@ tasks:
           exit 1
         fi
       - bun scripts/release-bump.ts
-      - git add api/VERSION
-      - 'git commit -m "release: v$(cat api/VERSION)" -- api/VERSION'
+      - git add api/VERSION client/VERSION
+      - 'git commit -m "release: v$(cat api/VERSION)" -- api/VERSION client/VERSION'
       - git push origin HEAD:main

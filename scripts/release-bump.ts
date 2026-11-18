@@ -1,5 +1,6 @@
 /**
- * Release bump: move `api/VERSION` to its next release version (today when
+ * Release bump: move `api/VERSION` (the release source: image tags, /health) and
+ * `client/VERSION` (read by client/app.config.ts) in lockstep to the next version (today when
  * older, the next same-day `-NN` suffix otherwise, the day after only when the
  * suffix is exhausted). Pattern: `YYYY.MM.DD[-NN]`.
  *
@@ -28,8 +29,8 @@ export function nextAppVersion(current: string, now: Date = new Date()): string 
 }
 
 if (import.meta.main) {
-  const VERSION_FILE = path.join(import.meta.dir, '..', 'api', 'VERSION');
-  const next = nextAppVersion(fs.readFileSync(VERSION_FILE, 'utf8').trim());
-  fs.writeFileSync(VERSION_FILE, `${next}\n`);
+  const root = path.join(import.meta.dir, '..');
+  const next = nextAppVersion(fs.readFileSync(path.join(root, 'api', 'VERSION'), 'utf8').trim());
+  for (const dir of ['api', 'client']) fs.writeFileSync(path.join(root, dir, 'VERSION'), `${next}\n`);
   console.log(next);
 }
