@@ -219,7 +219,7 @@ describe('bundle endpoints', () => {
 });
 
 describe('formerly hand-written URLs now come from contracts (same routes)', () => {
-  const cases: Array<[string, (s: ReturnType<typeof makeStore>) => unknown, string, string, Record<string, unknown> | null]> = [
+  const cases: [string, (s: ReturnType<typeof makeStore>) => unknown, string, string, Record<string, unknown> | null][] = [
     ['getUsdBrlRate', () => budgetApi.endpoints.getUsdBrlRate.initiate(), 'GET', '/rates/usd-brl', null],
     ['getMe', () => budgetApi.endpoints.getMe.initiate(), 'GET', '/auth/me', null],
     ['getConnections', () => budgetApi.endpoints.getConnections.initiate(), 'GET', '/connections', null],
