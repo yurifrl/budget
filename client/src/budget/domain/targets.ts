@@ -19,7 +19,7 @@
  * `neededBy` / `suggestedToAssign` from here; the persistence layer stores
  * `CategoryTargetConfig` as the `category_targets.config` JSONB.
  */
-import type { Cents, CategoryTarget, CategoryTargetConfig, TargetKind, MonthKey } from "./types";
+import type { Cents, CategoryTarget, MonthKey } from "./types";
 import { daysInMonth, makeMonth, splitMonth } from "./format";
 
 /** Weekday (0=Sunday) of the month identified by `key`, day 1. */

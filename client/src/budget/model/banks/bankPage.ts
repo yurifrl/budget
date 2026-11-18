@@ -4,7 +4,6 @@
  */
 
 import type { ConnectionTxnState } from '../../data/connections';
-import type { Cents } from '../../domain/types';
 
 /**
  * Human bank name. Providers sometimes hand back a raw lowercase id

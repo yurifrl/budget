@@ -219,7 +219,6 @@ export function AccountsScreen() {
       setToast(`Linked ${linkedCount} account${linkedCount === 1 ? '' : 's'}`);
     }
     // Only on mount/param change — the toast state owns dismissal.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedCount]);
 
   // Derived scope + register memos must run before any early return

@@ -160,7 +160,6 @@ async function refetchBudgets(dispatch: AppDispatch): Promise<BudgetRow[]> {
 /** Budget switcher list — every row opens the per-budget menu (EDIT BUDGET). */
 function OpenBudgetPane() {
   const { formatDate } = useMoneyFormat();
-  const dispatch = useAppDispatch();
   const nav = useMenuNav();
   const activeBudgetId = useAppSelector((s) =>
     selectActiveBudgetId(s),

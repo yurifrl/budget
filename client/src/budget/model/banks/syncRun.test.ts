@@ -65,7 +65,7 @@ describe('awaitSyncRun', () => {
 
 describe('describeSyncOutcome (table)', () => {
   const done = (r: SyncRunJson) => ({ kind: 'done' as const, run: r });
-  const cases: Array<[string, Parameters<typeof describeSyncOutcome>[0], string, string]> = [
+  const cases: [string, Parameters<typeof describeSyncOutcome>[0], string, string][] = [
     ['nothing new', done(run({ status: 'succeeded', result: { added: 0 } })), 'report', 'Sync complete — nothing new'],
     ['counts', done(run({ status: 'succeeded', result: { added: 2, updated: 1, deleted: 1 } })), 'report', 'Sync complete — 2 added · 1 updated · 1 removed'],
     ['quota notice wins', done(run({ status: 'succeeded', user_message: 'Bank limits reached — data resumes next month', result: { skipped: 'quota_exhausted' } })), 'report', 'Bank limits reached — data resumes next month'],
