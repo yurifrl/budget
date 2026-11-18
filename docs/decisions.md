@@ -110,3 +110,182 @@ Lockfiles: `grep -c fbr.land */bun.lock` gives 0 for all three.
   in SDK 58) is used.
 - `bun install` blocks two postinstalls in api/ (protobufjs). Nothing needed
   them for the bundle, the tests or the image.
+
+## Phase 2: API lift-and-shift
+
+Source: syscd-app server code, copied into `api/src/` (`core`, `user`, `oauth`,
+`mcp`, `cli`, `jobs`, `budget`, `connections`, `rates` plus `index/worker/cli/mcp/app/catalog`).
+Not carried: `health`, `ourtube`, `yt`, `ai` (wiring removed from `app.ts`,
+`catalog.ts`, `index.ts`). The move is behaviour-identical except for the
+items below.
+
+### Migrations: copied unchanged, new ones start at 0100
+
+The owner decided the new API connects to the SAME Postgres database syscd
+uses in production, and syscd keeps running against it for a while. So there is
+no squashed baseline (this reverses the plan's phase 2 step 2; G1-G3 are not
+done here):
+
+- `api/db/migrations/` holds all 33 syscd files, byte-identical, health and
+  OurTube ones included, so `schema_migrations` stays consistent and a fresh
+  local DB still builds. `MIGRATION_SIGNATURES` / `MIGRATION_EXEMPT` in
+  `core/migrate.ts` are unchanged.
+- **Numbering rule: a new migration is numbered `0100` or higher** so it cannot
+  collide with numbers syscd may still add (0034+). It must be backward
+  compatible with the running syscd code: additive only (new nullable columns,
+  new tables, new indexes). No renames, drops or new NOT NULLs. It also needs
+  a `MIGRATION_SIGNATURES` entry (`migrate.test.ts` enforces it).
+- `accounts.currency` (G1) is deferred to a later phase.
+- Migrator findings (read from `core/migrate.ts`, same file in syscd):
+  - It selects `filename` from `schema_migrations` and only iterates the files
+    present in its own `db/migrations` directory. Applied names it does not
+    know are ignored: syscd tolerates our 0100+ rows and we tolerate syscd's
+    0034+ rows. Tracked-but-unknown rows are never deleted.
+  - `MIGRATION_SIGNATURES` is keyed by filename and only consulted per local
+    file, so extra rows or extra files never break it. The heal step (tracked
+    row whose signature probe fails is unmarked and re-run) applies to our files
+    only.
+  - Both runners take the same session advisory lock (`7_204_001`), so two
+    processes booting at once serialize. Do not change that key in either app.
+  - Gaps that remain from the plan (not fixed): a fresh DB cannot be migrated
+    by the runner alone because 0010 is a data migration over seeded rows.
+    Use `api/db/dev-initdb.sh` (compose) or the test preload's retry loop.
+- Jobs relay scoping, verified in `jobs/store.ts`: `lockPending` selects
+  `status = 'queued' and temporal_workflow_id is null and instance_id = $1`,
+  and `enqueueJob` stamps `instance_id` from `JOBS_INSTANCE_ID`. So a worker
+  only takes runs enqueued with its own instance id. Not scoped by instance:
+  the dedup lookup (`findActive`: same job type + subject), the retention
+  delete, the queued-count health figure and the admin list (unless filtered).
+  Both apps must therefore run with different `JOBS_INSTANCE_ID`s; the default
+  changed from `local` to `budget-local` so two unconfigured processes cannot
+  share one by accident.
+
+### Database naming
+
+Everything this repo creates on the shared Postgres (localhost:5432) starts
+with `budgetnew_`: dev `budgetnew_dev`, tests `budgetnew_test` (main checkout)
+or `budgetnew_test_<sha1(repo root)[:8]>` (linked worktree). `BUDGET_TEST_DB`
+may override the name but must match `budgetnew_test[a-z0-9_]*`; the preload
+refuses to drop anything else. The owner's `budget` and syscd's `budget_test*`
+databases are never touched. `docker-compose.yml` now creates `budgetnew_dev`
+on its own Postgres (host 55432) and runs `api/db/dev-initdb.sh` on first start.
+Seeds: only `db/seed/seed.sql` is carried (health CSVs and `seed_health.sql`
+stayed in syscd; no carried test needs them).
+
+### Auth config is injected (G11, minimal)
+
+- `user/config.ts` holds an `AuthConfig` (cookie name/domain, app and API
+  origin, native scheme allow-list, Google client, allow-list, session secret,
+  service token, `authDisabled`). The entrypoint builds it from env in
+  `src/auth-env.ts` and calls `configureAuth()`; `user/` no longer reads
+  `process.env`. Pluggy's env is handed over the same way
+  (`configurePluggyEnv(process.env)` in `index.ts` and `worker.ts`).
+  `core/db.ts` still reads `DATABASE_URL`.
+- The default config is fail-closed (no allow-list, no secret: every request
+  is refused). `authDisabled` is never derived; it is true only when
+  `AUTH_DISABLED_OK=1` and no Google/allow-list env is set.
+- **Boot guard** (`checkAuthEnv`): the server exits unless the allow-list,
+  Google client id and secret, and a `SESSION_SECRET` of at least 32 chars are
+  all set. `AUTH_DISABLED_OK=1` is the only way to boot with auth off; it is
+  refused when `KUBERNETES_SERVICE_HOST` is set and ignored (full rules apply)
+  when any auth env is present. Empty strings count as unset. `task api` sets
+  the opt-in for local dev.
+- The worker, CLI and stdio MCP do not use the auth config.
+
+### Rebrand and defaults
+
+- CLI `budget`, credentials `$XDG_CONFIG_HOME/budget/credentials.json`, MCP
+  server name `budget`, cookie `budget_session` (syscd's is `syscd_session`;
+  both live under `.syscd.live`), native schemes `exp://` and `budgetapp://`,
+  consent page title, `x-budget` key in `budget schema` output.
+- Hosts: web `https://budget.syscd.live`, API `https://budget-api.syscd.live`,
+  admin `https://budget-admin.syscd.live` (only used in tests; the admin origin
+  comes from `ADMIN_ORIGIN`).
+- API listens on `API_PORT` (default 3100; was `SERVER_PORT` 3000) and binds
+  `API_HOST`. CLI and MCP use `BUDGET_API_URL` (fallback `API_URL`), default
+  `http://localhost:3100`. CORS dev origins add `http://localhost:8091`.
+- Temporal: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE` (`budget` in production),
+  `TEMPORAL_TASK_QUEUE` default `budget-jobs`. Empty values count as unset.
+- Kept on purpose: the Pluggy `CLIENT_USER_ID` default `syscd-app` (existing
+  Pluggy items are attached to it), the `OT_SERVICE_TOKEN` env name, the
+  `@syscd.local` service/test e-mail addresses and the `syscd:users:bootstrap`
+  advisory-lock hash (shared with syscd on purpose).
+- `BUDGET_REPEAT_TICK=0|false|off|no` disables the in-process repeat-rule tick
+  (default on), so only one of the two APIs on the shared DB generates
+  occurrences.
+
+### G13: client balance deltas removed
+
+`deltas` is gone from `budget_transactions_create`, `_update` and `_delete`
+(shared contracts) and from the handlers: balances are always derived on the
+server. The input schemas are not strict, so a request that still carries
+`deltas` is accepted and the key is ignored (stripped), not rejected. Tests:
+`shared/src/contracts/budget/transactions.test.ts` and, against a real DB,
+`api/src/budget/domain/transactions.test.ts` ("client-supplied deltas are
+ignored"). A consequence: an empty `deltas: []` can no longer mean "move
+nothing", so a manually created future-dated row now counts toward the account
+balance (one `fresh-start` test expectation changed accordingly).
+`balanceDeltaSchema` stays in `shared/src/validation.ts`, unused.
+
+### Contracts and imports
+
+Copied `*/contracts/`, `core/operation-contract.ts`, `budget/domain/schemas.ts`
+and `connections/domain/schemas.ts` were deleted in favour of
+`@shared/contracts/<feature>[/<file>]`, `@shared/operation-contract`,
+`@shared/domain/{payees,transfers}`. The jobs and rates barrels in shared do not
+re-export the named contracts, so api imports them by file
+(`@shared/contracts/jobs/jobs`, `.../rates/rates`, `.../connections/connections`).
+`core/validate.ts` keeps `HttpError`, `parseBody` etc. and re-exports the pure
+validators from `@shared/validation`; `budget/domain/repeat-schedule.ts`
+re-exports `FREQUENCIES` from shared. The phase 0 hello route and workflow are
+gone; the zod-identity MCP test stays (`mcp/tools.test.ts`, with a local probe
+contract) and the Temporal bundle test now bundles the real
+`jobs/workflows/index.ts`.
+
+### Tooling
+
+- `api/tsconfig.json`: dropped `noUncheckedIndexedAccess` and added the `DOM`
+  lib (syscd's expo base had neither strictness; the move stays a move).
+- `api/eslint.config.js`: the server `import/no-restricted-paths` zones ported
+  (core imports no feature; features import another feature through
+  `index.ts` only), seams kept: connections -> `budget/domain`, jobs ->
+  `connections/workflows.ts`, connections -> `jobs/workflows/tracked.ts`.
+  The `modules/` seam is gone (that logic is `@shared/domain/*` now). The zod
+  ban stays. `no-explicit-any`, unused-vars and prefer-const are off to match
+  what `eslint-config-expo` enforced; tighten in phase 5.
+- `shared/` gained `eslint.config.js` (zod ban except `src/zod.ts`, no node/hono/pg/react)
+  and `eslint`/`typescript-eslint` devDependencies.
+- Test env names: `BUDGET_REQUIRE_TEST_DB=1` (DB suites fail instead of skip),
+  `BUDGET_TEST_DB`, `BUDGET_TEST_PG_BASE`, `BUDGET_TEST_DB_ISOLATED`.
+  `task test:api` sets the first.
+- `deploy/Dockerfile.api` also runs the worker: `bun src/worker.ts`. It copies
+  `api/db/migrations` and `api/VERSION`. `api/VERSION` replaces syscd's root
+  `VERSION` (read by `/health`).
+
+### Env delta vs syscd (full list in `.env.schema`)
+
+Added: `AUTH_DISABLED_OK`, `BUDGET_REPEAT_TICK`, `BUDGET_API_URL`, `API_PORT`,
+`API_HOST`, `BUDGET_REQUIRE_TEST_DB`, `BUDGET_TEST_DB`, `BUDGET_TEST_PG_BASE`.
+Renamed: `SERVER_PORT` -> `API_PORT`, `SERVER_HOST` -> `API_HOST`,
+`SYSCD_API_URL` -> `BUDGET_API_URL`, `SYSCD_*TEST*` -> `BUDGET_*TEST*`.
+Changed defaults: `TEMPORAL_TASK_QUEUE` `budget-jobs`, `JOBS_INSTANCE_ID`
+`budget-local`, `APP_BASE_URL`/`API_BASE_URL` budget hosts, cookie name.
+Dropped (features gone): all `OT_*` poll/retention vars, health, AI, yt vars.
+`OT_SERVICE_TOKEN` is kept.
+
+### Phase 2 checks
+
+Run on 2026-11-18 from the `tk/budget-yue` worktree against Postgres :5432
+(`budgetnew_*` only) and, for Temporal, a compose Temporal on :57233.
+
+| Check | Result |
+|---|---|
+| `bunx tsc --noEmit` in shared, api | clean |
+| `bunx eslint .` in shared, api | clean |
+| `bun test` in shared | 34 pass |
+| `BUDGET_REQUIRE_TEST_DB=1 bun test` in api | 649 pass, 0 fail, 48 files, 0 skipped |
+| API boot on :3100, `budgetnew_dev`, `AUTH_DISABLED_OK=1` | `/health` 200, `GET /budgets` 200 (seed budgets), OAuth metadata 200 |
+| Boot guard | no auth env: exit 1; `AUTH_DISABLED_OK=1` + `KUBERNETES_SERVICE_HOST`: exit 1 |
+| `e2e-mcp http` and `stdio`, `e2e-consent`, CLI `login` + `whoami` | pass (auth on) |
+| `e2e-jobs`, `e2e-connections` (fake adapter) | pass against compose Temporal :57233 |
+| `container build --dns 1.1.1.1 -f deploy/Dockerfile.api -t budget-api:phase2 .` | built; image holds 33 migrations; boot guard fires without env |
