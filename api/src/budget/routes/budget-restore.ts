@@ -22,6 +22,19 @@ import { budgetRestore } from '@shared/contracts/budget';
 import { recomputeAccountBalances } from '../domain/transactions';
 import { isBudgetMember, isBudgetOwnerOrAdmin } from '../ownership';
 import { budgetRouter } from '../router';
+import {
+  budgetExists,
+  insertRestoredAccount,
+  insertRestoredAssignment,
+  insertRestoredBundle,
+  insertRestoredCategory,
+  insertRestoredGroup,
+  insertRestoredTransaction,
+  linkRestoredTransferPayees,
+  linkRestoredTransferPeer,
+  upsertRestoredPayee,
+  wipeBudgetData,
+} from '../store/restore';
 
 // Restore means "replace everything with mine": every incoming row is approved.
 // Flags arrive as '' | color | free label — the storage split is flag_color for
@@ -36,25 +49,6 @@ const FLAG_COLORS: Record<string, true> = {
 };
 const isFlagColor = (flag: string): boolean => flag in FLAG_COLORS;
 
-/** Tables wiped before the payload is re-created. Child-first order. */
-const WIPE_TABLES = [
-  'subtransactions',
-  'transactions',
-  'txn_repeat_rules',
-  'scheduled_subtransactions',
-  'scheduled_transactions',
-  'assignments',
-  'category_targets',
-  'category_notes',
-  'month_notes',
-  'categories',
-  'category_bundles',
-  'category_groups',
-  'accounts',
-  'payee_locations',
-  'payees',
-] as const;
-
 export const operations = [
   implement(budgetRestore, async (c, { budget_id: budgetId, ...payload }) => {
     const user: IdentityUser | undefined = c.get('user');
@@ -64,21 +58,14 @@ export const operations = [
     return withTransaction(pool, async (client) => {
 
       // Budget must exist; budgetAccess already proved ownership for non-admins.
-      const budget = await client.query('SELECT 1 FROM budgets WHERE id = $1', [budgetId]);
-      if (budget.rowCount === 0) throw new HttpError(404, 'budget not found');
+      if (!(await budgetExists(client, budgetId))) throw new HttpError(404, 'budget not found');
 
-      for (const table of WIPE_TABLES) {
-        await client.query(`DELETE FROM public.${table} WHERE budget_id = $1`, [budgetId]);
-      }
+      await wipeBudgetData(client, budgetId);
 
       // ---- category groups --------------------------------------------------
       const groupIds = payload.groups.map(() => crypto.randomUUID());
       for (let i = 0; i < payload.groups.length; i++) {
-        await client.query(
-          `INSERT INTO public.category_groups (id, budget_id, name, sort_order)
-         VALUES ($1, $2, $3, $4)`,
-          [groupIds[i], budgetId, payload.groups[i], i],
-        );
+        await insertRestoredGroup(client, groupIds[i], budgetId, payload.groups[i], i);
       }
 
       // A backup may come from another budget: a person who is not a member of
@@ -97,10 +84,7 @@ export const operations = [
         if (bundles[i].groupIndex >= payload.groups.length) {
           throw new HttpError(400, `bundle ${i}: groupIndex ${bundles[i].groupIndex} out of range`);
         }
-        await client.query(
-          'INSERT INTO public.category_bundles (id, budget_id, group_id, name) VALUES ($1, $2, $3, $4)',
-          [bundleIds[i], budgetId, groupIds[bundles[i].groupIndex], bundles[i].name],
-        );
+        await insertRestoredBundle(client, bundleIds[i], budgetId, groupIds[bundles[i].groupIndex], bundles[i].name);
       }
 
       // ---- categories --------------------------------------------------------
@@ -114,30 +98,22 @@ export const operations = [
         if (bundleIndex !== null && (bundleIndex >= bundles.length || bundles[bundleIndex].groupIndex !== cat.groupIndex)) {
           throw new HttpError(400, `category ${i}: bundleIndex ${bundleIndex} is out of range or in another group`);
         }
-        await client.query(
-          `INSERT INTO public.categories (id, budget_id, group_id, name, sort_order, hidden, user_id, bundle_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [
-            categoryIds[i],
-            budgetId,
-            groupIds[cat.groupIndex],
-            cat.name,
-            i,
-            cat.hidden ?? false,
-            await personFor(cat.userId),
-            bundleIndex === null ? null : bundleIds[bundleIndex],
-          ],
-        );
+        await insertRestoredCategory(client, {
+          id: categoryIds[i],
+          budgetId,
+          groupId: groupIds[cat.groupIndex],
+          name: cat.name,
+          sortOrder: i,
+          hidden: cat.hidden ?? false,
+          userId: await personFor(cat.userId),
+          bundleId: bundleIndex === null ? null : bundleIds[bundleIndex],
+        });
       }
 
       // ---- accounts ----------------------------------------------------------
       const accountIds = payload.accounts.map(() => crypto.randomUUID());
       for (let i = 0; i < payload.accounts.length; i++) {
-        await client.query(
-          `INSERT INTO public.accounts (id, budget_id, name, type, account_group, user_id)
-         VALUES ($1, $2, $3, 'checking', 'CASH', $4)`,
-          [accountIds[i], budgetId, payload.accounts[i].name, await personFor(payload.accounts[i].userId)],
-        );
+        await insertRestoredAccount(client, accountIds[i], budgetId, payload.accounts[i].name, await personFor(payload.accounts[i].userId));
       }
 
       // ---- payees ------------------------------------------------------------
@@ -150,15 +126,9 @@ export const operations = [
         if (key === '') return null;
         const known = payeeIdByName.get(key);
         if (known) return known;
-        const inserted = await client.query<{ id: string }>(
-          `INSERT INTO public.payees (id, budget_id, name)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (budget_id, name) DO UPDATE SET name = EXCLUDED.name
-         RETURNING id`,
-          [crypto.randomUUID(), budgetId, key],
-        );
-        payeeIdByName.set(key, inserted.rows[0].id);
-        return inserted.rows[0].id;
+        const id = await upsertRestoredPayee(client, crypto.randomUUID(), budgetId, key);
+        payeeIdByName.set(key, id);
+        return id;
       }
 
       // ---- transactions ------------------------------------------------------
@@ -185,25 +155,19 @@ export const operations = [
         const payeeId = await payeeFor(payeeName);
 
         const flag = txn.flag === '' ? null : txn.flag;
-        await client.query(
-          `INSERT INTO public.transactions
-          (id, budget_id, account_id, date, amount, payee_id, category_id, memo,
-           cleared, approved, flag_color, flag_name, repeat, deleted)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10, $11, 'never', false)`,
-          [
-            txnIds[i],
-            budgetId,
-            accountIds[txn.accountIndex],
-            txn.date,
-            (txn.inflow - txn.outflow) * 10,
-            payeeId,
-            txn.categoryIndex === null ? null : categoryIds[txn.categoryIndex],
-            txn.memo,
-            txn.cleared,
-            isFlagColor(txn.flag) ? flag : null,
-            isFlagColor(txn.flag) ? null : flag,
-          ],
-        );
+        await insertRestoredTransaction(client, {
+          id: txnIds[i],
+          budgetId,
+          accountId: accountIds[txn.accountIndex],
+          date: txn.date,
+          amount: (txn.inflow - txn.outflow) * 10,
+          payeeId,
+          categoryId: txn.categoryIndex === null ? null : categoryIds[txn.categoryIndex],
+          memo: txn.memo,
+          cleared: txn.cleared,
+          flagColor: isFlagColor(txn.flag) ? flag : null,
+          flagName: isFlagColor(txn.flag) ? null : flag,
+        });
       }
       for (let i = 0; i < payload.transactions.length; i++) {
         const peer = payload.transactions[i].transferPeerIndex;
@@ -211,36 +175,25 @@ export const operations = [
         if (payload.transactions[peer].transferPeerIndex !== i) {
           throw new HttpError(400, `transaction ${i}: transferPeerIndex ${peer} is not mutual`);
         }
-        await client.query('UPDATE public.transactions SET transfer_transaction_id = $1 WHERE id = $2', [
-          txnIds[peer],
-          txnIds[i],
-        ]);
+        await linkRestoredTransferPeer(client, txnIds[i], txnIds[peer]);
       }
 
       // "Transfer : <account>" payees keep their picker linkage to the account,
       // mirroring the app's per-account transfer payee convention.
-      await client.query(
-        `UPDATE public.payees p SET transfer_account_id = a.id
-       FROM public.accounts a
-       WHERE p.budget_id = $1 AND p.name = 'Transfer : ' || a.name`,
-        [budgetId],
-      );
+      await linkRestoredTransferPayees(client, budgetId);
 
       // ---- assignments -------------------------------------------------------
       for (const assignment of payload.assignments) {
         if (assignment.categoryIndex >= payload.categories.length) {
           throw new HttpError(400, `assignment: categoryIndex ${assignment.categoryIndex} out of range`);
         }
-        await client.query(
-          `INSERT INTO public.assignments (id, budget_id, month, category_id, budgeted)
-         VALUES ($1, $2, $3, $4, $5)`,
-          [
-            crypto.randomUUID(),
-            budgetId,
-            assignment.month,
-            categoryIds[assignment.categoryIndex],
-            assignment.budgeted * 10,
-          ],
+        await insertRestoredAssignment(
+          client,
+          crypto.randomUUID(),
+          budgetId,
+          assignment.month,
+          categoryIds[assignment.categoryIndex],
+          assignment.budgeted * 10,
         );
       }
 

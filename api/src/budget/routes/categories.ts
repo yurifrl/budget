@@ -79,6 +79,10 @@ export const operations = [
     return withTransaction(pool, async (client) => {
       let updated = 0;
       for (const move of moves) {
+        // The target group must belong to this budget, like on create.
+        if (!(await categoriesStore.groupInBudget(client, move.group_id, budget_id))) {
+          throw new HttpError(404, 'category group not found in budget');
+        }
         updated += await categoriesStore.moveCategory(client, budget_id, move);
       }
       if (updated !== moves.length) throw new HttpError(404, 'category not found');
