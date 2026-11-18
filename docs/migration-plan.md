@@ -199,6 +199,11 @@ as source instead:
   from `shared/src/zod.ts`, and `client/` and `api/` import zod only through
   it. One zod instance per runtime, and a lint rule bans direct `zod` imports
   elsewhere.
+- Phase 0 found that `@modelcontextprotocol/sdk` (api) and
+  `eslint-plugin-react-hooks` (client) pull in zod as a dependency anyway, so
+  `api/` and `client/` add `"overrides": { "zod": "link:../shared/node_modules/zod" }`.
+  This keeps one physical zod, and it means `shared/` must be installed first.
+  See `decisions.md`.
 - Costs: `bun install` runs in each directory (one Taskfile task), Docker build
   contexts are the repo root, and EAS runs from `client/` with the repo root
   uploaded.
