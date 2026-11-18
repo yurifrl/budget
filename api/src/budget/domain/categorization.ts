@@ -1,4 +1,4 @@
-import type { PoolClient } from 'pg';
+import type { Queryable } from '../../core/db';
 import {
   suggestCategory,
   type CategorizationHistoryRow,
@@ -13,7 +13,7 @@ import {
  * payee-suggestions preview route.
  */
 export async function suggestedCategoryForPayee(
-  client: PoolClient,
+  client: Queryable,
   budgetId: string,
   payeeId: string | null,
 ): Promise<string | null> {

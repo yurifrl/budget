@@ -422,3 +422,9 @@ export async function deleteOwnedBudget(db: Queryable, id: string, user: Caller)
   );
   return deleted.rows[0];
 }
+
+/** The budget's change revision (bumped by DB triggers, migration 0033); undefined when no such budget. */
+export async function getBudgetRevision(db: Queryable, budgetId: string): Promise<string | undefined> {
+  const r = await db.query<{ revision: string }>('SELECT revision FROM public.budgets WHERE id = $1', [budgetId]);
+  return r.rows[0]?.revision;
+}

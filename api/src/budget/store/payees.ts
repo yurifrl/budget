@@ -241,3 +241,12 @@ export async function setPayeeRenameRule(
   );
   return result.rowCount !== 0;
 }
+
+/** categorization_mode of a live payee of the budget; undefined when there is none. */
+export async function getPayeeCategorizationMode(db: Queryable, id: string, budgetId: string) {
+  const payee = await db.query<{ categorization_mode: 'auto' | 'fixed' | 'never' }>(
+    'SELECT categorization_mode FROM payees WHERE id = $1 AND budget_id = $2 AND deleted = false',
+    [id, budgetId],
+  );
+  return payee.rows[0]?.categorization_mode;
+}
