@@ -14,7 +14,8 @@ import categoryBundles, { operations as categoryBundlesOps } from './routes/cate
 import categories, { operations as categoriesOps } from './routes/categories';
 import accounts, { operations as accountsOps } from './routes/accounts';
 import transactions, { operations as transactionsOps } from './routes/transactions';
-import repeatRules, { generateAllBudgets, operations as repeatRulesOps } from './routes/repeat-rules';
+import repeatRules, { operations as repeatRulesOps } from './routes/repeat-rules';
+import { generateAllBudgets } from './domain/repeat-generation';
 import assignments, { operations as assignmentsOps } from './routes/assignments';
 import members, { operations as membersOps } from './routes/members';
 import budgetExport, { operations as budgetExportOps } from './routes/budget-export';

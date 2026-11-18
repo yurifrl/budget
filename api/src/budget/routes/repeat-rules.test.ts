@@ -15,7 +15,8 @@ import { pool } from '../../core/db';
 import { dbReady } from '../../core/test-gate';
 import { httpOnError } from '../../core/validate';
 import type { IdentityUser } from '../../user';
-import repeatRulesApp, { generateAllBudgets } from './repeat-rules';
+import { generateAllBudgets } from '../domain/repeat-generation';
+import repeatRulesApp from './repeat-rules';
 
 const owner: IdentityUser = {
   id: crypto.randomUUID(),
