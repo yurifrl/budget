@@ -2,8 +2,8 @@
  * Settings menu host — the pane-stack menu that holds the budget's settings.
  *
  * Extracted from syscd's Apps switcher (`core/apps/AppsSwitcher.tsx`) with the
- * app list removed: in a single app the trigger pill (and the ⚙ beside it)
- * open this menu directly on the settings root pane. Everything else is the
+ * app list removed: in a single app the trigger pill
+ * opens this menu directly on the settings root pane. Everything else is the
  * switcher's pane stack, unchanged:
  *
  * The menu is a React Native `Modal` — a portal painted above the entire
@@ -158,21 +158,6 @@ export function SettingsMenu({
           </View>
         )}
       </Pressable>
-      {/* The rail's ⚙ entry: always visible, opens the menu on the settings
-          root (expanded: centered between the pill and the rail's right
-          border; collapsed: under the B). */}
-      {compact ? (
-        <Pressable onPress={() => openTo()} accessibilityLabel="Settings" style={styles.gearBtn}>
-          <Text style={styles.gearGlyph}>{'⚙'}</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.gearSlot}>
-          <Pressable onPress={() => openTo()} accessibilityLabel="Settings" style={styles.gearBtn}>
-            <Text style={styles.gearGlyph}>{'⚙'}</Text>
-          </Pressable>
-        </View>
-      )}
-
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.scrim} onPress={() => setOpen(false)}>
           <Pressable style={[styles.menu, { left: origin.x, top: origin.y }]} onPress={(e) => e.stopPropagation()}>
@@ -216,8 +201,7 @@ const HEAD_EST = 46;
 const styles = StyleSheet.create({
   root: { position: 'relative', zIndex: 100 },
   rootRow: { flexDirection: 'row', alignItems: 'center', width: '100%' },
-  rootCol: { flexDirection: 'column', alignItems: 'center', gap: 6 },
-  gearSlot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  rootCol: { flexDirection: 'column', alignItems: 'center' },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -274,11 +258,4 @@ const styles = StyleSheet.create({
   menuHeaderVersion: { color: colors.muted, fontSize: 8, letterSpacing: 0.8 },
   paneBody: { maxHeight: PANE_MAX_BODY },
   paneContent: { gap: 2, paddingBottom: 4 },
-  gearBtn: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gearGlyph: { color: colors.muted, fontSize: 30, lineHeight: 34 },
 });

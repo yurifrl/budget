@@ -103,8 +103,7 @@ export function BudgetRail({
 
   return (
     <View style={[styles.rail, { paddingTop: 13 + topInset }, isCollapsed && styles.railCollapsed]}>
-      {/* The PROMINENT control: the settings-menu trigger with the rail's
-          ⚙ beside/under it; budget settings ride inside the menu as panes. */}
+      {/* The PROMINENT control: the settings-menu trigger; budget settings ride inside the menu as panes. */}
       <View style={[styles.switchRow, isCollapsed && styles.switchRowCollapsed]}>
         <SettingsMenu
           compact={isCollapsed}
