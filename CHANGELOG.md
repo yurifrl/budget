@@ -1,5 +1,51 @@
 # Changelog
 
+## v2026.11.18-01 2026-11-18 release
+
+### Changed
+
+- release: v2026.11.18-01
+- chore: renovate.json (RN core grouped, expo-router pinned); 1Password script: exact-title idempotency, no empty CLIENT_USER_ID, PLUGGY_SANDBOX=false, set -e safe secrets
+- client: align react, gesture-handler, svg, worklets to SDK 58; declare expo-router/async-storage pins and four too-new packages in expo.install.exclude
+- tasks: phase 5a/5e ready for review, follow-ups
+- docs: regression pass summary in decisions
+- docs: phase 5a/5e architecture, agent recipe for a client feature, decisions with metrics, regression evidence
+- client(ui): replace 90 hex literals that equal a theme token with the token (white/black tokens added); values unchanged
+- tasks: phase 5a/5e notes
+- client: reorganise into the target layout (phase 5e)
+- tasks: restore payee scope fix record
+- fix(api): scope restore transfer-payee link to the budget's own accounts (budget-njc)
+- tasks: phase 5c/5d records
+- client: settings menu nav context in shell/menuNav; import row types in domain/importTypes (shim left for data/mapping)
+- fix(client): month note follows the active budget (budget-xd6); New Budget stays on the new budget (budget-fwf)
+- docs: phase 5c/5d checks, end-to-end evidence and follow-ups
+- docs: note the loosened MCP output schemas
+- fix(mcp): advertise output schemas with loose objects
+- feat: contract outputs, contract-built requests, split budgetApi (phase 5c, G9)
+- client(budget): split shell.tsx into rail/ (BudgetRail, BudgetTabs, tested section and fallback-budget logic)
+- client(budget): TxnRowMenu items, card position and category list as tested pure logic; panels as components
+- client(budget): split ConnectBankScreen (connect flow hook, row and widget views, tested widget-step rules)
+- client(budget): PayeeDropdown view-model and placement as tested pure logic; menu body component
+- client: useMoneyFormat reads a ui-level context provided from the budgetUi slice at the composition root
+- client(budget): split AddTransactionSheet into addTransaction/ (keypad reducer and form rules in domain, hook, parts)
+- client(budget): split InlineAddRow into useInlineAdd, panel components and tested domain rules
+- client(budget): split PlanScreen into screens/plan hooks and components (behaviour-preserving)
+- client(budget): plan grid logic as pure domain (filter, sections, drop target, selection, row figures) with tests
+- client(budget): split ImportScreen into importFlow/ (flow reducer, hook, sections, tested logic)
+- client(budget): split AccountsScreen into register hooks, child components and tested domain rules
+- client(ui): one theme file (budget's tokens canonical) at ui/theme
+- client(budget): split AccountEditModal into accountEdit/ (hook, sections, tested form rules)
+- client(budget): split ui/MenuPanes into one file per pane under screens/settings; pane copy and list logic extracted and tested
+- fix(client): Escape closes the Plan Assign dropdown (budget-ipa)
+- client(budget): split ui/bits into one file per primitive under ui/primitives; draft-text rules extracted and tested
+- client(budget): split ManagePayeesScreen into payees/ (hook, panes, tested logic)
+- client(platform): native session token in the Keychain (expo-secure-store) with a one-time move from AsyncStorage (G22)
+- feat(api,shared,client): machine-readable error code next to {error}
+- docs(evidence): budget-xef fixed, number format re-renders amounts live (before/after, no reload)
+- client: clear the pre-existing lint warnings outside data/ (unused imports, array types, a stale disable)
+- client(budget): one definition per helper; register and Spending honour the format prefs; English UI strings
+
+
 ## v2026.11.18 2026-11-18 release
 
 ### Changed
