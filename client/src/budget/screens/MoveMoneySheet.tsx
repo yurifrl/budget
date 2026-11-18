@@ -33,7 +33,7 @@ import { multiMoveMoneyUpdates, type MovePair } from '../data/ledger';
 import { categoryLabel } from '../domain/bundles';
 import { useBudgetMonth } from '../model/useBudgetMonth';
 import { categoryFigures, type BudgetMonth } from '../domain/zeroSum';
-import { formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import type { Budget, Bundle, Cents, Category, CategoryGroup, MonthKey } from '../domain/types';
 import { makeMultiMoveEdit, newPlanEdit } from '../state/planEdits';
 import { recordPlanEdit } from '../state/ui';
@@ -92,6 +92,7 @@ export function ToDropdown({
    * string gives YNAB's blank-until-picked dropdown. */
   placeholder?: string;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [highlight, setHighlight] = useState(0);
@@ -255,6 +256,7 @@ export function useMoveMoney({
   request: MoveMoneyRequest;
   onClose: () => void;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const [apply, applyState] = useApplyAssignmentUpdatesMutation();
   const dispatch = useAppDispatch();
   const cover = request.pickFrom === true && request.to != null;
@@ -312,7 +314,7 @@ export function useMoveMoney({
     try {
       await apply({ budgetId, month, updates }).unwrap();
       // Snapshot over the pre-mutation `budget` prop; persisting already succeeded.
-      const draft = makeMultiMoveEdit(budget, budgetId, month, pairs);
+      const draft = makeMultiMoveEdit(budget, budgetId, month, pairs, { formatMoney });
       if (draft) dispatch(recordPlanEdit(newPlanEdit(draft)));
       onClose();
     } catch (err) {
@@ -374,6 +376,7 @@ export function MoveMoneyBody({
   request: MoveMoneyRequest;
   onClose: () => void;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const m = useMoveMoney({ budget, budgetId, month, request, onClose });
 
   const fromLabel = m.fromCat ? categoryLabel(m.fromCat, budget.bundles) : 'Ready to Assign';

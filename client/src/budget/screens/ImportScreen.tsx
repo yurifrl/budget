@@ -30,7 +30,7 @@ import {
 import { snakeImportRow } from '../data/mapping';
 import type { PayeeAdminRow } from '../data/rows';
 import { pickImportFile } from '@/platform/import/pickImportFile';
-import { formatDate, parseDateInput } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import {
   assocRules,
   emptyMapping,
@@ -100,6 +100,7 @@ function CheckRow({
  * (DD, DD/MM, DD/MM/YYYY) committed on blur/Enter; invalid input reverts.
  */
 function DateCell({ value, onCommit }: { value: string; onCommit: (iso: string) => void }) {
+  const { formatDate, parseDateInput } = useMoneyFormat();
   const [text, setText] = useState<string | null>(null);
   return (
     <TextInput

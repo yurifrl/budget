@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { formatDate, formatMoney } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import type { Budget, Transaction } from '../../domain/types';
 import { colors } from '../../ui/theme';
 import { InlineAddRow } from '../register/InlineAddRow';
@@ -41,6 +41,7 @@ export function ScheduledSection({
   onCloseEdit,
   style,
 }: ScheduledSectionProps) {
+  const { formatDate, formatMoney } = useMoneyFormat();
   const [open, setOpen] = useState(true);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
 

@@ -1,13 +1,8 @@
 /**
- * Money-format prefs — module-scoped store behind `domain/format`.
- *
- * The Settings panel writes user choices here (Currency, Currency Placement,
- * Number Format); `formatMoney`/`formatAmount` read them so every money
- * render in the module follows without call-site changes — same mechanism as
- * the Hide Amounts mask. Defaults reproduce the original BRL/pt-BR output
- * exactly, so domain tests and screens are untouched until the panel applies
- * a different choice. Not shared React state: consumers bridge it into React
- * via `ui/stores` (useSyncExternalStore).
+ * Money and date format prefs (Settings > Plan Settings): currency, symbol
+ * placement, number format, date format. Types and defaults only; the live
+ * value lives in the budgetUi redux slice and reaches components through
+ * `useMoneyFormat()`. Defaults reproduce the original BRL/pt-BR output.
  */
 
 export type FmtCurrency = 'BRL' | 'USD';
@@ -19,7 +14,6 @@ export interface FmtPrefs {
   currency: FmtCurrency;
   currencyPlacement: FmtPlacement;
   numberLocale: FmtNumberLocale;
-  /** Parsed by `formatDate`; "MM/DD/YYYY" only affects new renders after the panel changes it. */
   dateFormat: FmtDateFormat;
 }
 
@@ -30,22 +24,10 @@ export const DEFAULT_FMT_PREFS: FmtPrefs = {
   dateFormat: 'DD/MM/YYYY',
 };
 
-let prefs: FmtPrefs = DEFAULT_FMT_PREFS;
-const listeners = new Set<() => void>();
-
-export function getFmtPrefs(): FmtPrefs {
-  return prefs;
-}
-
-export function setFmtPrefs(next: Partial<FmtPrefs>): void {
-  prefs = { ...prefs, ...next };
-  for (const listener of listeners) listener();
-}
-
-/** useSyncExternalStore-compatible subscribe; returns the unsubscribe fn. */
-export function subscribeFmtPrefs(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
+/**
+ * @deprecated No-op. Prefs live in the budgetUi redux slice (`setFmtPrefs`
+ * action in state/ui). Kept only because data/settingsBlob.ts (owned by the
+ * data-layer work, not edited here) still imports it for the unused
+ * `applyBudgetSettings`. Follow-up: delete with that function.
+ */
+export function setFmtPrefs(_next: Partial<FmtPrefs>): void {}

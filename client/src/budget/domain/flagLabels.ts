@@ -1,13 +1,10 @@
 /**
- * Flag labels — module-scoped store behind the Settings panel's Edit Flags
- * sub-view (YNAB parity: six fixed colors, each with an editable label).
+ * Flag labels (Settings > Edit Flags; YNAB parity: six fixed colors, each
+ * with an editable label). Types and pure helpers; the live map lives in the
+ * budgetUi redux slice (persisted per budget in the settings blob).
  *
  * An empty label means "no label": menus fall back to the capitalized color
- * name (see `displayFlagLabel`). Same store recipe as `fmtPrefs` — plain
- * module state; consumers bridge it into React via `ui/stores`
- * (useSyncExternalStore), and the panel persists it per budget through the
- * KV store (key: `budget.settings.<budgetId>`, one blob for all panel
- * settings).
+ * name (see `displayFlagLabel`).
  */
 
 import type { FlagColor } from './types';
@@ -23,31 +20,12 @@ export const DEFAULT_FLAG_LABELS: FlagLabels = {
   purple: '',
 };
 
-let labels: FlagLabels = DEFAULT_FLAG_LABELS;
-const listeners = new Set<() => void>();
-
-export function getFlagLabels(): FlagLabels {
-  return labels;
-}
-
-export function setFlagLabel(color: FlagColor, label: string): void {
-  labels = { ...labels, [color]: label };
-  for (const listener of listeners) listener();
-}
-
-/** Replace the whole map at once (KV hydration from the Settings panel). */
-export function setFlagLabels(next: FlagLabels): void {
-  labels = { ...next };
-  for (const listener of listeners) listener();
-}
-
-/** useSyncExternalStore-compatible subscribe; returns the unsubscribe fn. */
-export function subscribeFlagLabels(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
+/**
+ * @deprecated No-op. Flag labels live in the budgetUi redux slice. Kept only
+ * because data/settingsBlob.ts still imports it for the unused
+ * `applyBudgetSettings`. Follow-up: delete with that function.
+ */
+export function setFlagLabels(_next: FlagLabels): void {}
 
 /** "red" -> "Red". Fallback when no user label is set. */
 export function defaultFlagLabel(color: FlagColor): string {

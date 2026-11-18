@@ -20,7 +20,8 @@ import {
   useSetCategoryHiddenMutation,
 } from '../data/api';
 import { targetFundingState } from '../domain/engine';
-import { formatMoney, formatMonthLong, prevMonth } from '../domain/format';
+import { formatMonthLong, prevMonth } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { availableBreakdown } from '../domain/inspector';
 import { activityFor, type ActivityMap } from '../domain/people';
 import { creditOverspendHint } from '../domain/overspendHints';
@@ -74,6 +75,7 @@ export function MobileCategoryDetail({
   personName: string | null;
   onMoveMoney: (req: MoveMoneyRequest) => void;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const insets = useSafeAreaInsets();
   const shell = useBudgetShell();
   const [setAssigned] = useSetAssignedMutation();
@@ -89,7 +91,7 @@ export function MobileCategoryDetail({
   const bm = useBudgetMonth(budget, month);
   const available = availableBreakdown(bm, category.id);
   const funding = targetFundingState(category, bm);
-  const creditHint = creditOverspendHint(bm, category.id);
+  const creditHint = creditOverspendHint(bm, category.id, { formatMoney });
   const { assigned, activity } = categoryFigures(bm, category.id);
   const overspent = available.available < 0;
   const spent = activity < 0 ? -activity : 0;

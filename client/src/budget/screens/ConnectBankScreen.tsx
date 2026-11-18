@@ -41,7 +41,7 @@ import {
   widgetItemId,
 } from '../domain/connections';
 import { connectionSparkData } from '../domain/connectionSpark';
-import { formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { selectActiveBudgetId } from '../state/ui';
 import { LinkedBy } from '../ui/LinkedBy';
 import { colors, radius } from '../ui/theme';
@@ -61,6 +61,7 @@ const STATUS_BG = { ok: colors.greenPillBg, warn: colors.yellowPillBg, bad: colo
 const STATUS_FG = { ok: colors.greenPillFg, warn: colors.yellowPillFg, bad: colors.redFg, off: colors.grayPillFg } as const;
 
 export function ConnectBankScreen() {
+  const { formatMoney } = useMoneyFormat();
   const router = useRouter();
   const shell = useBudgetShell();
   const { width } = useWindowDimensions();

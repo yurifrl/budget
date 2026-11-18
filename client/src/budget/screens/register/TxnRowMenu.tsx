@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import type { Budget, Transaction } from '../../domain/types';
 import { displayFlagLabel } from '../../domain/flagLabels';
-import { useFlagLabels } from '../../ui/stores';
+import { useFlagLabels } from '../../model/useDisplayPrefs';
 import { REPEAT_FREQS, REPEAT_LABELS } from './InlineAddRow';
 import { FLAG_COLORS, colors, radius } from '../../ui/theme';
 import { centsFmt, shortDate, useTxnRowMenuActions } from './txnRowMenuShared';

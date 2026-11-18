@@ -28,7 +28,7 @@ import {
   type AutoAssignSnapshot,
   type AutoAssignStrategyKey,
 } from '../domain/auto-assign';
-import { formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { availableBreakdown, type BreakdownRow } from '../domain/inspector';
 import { activityFor, type ActivityMap } from '../domain/people';
 import { creditOverspendHint } from '../domain/overspendHints';
@@ -212,6 +212,7 @@ export function QuickAssignRow({
   averageMonths: number;
   onApplied: () => void;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const [applyAutoAssign] = useApplyAutoAssignMutation();
   const dispatch = useAppDispatch();
   const [error, setError] = useState<string | null>(null);
@@ -226,7 +227,7 @@ export function QuickAssignRow({
       .unwrap()
       .then(() => {
         // Undo snapshot over the pre-mutation aggregate (pattern of recordAssigned).
-        const draft = makeAssignEdit(budget, budgetId, month, category.id, applyCents);
+        const draft = makeAssignEdit(budget, budgetId, month, category.id, applyCents, { formatMoney });
         if (draft) dispatch(recordPlanEdit(newPlanEdit(draft)));
         onApplied();
       })
@@ -320,6 +321,7 @@ export function CategoryInspector({
   /** Label of the selected person; null when the Plan shows the household. */
   personName: string | null;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const [setAssigned, assignedMeta] = useSetAssignedMutation();
   const [setNote, noteMeta] = useSetCategoryNoteMutation();
   const notesQuery = useGetCategoryNotesQuery({ budgetId, month });
@@ -341,7 +343,7 @@ export function CategoryInspector({
   const bm = useBudgetMonth(budget, month);
   const available = availableBreakdown(bm, category.id);
   const funding = targetFundingState(category, bm);
-  const creditHint = creditOverspendHint(bm, category.id);
+  const creditHint = creditOverspendHint(bm, category.id, { formatMoney });
   const assigned = categoryFigures(bm, category.id).assigned;
 
   // --- xvu scope A: quick-assign rows from the single-category snapshot ----

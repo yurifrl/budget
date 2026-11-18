@@ -8,9 +8,9 @@
  *
  * Panes: root (SETTINGS) → open / new / people (sharing) / settings (plan name + format prefs
  * with live preview) / flags (6 fixed colors, editable labels — YNAB parity)
- * / display / shortcuts (web only) / account. Every write persists through
- * the per-budget settings blob via saveBudgetSettingsPatch (sectioned
- * merge), except the Hide Amounts mask — session-scoped by design (task 3.4).
+ * / display / shortcuts (web only) / account. Settings of the ACTIVE budget
+ * are budgetUi actions, persisted per budget by state/budgetSettings; the
+ * Hide Amounts mask is session-scoped by design (task 3.4).
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'expo-router';
@@ -34,13 +34,9 @@ import {
   useRenameBudgetMutation,
   useUnarchiveBudgetMutation,
 } from '../data/api';
-import {
-  saveBudgetSettingsPatch,
-  type BudgetDisplaySettings,
-  type BudgetSettingsBlob,
-} from '../data/settingsBlob';
-import { defaultFlagLabel, getFlagLabels, setFlagLabel } from '../domain/flagLabels';
-import { formatDate, formatDateWith, formatMoneyWith } from '../domain/format';
+import { loadBudgetSettings, saveBudgetSettingsPatch } from '../data/settingsBlob';
+import { defaultFlagLabel } from '../domain/flagLabels';
+import { formatDateWith, formatMoneyWith } from '../domain/format';
 import {
   DEFAULT_FMT_PREFS,
   type FmtCurrency,
@@ -48,7 +44,6 @@ import {
   type FmtNumberLocale,
   type FmtPlacement,
   type FmtPrefs,
-  setFmtPrefs,
 } from '../domain/fmtPrefs';
 import { clearActiveBudget, switchBudget } from '../state/thunks';
 import {
@@ -56,11 +51,12 @@ import {
   selectShowClosedAccounts,
   selectShowHiddenCategories,
   selectShowProgressBars,
+  setFlagLabel,
+  setFmtPrefs,
   setShowClosedAccounts,
   setShowHiddenCategories,
   setShowProgressBars,
 } from '../state/ui';
-import { loadBudgetSettings } from '../data/settingsBlob';
 import { useBudgetShell } from '../screens/shell';
 import { OverlaySheet } from './bits';
 import { PeoplePane } from './PeoplePane';
@@ -69,7 +65,7 @@ import { usePeople } from '../model/usePeople';
 import type { BudgetRow } from '../data/rows';
 import type { AppDispatch } from '@/store/hooks';
 import { FLAG_COLORS, colors } from './theme';
-import { useFlagLabels, useFmtPrefs, useMoneyMask } from './stores';
+import { useFlagLabels, useFmtPrefs, useMoneyFormat, useMoneyMask } from '../model/useDisplayPrefs';
 
 /** Surface color of the menu panes (separator ring for overlapping avatars). */
 const MENU_BG = '#161a24';
@@ -163,6 +159,7 @@ async function refetchBudgets(dispatch: AppDispatch): Promise<BudgetRow[]> {
 
 /** Budget switcher list — every row opens the per-budget menu (EDIT BUDGET). */
 function OpenBudgetPane() {
+  const { formatDate } = useMoneyFormat();
   const dispatch = useAppDispatch();
   const nav = useMenuNav();
   const activeBudgetId = useAppSelector((s) =>
@@ -351,6 +348,7 @@ function NewBudgetPane() {
 /** Plan Settings: name PATCH + format prefs with live preview. */
 function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
   const storage = useService(Tokens.Storage);
+  const dispatch = useAppDispatch();
   const budgets = useGetBudgetsQuery();
   const activeBudgetId = useAppSelector((s) =>
     selectActiveBudgetId(s),
@@ -377,15 +375,17 @@ function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
   }, [live, budgetId, storage]);
   const currentFmt = live ? fmt : blobFmt;
 
-  const persist = (patch: BudgetSettingsBlob) => {
-    if (!budgetId) return;
-    void saveBudgetSettingsPatch(storage, budgetId, patch);
-  };
-  /** Live targets mirror into the global store; blob targets only persist. */
+  /**
+   * Live target: the budgetUi slice (state/budgetSettings persists it). Other
+   * budgets: only their saved blob.
+   */
   const applyFmt = (patch: Partial<FmtPrefs>) => {
-    if (live) setFmtPrefs(patch);
-    else setBlobFmt((prev) => ({ ...prev, ...patch }));
-    persist({ fmt: patch });
+    if (live) {
+      dispatch(setFmtPrefs(patch));
+      return;
+    }
+    setBlobFmt((prev) => ({ ...prev, ...patch }));
+    if (budgetId) void saveBudgetSettingsPatch(storage, budgetId, { fmt: patch });
   };
   const rename = () => {
     const name = planName.trim();
@@ -585,15 +585,8 @@ function DeleteBudgetModal({ target, onClose }: { target: BudgetRow; onClose: ()
 
 /** Edit Flags: 6 fixed colors, editable labels (YNAB parity). */
 function FlagsPane() {
-  const storage = useService(Tokens.Storage);
-  const budgetId = useAppSelector((s) =>
-    selectActiveBudgetId(s),
-  );
+  const dispatch = useAppDispatch();
   const flagLabels = useFlagLabels();
-  const persist = () => {
-    if (!budgetId) return;
-    void saveBudgetSettingsPatch(storage, budgetId, { flagLabels: getFlagLabels() });
-  };
   return (
     <>
       <Text style={s.hint}>{`Labels shown in the register's flag menu. Blank uses the color name.`}</Text>
@@ -602,8 +595,7 @@ function FlagsPane() {
           <View style={[s.flagDot, { backgroundColor: f.hex }]} />
           <TextInput
             value={flagLabels[f.key]}
-            onChangeText={(label) => setFlagLabel(f.key, label)}
-            onBlur={persist}
+            onChangeText={(label) => dispatch(setFlagLabel({ color: f.key, label }))}
             placeholder={defaultFlagLabel(f.key)}
             placeholderTextColor="#5f6878"
             style={s.flagInput}
@@ -618,10 +610,6 @@ function FlagsPane() {
 /** Display Options: the RTK display toggles, persisted via the blob. */
 function DisplayPane() {
   const dispatch = useAppDispatch();
-  const storage = useService(Tokens.Storage);
-  const budgetId = useAppSelector((s) =>
-    selectActiveBudgetId(s),
-  );
   const showBars = useAppSelector((s) =>
     selectShowProgressBars(s),
   );
@@ -631,10 +619,6 @@ function DisplayPane() {
   const showClosed = useAppSelector((s) =>
     selectShowClosedAccounts(s),
   );
-  const persist = (display: BudgetDisplaySettings) => {
-    if (!budgetId) return;
-    void saveBudgetSettingsPatch(storage, budgetId, { display });
-  };
   return (
     <>
       <ToggleRow
@@ -643,7 +627,6 @@ function DisplayPane() {
         value={showBars}
         onChange={(v) => {
           dispatch(setShowProgressBars(v));
-          persist({ progressBars: v });
         }}
       />
       <ToggleRow
@@ -652,7 +635,6 @@ function DisplayPane() {
         value={showHidden}
         onChange={(v) => {
           dispatch(setShowHiddenCategories(v));
-          persist({ hiddenCategories: v });
         }}
       />
       <ToggleRow
@@ -661,7 +643,6 @@ function DisplayPane() {
         value={showClosed}
         onChange={(v) => {
           dispatch(setShowClosedAccounts(v));
-          persist({ closedAccounts: v });
         }}
       />
     </>

@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Category, CategoryGroup, FlagColor } from '../../domain/types';
 import { displayFlagLabel } from '../../domain/flagLabels';
 import { FLAG_COLORS, colors } from '../../ui/theme';
-import { useFlagLabels } from '../../ui/stores';
+import { useFlagLabels } from '../../model/useDisplayPrefs';
 
 /** YNAB reference pill — deeper than the theme indigo accents. */
 const BAR_BG = '#4a3fa5';

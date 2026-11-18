@@ -29,7 +29,7 @@ import { disabled } from "@expo/ui/swift-ui/modifiers";
 
 import type { Budget, RepeatFrequency, Transaction } from "../../domain/types";
 import { displayFlagLabel } from "../../domain/flagLabels";
-import { useFlagLabels } from "../../ui/stores";
+import { useFlagLabels } from "../../model/useDisplayPrefs";
 import { REPEAT_FREQS, REPEAT_LABELS } from "./InlineAddRow";
 import { FLAG_COLORS, colors } from "../../ui/theme";
 import { centsFmt, shortDate, useTxnRowMenuActions } from "./txnRowMenuShared";

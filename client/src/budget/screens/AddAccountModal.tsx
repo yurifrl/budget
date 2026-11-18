@@ -17,7 +17,7 @@ import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { useAddAccountMutation } from '../data/api';
 import type { AccountTypeRow } from '../data/rows';
 import { PersonPicker } from './PersonPicker';
-import { formatMoney, parseMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { KeyboardModalFrame } from '../ui/KeyboardModalFrame';
 import { colors } from '../ui/theme';
 
@@ -60,6 +60,7 @@ export function AddAccountModal({
   visible: boolean;
   onClose: () => void;
 }) {
+  const { formatMoney, parseMoney } = useMoneyFormat();
   const [addAccount, { isLoading }] = useAddAccountMutation();
   const router = useRouter();
   const [name, setName] = useState('');

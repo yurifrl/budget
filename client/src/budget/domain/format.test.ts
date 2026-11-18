@@ -1,22 +1,24 @@
-import { describe, it, expect, afterEach } from "bun:test";
-import { DEFAULT_FMT_PREFS, getFmtPrefs, setFmtPrefs, type FmtPrefs } from "./fmtPrefs";
+import { describe, it, expect } from "bun:test";
+import { DEFAULT_FMT_PREFS, type FmtPrefs } from "./fmtPrefs";
 import {
-  formatMoney,
+  DEFAULT_MONEY_FORMAT,
+  MONEY_MASK_TEXT,
+  moneyFormat,
   formatMoneyWith,
-  formatAmount,
-  parseMoney,
   isUsdDraft,
   formatUsd,
-  formatDate,
   formatMonth,
   prevMonth,
   nextMonth,
   isInMonth,
   dayOfMonth,
-  parseDateInput,
   parseDateInputWith,
   formatDateWith,
 } from "./format";
+
+// The default-prefs formatters (what the store-backed wrappers used to return
+// before any Settings change).
+const { formatMoney, formatAmount, parseMoney, formatDate, parseDateInput } = DEFAULT_MONEY_FORMAT;
 
 describe("formatMoney", () => {
   it("formats integer cents as pt-BR currency", () => {
@@ -186,7 +188,6 @@ describe("parseDateInput", () => {
 });
 
 describe("parseMoney round-trips every number-format preference", () => {
-  afterEach(() => setFmtPrefs(DEFAULT_FMT_PREFS));
   const values = [0, 1, 5, 99, 100, 123, 99999, 123456, 100000, 131451, 123456789, 100000000, -1, -5, -12, -131451, -123456789];
   const locales: FmtPrefs["numberLocale"][] = ["pt-BR", "en-US"];
   const currencies: FmtPrefs["currency"][] = ["BRL", "USD"];
@@ -194,14 +195,14 @@ describe("parseMoney round-trips every number-format preference", () => {
 
   for (const numberLocale of locales) {
     it(`parseMoney(formatAmount(x)) === x under ${numberLocale}`, () => {
-      setFmtPrefs({ numberLocale });
+      const { parseMoney, formatAmount } = moneyFormat({ ...DEFAULT_FMT_PREFS, numberLocale });
       for (const x of values) expect(parseMoney(formatAmount(x))).toBe(x);
     });
     for (const currency of currencies) {
       for (const currencyPlacement of placements) {
         it(`parseMoney(formatMoney(x)) === x under ${numberLocale}/${currency}/${currencyPlacement}`, () => {
           const prefs: FmtPrefs = { ...DEFAULT_FMT_PREFS, numberLocale, currency, currencyPlacement };
-          setFmtPrefs(prefs);
+          const { parseMoney } = moneyFormat(prefs);
           for (const x of values) expect(parseMoney(formatMoneyWith(prefs, x))).toBe(x);
         });
       }
@@ -209,7 +210,7 @@ describe("parseMoney round-trips every number-format preference", () => {
   }
 
   it("keeps typing habits under en-US", () => {
-    setFmtPrefs({ numberLocale: "en-US" });
+    const { parseMoney } = moneyFormat({ ...DEFAULT_FMT_PREFS, numberLocale: "en-US" });
     expect(parseMoney("1234.5")).toBe(123450);
     expect(parseMoney("1,234")).toBe(123400);
     expect(parseMoney("-12")).toBe(-1200);
@@ -275,15 +276,28 @@ describe("parseDateInputWith — follows the active date format", () => {
   });
 });
 
-describe("parseDateInput (live preference wrapper)", () => {
-  it("reads the Settings date format", () => {
-    const prev = getFmtPrefs().dateFormat;
-    try {
-      setFmtPrefs({ dateFormat: "MM/DD/YYYY" });
-      expect(parseDateInput(formatDate("2026-06-05"), "2026-09-26")).toBe("2026-06-05");
-      expect(parseDateInput("11/16/2026", "2026-09-26")).toBe("2026-11-16");
-    } finally {
-      setFmtPrefs({ dateFormat: prev });
-    }
+describe("parseDateInput (bound formatter)", () => {
+  it("reads the bound date format", () => {
+    const { parseDateInput, formatDate } = moneyFormat({ ...DEFAULT_FMT_PREFS, dateFormat: "MM/DD/YYYY" });
+    expect(parseDateInput(formatDate("2026-06-05"), "2026-09-26")).toBe("2026-06-05");
+    expect(parseDateInput("11/16/2026", "2026-09-26")).toBe("2026-11-16");
+  });
+});
+
+describe("moneyFormat", () => {
+  it("masks money and amounts when Hide Amounts is on, parsing is unaffected", () => {
+    const f = moneyFormat(DEFAULT_FMT_PREFS, true);
+    expect(f.formatMoney(131451)).toBe(MONEY_MASK_TEXT);
+    expect(f.formatAmount(131451)).toBe(MONEY_MASK_TEXT);
+    expect(f.masked).toBe(true);
+    expect(f.parseMoney("1.314,51")).toBe(131451);
+    expect(f.formatDate("2026-06-05")).toBe("05/06/2026");
+  });
+
+  it("follows the bound prefs", () => {
+    const f = moneyFormat({ currency: "USD", currencyPlacement: "after", numberLocale: "en-US", dateFormat: "MM/DD/YYYY" });
+    expect(f.formatMoney(-131451)).toBe("-1,314.51\u00a0US$");
+    expect(f.formatAmount(131451)).toBe("1,314.51");
+    expect(f.formatDate("2026-06-05")).toBe("06/05/2026");
   });
 });

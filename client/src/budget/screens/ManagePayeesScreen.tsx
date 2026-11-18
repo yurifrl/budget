@@ -38,7 +38,7 @@ import {
 import { milliToCents } from '../data/mapping';
 import type { PayeeAdminRow } from '../data/rows';
 import type { MonthKey, Budget } from '../domain/types';
-import { formatDate, formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { categorizationModes, matchTypeLabels, matchTypes, type CategorizationMode, type MatchType } from '@shared/domain/payees';
 import { useBudgetModel } from '../model/useBudgetModel';
 import { useBudgetMonth } from '../model/useBudgetMonth';
@@ -504,6 +504,7 @@ export function ManagePayeesScreen() {
 
 /** In-page, paginated table of one payee's transactions (syscd-app-kr7). */
 function PayeeTxnsPane({ budgetId, payeeId }: { budgetId: string; payeeId: string }) {
+  const { formatDate, formatMoney } = useMoneyFormat();
   const PAGE_SIZE = 50;
   const [page, setPage] = useState(0);
   const query = useGetPayeeTransactionsQuery({ budgetId, payeeId, limit: PAGE_SIZE, offset: page * PAGE_SIZE });

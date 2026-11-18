@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MovePair } from '../data/ledger';
 import { categoryLabel } from '../domain/bundles';
 import { categoryFigures } from '../domain/zeroSum';
-import { formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { neededBy } from '../domain/targets';
 import type { Budget, Cents, MonthKey } from '../domain/types';
 import { Pill } from '../ui/bits';
@@ -115,6 +115,7 @@ export function MobileMoveMoney({
   month: MonthKey;
   request: MoveMoneyRequest;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const insets = useSafeAreaInsets();
   const m = useMoveMoney({ budget, budgetId, month, request, onClose });
   const [query, setQuery] = useState('');

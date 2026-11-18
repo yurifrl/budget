@@ -9,7 +9,7 @@ import { ActivityIndicator, SectionList, StyleSheet, Text, View, Pressable } fro
 
 import { useUpdateTransactionMutation } from '../data/api';
 import { categoryLabel } from '../domain/bundles';
-import { formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { budgetForPerson } from '../domain/people';
 import type { Transaction } from '../domain/types';
 import { colors, radius } from '../ui/theme';
@@ -21,6 +21,7 @@ import { useBudgetShell } from './shell';
 const DAY_LABEL = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
 
 export function SpendingScreen() {
+  const { formatMoney } = useMoneyFormat();
   const shell = useBudgetShell();
   const { budget, budgetId, error } = useBudgetModel();
   const [updateTransaction] = useUpdateTransactionMutation();

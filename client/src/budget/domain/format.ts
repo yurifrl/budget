@@ -1,15 +1,20 @@
 /**
- * Localized formatting helpers — pt-BR (R$), DD/MM/YYYY, decimal comma.
- * SHARED CONTRACT.
+ * Localized formatting helpers: pt-BR (R$), DD/MM/YYYY, decimal comma by
+ * default, or whatever the user's format prefs say.
  *
- * Money is stored as integer cents everywhere (see types.ts). These helpers
- * convert to/from the displayed string form.
+ * Pure: every formatter takes the prefs (and the Hide Amounts mask)
+ * explicitly. Components get a bound `MoneyFormat` from
+ * `useMoneyFormat()` (prefs live in the budgetUi redux slice); non-React
+ * callers receive one as an argument. Money is integer cents everywhere (see
+ * types.ts).
  */
 
-import { localToday } from "@/platform/date";
+import { localToday } from "./date";
 import type { Cents, MonthKey } from "./types";
-import { getFmtPrefs, type FmtCurrency, type FmtNumberLocale, type FmtPrefs } from "./fmtPrefs";
-import { isMoneyMaskHidden, MONEY_MASK_TEXT } from "./moneyMask";
+import { DEFAULT_FMT_PREFS, type FmtCurrency, type FmtNumberLocale, type FmtPrefs } from "./fmtPrefs";
+
+/** Placeholder shown instead of any amount while the Hide Amounts mask is on. */
+export const MONEY_MASK_TEXT = "••••••";
 
 /** One cached formatter per locale — Intl construction is expensive. */
 const numberFormatters = new Map<string, Intl.NumberFormat>();
@@ -32,8 +37,8 @@ const CURRENCY_SYMBOLS: Record<FmtCurrency, string> = { BRL: "R$", USD: "US$" };
  * money-format prefs (currency, placement, number locale). Sign stays before
  * the symbol ("-R$\u00a04.453,69") in every placement.
  */
-export function formatMoneyWith(prefs: FmtPrefs, cents: Cents): string {
-  if (isMoneyMaskHidden()) return MONEY_MASK_TEXT;
+export function formatMoneyWith(prefs: FmtPrefs, cents: Cents, masked = false): string {
+  if (masked) return MONEY_MASK_TEXT;
   const sign = cents < 0 ? "-" : "";
   const amount = numberFormatter(prefs.numberLocale).format(Math.abs(cents) / 100);
   if (prefs.currencyPlacement === "hidden") return sign + amount;
@@ -45,18 +50,13 @@ export function formatMoneyWith(prefs: FmtPrefs, cents: Cents): string {
   return sign + body;
 }
 
-/** Store-backed convenience: formats with the live Settings prefs. */
-export function formatMoney(cents: Cents): string {
-  return formatMoneyWith(getFmtPrefs(), cents);
-}
-
 /**
  * Format integer cents without the currency symbol: "1.314,51".
  * Useful inside inputs / tight columns.
  */
-export function formatAmount(cents: Cents): string {
-  if (isMoneyMaskHidden()) return MONEY_MASK_TEXT;
-  return numberFormatter(getFmtPrefs().numberLocale).format(cents / 100);
+export function formatAmountWith(prefs: Pick<FmtPrefs, "numberLocale">, cents: Cents, masked = false): string {
+  if (masked) return MONEY_MASK_TEXT;
+  return numberFormatter(prefs.numberLocale).format(cents / 100);
 }
 
 /**
@@ -93,11 +93,6 @@ export function parseMoneyWith(locale: FmtNumberLocale, input: string): Cents {
   return Math.round(value * 100);
 }
 
-/** Store-backed convenience: parses with the live Settings number format. */
-export function parseMoney(input: string): Cents {
-  return parseMoneyWith(getFmtPrefs().numberLocale, input);
-}
-
 /** True when the draft was typed with an explicit USD ("$") prefix — e.g.
  * "$10,50". A leading "R$" or a bare number is a BRL draft. Used by the
  * scheduled-row USD conversion: the USD entry is an affordance, the stored
@@ -120,16 +115,11 @@ export function formatUsd(cents: Cents): string {
 // Dates
 // ---------------------------------------------------------------------------
 
-/** Core: format an ISO date per explicit prefs (live wrapper below). */
+/** Format an ISO date string (YYYY-MM-DD) per the date-format pref. */
 export function formatDateWith(prefs: Pick<FmtPrefs, 'dateFormat'>, iso: string): string {
   const [y, m, d] = iso.split("-");
   if (!y || !m || !d) return iso;
   return prefs.dateFormat === "MM/DD/YYYY" ? `${m}/${d}/${y}` : `${d}/${m}/${y}`;
-}
-
-/** Format an ISO date string (YYYY-MM-DD) per the Settings panel's date format. */
-export function formatDate(iso: string): string {
-  return formatDateWith(getFmtPrefs(), iso);
 }
 
 const MONTH_NAMES_PT = [
@@ -251,7 +241,37 @@ export function parseDateInputWith(
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
-/** Store-backed convenience: parses with the live Settings date format. */
-export function parseDateInput(raw: string, today = todayIso()): string | null {
-  return parseDateInputWith(getFmtPrefs(), raw, today);
+// ---------------------------------------------------------------------------
+// Bound formatter
+// ---------------------------------------------------------------------------
+
+/**
+ * The formatters bound to one set of prefs and one mask state. What
+ * `useMoneyFormat()` returns; pass it to non-React code that renders money.
+ */
+export interface MoneyFormat {
+  readonly prefs: FmtPrefs;
+  /** Hide Amounts is on: money renders as MONEY_MASK_TEXT and editors drop commits. */
+  readonly masked: boolean;
+  formatMoney(cents: Cents): string;
+  formatAmount(cents: Cents): string;
+  parseMoney(input: string): Cents;
+  formatDate(iso: string): string;
+  parseDateInput(raw: string, today?: string): string | null;
 }
+
+/** Bind the formatters to `prefs` and the mask. */
+export function moneyFormat(prefs: FmtPrefs = DEFAULT_FMT_PREFS, masked = false): MoneyFormat {
+  return {
+    prefs,
+    masked,
+    formatMoney: (cents) => formatMoneyWith(prefs, cents, masked),
+    formatAmount: (cents) => formatAmountWith(prefs, cents, masked),
+    parseMoney: (input) => parseMoneyWith(prefs.numberLocale, input),
+    formatDate: (iso) => formatDateWith(prefs, iso),
+    parseDateInput: (raw, today = todayIso()) => parseDateInputWith(prefs, raw, today),
+  };
+}
+
+/** The default (pt-BR, R$ before, DD/MM/YYYY), unmasked. */
+export const DEFAULT_MONEY_FORMAT: MoneyFormat = moneyFormat(DEFAULT_FMT_PREFS, false);

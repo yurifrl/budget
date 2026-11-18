@@ -22,7 +22,7 @@ import {
 } from '../domain/auto-assign';
 import { makeAutoAssignEdit, newPlanEdit } from '../state/planEdits';
 import { recordPlanEdit } from '../state/ui';
-import { formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import type { Budget, Cents, MonthKey } from '../domain/types';
 import { OverlaySheet, SheetItem } from '../ui/bits';
 import { colors } from '../ui/theme';
@@ -39,7 +39,7 @@ const STRATEGY_LABELS: Record<AutoAssignStrategyKey, string> = {
 };
 
 /** One-line effect summary under the strategy label. */
-function strategySub(s: AutoAssignStrategy): string {
+function strategySub(s: AutoAssignStrategy, formatMoney: (cents: Cents) => string): string {
   if (s.rows.length === 0) return 'nothing to change';
   const total = s.totalCents > 0 ? `+${formatMoney(s.totalCents)}` : formatMoney(s.totalCents);
   const avg =
@@ -95,6 +95,7 @@ export function AutoAssignList({
   rtaCents: Cents;
   onDone: () => void;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const [apply] = useApplyAutoAssignMutation();
   const dispatch = useAppDispatch();
   const [applyingKey, setApplyingKey] = useState<AutoAssignStrategyKey | null>(null);
@@ -132,7 +133,7 @@ export function AutoAssignList({
           <SheetItem
             key={s.key}
             label={STRATEGY_LABELS[s.key]}
-            sub={strategySub(s)}
+            sub={strategySub(s, formatMoney)}
             active={applyingKey === s.key}
             onPress={s.rows.length === 0 || applyingKey !== null ? undefined : () => run(s)}
           />

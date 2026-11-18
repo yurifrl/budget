@@ -9,7 +9,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { Bundle, Category } from '../domain/types';
 import type { BundleFigures } from '../domain/bundles';
-import { formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { Pill } from '../ui/bits';
 import { centsPillState, colors, radius } from '../ui/theme';
 
@@ -66,6 +66,7 @@ export function BundleRow({
   rowRef: (el: ComponentRef<typeof Pressable> | null) => void;
   onPointerDown?: () => void;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const { bundle, children, sums } = item;
   const [draft, setDraft] = useState(bundle.name);
   const doneRef = useRef(false);

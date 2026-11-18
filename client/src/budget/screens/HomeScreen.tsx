@@ -8,7 +8,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { useEffect, useState } from 'react';
 
 import { targetFundingState } from '../domain/engine';
-import { formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { IndigoButton } from '../ui/bits';
 import { colors, radius } from '../ui/theme';
 import { useBudgetModel } from '../model/useBudgetModel';
@@ -17,6 +17,7 @@ import { ManagePayeesModal } from './ManagePayeesModal';
 import { useBudgetShell } from './shell';
 
 export function BudgetHomeScreen() {
+  const { formatMoney } = useMoneyFormat();
   const router = useRouter();
   const shell = useBudgetShell();
   const { budget, error } = useBudgetModel();

@@ -27,7 +27,7 @@ import { useAppSelector } from '@/store/hooks';
 import { useGetAccountsQuery, useGetConnectionsQuery } from '../data/api';
 import { connectionStatusView } from '../domain/connections';
 import { computeRunningBalances, workingBalance } from '../domain/engine';
-import { formatDate, formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import type { Budget, Transaction } from '../domain/types';
 import { useBudgetModel } from '../model/useBudgetModel';
 import { selectActiveBudgetId } from '../state/ui';
@@ -78,6 +78,7 @@ function categoryLabel(
 }
 
 export function LinkedAccountDetailScreen() {
+  const { formatDate, formatMoney } = useMoneyFormat();
   const shell = useBudgetShell();
   const router = useRouter();
   // The linked budget account this register belongs to.

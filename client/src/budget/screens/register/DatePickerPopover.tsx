@@ -8,16 +8,8 @@
  */
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { useMemo, useState, type ReactNode } from 'react';
-import {
-  formatDate,
-  formatMonthLong,
-  makeMonth,
-  nextMonth,
-  parseDateInput,
-  prevMonth,
-  splitMonth,
-  todayIso,
-} from '../../domain/format';
+import { formatMonthLong, makeMonth, nextMonth, prevMonth, splitMonth, todayIso } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import type { MonthKey } from '../../domain/types';
 import { colors } from '../../ui/theme';
 import { DropdownShell, dropdownStyles, pressNoBlur, useDropdownPortal, type DropdownKeyEvent } from './dropdown';
@@ -68,6 +60,7 @@ export function DatePickerPopover({
   containerStyle?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
 }) {
+  const { formatDate, parseDateInput } = useMoneyFormat();
   const [open, setOpen] = useState(false);
   const [display, setDisplay] = useState<MonthKey>(() => makeMonth(new Date().getFullYear(), new Date().getMonth() + 1));
   const [highlight, setHighlight] = useState<string | null>(null);

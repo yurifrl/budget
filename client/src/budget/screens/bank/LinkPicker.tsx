@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { LinkOptionGroup } from '../../domain/linkPicker';
-import { formatMoney } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 import { LinkOptionCard } from './LinkOptionCard';
 
@@ -50,6 +50,7 @@ export function LinkPicker({
   /** Omit to hide the Cancel button (first-time link has nothing to cancel). */
   onCancel?: () => void;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
   const all = groups.flatMap((g) => g.options);
   const selected = all.find((o) => o.id === selectedId) ?? null;

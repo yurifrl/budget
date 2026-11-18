@@ -12,7 +12,7 @@
  */
 
 import type { Cents } from './types';
-import { formatMoney, parseMoney } from './format';
+import { DEFAULT_MONEY_FORMAT, type MoneyFormat } from './format';
 
 /** On-screen glyphs plus the keyboard aliases users actually type. */
 const OPS: Record<string, MathOp> = {
@@ -53,7 +53,11 @@ export function applyMathOp(acc: Cents, op: MathOp, operand: Cents): Cents | nul
   }
 }
 
-export function evalQuickMath(expr: string, currentCents: Cents): Cents | null {
+export function evalQuickMath(
+  expr: string,
+  currentCents: Cents,
+  { parseMoney }: Pick<MoneyFormat, 'parseMoney'> = DEFAULT_MONEY_FORMAT,
+): Cents | null {
   const s = expr.trim();
   if (!s) return null;
 
@@ -213,6 +217,9 @@ export function applyNumpadKey(state: NumpadState, key: NumpadKey): NumpadState 
 
 /** Display text for the typed operand — punctuation automatic through the
  * shared pt-BR money formatter: '1' → R$0,01, '11' → R$0,11, '111' → R$1,11. */
-export function numpadOperandText(operand: string): string {
+export function numpadOperandText(
+  operand: string,
+  { formatMoney }: Pick<MoneyFormat, 'formatMoney'> = DEFAULT_MONEY_FORMAT,
+): string {
   return formatMoney(operandCents(operand) ?? 0);
 }

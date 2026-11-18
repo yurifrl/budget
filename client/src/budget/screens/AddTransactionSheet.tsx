@@ -23,7 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppSelector } from '@/store/hooks';
 
 import { apiErrorMessage } from '@/platform/api/baseQuery';
-import { addDaysToDate } from '@/platform/date';
+import { addDaysToDate } from '../domain/date';
 import {
   useAddCategoryMutation,
   useAddTransactionMutation,
@@ -37,7 +37,8 @@ import {
 } from '../data/api';
 import type { PayeeAdminRow } from '../data/rows';
 import { categoryLabel } from '../domain/bundles';
-import { formatDate, formatMoney, todayIso } from '../domain/format';
+import { todayIso } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { applyMathOp, type MathOp } from '../domain/quickmath';
 import { initialSheetKind, resolveSheetCategory, toggleSheetKind } from '../domain/sheetKind';
 import type { Cents, Transaction } from '../domain/types';
@@ -60,6 +61,7 @@ export function AddTransactionSheet({
    * keys the sheet by this id so a changed prefill remounts with fresh state. */
   prefillCategoryId?: string | null;
 }) {
+  const { formatDate, formatMoney } = useMoneyFormat();
   const budgetId = useAppSelector((s) => selectActiveBudgetId(s));
   const scope = budgetId ? { budgetId } : { budgetId: '' };
   const categories = useGetCategoriesQuery(scope, { skip: !budgetId });

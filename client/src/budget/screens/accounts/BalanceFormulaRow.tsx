@@ -16,11 +16,12 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { formatMoney } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import type { Cents } from '../../domain/types';
 import { colors } from '../../ui/theme';
 
 function Term({ label, cents }: { label: string; cents: Cents }) {
+  const { formatMoney } = useMoneyFormat();
   return (
     <View style={styles.term}>
       <Text style={[styles.value, cents < 0 && styles.valueNeg]}>{formatMoney(cents)}</Text>
@@ -44,6 +45,7 @@ export function BalanceFormulaRow({
   /** Phone hero: big centered working balance, chevron expands the formula. */
   hero?: boolean;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const [expanded, setExpanded] = useState(false);
 
   if (hero) {

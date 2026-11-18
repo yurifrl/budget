@@ -5,7 +5,7 @@
  * moves into card debt). PURE over the engine's month; components stay thin.
  */
 
-import { formatMoney } from "./format";
+import { DEFAULT_MONEY_FORMAT, type MoneyFormat } from "./format";
 import type { BudgetMonth } from "./zeroSum";
 
 export interface OverspendHint {
@@ -16,10 +16,14 @@ export interface OverspendHint {
 }
 
 /** "Underfunded R$ X" for a card payment category with `underfunded > 0`, else null. */
-export function underfundedHint(bm: BudgetMonth, categoryId: string): OverspendHint | null {
+export function underfundedHint(
+  bm: BudgetMonth,
+  categoryId: string,
+  fmt: Pick<MoneyFormat, "formatMoney"> = DEFAULT_MONEY_FORMAT,
+): OverspendHint | null {
   const underfunded = bm.payments[categoryId]?.underfunded ?? 0;
   if (underfunded <= 0) return null;
-  const amount = formatMoney(underfunded);
+  const amount = fmt.formatMoney(underfunded);
   return {
     label: `Underfunded ${amount}`,
     detail: `${amount} more is needed to cover this card's debt`,
@@ -27,10 +31,14 @@ export function underfundedHint(bm: BudgetMonth, categoryId: string): OverspendH
 }
 
 /** Hint for a spending category overspent on credit (`creditOverspend > 0`), else null. */
-export function creditOverspendHint(bm: BudgetMonth, categoryId: string): OverspendHint | null {
+export function creditOverspendHint(
+  bm: BudgetMonth,
+  categoryId: string,
+  fmt: Pick<MoneyFormat, "formatMoney"> = DEFAULT_MONEY_FORMAT,
+): OverspendHint | null {
   const credit = bm.categories[categoryId]?.creditOverspend ?? 0;
   if (credit <= 0) return null;
-  const amount = formatMoney(credit);
+  const amount = fmt.formatMoney(credit);
   return {
     label: `${amount} on credit`,
     detail: `${amount} spent on credit with no money assigned: added to card debt`,
@@ -38,6 +46,10 @@ export function creditOverspendHint(bm: BudgetMonth, categoryId: string): Oversp
 }
 
 /** Whichever hint applies to a category (payment categories first). */
-export function overspendHint(bm: BudgetMonth, categoryId: string): OverspendHint | null {
-  return underfundedHint(bm, categoryId) ?? creditOverspendHint(bm, categoryId);
+export function overspendHint(
+  bm: BudgetMonth,
+  categoryId: string,
+  fmt: Pick<MoneyFormat, "formatMoney"> = DEFAULT_MONEY_FORMAT,
+): OverspendHint | null {
+  return underfundedHint(bm, categoryId, fmt) ?? creditOverspendHint(bm, categoryId, fmt);
 }

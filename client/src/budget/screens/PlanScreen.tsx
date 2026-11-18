@@ -51,7 +51,8 @@ import {
   neededInMonth,
   targetFundingState,
 } from '../domain/engine';
-import { formatMoney, formatMonth, nextMonth, prevMonth } from '../domain/format';
+import { formatMonth, nextMonth, prevMonth } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import {
   activityFor,
   categoriesForPerson,
@@ -169,6 +170,7 @@ function MonthSummary({
   /** "Ana’s categories" / "Shared categories"; null = Everyone. */
   scopeLabel: string | null;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const dispatch = useAppDispatch();
   const [setMonthNote] = useSetMonthNoteMutation();
   const [note, setNote] = useState(budget.monthNotes?.[month] ?? '');
@@ -233,6 +235,7 @@ function MonthSummary({
 }
 
 export function PlanScreen() {
+  const { formatMoney } = useMoneyFormat();
   const dispatch = useAppDispatch();
   const shell = useBudgetShell();
   const { budget, budgetId, isLoading, error } = useBudgetModel();
@@ -467,7 +470,7 @@ export function PlanScreen() {
     void setAssigned({ budgetId, month, categoryId, assignedCents: next })
       .unwrap()
       .then(() => {
-        const draft = makeAssignEdit(budget, budgetId, month, categoryId, next);
+        const draft = makeAssignEdit(budget, budgetId, month, categoryId, next, { formatMoney });
         if (draft) dispatch(recordPlanEdit(newPlanEdit(draft)));
       })
       .catch(() => undefined);
@@ -1042,7 +1045,7 @@ export function PlanScreen() {
               const target = c.target ?? null;
               const funding = targetFundingState(c, bm);
               const { available, assigned } = categoryFigures(bm, c.id);
-              const hint = overspendHint(bm, c.id);
+              const hint = overspendHint(bm, c.id, { formatMoney });
               const isSelected = selectedId === c.id;
               const fraction =
                 funding.neededThisMonth > 0
@@ -1172,7 +1175,7 @@ export function PlanScreen() {
                                 style={[styles.numText, styles.numTextPhone, styles.numpadEditLine]}
                                 numberOfLines={1}>
                                 {numpadState.op +
-                                  (numpadState.operand ? ` ${numpadOperandText(numpadState.operand)}` : '')}
+                                  (numpadState.operand ? ` ${numpadOperandText(numpadState.operand, { formatMoney })}` : '')}
                                 |
                               </Text>
                             </>
@@ -1183,7 +1186,7 @@ export function PlanScreen() {
                               style={[styles.numText, styles.numTextPhone, styles.numpadEditLine]}
                               numberOfLines={1}>
                               {(numpadState.operand
-                                ? numpadOperandText(numpadState.operand)
+                                ? numpadOperandText(numpadState.operand, { formatMoney })
                                 : formatMoney(numpadState.base ?? assigned)) + '|'}
                             </Text>
                           )

@@ -15,7 +15,8 @@ import Svg, { Rect } from 'react-native-svg';
 
 import { filterChips, selectionCategoryIds, spendRows, type CategorySelection } from '../domain/bundleSpend';
 import { transactionActivity, workingBalance } from '../domain/engine';
-import { formatMoney, formatMonth } from '../domain/format';
+import { formatMonth } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { monthKeyFromDate } from '../data/mapping';
 import { budgetForPerson } from '../domain/people';
 import type { Budget, Cents, MonthKey } from '../domain/types';
@@ -84,6 +85,7 @@ function BarChart({ data, color, height = 180 }: { data: { label: string; value:
 }
 
 export function ReflectScreen() {
+  const { formatMoney } = useMoneyFormat();
   const shell = useBudgetShell();
   const { budget: fullBudget, budgetId, error } = useBudgetModel();
   const byPerson = usePersonFilter(fullBudget, budgetId);

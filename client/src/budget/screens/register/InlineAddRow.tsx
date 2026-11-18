@@ -28,16 +28,8 @@ import {
 } from '../../data/api';
 import type { TransactionInput } from '../../data/mapping';
 import { useBudgetMonth } from '../../model/useBudgetMonth';
-import {
-  formatDate,
-  formatMoney,
-  formatUsd,
-  isUsdDraft,
-  makeMonth,
-  parseDateInput,
-  todayIso,
-} from '../../domain/format';
-import { getFmtPrefs } from '../../domain/fmtPrefs';
+import { formatUsd, isUsdDraft, makeMonth, todayIso } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import type { Budget, Cents, Transaction, TransactionSplit, RepeatFrequency } from '../../domain/types';
 import { editDirty, newDraftDirty, type RowDraft } from '../../domain/rowEdit';
 import { AmountCell, MoneyInput } from '../../ui/bits';
@@ -99,6 +91,7 @@ export function InlineAddRow({
   transaction?: Transaction;
   onClose: () => void;
 }) {
+  const { formatDate, formatMoney, parseDateInput, prefs: fmtPrefs } = useMoneyFormat();
   const editing = transaction != null;
   const [accountId, setAccountId] = useState(
     transaction?.accountId ?? defaultAccountId ?? budget.accounts[0]?.id ?? '',
@@ -272,7 +265,7 @@ export function InlineAddRow({
     }
     const date = parseDateInput(dateText) ?? (dateText.trim() ? null : todayIso());
     if (!date) {
-      setError(`invalid date — try ${getFmtPrefs().dateFormat} or 5, 5/9`);
+      setError(`invalid date — try ${fmtPrefs.dateFormat} or 5, 5/9`);
       return;
     }
     if (draftSplits.length > 0 && draftSplits.some((s) => !s.categoryId)) {

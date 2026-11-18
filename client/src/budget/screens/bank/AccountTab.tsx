@@ -11,7 +11,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import type { ConnectionTxnJson } from '../../data/connections';
 import { useGetConnectionTransactionsInfiniteQuery } from '../../data/api';
 import { milliToCents, txnStateView, type TxnStateTone } from '../../domain/bankPage';
-import { formatDate } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 import { AmountPill } from '../register/AmountPill';
 import { ClearedBadge } from '../register/ClearedBadge';
@@ -97,6 +97,7 @@ function StatePill({ t }: { t: ConnectionTxnJson }) {
 }
 
 function TxnRow({ t }: { t: ConnectionTxnJson }) {
+  const { formatDate } = useMoneyFormat();
   return (
     <View style={[styles.row, t.state === 'removed' && styles.removed]}>
       <Text style={[styles.cell, styles.cDate, { color: colors.muted }]}>{formatDate(t.date)}</Text>
@@ -120,6 +121,7 @@ function TxnRow({ t }: { t: ConnectionTxnJson }) {
 }
 
 function TxnCard({ t }: { t: ConnectionTxnJson }) {
+  const { formatDate } = useMoneyFormat();
   return (
     <View style={[styles.card, t.state === 'removed' && styles.removed]}>
       <View style={styles.cardL1}>

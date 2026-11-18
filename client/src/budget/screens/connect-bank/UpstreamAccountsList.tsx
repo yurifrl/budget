@@ -10,7 +10,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { ConnectionUpstreamJson } from '../../data/connections';
 import type { AccountRow } from '../../data/rows';
 import { creditSummary } from '../../domain/connections';
-import { formatMoney } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors } from '../../ui/theme';
 
 export function UpstreamAccountsList({
@@ -24,6 +24,7 @@ export function UpstreamAccountsList({
   /** Hairline top border (the in-row presentation). */
   bordered?: boolean;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const box = [styles.acctBox, !bordered && styles.acctBoxFlat];
   if (up.accounts == null) {
     return (

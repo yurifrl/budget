@@ -23,7 +23,7 @@ import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { useSetCategoryTargetMutation } from '../data/api';
 import { categoryLabel } from '../domain/bundles';
 import { assignedInMonth } from '../domain/engine';
-import { formatMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { resolve, type NumpadKey, type NumpadState } from '../domain/quickmath';
 import { neededBy } from '../domain/targets';
 import type { Budget, Category, CategoryTarget, MonthKey } from '../domain/types';
@@ -75,6 +75,7 @@ export function MobileAssignNumpad({
    * alignment target — PlanScreen scrolls the tapped row directly above it. */
   panelRef?: Ref<ViewInstance>;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const [pop, setPop] = useState<'auto' | null>(null);
   const [snoozeError, setSnoozeError] = useState<string | null>(null);
   const [setCategoryTarget] = useSetCategoryTargetMutation();

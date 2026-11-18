@@ -10,8 +10,10 @@
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
 
 import { budgetApi } from '@/budget/data/api';
+import { createBudgetSettingsListener } from '@/budget/state/budgetSettings';
 import { BUDGET_UI_KEY, budgetUiReducer } from '@/budget/state/ui';
 import type { Container } from '@/platform/di/container';
+import { Tokens } from '@/platform/di/tokens';
 import { setupStoreListeners } from '@/platform/state/listeners';
 import { resetAppState } from '@/platform/state/reset';
 import { profileApi } from '@/profile/api';
@@ -28,12 +30,16 @@ const rootReducer = (state: CombinedState | undefined, action: Parameters<typeof
   resetAppState.match(action) ? combined(undefined, action) : combined(state, action);
 
 export function createAppStore(container: Container, { listeners = true }: { listeners?: boolean } = {}) {
+  // Per-budget settings: hydrate on budget switch, persist settings actions.
+  const budgetSettings = createBudgetSettingsListener(() => container.resolve(Tokens.Storage));
   const store = configureStore({
     reducer: rootReducer,
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware({
         thunk: { extraArgument: container },
-      }).concat(budgetApi.middleware, profileApi.middleware),
+      })
+        .prepend(budgetSettings.middleware)
+        .concat(budgetApi.middleware, profileApi.middleware),
   });
 
   // Focus/reconnect signals for refetchOnFocus / refetchOnReconnect.

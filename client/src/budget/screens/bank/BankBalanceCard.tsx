@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { formatMoney } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 import { Sparkline } from '../../ui/Sparkline';
 
@@ -21,6 +21,7 @@ export interface BankBalanceLinked {
 }
 
 export function BankBalanceCard({ balanceCents, linked }: { balanceCents: number; linked: BankBalanceLinked | null }) {
+  const { formatMoney } = useMoneyFormat();
   const [width, setWidth] = useState(0);
   const rec = linked?.reconcile ?? null;
   return (

@@ -23,7 +23,7 @@ import {
 import { AccountRow } from '../data/rows';
 import { milliToCents } from '../data/mapping';
 import { connectionStatusView, requiresReauth } from '../domain/connections';
-import { formatMoney, parseMoney } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { upstreamOption } from '../domain/linkPicker';
 import { KeyboardModalFrame } from '../ui/KeyboardModalFrame';
 import { LinkedBy } from '../ui/LinkedBy';
@@ -44,6 +44,7 @@ export function AccountEditModal({
   budgetId: string;
   onClose: () => void;
 }) {
+  const { formatMoney, parseMoney } = useMoneyFormat();
   const [updateAccount, { isLoading }] = useUpdateAccountMutation();
   const syncRunner = useSyncRunner(budgetId);
   const [syncing, setSyncing] = useState(false);

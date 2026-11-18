@@ -33,9 +33,8 @@ import { useMedia } from '@/ui/media';
 import { useGetAccountsQuery, useGetBudgetsQuery } from '../data/api';
 import { milliToCents } from '../data/mapping';
 import type { AccountRow } from '../data/rows';
-import { applyBudgetSettings, loadBudgetSettings } from '../data/settingsBlob';
 import { workingBalance } from '../domain/engine';
-import { formatMoney } from '../domain/format';
+import { useMoneyFormat, useMoneyMask } from '../model/useDisplayPrefs';
 import type { Transaction } from '../domain/types';
 import { restoreActiveBudget, switchBudget } from '../state/thunks';
 import {
@@ -46,7 +45,6 @@ import { personLabel } from '../domain/people';
 import { useBudgetRevisionWatcher } from '../model/useBudgetRevisionWatcher';
 import { usePeople } from '../model/usePeople';
 import { AccountOwnerFace } from '../ui/PersonFace';
-import { useMoneyMask } from '../ui/stores';
 import { colors, radius } from '../ui/theme';
 import { AccountEditModal } from './AccountEditModal';
 import { AddAccountModal } from './AddAccountModal';
@@ -141,6 +139,7 @@ function BudgetRail({
   /** Extra bottom padding in drawer mode so the footer clears the home indicator. */
   bottomInset?: number;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const router = useRouter();
   const pathname = usePathname();
   // Account selection lives in the URL (?account=) so the register on
@@ -383,8 +382,9 @@ export function BudgetLayout() {
       useNativeDriver: true,
     }).start();
   }, [numpadOpen, fabShift]);
-  // Hide Amounts: subscribing here re-renders the whole shell on toggle, so
-  // every screen's money renders follow the mask (see domain/format).
+  // Hide Amounts banner. (Per-budget settings are rehydrated on budget
+  // switch by state/budgetSettings; money renders follow through
+  // useMoneyFormat.)
   const [masked, setMasked] = useMoneyMask();
 
   // Restore the persisted active budget, then fall back to the first budget.
@@ -403,16 +403,6 @@ export function BudgetLayout() {
       void dispatch(switchBudget(budgets.data.find((b) => !b.archived_at)?.id ?? budgets.data[0].id));
     }
   }, [restored, budgetId, budgets.data, dispatch]);
-
-  // Per-budget settings (fmt prefs, flag labels, display toggles): rehydrate
-  // the domain stores on every active-budget change, defaulting to the
-  // defaults when the budget has no blob yet.
-  useEffect(() => {
-    if (!budgetId) return;
-    void loadBudgetSettings(storage, budgetId).then((blob) => {
-      applyBudgetSettings(blob, dispatch);
-    });
-  }, [budgetId, storage, dispatch]);
 
   const router = useRouter();
   const shell: BudgetShellState = useMemo(

@@ -5,10 +5,11 @@
 
 import { StyleSheet, Text, View } from 'react-native';
 
-import { formatMoney } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors } from '../../ui/theme';
 
 export function AmountPill({ cents }: { cents: number }) {
+  const { formatMoney } = useMoneyFormat();
   const out = cents < 0;
   return (
     <View style={[styles.box, out ? styles.out : styles.in]}>

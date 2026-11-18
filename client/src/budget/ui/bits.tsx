@@ -23,8 +23,7 @@ import {
 
 import Svg, { Circle } from 'react-native-svg';
 
-import { formatAmount, formatMoney, parseMoney } from '../domain/format';
-import { isMoneyMaskHidden } from '../domain/moneyMask';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { evalQuickMath } from '../domain/quickmath';
 import type { Cents, FundingState } from '../domain/types';
 import { barColor, colors, pillColors, radius } from './theme';
@@ -73,6 +72,7 @@ export function Pill({
    * the pill (syscd-app-pjtv) via nativeEvent.pageX/pageY. */
   onPress?: (e: GestureResponderEvent) => void;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const c = pillColors(state);
   const pill = (
     <View style={[styles.pill, small && styles.pillSmall, { backgroundColor: c.bg }]}>
@@ -191,7 +191,7 @@ const pressNoBlur = {
  * Signed pt-BR draft text: "-1.314,51" / "+1.314,51"; 0 → empty. The operand
  * in the string IS the storage sign — a bare number reads as positive.
  */
-function signedAmountText(cents: Cents): string {
+function signedAmountText(cents: Cents, formatAmount: (cents: Cents) => string): string {
   if (cents === 0) return '';
   return cents < 0 ? formatAmount(cents) : `+${formatAmount(cents)}`;
 }
@@ -228,7 +228,8 @@ export function MoneyInput({
   signed?: boolean;
   onEscape?: () => void;
 }) {
-  const initial = useRef(allowEmpty && cents === 0 ? '' : signed ? signedAmountText(cents) : formatAmount(cents));
+  const { formatAmount, parseMoney, masked } = useMoneyFormat();
+  const initial = useRef(allowEmpty && cents === 0 ? '' : signed ? signedAmountText(cents, formatAmount) : formatAmount(cents));
   const [text, setText] = useState(initial.current);
   const [opsOpen, setOpsOpen] = useState(false);
   const opsOpenRef = useRef(false);
@@ -250,9 +251,9 @@ export function MoneyInput({
     if (centsRef.current === cents) return;
     centsRef.current = cents;
     if (parseMoney(text) === cents && !(allowEmpty && cents === 0 && text !== '')) return;
-    initial.current = allowEmpty && cents === 0 ? '' : signed ? signedAmountText(cents) : formatAmount(cents);
+    initial.current = allowEmpty && cents === 0 ? '' : signed ? signedAmountText(cents, formatAmount) : formatAmount(cents);
     setText(initial.current);
-  }, [cents, allowEmpty, text, signed]);
+  }, [cents, allowEmpty, text, signed, formatAmount, parseMoney]);
   useEffect(() => {
     opsOpenRef.current = opsOpen;
   }, [opsOpen]);
@@ -298,14 +299,14 @@ export function MoneyInput({
   const commitNow = () => {
     if (cancelledRef.current) return;
     // Privacy mask: YNAB parity — "Changes to amounts will not be saved."
-    if (isMoneyMaskHidden()) return;
+    if (masked) return;
     // Signed mode: parseMoney already reads the typed operand ("-115,00" /
     // "+115,00" / bare = positive); quick-math mode falls back to the prior
     // value on an unparseable draft; plain mode parses the magnitude.
     const next = signed
       ? parseMoney(text)
       : quickMath
-        ? (evalQuickMath(text, cents) ?? cents)
+        ? (evalQuickMath(text, cents, { parseMoney }) ?? cents)
         : parseMoney(text);
     // Quick-math: invalid/empty drafts keep the prior value but still end the
     // edit (Enter or an outside blur always closes the editor). Other modes
@@ -494,6 +495,7 @@ export function BigMoneyInput({
   color?: string;
   accessibilityLabel?: string;
 }) {
+  const { formatAmount, parseMoney, masked } = useMoneyFormat();
   const [text, setText] = useState(() => formatAmount(cents));
   const [focused, setFocused] = useState(false);
   const cancelledRef = useRef(false);
@@ -502,7 +504,7 @@ export function BigMoneyInput({
     if (focused) return;
     if (parseMoney(text) === cents) return;
     setText(formatAmount(cents));
-  }, [cents, focused, text]);
+  }, [cents, focused, text, formatAmount, parseMoney]);
 
   const commit = () => {
     if (cancelledRef.current) {
@@ -510,7 +512,7 @@ export function BigMoneyInput({
       return;
     }
     // Privacy mask: YNAB parity — "Changes to amounts will not be saved."
-    if (isMoneyMaskHidden()) return;
+    if (masked) return;
     const next = parseMoney(text);
     // Normalize the visible draft ("100" → "100,00") even when the parsed
     // value didn't change — the sync effect can't (parse-equal early return).

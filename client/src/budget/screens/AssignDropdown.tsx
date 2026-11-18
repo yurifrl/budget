@@ -17,6 +17,7 @@ import { useAppDispatch } from '@/store/hooks';
 import { useApplyAssignmentUpdatesMutation } from '../data/api';
 import type { Budget, Cents, MonthKey } from '../domain/types';
 import { useBudgetMonth } from '../model/useBudgetMonth';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import { makeAssignEdit, newPlanEdit } from '../state/planEdits';
 import { recordPlanEdit } from '../state/ui';
 import { AutoAssignList } from './AutoAssignPanel';
@@ -40,6 +41,7 @@ function ManualAssign({
   rtaCents: Cents;
   onDone: () => void;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const [apply] = useApplyAssignmentUpdatesMutation();
   const dispatch = useAppDispatch();
   const bm = useBudgetMonth(budget, month);
@@ -58,12 +60,12 @@ function ManualAssign({
     apply({ budgetId, month, updates: [{ categoryId: cat.id, assignedCents: next }] })
       .unwrap()
       .then(() => {
-        const draft = makeAssignEdit(budget, budgetId, month, cat.id, next);
+        const draft = makeAssignEdit(budget, budgetId, month, cat.id, next, { formatMoney });
         if (draft) dispatch(recordPlanEdit(newPlanEdit(draft)));
         onDone();
       })
       .catch((err) => setError(apiErrorMessage(err, 'failed to assign')));
-  }, [apply, budget, budgetId, dispatch, month, onDone, to, amount]);
+  }, [apply, budget, budgetId, dispatch, month, onDone, to, amount, formatMoney]);
 
   return (
     <View style={styles.manualBody}>

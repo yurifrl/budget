@@ -7,10 +7,11 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { CreditView } from '../../domain/connections';
-import { formatMoney } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 
 export function CreditBillCard({ view }: { view: CreditView }) {
+  const { formatMoney } = useMoneyFormat();
   const { billCents, due, usedCents, limitCents, availableCents, usedPct } = view;
   const showBar = usedCents != null && limitCents != null;
   return (

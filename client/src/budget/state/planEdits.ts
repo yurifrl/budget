@@ -18,7 +18,7 @@
 
 import type { AutoAssignRow } from '../domain/auto-assign';
 import { assignedInMonth } from '../domain/engine';
-import { formatMoney } from '../domain/format';
+import { DEFAULT_MONEY_FORMAT, type MoneyFormat } from '../domain/format';
 import { multiMoveMoneyUpdates, type MovePair } from '../data/ledger';
 import type { Budget, Cents, MonthKey } from '../domain/types';
 import { BUDGET_UI_KEY, type BudgetUiRootState } from './ui';
@@ -122,6 +122,7 @@ export function makeAssignEdit(
   month: MonthKey,
   categoryId: string,
   nextCents: Cents,
+  { formatMoney }: Pick<MoneyFormat, 'formatMoney'> = DEFAULT_MONEY_FORMAT,
 ): PlanEditDraft | null {
   const cat = budget.categories.find((c) => c.id === categoryId);
   if (!cat) return null;
@@ -149,6 +150,7 @@ export function makeMultiMoveEdit(
   budgetId: string,
   month: MonthKey,
   pairs: readonly MovePair[],
+  { formatMoney }: Pick<MoneyFormat, 'formatMoney'> = DEFAULT_MONEY_FORMAT,
 ): PlanEditDraft | null {
   const clean = pairs.filter((p) => p.amount > 0);
   if (clean.length === 0) return null;

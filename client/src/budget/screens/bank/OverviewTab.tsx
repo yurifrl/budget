@@ -13,7 +13,7 @@ import type { AccountRow, TransactionRow } from '../../data/rows';
 import { accountActivity, balanceReconcile } from '../../domain/connectionSpark';
 import { creditView } from '../../domain/connections';
 import { linkedSummaryAccounts } from '../../domain/linkPicker';
-import { formatDate, formatMoney } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 import { BankBalanceCard } from './BankBalanceCard';
 import { CreditBillCard } from './CreditBillCard';
@@ -187,6 +187,7 @@ function AccountCard({
   onChange: () => void;
   onUnlink: () => void;
 }) {
+  const { formatDate } = useMoneyFormat();
   const range = acct.firstDate && acct.lastDate ? `${formatDate(acct.firstDate)} – ${formatDate(acct.lastDate)}` : 'No transactions yet';
   return (
     // The open-tab press covers the content only; link controls sit outside it

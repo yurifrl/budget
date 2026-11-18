@@ -34,12 +34,8 @@ import {
 import { connectionStatusView, formatSyncStamp } from "../domain/connections";
 import { AccountEditModal } from "./AccountEditModal";
 import { computeRunningBalances, workingBalance } from "../domain/engine";
-import {
-  formatDate,
-  formatMoney,
-  parseMoney,
-  todayIso,
-} from "../domain/format";
+import { todayIso } from "../domain/format";
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import type { Budget, Cents, Transaction } from "../domain/types";
 import type { TransactionInput } from "../data/mapping";
 import { GhostButton, IndigoButton, MoneyInput } from "../ui/bits";
@@ -107,6 +103,7 @@ function categoryLabel(
 }
 
 export function AccountsScreen() {
+  const { formatDate, formatMoney, parseMoney } = useMoneyFormat();
   const shell = useBudgetShell();
   const { budget, budgetId, error } = useBudgetModel();
   // Selection lives in the URL: the shell rail's account rows navigate with
@@ -335,6 +332,7 @@ export function AccountsScreen() {
     dateFrom,
     dateTo,
     searchQuery,
+    parseMoney,
   ]);
 
   // Future-dated rows leave the register and render in the "Scheduled

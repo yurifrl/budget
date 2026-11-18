@@ -8,10 +8,11 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { LinkOption } from '../../domain/linkPicker';
-import { formatMoney } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import { colors, radius } from '../../ui/theme';
 
 export function LinkOptionCard({ option, dim }: { option: LinkOption; dim?: boolean }) {
+  const { formatMoney } = useMoneyFormat();
   const { credit, hint } = option;
   return (
     <View style={styles.body}>

@@ -16,7 +16,7 @@ import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import { GhostButton, IndigoButton, MoneyInput } from '../ui/bits';
 import { DatePickerPopover } from './register/DatePickerPopover';
 import { barColor, colors, radius } from '../ui/theme';
-import { formatDate, formatMoney, parseDateInput } from '../domain/format';
+import { useMoneyFormat } from '../model/useDisplayPrefs';
 import type { CategoryTarget, CategoryTargetConfig, Cents, FundingState, MonthKey, TargetKind } from '../domain/types';
 import { neededBy } from '../domain/targets';
 
@@ -126,6 +126,7 @@ export function TargetEditor({
   /** Re-seed the draft from the stored target (inline editors, no sheet). */
   onCancel?: () => void;
 }) {
+  const { formatDate, parseDateInput } = useMoneyFormat();
   const [kind, setKind] = useState<TargetKind>(target?.kind ?? 'monthly');
   const [amount, setAmount] = useState<Cents>(target?.amountCents ?? 0);
   const [config, setConfig] = useState<CategoryTargetConfig>(target?.config ?? {});
@@ -143,7 +144,7 @@ export function TargetEditor({
     setAmount(target.amountCents);
     setConfig(target.config ?? {});
     setByDateText(target.config.byDate ? formatDate(target.config.byDate) : '');
-  }, [target]);
+  }, [target, formatDate]);
 
   const amountInvalid = amount <= 0;
   const byDateInvalid = kind === 'custom' && !(config.byDate && BY_DATE_RE.test(config.byDate));
@@ -319,6 +320,7 @@ export function TargetSummary({
   onToggleSnooze: (snooze: boolean) => void;
   busy?: boolean;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const snoozed = target.snoozeMonth === month;
   const need = neededBy(target, month);
   const state: FundingState = available < 0 ? 'red' : need > 0 && assigned >= need ? 'green' : need > 0 ? 'yellow' : 'gray';

@@ -9,8 +9,10 @@
 
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
+import { DEFAULT_FLAG_LABELS, type FlagLabels } from '../domain/flagLabels';
+import { DEFAULT_FMT_PREFS, type FmtPrefs } from '../domain/fmtPrefs';
 import { PERSON_ALL, type PersonFilter } from '../domain/people';
-import type { MonthKey } from '../domain/types';
+import type { FlagColor, MonthKey } from '../domain/types';
 import {
   initialPlanEdits,
   movePlanEditRevertToFuture,
@@ -43,6 +45,19 @@ export interface BudgetUiState {
   showClosedAccounts: boolean;
   /** Session-scoped undo/redo history for Plan assignment edits (syscd-app-ijn). */
   planEdits: PlanEditsState;
+  /** Active budget's money/date format prefs (persisted per budget, see state/budgetSettings). */
+  fmt: FmtPrefs;
+  /** Active budget's flag labels (persisted per budget). */
+  flagLabels: FlagLabels;
+  /** Hide Amounts privacy mask (session only, not persisted). */
+  moneyMasked: boolean;
+}
+
+/** The persisted per-budget settings blob, as far as this slice applies it. */
+export interface LoadedBudgetSettings {
+  fmt?: Partial<FmtPrefs>;
+  flagLabels?: Partial<FlagLabels>;
+  display?: { progressBars?: boolean; hiddenCategories?: boolean; closedAccounts?: boolean };
 }
 
 /** Month key for a Date: 2026-06-05 -> 202606. */
@@ -65,6 +80,9 @@ const initialState: BudgetUiState = {
   showHiddenCategories: true,
   showClosedAccounts: false,
   planEdits: initialPlanEdits(),
+  fmt: DEFAULT_FMT_PREFS,
+  flagLabels: DEFAULT_FLAG_LABELS,
+  moneyMasked: false,
 };
 
 const slice = createSlice({
@@ -106,6 +124,31 @@ const slice = createSlice({
     setShowClosedAccounts(state, action: PayloadAction<boolean>) {
       state.showClosedAccounts = action.payload;
     },
+    /** Money/date format change for the active budget (persisted by state/budgetSettings). */
+    setFmtPrefs(state, action: PayloadAction<Partial<FmtPrefs>>) {
+      state.fmt = { ...state.fmt, ...action.payload };
+    },
+    /** One flag label edit for the active budget (persisted by state/budgetSettings). */
+    setFlagLabel(state, action: PayloadAction<{ color: FlagColor; label: string }>) {
+      state.flagLabels = { ...state.flagLabels, [action.payload.color]: action.payload.label };
+    },
+    setMoneyMasked(state, action: PayloadAction<boolean>) {
+      state.moneyMasked = action.payload;
+    },
+    /**
+     * Rehydrate from the active budget's settings blob (on every budget
+     * switch). Same rules as the old `applyBudgetSettings`: fmt is merged
+     * over the current prefs and flag labels over the defaults only when the
+     * blob has them; the display toggles fall back to their defaults.
+     */
+    budgetSettingsLoaded(state, action: PayloadAction<LoadedBudgetSettings>) {
+      const blob = action.payload;
+      if (blob.fmt) state.fmt = { ...state.fmt, ...blob.fmt };
+      if (blob.flagLabels) state.flagLabels = { ...DEFAULT_FLAG_LABELS, ...blob.flagLabels };
+      state.showProgressBars = blob.display?.progressBars ?? true;
+      state.showHiddenCategories = blob.display?.hiddenCategories ?? true;
+      state.showClosedAccounts = blob.display?.closedAccounts ?? false;
+    },
     /** Record a persisted Plan assignment edit (pushes history, truncates redo). */
     recordPlanEdit(state, action: PayloadAction<PlanEditEntry>) {
       pushPlanEdit(state.planEdits, action.payload);
@@ -136,6 +179,10 @@ export const {
   setShowProgressBars,
   setShowHiddenCategories,
   setShowClosedAccounts,
+  setFmtPrefs,
+  setFlagLabel,
+  setMoneyMasked,
+  budgetSettingsLoaded,
   recordPlanEdit,
   planEditUndone,
   planEditReapplied,
@@ -157,3 +204,6 @@ export const selectPersonFilter = (s: BudgetUiRootState) => s[BUDGET_UI_KEY].per
 export const selectShowProgressBars = (s: BudgetUiRootState) => s[BUDGET_UI_KEY].showProgressBars;
 export const selectShowHiddenCategories = (s: BudgetUiRootState) => s[BUDGET_UI_KEY].showHiddenCategories;
 export const selectShowClosedAccounts = (s: BudgetUiRootState) => s[BUDGET_UI_KEY].showClosedAccounts;
+export const selectFmtPrefs = (s: BudgetUiRootState) => s[BUDGET_UI_KEY].fmt;
+export const selectFlagLabels = (s: BudgetUiRootState) => s[BUDGET_UI_KEY].flagLabels;
+export const selectMoneyMasked = (s: BudgetUiRootState) => s[BUDGET_UI_KEY].moneyMasked;

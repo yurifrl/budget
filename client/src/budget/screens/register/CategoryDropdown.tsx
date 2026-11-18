@@ -21,7 +21,7 @@ import { DropdownShell, dropdownStyles, pressNoBlur, useDropdownPortal, type Dro
 import { transferPayeeName } from './PayeeDropdown';
 
 import { categoryLabel } from '../../domain/bundles';
-import { formatMoney } from '../../domain/format';
+import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import type { Account, Bundle, Cents, Category, CategoryGroup } from '../../domain/types';
 import { categoryFigures, type BudgetMonth } from '../../domain/zeroSum';
 import { matchesCategoryQuery } from '../../ui/categoryPick';
@@ -86,6 +86,7 @@ export function CategoryDropdown({
   containerStyle?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
 }) {
+  const { formatMoney } = useMoneyFormat();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'category' | 'transfer'>('category');
   const [draft, setDraft] = useState('');
