@@ -7,15 +7,26 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "ios": { "simulator": true }
+      "ios": {
+        "simulator": true
+      },
+      "bun": "1.4.4"
     },
     "preview": {
       "distribution": "internal",
-      "ios": { "simulator": false }
+      "ios": {
+        "simulator": false
+      },
+      "bun": "1.4.4"
     },
     "production": {
-      "ios": { "autoIncrement": false },
-      "android": { "buildType": "app-bundle" }
+      "ios": {
+        "autoIncrement": false
+      },
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "bun": "1.4.4"
     }
   },
   "submit": {
