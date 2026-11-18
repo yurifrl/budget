@@ -314,6 +314,7 @@ const STATE_SQL = `CASE WHEN t.deleted THEN 'removed' WHEN s.blocked THEN 'edite
 async function connectionSummary(connectionId: string) {
   const { rows } = await pool.query<{
     account_id: string;
+    budget_id: string;
     name: string;
     type: string;
     external_account_id: string | null;
@@ -324,7 +325,7 @@ async function connectionSummary(connectionId: string) {
     first_date: string | null;
     last_date: string | null;
   }>(
-    `SELECT a.id AS account_id, a.name, a.type, a.external_account_id,
+    `SELECT a.id AS account_id, a.budget_id, a.name, a.type, a.external_account_id,
             (a.cleared_balance + a.uncleared_balance) AS balance,
             count(*) FILTER (WHERE ${STATE_SQL} = 'imported') AS imported,
             count(*) FILTER (WHERE ${STATE_SQL} = 'edited') AS edited,
@@ -346,6 +347,7 @@ async function connectionSummary(connectionId: string) {
     const removedCount = Number(r.removed);
     return {
       accountId: r.account_id,
+      budgetId: r.budget_id,
       name: r.name,
       type: r.type,
       externalAccountId: r.external_account_id,

@@ -43,12 +43,12 @@ export function OverviewTab({
   transactions: TransactionRow[];
   onOpenAccount: (accountId: string) => void;
 }) {
-  const linkedAccounts = linkedSummaryAccounts(summary.accounts, upstream, accounts);
+  const linkedAccounts = linkedSummaryAccounts(summary.accounts, upstream, accounts, budgetId);
   const unlinked = (upstream ?? []).filter((a) => a.linkedAccountId == null);
   // Link editing: the bank account being (re)linked and the account being unlinked.
-  const [linking, setLinking] = useState<{ bank: UpstreamAccountJson; currentAccountId: string | null } | null>(null);
+  const [linking, setLinking] = useState<{ bank: UpstreamAccountJson; current: { accountId: string; budgetId: string } | null } | null>(null);
   const bankFor = (acct: ConnectionAccountSummaryJson) => upstream?.find((u) => u.externalId === acct.externalAccountId) ?? null;
-  const [unlinking, setUnlinking] = useState<{ id: string; name: string } | null>(null);
+  const [unlinking, setUnlinking] = useState<{ id: string; name: string; budgetId: string } | null>(null);
   return (
     <View style={styles.wrap}>
       <View style={styles.totals}>
@@ -72,8 +72,8 @@ export function OverviewTab({
               budgetAccount={accounts.find((a) => a.id === acct.accountId) ?? null}
               transactions={transactions}
               onPress={() => onOpenAccount(acct.accountId)}
-              onChange={() => bankFor(acct) && setLinking({ bank: bankFor(acct)!, currentAccountId: acct.accountId })}
-              onUnlink={() => setUnlinking({ id: acct.accountId, name: acct.name })}
+              onChange={() => bankFor(acct) && setLinking({ bank: bankFor(acct)!, current: { accountId: acct.accountId, budgetId: acct.budgetId } })}
+              onUnlink={() => setUnlinking({ id: acct.accountId, name: acct.name, budgetId: acct.budgetId })}
             />
           ))}
         </View>
@@ -100,7 +100,7 @@ export function OverviewTab({
                     style={styles.primaryBtn}
                     accessibilityRole="button"
                     accessibilityLabel={`Link ${u.name} to a budget account`}
-                    onPress={() => setLinking({ bank: u, currentAccountId: null })}>
+                    onPress={() => setLinking({ bank: u, current: null })}>
                     <Text style={styles.primaryBtnText}>Link to a budget account</Text>
                   </Pressable>
                 </View>
@@ -115,7 +115,7 @@ export function OverviewTab({
         connectionId={connectionId}
         institution={institution}
         bank={linking?.bank ?? null}
-        currentAccountId={linking?.currentAccountId ?? null}
+        current={linking?.current ?? null}
         accounts={accounts}
         upstream={allUpstream}
         onClose={() => setLinking(null)}

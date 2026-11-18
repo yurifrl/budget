@@ -96,6 +96,8 @@ describe.skipIf(!dbReady)('connection history reads', () => {
     expect(status).toBe(200);
     const one = body.accounts.find((a: any) => a.accountId === acc1);
     expect(one).toMatchObject({
+      // The account's own budget: the client scopes link edits by it.
+      budgetId,
       name: 'Linked One',
       externalAccountId: 'ext-1',
       importedCount: 5,

@@ -196,6 +196,8 @@ export function linkedSummaryAccounts(
   summaryAccounts: ConnectionAccountSummaryJson[],
   upstream: UpstreamAccountJson[] | null,
   budgetAccounts: AccountRow[],
+  /** The budget `budgetAccounts` belong to (the active one). */
+  budgetId: string,
 ): ConnectionAccountSummaryJson[] {
   const known = new Set(summaryAccounts.map((a) => a.accountId));
   const extra: ConnectionAccountSummaryJson[] = [];
@@ -205,6 +207,7 @@ export function linkedSummaryAccounts(
     if (!acct) continue;
     extra.push({
       accountId: acct.id,
+      budgetId,
       name: acct.name,
       type: acct.type,
       externalAccountId: up.externalId,

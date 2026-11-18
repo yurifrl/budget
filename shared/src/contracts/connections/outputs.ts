@@ -165,9 +165,14 @@ export const connectionCountsSchema = z.object({
   totalCount: z.number(),
 });
 
-/** One linked budget account in GET /connections/:id/summary. `balance` is signed milliunits. */
+/**
+ * One linked budget account in GET /connections/:id/summary. `balance` is signed
+ * milliunits. `budgetId` is the budget the account lives in: a connection is
+ * per user, so its accounts may sit in a budget other than the active one.
+ */
 export const connectionAccountSummarySchema = connectionCountsSchema.extend({
   accountId: id,
+  budgetId: id,
   name: z.string(),
   type: z.string(),
   externalAccountId: nullableString,

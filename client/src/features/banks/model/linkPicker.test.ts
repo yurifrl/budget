@@ -98,9 +98,9 @@ describe('linkPicker domain', () => {
 
   test('linked accounts missing from the summary are synthesized with zero counts', () => {
     const a1 = acct({ id: 'a1' });
-    const out = linkedSummaryAccounts([], [up({ externalId: 'x1', linkedAccountId: 'a1' }), up({ externalId: 'x2' })], [a1]);
+    const out = linkedSummaryAccounts([], [up({ externalId: 'x1', linkedAccountId: 'a1' }), up({ externalId: 'x2' })], [a1], 'b1');
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ accountId: 'a1', externalAccountId: 'x1', totalCount: 0, balance: 150000 });
-    expect(linkedSummaryAccounts(out, [up({ externalId: 'x1', linkedAccountId: 'a1' })], [a1])).toHaveLength(1);
+    expect(out[0]).toMatchObject({ accountId: 'a1', externalAccountId: 'x1', totalCount: 0, balance: 150000, budgetId: 'b1' });
+    expect(linkedSummaryAccounts(out, [up({ externalId: 'x1', linkedAccountId: 'a1' })], [a1], 'b1')).toHaveLength(1);
   });
 });

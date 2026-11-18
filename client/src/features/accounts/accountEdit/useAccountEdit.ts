@@ -115,7 +115,7 @@ export function useAccountEdit(account: AccountRow | null, budgetId: string, onC
   /** Sever only this account's bank link — the bank itself is removed on the connect-bank page. */
   const unlink = async () => {
     setError(null);
-    const failure = await accountLink.unlink(account.id);
+    const failure = await accountLink.unlink(account.id, budgetId);
     setUnlinkAsk(false);
     if (failure) setError(failure);
   };
