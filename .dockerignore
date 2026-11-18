@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/.expo
+client
+docs
+.git
+.env
+.env*.local
+.tmp

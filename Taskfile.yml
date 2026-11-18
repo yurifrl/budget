@@ -46,3 +46,8 @@ tasks:
     dir: client
     cmds:
       - bunx expo start --web --port 8091
+
+  image:api:
+    desc: Build the API image (context = repo root). On this Mac the docker shim's builder has no DNS; use `container build --dns 1.1.1.1 ...` instead.
+    cmds:
+      - docker build -f deploy/Dockerfile.api -t budget-api:dev .

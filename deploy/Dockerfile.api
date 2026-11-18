@@ -1,0 +1,26 @@
+# Budget API image. Build context is the REPO ROOT (shared/ sits beside api/):
+#   docker build -f deploy/Dockerfile.api -t budget-api .
+# Debian (not alpine): Temporal's native core-bridge fails to load on musl.
+FROM oven/bun:1.4.4
+
+WORKDIR /app
+
+# shared/ first: it owns zod, and api/ overrides zod to
+# link:../shared/node_modules/zod, so shared/node_modules must exist before
+# api installs.
+COPY shared/package.json shared/bun.lock shared/bunfig.toml shared/
+RUN cd shared && bun install --frozen-lockfile --production
+
+COPY api/package.json api/bun.lock api/bunfig.toml api/
+RUN cd api && bun install --frozen-lockfile --production
+
+COPY shared/tsconfig.json shared/
+COPY shared/src shared/src
+# api/tsconfig.json carries the @shared/* path that bun resolves at runtime.
+COPY api/tsconfig.json api/
+COPY api/src api/src
+
+WORKDIR /app/api
+ENV API_HOST=0.0.0.0 API_PORT=3100
+EXPOSE 3100
+CMD ["bun", "src/index.ts"]
