@@ -66,17 +66,17 @@ interface BulkRow {
   date: string;
   payee: string;
   memo: string;
-  outflow_cents: number;
-  inflow_cents: number;
+  outflow: number;
+  inflow: number;
   category_id: string | null;
   import_id?: string;
 }
 
 /** Two identical id-less rows (same amount+date) plus one explicit import_id. */
 const statementRows: BulkRow[] = [
-  { date: '2025-03-01', payee: 'Nubank', memo: '', outflow_cents: 1234, inflow_cents: 0, category_id: null },
-  { date: '2025-03-01', payee: 'Nubank', memo: '', outflow_cents: 1234, inflow_cents: 0, category_id: null },
-  { date: '2025-03-02', payee: 'Salary', memo: '', outflow_cents: 0, inflow_cents: 50000, category_id: null, import_id: 'test-salary-0001' },
+  { date: '2025-03-01', payee: 'Nubank', memo: '', outflow: 12340, inflow: 0, category_id: null },
+  { date: '2025-03-01', payee: 'Nubank', memo: '', outflow: 12340, inflow: 0, category_id: null },
+  { date: '2025-03-02', payee: 'Salary', memo: '', outflow: 0, inflow: 500000, category_id: null, import_id: 'test-salary-0001' },
 ];
 
 const postBulk = (txns: unknown[], accountIdOverride?: string) =>
@@ -126,7 +126,7 @@ describe('transactions routes', () => {
     expect(first.status).toBe(201);
     expect(await first.json()).toEqual({ imported: 3, duplicates: 0 });
 
-    // One server-computed uncleared delta: (50000 - 1234 - 1234) cents.
+    // One server-computed uncleared delta: (500000 - 12340 - 12340) milliunits.
     const acc = await pool!.query<{ uncleared_balance: string; cleared_balance: string }>(
       'SELECT uncleared_balance, cleared_balance FROM accounts WHERE id = $1',
       [accountId],
@@ -147,7 +147,7 @@ describe('transactions routes', () => {
     // Partial re-import: dup row skipped by occurrence rule, new row inserted.
     const partial = await postBulk([
       statementRows[0],
-      { date: '2025-03-05', payee: 'New Store', memo: '', outflow_cents: 999, inflow_cents: 0, category_id: null },
+      { date: '2025-03-05', payee: 'New Store', memo: '', outflow: 9990, inflow: 0, category_id: null },
     ]);
     expect(await partial.json()).toEqual({ imported: 1, duplicates: 1 });
 
@@ -178,8 +178,8 @@ describe('transactions routes', () => {
       [vendorAccountId, budgetId],
     );
     const rows = [
-      { date: '2025-04-01', payee: 'Alpha Market', memo: '', outflow_cents: 700, inflow_cents: 0, category_id: null },
-      { date: '2025-04-01', payee: 'Beta Market', memo: '', outflow_cents: 700, inflow_cents: 0, category_id: null },
+      { date: '2025-04-01', payee: 'Alpha Market', memo: '', outflow: 7000, inflow: 0, category_id: null },
+      { date: '2025-04-01', payee: 'Beta Market', memo: '', outflow: 7000, inflow: 0, category_id: null },
     ];
     const first = await postBulk(rows, vendorAccountId);
     expect(await first.json()).toEqual({ imported: 2, duplicates: 0 });
@@ -240,7 +240,7 @@ describe('transactions routes', () => {
 
   test.skipIf(!dbReady)('rejects rows that are both inflow and outflow', async () => {
     const res = await postBulk([
-      { ...statementRows[0], outflow_cents: 100, inflow_cents: 100 },
+      { ...statementRows[0], outflow: 1000, inflow: 1000 },
     ]);
     expect(res.status).toBe(400);
   });
@@ -304,23 +304,23 @@ describe('transactions routes', () => {
         payee: 'Split Grocer',
         category_id: null,
         memo: '',
-        outflow_cents: 3000,
-        inflow_cents: 0,
+        outflow: 30000,
+        inflow: 0,
         cleared: 'uncleared',
         approved: true,
         flag: null,
         repeat: '',
       },
       subtransactions: [
-        { category_id: catA, memo: 'produce', outflow_cents: 2000, inflow_cents: 0 },
-        { category_id: catB, memo: 'cleaning', outflow_cents: 1000, inflow_cents: 0 },
+        { category_id: catA, memo: 'produce', outflow: 20000, inflow: 0 },
+        { category_id: catB, memo: 'cleaning', outflow: 10000, inflow: 0 },
       ],
       deltas: [{ account_id: splitAccountId, cleared_delta: 0, uncleared_delta: -3000 }],
     });
     expect(res.status).toBe(201);
     const txnId = (await res.json() as { id: string }).id;
 
-    // Parent carries the split total and NULL category; legs stored with cents->milli.
+    // Parent carries the split total and NULL category; legs stored as sent (milliunits).
     const parent = await pool!.query<{ amount: string; category_id: string | null }>(
       'SELECT amount, category_id FROM transactions WHERE id = $1',
       [txnId],
@@ -358,15 +358,15 @@ describe('transactions routes', () => {
         payee: 'Bad Split',
         category_id: cats.rows[0].id,
         memo: '',
-        outflow_cents: 500,
-        inflow_cents: 0,
+        outflow: 5000,
+        inflow: 0,
         cleared: 'uncleared',
         approved: true,
         flag: null,
         repeat: '',
       },
       subtransactions: [
-        { category_id: cats.rows[0].id, memo: null, outflow_cents: 500, inflow_cents: 0 },
+        { category_id: cats.rows[0].id, memo: null, outflow: 5000, inflow: 0 },
       ],
       deltas: [],
     });
@@ -390,16 +390,16 @@ describe('transactions routes', () => {
         payee: 'Patch Split',
         category_id: null,
         memo: '',
-        outflow_cents: 1000,
-        inflow_cents: 0,
+        outflow: 10000,
+        inflow: 0,
         cleared: 'uncleared',
         approved: true,
         flag: null,
         repeat: '',
       },
       subtransactions: [
-        { category_id: catA, memo: null, outflow_cents: 400, inflow_cents: 0 },
-        { category_id: catB, memo: null, outflow_cents: 600, inflow_cents: 0 },
+        { category_id: catA, memo: null, outflow: 4000, inflow: 0 },
+        { category_id: catB, memo: null, outflow: 6000, inflow: 0 },
       ],
       deltas: [{ account_id: splitAccountId, cleared_delta: 0, uncleared_delta: -1000 }],
     });
@@ -414,7 +414,7 @@ describe('transactions routes', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         budget_id: splitBudgetId,
-        patch: { category_id: catB, outflow_cents: 1000, inflow_cents: 0 },
+        patch: { category_id: catB, outflow: 10000, inflow: 0 },
         deltas: [],
         subtransactions: [],
       }),

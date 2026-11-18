@@ -67,13 +67,13 @@ async function createTransaction(
     // Split rows ignore the client amount: the signed parent amount is the
     // sum of legs, computed server-side so the register total can't drift.
     const amount = isSplit
-      ? subtransactions!.reduce((sum, s) => sum + s.inflow_cents - s.outflow_cents, 0) * 10
-      : (txn.inflow_cents - txn.outflow_cents) * 10;
+      ? subtransactions!.reduce((sum, s) => sum + s.inflow - s.outflow, 0)
+      : txn.inflow - txn.outflow;
     const inserted = await txnStore.insertTransaction(client, {
       budgetId: budget_id,
       accountId: txn.account_id,
       date: txn.date,
-      // client sends inflow/outflow in cents; storage is milliunits.
+      // inflow/outflow and storage are both milliunits.
       amount,
       payeeId,
       categoryId,
@@ -133,8 +133,8 @@ export const operations = [
         payee: input.payee,
         category_id: input.category_id ?? null,
         memo: input.memo ?? null,
-        outflow_cents: input.amount_cents < 0 ? -input.amount_cents : 0,
-        inflow_cents: input.amount_cents > 0 ? input.amount_cents : 0,
+        outflow: input.amount < 0 ? -input.amount : 0,
+        inflow: input.amount > 0 ? input.amount : 0,
         cleared: input.cleared ?? 'uncleared',
         approved: true,
         flag: null,
@@ -147,7 +147,7 @@ export const operations = [
   /**
    * POST /bulk — one statement-import batch for a single account.
    *
-   * The client sends parsed rows (cents) and nothing else: the server resolves
+   * The client sends parsed rows (milliunits) and nothing else: the server resolves
    * payees (once per distinct name, rename rules applied), dedupes on YNAB-style
    * import_ids (exact match for rows that carry one; generated
    * `YNAB:<milliunits>:<date>:<payee>:<occurrence>` ids for rows that don't —
@@ -191,7 +191,7 @@ export const operations = [
         ...new Set(
           txns
             .filter((t) => !t.import_id)
-            .map((t) => `YNAB:${(t.inflow_cents - t.outflow_cents) * 10}:${t.date}:${payeeKeyOf(t)}`),
+            .map((t) => `YNAB:${t.inflow - t.outflow}:${t.date}:${payeeKeyOf(t)}`),
         ),
       ];
       const existingOccs = new Map<string, number[]>();
@@ -215,10 +215,10 @@ export const operations = [
 
       let imported = 0;
       let duplicates = 0;
-      let unclearedDelta = 0; // cents, summed across inserted rows
+      let unclearedDelta = 0; // milliunits, summed across inserted rows
       const batchOcc = new Map<string, number>();
       for (const txn of txns) {
-        const milliunits = (txn.inflow_cents - txn.outflow_cents) * 10;
+        const milliunits = txn.inflow - txn.outflow;
         let importId = txn.import_id ?? null;
         if (!importId) {
           const prefix = `YNAB:${milliunits}:${txn.date}:${payeeKeyOf(txn)}`;
@@ -248,7 +248,7 @@ export const operations = [
           continue;
         }
         imported += 1;
-        unclearedDelta += txn.inflow_cents - txn.outflow_cents;
+        unclearedDelta += milliunits;
       }
 
       // One server-computed delta for the whole batch — clients never send
@@ -265,7 +265,7 @@ export const operations = [
   }),
 
   implement(transactionsUpdate, async (_c, { id, budget_id, patch, subtransactions }) => {
-    if (bothPositive({ inflow_cents: patch.inflow_cents ?? 0, outflow_cents: patch.outflow_cents ?? 0 })) {
+    if (bothPositive({ inflow: patch.inflow ?? 0, outflow: patch.outflow ?? 0 })) {
       throw new HttpError(400, ONE_WAY_ERROR);
     }
     return withTransaction(pool, async (client) => {
@@ -312,8 +312,8 @@ export const operations = [
       if (patch.matched_transaction_id !== undefined) {
         set.push({ col: 'matched_transaction_id', value: patch.matched_transaction_id });
       }
-      if (patch.outflow_cents !== undefined || patch.inflow_cents !== undefined) {
-        const amount = ((patch.inflow_cents ?? 0) - (patch.outflow_cents ?? 0)) * 10;
+      if (patch.outflow !== undefined || patch.inflow !== undefined) {
+        const amount = (patch.inflow ?? 0) - (patch.outflow ?? 0);
         set.push({ col: 'amount', value: amount });
       }
 
@@ -328,7 +328,7 @@ export const operations = [
           {
             account_id: existing.account_id,
             cleared_delta: 0,
-            uncleared_delta: Number(existing.amount) / 10,
+            uncleared_delta: Number(existing.amount),
           },
         ]);
         const rule = await getRepeatRuleSchedule(client, existing.repeat_rule_id);

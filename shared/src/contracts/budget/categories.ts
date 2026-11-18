@@ -7,7 +7,7 @@ const scoped = z.object({ id: uuidSchema, budget_id: budgetId });
 
 export const categoriesList = defineOperation({
   name: 'budget_categories_list',
-  description: 'List the categories of a budget, in display order. Goal amounts (goal_target) are returned in MILLIUNITS (cents x 10).',
+  description: 'List the categories of a budget, in display order. Goal amounts (goal_target) are integer milliunits (12.34 = 12340).',
   input: z.object({ budget_id: budgetId }),
   method: 'GET',
   path: '/categories',
@@ -77,7 +77,7 @@ export const categoriesRename = defineOperation({
 
 export const categoriesSetTarget = defineOperation({
   name: 'budget_categories_set_target',
-  description: "Set a category's goal from {amount_cents (CENTS), cadence, by_date, behavior}, or clear it with null.",
+  description: "Set a category's goal from {amount (integer MILLIUNITS, 12.34 = 12340), cadence, by_date, behavior}, or clear it with null.",
   input: scoped.extend({ target: categoryTargetInputSchema }),
   method: 'PATCH',
   path: '/categories/:id/target',

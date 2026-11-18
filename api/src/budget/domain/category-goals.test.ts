@@ -18,7 +18,7 @@ describe('goalColumns', () => {
   });
 
   test('custom: TBD with the by-date, milliunits', () => {
-    expect(goalColumns({ cadence: 'custom', amount_cents: 1234, by_date: '2026-12-01' })).toEqual({
+    expect(goalColumns({ cadence: 'custom', amount: 12_340, by_date: '2026-12-01' })).toEqual({
       ...none,
       goal_type: 'TBD',
       goal_target: 12_340,
@@ -27,7 +27,7 @@ describe('goalColumns', () => {
   });
 
   test('monthly: NEED, cadence 1, whole amount unless refill', () => {
-    expect(goalColumns({ cadence: 'monthly', amount_cents: 100 })).toEqual({
+    expect(goalColumns({ cadence: 'monthly', amount: 1000 })).toEqual({
       goal_type: 'NEED',
       goal_target: 1000,
       goal_cadence: 1,
@@ -35,12 +35,12 @@ describe('goalColumns', () => {
       goal_target_date: null,
       goal_needs_whole_amount: true,
     });
-    expect(goalColumns({ cadence: 'monthly', amount_cents: 100, behavior: 'refill' }).goal_needs_whole_amount).toBe(false);
+    expect(goalColumns({ cadence: 'monthly', amount: 1000, behavior: 'refill' }).goal_needs_whole_amount).toBe(false);
   });
 
   test('weekly cadence 2; yearly cadence 13 keeps the by-date; default is monthly cadence with no whole-amount flag', () => {
-    expect(goalColumns({ cadence: 'weekly', amount_cents: 1 })).toMatchObject({ goal_cadence: 2, goal_needs_whole_amount: null });
-    expect(goalColumns({ cadence: 'yearly', amount_cents: 1, by_date: '2027-01-01' })).toMatchObject({
+    expect(goalColumns({ cadence: 'weekly', amount: 10 })).toMatchObject({ goal_cadence: 2, goal_needs_whole_amount: null });
+    expect(goalColumns({ cadence: 'yearly', amount: 10, by_date: '2027-01-01' })).toMatchObject({
       goal_cadence: 13,
       goal_target_date: '2027-01-01',
     });

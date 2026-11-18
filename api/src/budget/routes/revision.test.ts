@@ -97,7 +97,7 @@ describe.skipIf(!dbReady)('budget revision', () => {
       budget_id: budgetId,
       txn: {
         account_id: accountId, date: '2025-03-01', payee: 'Cafe', category_id: null, memo: null,
-        outflow_cents: 500, inflow_cents: 0, cleared: 'uncleared', approved: true, flag: null, repeat: 'never',
+        outflow: 5000, inflow: 0, cleared: 'uncleared', approved: true, flag: null, repeat: 'never',
       },
     });
     expect(res.status).toBe(201);
@@ -109,7 +109,7 @@ describe.skipIf(!dbReady)('budget revision', () => {
     const before = await revisionOf(budgetId);
     const txns = Array.from({ length: 50 }, (_, i) => ({
       date: '2025-04-01', payee: `P${i}`, category_id: null, memo: null,
-      outflow_cents: 100 + i, inflow_cents: 0, import_id: `rev-test-${i}`,
+      outflow: (100 + i) * 10, inflow: 0, import_id: `rev-test-${i}`,
     }));
     const res = await json('POST', `/transactions/bulk?budget_id=${budgetId}`, { budget_id: budgetId, account_id: accountId, txns });
     expect(res.status).toBeLessThan(300);

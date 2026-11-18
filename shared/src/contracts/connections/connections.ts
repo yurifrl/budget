@@ -50,7 +50,7 @@ export const connectionsSettingsUpdateOne = defineOperation({
 export const connectionsUpstream = defineOperation({
   name: 'connections_upstream_list',
   description:
-    "List every bank account upstream of the current user's live connections, each annotated (balanceCents is signed CENTS, null if unreported) with the budget account it is linked to (linkedAccountId, or null). CREDIT accounts also carry credit: { limitCents, availableCents, usedCents, minimumPaymentCents, dueDate, latestBill: { totalCents, dueDate, minimumPaymentCents } | null } (cents; many issuers report balanceCents 0 for cards, so use the bill and limit figures); credit is absent/null for BANK accounts. accounts is null for a connection whose provider call failed.",
+    "List every bank account upstream of the current user's live connections, each annotated (balance is signed integer MILLIUNITS, 12.34 = 12340, null if unreported; currencyCode is the provider's ISO 4217 code) with the budget account it is linked to (linkedAccountId, or null). CREDIT accounts also carry credit: { limit, available, used, minimumPayment, dueDate, latestBill: { total, dueDate, minimumPayment } | null } (milliunits; many issuers report balance 0 for cards, so use the bill and limit figures); credit is absent/null for BANK accounts. accounts is null for a connection whose provider call failed.",
   input: z.object({}),
   method: 'GET',
   path: '/connections/upstream',
@@ -61,7 +61,7 @@ export const connectionsUpstream = defineOperation({
 export const connectionsItemsRegister = defineOperation({
   name: 'connections_items_register',
   description:
-    'Register a bank item the provider widget just connected (provider + itemId) and discover its upstream accounts. Part of the in-app connect flow; idempotent; 409 if another user owns the item.',
+    'Register a bank item the provider widget just connected (provider + itemId) and discover its upstream accounts (same account shape as connections_upstream_list, amounts in milliunits). Part of the in-app connect flow; idempotent; 409 if another user owns the item.',
   input: z.object({ provider: z.string().min(1), itemId: z.string().min(1) }),
   method: 'POST',
   path: '/connections/items',
@@ -126,7 +126,7 @@ export const connectionsDelete = defineOperation({
 export const connectionsSummary = defineOperation({
   name: 'connections_accounts_summary',
   description:
-    "Per-account summary of one bank connection's imported transactions, for every budget account linked to it: importedCount (untouched bank rows), editedCount (rows the user changed - the sync stops updating them), removedCount (rows deleted/tombstoned, e.g. gone upstream), totalCount, firstDate/lastDate (YYYY-MM-DD over non-removed rows, null if none) and the budget-side balance in signed MILLIUNITS (cents x 10). `totals` sums the per-account counts. 404 if the connection is not the current user's.",
+    "Per-account summary of one bank connection's imported transactions, for every budget account linked to it: importedCount (untouched bank rows), editedCount (rows the user changed - the sync stops updating them), removedCount (rows deleted/tombstoned, e.g. gone upstream), totalCount, firstDate/lastDate (YYYY-MM-DD over non-removed rows, null if none) and the budget-side balance in signed integer milliunits (12.34 = 12340). `totals` sums the per-account counts. 404 if the connection is not the current user's.",
   input: z.object({ id: connectionId }),
   method: 'GET',
   path: '/connections/:id/summary',
@@ -137,7 +137,7 @@ export const connectionsSummary = defineOperation({
 export const connectionsTransactions = defineOperation({
   name: 'connections_transactions_list',
   description:
-    "Keyset-paginated transactions one bank connection imported into ONE linked budget account, newest first (date DESC, id DESC). limit 1..200, default 50; pass the previous page's nextCursor as `cursor` (null nextCursor = last page). Each item carries state: imported | edited (changed by the user) | removed (tombstoned/deleted). `amount` is signed MILLIUNITS (cents x 10). 404 if the connection is not the current user's or the account is not linked to it.",
+    "Keyset-paginated transactions one bank connection imported into ONE linked budget account, newest first (date DESC, id DESC). limit 1..200, default 50; pass the previous page's nextCursor as `cursor` (null nextCursor = last page). Each item carries state: imported | edited (changed by the user) | removed (tombstoned/deleted). `amount` is signed integer milliunits (12.34 = 12340). 404 if the connection is not the current user's or the account is not linked to it.",
   input: z.object({
     id: connectionId,
     accountId: uuidSchema.describe('Budget account id (uuid) linked to this connection'),

@@ -7,16 +7,17 @@ import { z } from '../../zod';
 
 import { categorizationModes, matchTypes } from '../../domain/payees';
 import {
-  centsSchema,
   clearedSchema,
   flagSchema,
   isoDateSchema,
+  milliunitsSchema,
   monthDateSchema,
+  nonNegativeMilliunitsSchema,
   uuidSchema,
 } from '../../validation';
 import { FREQUENCIES } from './frequencies';
 
-export { uuidSchema, monthDateSchema, centsSchema, isoDateSchema };
+export { uuidSchema, monthDateSchema, milliunitsSchema, nonNegativeMilliunitsSchema, isoDateSchema };
 
 /** Every budget-scoped endpoint addresses its budget with this key. */
 export const budgetId = uuidSchema;
@@ -27,18 +28,17 @@ export const noteSchema = z.string().max(10_000);
 
 // ---- transactions ----------------------------------------------------------
 
-export const ONE_WAY_ERROR = 'inflow_cents and outflow_cents cannot both be positive';
+export const ONE_WAY_ERROR = 'inflow and outflow cannot both be positive';
 
 /** A transaction moves money one way — inflow XOR outflow. */
-export const bothPositive = (t: { inflow_cents: number; outflow_cents: number }) =>
-  t.inflow_cents > 0 && t.outflow_cents > 0;
+export const bothPositive = (t: { inflow: number; outflow: number }) => t.inflow > 0 && t.outflow > 0;
 
-/** One split leg (subtransactions row, syscd-app-rlt). Cents, inflow XOR outflow. */
+/** One split leg (subtransactions row, syscd-app-rlt). Milliunits, inflow XOR outflow. */
 export const subTxnSchema = z.object({
   category_id: uuidSchema.nullable(),
   memo: z.string().max(500).nullable(),
-  outflow_cents: centsSchema,
-  inflow_cents: centsSchema,
+  outflow: milliunitsSchema,
+  inflow: milliunitsSchema,
 });
 // Empty list is legal: PATCHing `subtransactions: []` un-splits the row.
 export const subTxnListSchema = z.array(subTxnSchema).max(100);
@@ -49,8 +49,9 @@ export const txnSchema = z.object({
   payee: z.string(),
   category_id: uuidSchema.nullable(),
   memo: z.string().nullable(),
-  outflow_cents: centsSchema,
-  inflow_cents: centsSchema,
+  /** Milliunits; inflow XOR outflow. */
+  outflow: milliunitsSchema,
+  inflow: milliunitsSchema,
   cleared: clearedSchema,
   approved: z.boolean(),
   flag: flagSchema,
@@ -61,7 +62,7 @@ export const txnSchema = z.object({
 /** POST body: a transaction moves money one way — inflow XOR outflow. */
 export const createTxnSchema = txnSchema.refine((t) => !bothPositive(t), {
   message: ONE_WAY_ERROR,
-  path: ['inflow_cents'],
+  path: ['inflow'],
 });
 
 /** PATCH body: any subset of the transaction fields. */
@@ -69,14 +70,14 @@ export const patchTxnSchema = txnSchema.partial();
 
 /** POST /bulk row — one statement-import line for a single account. */
 export const bulkTxnSchema = txnSchema
-  .pick({ date: true, payee: true, category_id: true, memo: true, outflow_cents: true, inflow_cents: true })
+  .pick({ date: true, payee: true, category_id: true, memo: true, outflow: true, inflow: true })
   .extend({
     /** Deterministic dedupe key (YNAB-style); null rows get one generated. */
     import_id: z.string().min(1).max(200).nullable().optional(),
     import_payee_name: z.string().max(200).optional(),
     import_payee_name_original: z.string().max(200).optional(),
   })
-  .refine((t) => !bothPositive(t), { message: ONE_WAY_ERROR, path: ['inflow_cents'] });
+  .refine((t) => !bothPositive(t), { message: ONE_WAY_ERROR, path: ['inflow'] });
 
 // ---- accounts --------------------------------------------------------------
 
@@ -112,7 +113,8 @@ export const accountLinkSchema = z.object({
 
 export const categoryTargetInputSchema = z
   .object({
-    amount_cents: centsSchema.optional(),
+    /** Goal amount in milliunits. */
+    amount: milliunitsSchema.optional(),
     cadence: z.enum(['weekly', 'monthly', 'yearly', 'custom']).optional(),
     by_date: isoDateSchema.optional(),
     behavior: z.enum(['set-aside', 'refill']).optional(),
@@ -153,15 +155,12 @@ export const snoozeMonthSchema = z.number().int().min(190001).max(299912).nullab
 
 // ---- assignments / plan ------------------------------------------------------
 
-/** Stored milliunits (cents x 10) — assignments' `budgeted` is written as-is. */
-export const milliunitsSchema = centsSchema.describe('Milliunits (cents x 10), e.g. 12.34 = 12340');
-
 export const assignmentUpdateSchema = z.object({ category_id: uuidSchema, budgeted: milliunitsSchema });
 
 export const autoAssignRowSchema = z.object({
   category_id: uuidSchema,
-  // App-facing cents; auto-assign suggestions never negative.
-  assign_cents: centsSchema.min(0),
+  // Absolute assigned amount in milliunits; auto-assign suggestions are never negative.
+  assigned: nonNegativeMilliunitsSchema,
 });
 
 // ---- payees ------------------------------------------------------------------
@@ -176,7 +175,40 @@ export const frequencySchema = z.enum(FREQUENCIES);
 
 // ---- budget restore -------------------------------------------------------------
 
+/**
+ * Backup document versions. 1 (the original syscd format, no `format_version`
+ * key): amounts in CENTS. 2: amounts in MILLIUNITS, like the rest of the API.
+ * `budget_export` writes 2; `budget_restore` reads both.
+ */
+export const BACKUP_FORMAT_VERSION = 2;
+export const backupFormatVersionSchema = z
+  .union([z.literal(1), z.literal(2)])
+  .optional()
+  .describe('Backup format: 2 = amounts in milliunits (what budget_export writes); 1 or absent = legacy backup with amounts in cents');
+
+/**
+ * Bring a restore payload to the current format: a version-1 (or unversioned)
+ * backup carries cents, so its transaction and assignment amounts are scaled
+ * to milliunits. Pure; returns a new object, never mutates the input.
+ */
+export function upgradeRestorePayload<
+  P extends {
+    format_version?: 1 | 2;
+    transactions: ReadonlyArray<{ outflow: number; inflow: number }>;
+    assignments: ReadonlyArray<{ budgeted: number }>;
+  },
+>(payload: P): P & { format_version: 2 } {
+  if (payload.format_version === BACKUP_FORMAT_VERSION) return payload as P & { format_version: 2 };
+  return {
+    ...payload,
+    format_version: BACKUP_FORMAT_VERSION,
+    transactions: payload.transactions.map((t) => ({ ...t, outflow: t.outflow * 10, inflow: t.inflow * 10 })),
+    assignments: payload.assignments.map((a) => ({ ...a, budgeted: a.budgeted * 10 })),
+  };
+}
+
 export const restorePayloadShape = {
+  format_version: backupFormatVersionSchema,
   groups: z.array(z.string().min(1).max(500)).max(1000),
   categories: z
     .array(
@@ -204,8 +236,8 @@ export const restorePayloadShape = {
         payee: z.string().max(500),
         categoryIndex: z.number().int().min(0).max(9999).nullable(),
         memo: z.string().max(2000),
-        outflow: centsSchema.min(0),
-        inflow: centsSchema.min(0),
+        outflow: nonNegativeMilliunitsSchema,
+        inflow: nonNegativeMilliunitsSchema,
         cleared: clearedSchema,
         flag: z.string().max(100),
         transferPeerIndex: z.number().int().min(0).max(9999).nullable(),
@@ -217,7 +249,7 @@ export const restorePayloadShape = {
       z.object({
         categoryIndex: z.number().int().min(0).max(9999),
         month: monthDateSchema,
-        budgeted: centsSchema,
+        budgeted: milliunitsSchema,
       }),
     )
     .max(500000),

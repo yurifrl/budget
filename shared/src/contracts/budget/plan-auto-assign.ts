@@ -6,7 +6,7 @@ import { autoAssignRowSchema, budgetId, monthDateSchema } from './schemas';
 export const planAutoAssign = defineOperation({
   name: 'budget_plan_auto_assign',
   description:
-    'Persist the absolute assigned amounts (assign_cents, in CENTS; stored as milliunits) computed by one auto-assign strategy for a month, exactly as posted.',
+    'Persist the absolute assigned amounts (rows[].assigned, integer MILLIUNITS, 12.34 = 12340) computed by one auto-assign strategy for a month, exactly as posted.',
   input: z.object({
     budget_id: budgetId,
     month: monthDateSchema,

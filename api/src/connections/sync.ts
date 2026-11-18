@@ -2,9 +2,9 @@
  * Connections→budget transaction sync engine (v1.1 Phase 4).
  *
  * Pulls transactions for every budget account linked to one connection
- (`accounts.connection_id` + `external_account_id`), converts upstream signed
- * cent amounts into the storage boundary's signed-milliunit shape
- * (cents × 10 — the same conversion `store.centsFrom` uses for balances), and
+ (`accounts.connection_id` + `external_account_id`), stores the
+ * adapters' signed milliunit amounts as they are (each adapter converts its
+ * provider's unit once, at its own boundary), and
  * persists them through the budget `transactions` table with an import ledger
  * in `connection_transactions` (`import_id` = `<provider>:<external txn id>`,
  * idempotent across re-pulls).
@@ -98,13 +98,10 @@ const payloadFromRow = (row: { date: string; amount: number; memo: string | null
 const samePayload = (a: OwnedPayload, b: OwnedPayload): boolean =>
   a.date === b.date && a.amount === b.amount && a.memo === b.memo && a.payee === b.payee;
 
-/** Upstream cents → storage milliunits (×10, the boundary conversion). */
-const milliFromUpstream = (cents: number): number => Math.round(cents) * 10;
-
 /**
- * Per-account balance delta accumulators, in CENTS, bucketed by the row's
- * current cleared state so refreshed amounts move the right cached balance
- * (applyBalanceDeltas multiplies by 10 — deltas are its input unit).
+ * Per-account balance delta accumulators, in MILLIUNITS (the adapters already
+ * hand amounts over in milliunits), bucketed by the row's current cleared
+ * state so refreshed amounts move the right cached balance.
  */
 interface AccountDeltas {
   cleared_delta: number;
@@ -277,8 +274,7 @@ async function syncOnce(
       const deltas: AccountDeltas = { cleared_delta: 0, uncleared_delta: 0 };
 
       for (const txn of upstream.transactions) {
-        const milli = milliFromUpstream(txn.amountCents);
-        const cents = milli / 10;
+        const milli = txn.amount;
         const importId = `${row.provider}:${txn.externalId}`;
         const existing = (
           await pg.query<ExistingTxnRow>(
@@ -323,7 +319,7 @@ async function syncOnce(
             ],
           );
           result.added += 1;
-          deltas[cleared === 'cleared' ? 'cleared_delta' : 'uncleared_delta'] += cents;
+          deltas[cleared === 'cleared' ? 'cleared_delta' : 'uncleared_delta'] += milli;
           continue;
         }
 
@@ -375,7 +371,7 @@ async function syncOnce(
         );
         result.updated += 1;
         const bucket = existing.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';
-        deltas[bucket] += cents - Number(existing.amount) / 10;
+        deltas[bucket] += milli - Number(existing.amount);
       }
 
       // Missing-upstream deletes: engine-owned, unblocked rows within the
@@ -408,7 +404,7 @@ async function syncOnce(
         if (seen.has(trackedRow.external_transaction_id)) continue;
         await ledger.tombstoneTransaction(pg, trackedRow.id);
         const bucket = trackedRow.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';
-        deltas[bucket] -= Number(trackedRow.amount) / 10;
+        deltas[bucket] -= Number(trackedRow.amount);
         result.deleted += 1;
       }
 

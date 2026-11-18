@@ -269,7 +269,7 @@ describe.skipIf(!dbReady)('/mcp over the real budget API', () => {
     const client = await connect(app, `u:${ownerId}`);
     const added = await client.callTool({
       name: 'budget_transaction_add',
-      arguments: { budget_id: budgetId, account_id: accountId, amount_cents: -1250, payee: 'Corner Cafe', date: '2025-03-04', memo: 'lunch' },
+      arguments: { budget_id: budgetId, account_id: accountId, amount: -12500, payee: 'Corner Cafe', date: '2025-03-04', memo: 'lunch' },
     });
     expect(added.isError).toBeFalsy();
     const row = JSON.parse((added.content as { text: string }[])[0]!.text);
@@ -283,7 +283,7 @@ describe.skipIf(!dbReady)('/mcp over the real budget API', () => {
 
     const foreign = await client.callTool({
       name: 'budget_transaction_add',
-      arguments: { budget_id: otherBudget, account_id: accountId, amount_cents: -1, payee: 'x' },
+      arguments: { budget_id: otherBudget, account_id: accountId, amount: -10, payee: 'x' },
     });
     expect(foreign.isError).toBe(true);
     await client.close();

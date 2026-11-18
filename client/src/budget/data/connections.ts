@@ -36,7 +36,7 @@ export interface ConnectionJson {
   updated_at: string;
 }
 
-/** Credit-card details of a CREDIT upstream account (integer cents; mirrors server `CreditDetails`). */
+/** Credit-card details of a CREDIT upstream account, in the app's cents (converted from the wire's milliunits by `externalAccountFromWire`). */
 export interface CreditDetailsJson {
   limitCents: number | null;
   availableCents: number | null;
@@ -46,7 +46,7 @@ export interface CreditDetailsJson {
   latestBill: { totalCents: number | null; dueDate: string | null; minimumPaymentCents: number | null } | null;
 }
 
-/** An upstream account discovered for a connection. Balances are integer cents. */
+/** An upstream account discovered for a connection, in the app's cents (the wire carries milliunits). */
 export interface ExternalAccountJson {
   externalId: string;
   name: string;
@@ -191,4 +191,72 @@ export interface ConnectionSummaryJson {
   connectionId: string;
   accounts: ConnectionAccountSummaryJson[];
   totals: ConnectionCountsJson;
+}
+
+// ---------------------------------------------------------------------------
+// Upstream amounts: milliunits on the wire, cents in the app (phase 5d)
+// ---------------------------------------------------------------------------
+
+/** Credit details as the API sends them (integer milliunits). */
+export interface CreditDetailsWire {
+  limit: number | null;
+  available: number | null;
+  used: number | null;
+  minimumPayment: number | null;
+  dueDate: string | null;
+  latestBill: { total: number | null; dueDate: string | null; minimumPayment: number | null } | null;
+}
+
+/** An upstream account as the API sends it (amounts in integer milliunits). */
+export interface ExternalAccountWire {
+  externalId: string;
+  name: string;
+  type: 'BANK' | 'CREDIT';
+  currencyCode: string | null;
+  balance: number | null;
+  institution: string | null;
+  credit?: CreditDetailsWire | null;
+}
+
+export interface ConnectionUpstreamWire {
+  connection: ConnectionJson;
+  accounts: (ExternalAccountWire & { linkedAccountId: string | null })[] | null;
+}
+
+const centsOrNull = (milli: number | null): number | null => (milli == null ? null : Math.round(milli / 10));
+
+/** Wire (milliunits) -> the app's cents-shaped upstream account. */
+export function externalAccountFromWire<T extends ExternalAccountWire>(
+  wire: T,
+): Omit<T, 'balance' | 'credit'> & ExternalAccountJson {
+  const { balance, credit, ...rest } = wire;
+  const out = { ...rest, balanceCents: centsOrNull(balance) } as Omit<T, 'balance' | 'credit'> & ExternalAccountJson;
+  if (credit !== undefined) {
+    out.credit =
+      credit === null
+        ? null
+        : {
+            limitCents: centsOrNull(credit.limit),
+            availableCents: centsOrNull(credit.available),
+            usedCents: centsOrNull(credit.used),
+            minimumPaymentCents: centsOrNull(credit.minimumPayment),
+            dueDate: credit.dueDate,
+            latestBill:
+              credit.latestBill == null
+                ? null
+                : {
+                    totalCents: centsOrNull(credit.latestBill.total),
+                    dueDate: credit.latestBill.dueDate,
+                    minimumPaymentCents: centsOrNull(credit.latestBill.minimumPayment),
+                  },
+          };
+  }
+  return out;
+}
+
+export function upstreamFromWire(rows: readonly ConnectionUpstreamWire[]): ConnectionUpstreamJson[] {
+  return rows.map((row) => ({
+    connection: row.connection,
+    accounts: row.accounts === null ? null : row.accounts.map((a) => externalAccountFromWire(a)),
+  }));
 }

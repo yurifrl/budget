@@ -3,10 +3,12 @@
  *
  * Storage is the YNAB-v1-compatible schema (migration 0004): milliunits,
  * signed transaction amounts, payee_id references, the goal model, and
- * first-of-month date months. This layer is the STORAGE BOUNDARY — endpoints
- * accept app-facing input (cents, inflow/outflow, payee names, MonthKey) and
- * convert to YNAB columns on write; reads return raw rows that `mapping.ts`
- * converts back to the engine domain.
+ * first-of-month date months. The wire carries MILLIUNITS for every amount,
+ * both directions. This layer is the BOUNDARY — endpoints accept app-facing
+ * input (cents, inflow/outflow, payee names, MonthKey) and convert to wire
+ * milliunits on write; reads return raw rows that `mapping.ts` converts back to
+ * the engine domain (or, for the few cents-shaped app types, a
+ * `transformResponse` converts here).
  *
  * Budget-awareness: every read passes `?budget_id=…`, every insert sends
  * `budget_id`, and every cache tag is keyed by the budget id — so invalidation
@@ -104,13 +106,23 @@ import type {
   ConnectionsSyncResult,
   SyncStatusJson,
   ExternalAccountJson,
+  ConnectionUpstreamWire,
+  ExternalAccountWire,
 } from './connections';
-import { centsToMilli, monthKeyToDate, snakeSubTxn, snakeTxn, snakeTxnPatch } from './mapping';
-
-/** snakeSubTxn rows as the contract's `subtransactions` input; restore payload as its input minus budget_id. */
-type SubWire = z.input<typeof transactionsCreate.input>['subtransactions'];
-type RestoreWire = Omit<z.input<typeof budgetRestore.input>, 'budget_id'>;
-import type { ImportTxnWire, SubTxnInput, TransactionInput } from './mapping';
+import { externalAccountFromWire, upstreamFromWire } from './connections';
+import {
+  centsToMilli,
+  milliToCents,
+  monthKeyToDate,
+  restorePayloadToWire,
+  snakeSubTxn,
+  snakeTxn,
+  snakeTxnPatch,
+  type CentsRestorePayload,
+  type ImportTxnWire,
+  type SubTxnInput,
+  type TransactionInput,
+} from './mapping';
 import type {
   AccountRow,
   AccountTypeRow,
@@ -127,6 +139,10 @@ import type {
   UsdBrlRateRow,
 } from './rows';
 
+/** snakeSubTxn rows as the contract's `subtransactions` input; restore payload as its input minus budget_id. */
+type SubWire = z.input<typeof transactionsCreate.input>['subtransactions'];
+type RestoreWire = Omit<z.input<typeof budgetRestore.input>, 'budget_id'>;
+
 /**
  * Engine-facing target payload for PUT /category-targets — mirrors
  * `CategoryTarget` in domain/types.ts (cents + camelCase config JSONB).
@@ -139,12 +155,12 @@ export interface CategoryTargetPayload {
   config: Record<string, unknown>;
 }
 
-/** Row returned by GET /category-targets (storage shape, cents). */
+/** Row returned by GET /category-targets (wire shape, amount in milliunits). */
 export interface CategoryTargetRow {
   budget_id: string;
   category_id: string;
   kind: 'weekly' | 'monthly' | 'yearly' | 'custom';
-  amount_cents: number;
+  amount: number;
   snooze_month: number | null;
   config: Record<string, unknown>;
 }
@@ -156,7 +172,7 @@ export function targetsByCategoryFromRows(rows: readonly CategoryTargetRow[]): M
     map.set(row.category_id, {
       categoryId: row.category_id,
       kind: row.kind,
-      amountCents: row.amount_cents,
+      amountCents: milliToCents(row.amount),
       snoozeMonth: row.snooze_month,
       config: row.config,
     });
@@ -360,13 +376,13 @@ export const budgetApi = createApi({
       invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'Assignments', id: budgetId }],
     }),
 
-    /** Auto-assign panel: persist one strategy's computed rows (absolute cents) for a month. */
+    /** Auto-assign panel: persist one strategy's computed rows (absolute cents in, milliunits on the wire) for a month. */
     applyAutoAssign: b.mutation<null, BudgetScope & { month: MonthKey; rows: { categoryId: string; assignCents: Cents }[] }>({
       query: ({ budgetId, month, rows }) =>
         contractRequest(planAutoAssign, {
           budget_id: budgetId,
           month: monthKeyToDate(month),
-          rows: rows.map((r) => ({ category_id: r.categoryId, assign_cents: r.assignCents })),
+          rows: rows.map((r) => ({ category_id: r.categoryId, assigned: centsToMilli(r.assignCents) })),
         }),
       invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'Assignments', id: budgetId }],
     }),
@@ -443,8 +459,8 @@ export const budgetApi = createApi({
           payee,
           category_id: categoryId,
           memo,
-          outflow_cents: outflowCents,
-          inflow_cents: inflowCents,
+          outflow: centsToMilli(outflowCents),
+          inflow: centsToMilli(inflowCents),
           frequency,
           month_last_day: monthLastDay,
           attach_transaction_id: attachTransactionId,
@@ -474,7 +490,7 @@ export const budgetApi = createApi({
           categoryId,
           budget_id: budgetId,
           kind: target.kind,
-          amount_cents: target.amountCents,
+          amount: centsToMilli(target.amountCents),
           snooze_month: target.snoozeMonth ?? null,
           config: target.config,
         }),
@@ -834,7 +850,7 @@ export const budgetApi = createApi({
           name,
           type,
           on_budget: onBudget ?? true,
-          balance_cents: balanceCents,
+          balance: centsToMilli(balanceCents),
           ...(userId ? { user_id: userId } : {}),
         }),
       invalidatesTags: (_r, _e, { budgetId }) => [
@@ -867,7 +883,7 @@ export const budgetApi = createApi({
           name,
           note,
           closed,
-          working_balance_cents: workingBalanceCents,
+          working_balance: workingBalanceCents === undefined ? undefined : centsToMilli(workingBalanceCents),
           user_id: userId,
         }),
       invalidatesTags: (_r, _e, { budgetId }) => [
@@ -906,7 +922,7 @@ export const budgetApi = createApi({
         contractRequest(accountsReconcile, {
           id: accountId,
           budget_id: budgetId,
-          stated_balance_cents: statedBalanceCents,
+          stated_balance: centsToMilli(statedBalanceCents),
           ...(reconcileAll ? { reconcile_all: true } : {}),
         }),
       invalidatesTags: (_r, _e, { budgetId }) => [
@@ -982,6 +998,10 @@ export const budgetApi = createApi({
         method: 'POST',
         body: { provider, itemId },
       }),
+      transformResponse: (wire: { connection: ConnectionJson; accounts: ExternalAccountWire[] }) => ({
+        connection: wire.connection,
+        accounts: wire.accounts.map((a) => externalAccountFromWire(a)),
+      }),
       invalidatesTags: ['Connections'],
     }),
 
@@ -1055,6 +1075,7 @@ export const budgetApi = createApi({
      */
     getUpstreamAccounts: b.query<ConnectionUpstreamJson[], void>({
       query: () => ({ url: '/connections/upstream' }),
+      transformResponse: (wire: ConnectionUpstreamWire[]) => upstreamFromWire(wire),
       providesTags: ['Connections'],
     }),
 
@@ -1120,10 +1141,11 @@ export const budgetApi = createApi({
         transactions: number;
         assignments: number;
       },
-      { budgetId: string; payload: unknown }
+      // The transfer payload (transfer/payload.ts) is domain cents; sent as a format-2 (milliunit) document.
+      { budgetId: string; payload: CentsRestorePayload }
     >({
       query: ({ budgetId, payload }) =>
-        contractRequest(budgetRestore, { budget_id: budgetId, ...(payload as RestoreWire) }),
+        contractRequest(budgetRestore, { budget_id: budgetId, ...(restorePayloadToWire(payload) as RestoreWire) }),
       invalidatesTags: (_r, _e, { budgetId }) => [
         { type: 'Groups', id: budgetId },
         { type: 'Categories', id: budgetId },

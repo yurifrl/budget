@@ -54,7 +54,7 @@ async function ensureCardPaymentCategory(client: Queryable, budgetId: string, na
 
 const createAccount = implement(
   accountsCreate,
-  async (_c, { budget_id, name, type, on_budget, balance_cents, user_id }) => {
+  async (_c, { budget_id, name, type, on_budget, balance, user_id }) => {
     const accountId = await withTransaction(pool, async (client) => {
       if (!(await accountsStore.budgetExists(client, budget_id))) throw new HttpError(404, 'budget not found');
 
@@ -75,10 +75,10 @@ const createAccount = implement(
       await ensureTransferPayee(client, budget_id, accountId, name);
       if (type === 'creditCard' && on_budget) await ensureCardPaymentCategory(client, budget_id, name);
 
-      if (balance_cents !== 0) {
+      if (balance !== 0) {
         // Positive opening balance = inflow; debt types flip the sign so the
-        // account starts at the amount owed (balance_cents is stated |balance|).
-        const deltaMilli = (DEBT_TYPES[type] ? -balance_cents : balance_cents) * 10;
+        // account starts at the amount owed (balance is stated |balance|).
+        const deltaMilli = DEBT_TYPES[type] ? -balance : balance;
         const payeeId = await findOrCreatePayeeByName(client, budget_id, 'Starting Balance');
         await accountsStore.insertOpeningBalanceTransaction(client, budget_id, accountId, payeeId, deltaMilli);
         await accountsStore.setUnclearedBalance(client, accountId, deltaMilli);
@@ -93,7 +93,7 @@ const createAccount = implement(
 
 const updateAccount = implement(
   accountsUpdate,
-  async (c, { id: accountId, budget_id, name, note, closed, working_balance_cents, link, user_id }) => {
+  async (c, { id: accountId, budget_id, name, note, closed, working_balance, link, user_id }) => {
     const user = c.get('user');
     if (!user) throw new HttpError(401, 'unauthorized');
     await withTransaction(pool, async (client) => {
@@ -111,7 +111,7 @@ const updateAccount = implement(
       const mutatesFields =
         name !== undefined ||
         note !== undefined ||
-        working_balance_cents !== undefined ||
+        working_balance !== undefined ||
         user_id !== undefined ||
         link !== undefined;
       if (isClosed && closed !== false && mutatesFields) {
@@ -122,10 +122,10 @@ const updateAccount = implement(
       // decision): the balance is set directly, no adjustment entry is booked.
       // The delta lands in the uncleared bucket — the balance stays unverified
       // until reconciled, and future ledger deltas keep applying on top.
-      if (working_balance_cents !== undefined) {
+      if (working_balance !== undefined) {
         const current = await accountsStore.getAccountBalances(client, accountId);
         const workingMilli = Number(current.cleared_balance) + Number(current.uncleared_balance);
-        const diff = working_balance_cents * 10 - workingMilli;
+        const diff = working_balance - workingMilli;
         if (diff !== 0) {
           await accountsStore.addToUnclearedBalance(client, accountId, diff);
         }
@@ -186,7 +186,7 @@ const updateAccount = implement(
 
 const reconcileAccount = implement(
   accountsReconcile,
-  async (_c, { id: accountId, budget_id, stated_balance_cents, reconcile_all }) => {
+  async (_c, { id: accountId, budget_id, stated_balance, reconcile_all }) => {
     return withTransaction(pool, async (client) => {
       const acc = await accountsStore.getAccountBudgetClosed(client, accountId);
       // The account must exist AND belong to the budget in the request body;
@@ -214,7 +214,7 @@ const reconcileAccount = implement(
       // (same live-row filter as recomputeAccountBalances; split legs are
       // separate rows that carry no amount into the sum) so a stale cache or a
       // working-balance override (no ledger row) is absorbed by the adjustment.
-      const statedMilli = stated_balance_cents * 10;
+      const statedMilli = stated_balance;
       const diff = statedMilli - (await accountsStore.ledgerSum(client, accountId));
 
       if (diff !== 0) {

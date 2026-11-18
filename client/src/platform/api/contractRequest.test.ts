@@ -50,8 +50,8 @@ describe('contractRequest', () => {
     expect(contractRequest(c as never, { id: 'c1', budget_id: 'b', target: null } as never)).toEqual({
       url: '/categories/c1/target', method: 'PATCH', params: { budget_id: 'b' }, body: null,
     });
-    expect(contractRequest(c as never, { id: 'c1', budget_id: 'b', target: { amount_cents: 5, cadence: 'monthly' } } as never).body)
-      .toEqual({ amount_cents: 5, cadence: 'monthly' });
+    expect(contractRequest(c as never, { id: 'c1', budget_id: 'b', target: { amount: 50, cadence: 'monthly' } } as never).body)
+      .toEqual({ amount: 50, cadence: 'monthly' });
   });
 
   test('a missing path param throws', () => {

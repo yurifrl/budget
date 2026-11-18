@@ -2,7 +2,7 @@
  * Budget transfer payload — the canonical interchange shape between an
  * exported archive (Plan + Register TSVs) and a restored budget.
  *
- * Amounts are domain CENTS (integers). The server converts to milliunits (x10).
+ * Amounts are domain CENTS (integers); data/mapping restorePayloadToWire sends them as milliunits.
  */
 
 import { monthKeyToDate } from '../data/mapping';

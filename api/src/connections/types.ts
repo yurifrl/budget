@@ -31,62 +31,62 @@ export type ItemState = {
 
 export type ExternalAccountType = 'BANK' | 'CREDIT';
 
-/** Latest credit-card statement, integer cents. */
+/** Latest credit-card statement, integer milliunits. */
 export type CreditBill = {
-  totalCents: number | null;
+  total: number | null;
   dueDate: string | null;
-  minimumPaymentCents: number | null;
+  minimumPayment: number | null;
 };
 
 /**
- * Credit-card details for a CREDIT upstream account (integer cents, magnitudes
- * — all non-negative). Needed because issuers such as Itau report
- * `balanceCents = 0` for cards. Every field is null when the provider did not
+ * Credit-card details for a CREDIT upstream account (integer milliunits,
+ * magnitudes — all non-negative). Needed because issuers such as Itau report
+ * `balance = 0` for cards. Every field is null when the provider did not
  * report it.
  *
- * `usedCents` rule: the provider's total credit line ("LIMITE_CREDITO_TOTAL",
+ * `used` rule: the provider's total credit line ("LIMITE_CREDITO_TOTAL",
  * falling back to the largest reported line) `used` amount when present, since
  * the top-level limit/available fields are unreliable for shared multi-card
- * limits; otherwise `limit - available`. `limitCents`/`availableCents` come
+ * limits; otherwise `limit - available`. `limit`/`available` come
  * from that same line so the three figures stay consistent.
  */
 export type CreditDetails = {
-  limitCents: number | null;
-  availableCents: number | null;
-  usedCents: number | null;
-  minimumPaymentCents: number | null;
+  limit: number | null;
+  available: number | null;
+  used: number | null;
+  minimumPayment: number | null;
   dueDate: string | null;
   latestBill: CreditBill | null;
 };
 
-/** An upstream account discovered for a connection. Balances are integer cents. */
+/** An upstream account discovered for a connection. Amounts are integer milliunits. */
 export type ExternalAccount = {
   externalId: string;
   name: string;
   type: ExternalAccountType;
   currencyCode: string | null;
-  /** Signed integer cents; null when the provider did not report a balance. */
-  balanceCents: number | null;
+  /** Signed integer milliunits; null when the provider did not report a balance. */
+  balance: number | null;
   /** Human institution name (bank/card issuer), when known. */
   institution: string | null;
   /** Credit-card details; null for BANK accounts (and when none were reported). */
   credit?: CreditDetails | null;
 };
 
-/** One upstream transaction, normalized for the sync engine. Amounts are integer cents. */
+/** One upstream transaction, normalized for the sync engine. Amounts are integer milliunits. */
 export type AggregatedTransaction = {
   externalId: string;
   /** The upstream account the transaction belongs to. */
   externalAccountId: string;
   description: string;
   /**
-   * Signed integer cents, normalized by the adapter for EVERY account type:
+   * Signed integer milliunits, normalized by the adapter for EVERY account type:
    * negative = money leaving you (a purchase, incl. card purchases), positive
    * = money arriving (incl. card bill payments). Providers whose credit
    * accounts use the opposite convention invert inside the adapter — the sync
    * engine applies no per-type logic.
    */
-  amountCents: number;
+  amount: number;
   /** Upstream cleared/completed state — import policy (e.g. always uncleared) stays engine-side. */
   cleared: boolean;
   /** ISO date (YYYY-MM-DD) or full ISO timestamp, as reported upstream. */

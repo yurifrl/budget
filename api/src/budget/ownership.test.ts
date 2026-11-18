@@ -262,7 +262,7 @@ describe.skipIf(!dbReady)('budget route ownership (Phase 2, USER-04/05)', () => 
         name: 'Smuggled Account',
         type: 'checking',
         on_budget: true,
-        balance_cents: 0,
+        balance: 0,
       }),
     });
     expect(res.status).toBe(404);
@@ -285,7 +285,7 @@ describe.skipIf(!dbReady)('budget route ownership (Phase 2, USER-04/05)', () => 
         name: 'Split Id Account',
         type: 'checking',
         on_budget: true,
-        balance_cents: 0,
+        balance: 0,
       }),
     });
     expect(res.status).toBe(404);
@@ -297,7 +297,7 @@ describe.skipIf(!dbReady)('budget route ownership (Phase 2, USER-04/05)', () => 
     const ok = await accounts.request(`/?budget_id=${ownedBudget}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ budget_id: ownedBudget, name: 'Same Id Account', type: 'checking', on_budget: true, balance_cents: 0 }),
+      body: JSON.stringify({ budget_id: ownedBudget, name: 'Same Id Account', type: 'checking', on_budget: true, balance: 0 }),
     });
     expect(ok.status).toBe(201);
     await pool!.query('DELETE FROM accounts WHERE id = $1', [createdAccountSchema.parse(await ok.json()).id]);
@@ -318,7 +318,7 @@ describe.skipIf(!dbReady)('budget route ownership (Phase 2, USER-04/05)', () => 
         name: 'Admin Bypass Account',
         type: 'checking',
         on_budget: true,
-        balance_cents: 0,
+        balance: 0,
       }),
     });
     expect(write.status).toBe(201);

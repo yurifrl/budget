@@ -99,7 +99,7 @@ describe('transaction writes carry no client-computed deltas', () => {
 });
 
 describe('contract-derived requests', () => {
-  test('setCategoryTarget: PUT /category-targets/:id?budget_id with cents body', async () => {
+  test('setCategoryTarget: PUT /category-targets/:id?budget_id with a milliunit body', async () => {
     const c = await run(() =>
       budgetApi.endpoints.setCategoryTarget.initiate({
         budgetId: 'b-1', categoryId: 'cat-x',
@@ -108,7 +108,7 @@ describe('contract-derived requests', () => {
     );
     expect(c.method).toBe('PUT');
     expect(c.url).toBe(`${BASE}/category-targets/cat-x?budget_id=b-1`);
-    expect(c.body).toEqual({ kind: 'monthly', amount_cents: 1000, snooze_month: null, config: {} });
+    expect(c.body).toEqual({ kind: 'monthly', amount: 10000, snooze_month: null, config: {} });
   });
 
   test('setAssigned: milliunits on the wire', async () => {
@@ -151,12 +151,22 @@ describe('contract-derived requests', () => {
     expect(c.body).toEqual({ budget_id: 'b-1', link: { connectionId: null, externalAccountId: null } });
   });
 
-  test('restoreBudget: budget_id in the query, payload as the body', async () => {
-    const c = await run(() =>
-      budgetApi.endpoints.restoreBudget.initiate({ budgetId: 'b-1', payload: { groups: [], categories: [] } }),
-    );
+  test('restoreBudget: budget_id in the query, payload as a format-2 (milliunit) body', async () => {
+    const payload = {
+      groups: [],
+      categories: [],
+      transactions: [{ accountIndex: 0, outflow: 1234, inflow: 0 }],
+      assignments: [{ categoryIndex: 0, month: '2026-01-01', budgeted: -500 }],
+    };
+    const c = await run(() => budgetApi.endpoints.restoreBudget.initiate({ budgetId: 'b-1', payload }));
     expect(c.url).toBe(`${BASE}/budgets/restore?budget_id=b-1`);
-    expect(c.body).toEqual({ groups: [], categories: [] });
+    expect(c.body).toEqual({
+      groups: [],
+      categories: [],
+      format_version: 2,
+      transactions: [{ accountIndex: 0, outflow: 12340, inflow: 0 }],
+      assignments: [{ categoryIndex: 0, month: '2026-01-01', budgeted: -5000 }],
+    });
   });
 });
 

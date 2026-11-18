@@ -44,7 +44,7 @@ export async function generateDueOccurrences(budgetId: string): Promise<Generati
         flipped.rows.map((r) => ({
           account_id: r.account_id,
           cleared_delta: 0,
-          uncleared_delta: Number(r.amount) / 10,
+          uncleared_delta: Number(r.amount),
         })),
       );
     }

@@ -147,9 +147,9 @@ for (const lane of ['client', 'none'] as const) {
   /** The deltas an OLD client would send for its own row (none in the "none" lane). */
   const own = (before: LedgerRow | null, after: LedgerRow | null): { deltas?: BalanceDelta[] } =>
     lane === 'client' ? { deltas: deriveDeltas(before, after) } : {};
-  const led = (account_id: string, cents: number, cleared: LedgerRow['cleared'] = 'uncleared'): LedgerRow => ({
+  const led = (account_id: string, milli: number, cleared: LedgerRow['cleared'] = 'uncleared'): LedgerRow => ({
     account_id,
-    amount: cents * 10,
+    amount: milli,
     cleared,
   });
 
@@ -159,8 +159,8 @@ for (const lane of ['client', 'none'] as const) {
     payee: xfer('itau'),
     category_id: null,
     memo: 'm',
-    outflow_cents: 20000,
-    inflow_cents: 0,
+    outflow: 200000,
+    inflow: 0,
     cleared: 'uncleared',
     approved: true,
     flag: null,
@@ -169,14 +169,14 @@ for (const lane of ['client', 'none'] as const) {
   });
 
   async function create(over: Record<string, unknown> = {}) {
-    const t = txn(over) as ReturnType<typeof txn> & { outflow_cents: number; inflow_cents: number };
-    const cents = (t.inflow_cents as number) - (t.outflow_cents as number);
+    const t = txn(over) as ReturnType<typeof txn> & { outflow: number; inflow: number };
+    const milli = (t.inflow as number) - (t.outflow as number);
     const res = await send('POST', '/transactions', {
       budget_id: budgetId,
       txn: t,
-      ...own(null, led(t.account_id, cents, t.cleared as LedgerRow['cleared'])),
+      ...own(null, led(t.account_id, milli, t.cleared as LedgerRow['cleared'])),
     });
-    return { res, body: res.status === 201 ? ((await res.json()) as Leg) : null, cents };
+    return { res, body: res.status === 201 ? ((await res.json()) as Leg) : null, milli };
   }
   async function patch(id: string, p: Record<string, unknown>) {
     const before = await getRow(id);
@@ -184,8 +184,8 @@ for (const lane of ['client', 'none'] as const) {
     const after: LedgerRow = {
       account_id: (p.account_id as string) ?? before.account_id,
       amount:
-        p.outflow_cents !== undefined || p.inflow_cents !== undefined
-          ? (((p.inflow_cents as number) ?? 0) - ((p.outflow_cents as number) ?? 0)) * 10
+        p.outflow !== undefined || p.inflow !== undefined
+          ? ((p.inflow as number) ?? 0) - ((p.outflow as number) ?? 0)
           : before.amount,
       cleared: (p.cleared as LedgerRow['cleared']) ?? before.cleared,
     };
@@ -228,7 +228,7 @@ for (const lane of ['client', 'none'] as const) {
     });
 
     test('create cleared inflow moves the CLEARED bucket of both accounts', async () => {
-      const { body } = await create({ outflow_cents: 0, inflow_cents: 5000, cleared: 'cleared' });
+      const { body } = await create({ outflow: 0, inflow: 50000, cleared: 'cleared' });
       const src = await getRow(body!.id);
       const mirror = await getRow(src.transfer_transaction_id!);
       expect(mirror.cleared).toBe('cleared');
@@ -239,21 +239,21 @@ for (const lane of ['client', 'none'] as const) {
     });
 
     test('edit amount updates the mirror and both balances', async () => {
-      const { body } = await create({ outflow_cents: 1000 });
-      expect((await patch(body!.id, { outflow_cents: 1500, inflow_cents: 0 })).status).toBe(204);
+      const { body } = await create({ outflow: 10000 });
+      expect((await patch(body!.id, { outflow: 15000, inflow: 0 })).status).toBe(204);
       const src = await getRow(body!.id);
       expect(Number((await getRow(src.transfer_transaction_id!)).amount)).toBe(15000);
       expect(await balances(A.itau)).toEqual([0, 15000]);
       await expectLedgerConsistent(all);
       // direction flip
-      expect((await patch(body!.id, { outflow_cents: 0, inflow_cents: 300 })).status).toBe(204);
+      expect((await patch(body!.id, { outflow: 0, inflow: 3000 })).status).toBe(204);
       expect(Number((await getRow(src.transfer_transaction_id!)).amount)).toBe(-3000);
       await expectLedgerConsistent(all);
       await remove(body!.id);
     });
 
     test('moving a leg to a different account re-points the mirror and keeps every balance equal to the ledger', async () => {
-      const { body } = await create({ outflow_cents: 700 });
+      const { body } = await create({ outflow: 7000 });
       expect((await patch(body!.id, { account_id: A.third })).status).toBe(204);
       const src = await getRow(body!.id);
       const mirror = await getRow(src.transfer_transaction_id!);
@@ -275,7 +275,7 @@ for (const lane of ['client', 'none'] as const) {
     });
 
     test('toggling cleared on one leg moves only that leg bucket', async () => {
-      const { body } = await create({ outflow_cents: 900 });
+      const { body } = await create({ outflow: 9000 });
       expect((await patch(body!.id, { cleared: 'cleared' })).status).toBe(204);
       const src = await getRow(body!.id);
       expect((await getRow(src.transfer_transaction_id!)).cleared).toBe('uncleared'); // each bank clears on its own
@@ -291,7 +291,7 @@ for (const lane of ['client', 'none'] as const) {
     });
 
     test('plain -> transfer creates the mirror; transfer -> plain removes it; transfer -> other peer swaps it', async () => {
-      const { body } = await create({ payee: 'Padaria', outflow_cents: 700, category_id: categoryId });
+      const { body } = await create({ payee: 'Padaria', outflow: 7000, category_id: categoryId });
       expect((await getRow(body!.id)).transfer_transaction_id).toBeNull();
       expect(await balances(A.itau)).toEqual([0, 0]);
 
@@ -323,7 +323,7 @@ for (const lane of ['client', 'none'] as const) {
     });
 
     test('a category sent while editing an on-budget transfer is dropped', async () => {
-      const { body } = await create({ outflow_cents: 100 });
+      const { body } = await create({ outflow: 1000 });
       expect((await patch(body!.id, { category_id: categoryId })).status).toBe(204);
       expect((await getRow(body!.id)).category_id).toBeNull();
       await remove(body!.id);
@@ -331,7 +331,7 @@ for (const lane of ['client', 'none'] as const) {
 
     for (const side of ['source', 'mirror'] as const) {
       test(`deleting the ${side} leg deletes the other and reverses both balances`, async () => {
-        const { body } = await create({ outflow_cents: 1234, cleared: 'cleared' });
+        const { body } = await create({ outflow: 12340, cleared: 'cleared' });
         const src = await getRow(body!.id);
         const [victim, other] = side === 'source' ? [src.id, src.transfer_transaction_id!] : [src.transfer_transaction_id!, src.id];
         expect((await remove(victim)).status).toBe(204);
@@ -351,10 +351,10 @@ for (const lane of ['client', 'none'] as const) {
 
       const split = await send('POST', '/transactions', {
         budget_id: budgetId,
-        txn: txn({ outflow_cents: 0 }),
+        txn: txn({ outflow: 0 }),
         subtransactions: [
-          { outflow_cents: 100, inflow_cents: 0, memo: '', category_id: categoryId },
-          { outflow_cents: 200, inflow_cents: 0, memo: '', category_id: categoryId },
+          { outflow: 1000, inflow: 0, memo: '', category_id: categoryId },
+          { outflow: 2000, inflow: 0, memo: '', category_id: categoryId },
         ],
       });
       expect(split.status).toBe(400);
@@ -372,7 +372,7 @@ for (const lane of ['client', 'none'] as const) {
     });
 
     test('off-budget peer: single category-carrying leg stays categorized, mirror has none, balances still follow', async () => {
-      const { body } = await create({ payee: xfer('house'), category_id: categoryId, outflow_cents: 100 });
+      const { body } = await create({ payee: xfer('house'), category_id: categoryId, outflow: 1000 });
       const src = await getRow(body!.id);
       expect(src.category_id).toBe(categoryId);
       expect((await getRow(src.transfer_transaction_id!)).category_id).toBeNull();
@@ -392,7 +392,7 @@ for (const lane of ['client', 'none'] as const) {
       try {
         const before = (await pool!.query('SELECT count(*)::int AS n FROM transactions WHERE budget_id = $1', [budgetId])).rows[0].n;
         const b = [await balances(A.cash), await balances(A.itau)];
-        const r = await create({ outflow_cents: 777777 });
+        const r = await create({ outflow: 7777770 });
         expect(r.res.status).toBeGreaterThanOrEqual(400);
         const after = (await pool!.query('SELECT count(*)::int AS n FROM transactions WHERE budget_id = $1', [budgetId])).rows[0].n;
         expect(after).toBe(before);
@@ -415,7 +415,7 @@ describe.skipIf(!dbReady)('transfers: old-client deltas never double-apply', () 
         budget_id: budgetId,
         txn: {
           account_id: l.cash, date: '2025-07-02', payee: `Transfer : ${l.names.itau}`, category_id: null, memo: '',
-          outflow_cents: 4242, inflow_cents: 0, cleared: 'uncleared', approved: true, flag: null, repeat: 'never',
+          outflow: 42420, inflow: 0, cleared: 'uncleared', approved: true, flag: null, repeat: 'never',
         },
         ...(l === c ? { deltas: [{ account_id: l.cash, cleared_delta: 0, uncleared_delta: -4242 }] } : {}),
       });

@@ -105,8 +105,13 @@ const OF_WRAPPER_NAME = 'MeuPluggy';
 /** Webhook secret env key — read per call so tests can rotate it freely. */
 const WEBHOOK_SECRET_ENV = 'PLUGGY_WEBHOOK_SECRET';
 
-/** Pluggy reports balances/amounts as BRL floats; the boundary is integer cents. */
-const centsFrom = (amount: number): number => Math.round(amount * 100);
+/**
+ * Pluggy reports balances/amounts as currency-unit floats; the port's unit is
+ * integer milliunits. This is the ONE conversion: rounded to whole cents first
+ * (Pluggy amounts carry at most 2 decimals; the float noise of `x * 100` is
+ * removed), then x10, so rows already stored by earlier syncs compare equal.
+ */
+const milliFrom = (amount: number): number => Math.round(amount * 100) * 10;
 
 /** Constant-time compare of two same-length-ish byte strings. */
 function secretsMatch(presented: string, expected: string): boolean {
@@ -138,8 +143,8 @@ export function mapItemStatus(providerStatus: string): ConnectionStatus {
   return STATUS_BY_PROVIDER[providerStatus] ?? 'error';
 }
 
-const centsOrNull = (amount: number | null | undefined): number | null =>
-  amount == null ? null : centsFrom(amount);
+const milliOrNull = (amount: number | null | undefined): number | null =>
+  amount == null ? null : milliFrom(amount);
 
 /** Newest bill first: by dueDate, falling back to createdAt. */
 function latestBillOf(bills: Bill[]): Bill | null {
@@ -159,31 +164,31 @@ export function toCreditDetails(creditData: unknown, bills: Bill[] = []): Credit
   const pool = totalLines.length > 0 ? totalLines : lines.filter((l) => l.usedAmount != null);
   const line = [...pool].sort((a, b) => (b.limitAmount ?? 0) - (a.limitAmount ?? 0))[0];
 
-  let limit = centsOrNull(data?.creditLimit);
-  let available = centsOrNull(data?.availableCreditLimit);
+  let limit = milliOrNull(data?.creditLimit);
+  let available = milliOrNull(data?.availableCreditLimit);
   let used: number | null = null;
   if (line?.usedAmount != null) {
-    used = centsFrom(line.usedAmount);
-    limit = centsOrNull(line.limitAmount) ?? limit;
-    available = centsOrNull(line.availableAmount) ?? (limit != null ? limit - used : available);
+    used = milliFrom(line.usedAmount);
+    limit = milliOrNull(line.limitAmount) ?? limit;
+    available = milliOrNull(line.availableAmount) ?? (limit != null ? limit - used : available);
   } else if (limit != null && available != null) {
     used = Math.max(0, limit - available);
   }
 
   const bill = latestBillOf(bills);
   return {
-    limitCents: limit,
-    availableCents: available,
-    usedCents: used,
-    minimumPaymentCents: centsOrNull(data?.minimumPayment),
+    limit,
+    available,
+    used,
+    minimumPayment: milliOrNull(data?.minimumPayment),
     dueDate: data?.balanceDueDate ?? null,
     latestBill:
       bill == null
         ? null
         : {
-            totalCents: centsOrNull(bill.totalAmount),
+            total: milliOrNull(bill.totalAmount),
             dueDate: bill.dueDate ?? null,
-            minimumPaymentCents: centsOrNull(bill.minimumPaymentAmount),
+            minimumPayment: milliOrNull(bill.minimumPaymentAmount),
           },
   };
 }
@@ -196,7 +201,7 @@ export function toExternalAccount(account: Account, bills?: Bill[]): ExternalAcc
     name: (account.name ?? '').trim(),
     type: account.type,
     currencyCode: account.currencyCode ?? null,
-    balanceCents: account.balance == null ? null : centsFrom(account.balance),
+    balance: account.balance == null ? null : milliFrom(account.balance),
     institution: typeof account.institution === 'string' ? account.institution : null,
   };
 }
@@ -210,7 +215,7 @@ export function toAggregatedTransaction(txn: Transaction, accountType: ExternalA
     description: (txn.description ?? '').trim(),
     // Pluggy credit accounts report purchases POSITIVE and bill payments
     // NEGATIVE; the port contract is "negative = money leaving you".
-    amountCents: accountType === 'CREDIT' ? -centsFrom(txn.amount) : centsFrom(txn.amount),
+    amount: accountType === 'CREDIT' ? -milliFrom(txn.amount) : milliFrom(txn.amount),
     cleared: status != null && (CLEARED_BY_PROVIDER[status] ?? false),
     date: txn.date,
     currencyCode: null,

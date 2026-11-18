@@ -35,7 +35,7 @@ export const payeesCreate = defineOperation({
 
 export const payeesTransactions = defineOperation({
   name: 'budget_payees_transactions',
-  description: "Paginated ledger of one payee's transactions (limit 1..200, default 50). Returned `amount` is signed MILLIUNITS (cents x 10).",
+  description: "Paginated ledger of one payee's transactions (limit 1..200, default 50). Returned `amount` is signed integer milliunits (12.34 = 12340).",
   input: z.object({
     id: uuidSchema,
     budget_id: budgetId,

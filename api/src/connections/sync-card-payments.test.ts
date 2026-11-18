@@ -25,7 +25,7 @@ const txn = (acc: string, id: string, cents: number, description: string): Aggre
   externalId: id,
   externalAccountId: acc,
   description,
-  amountCents: cents,
+  amount: cents * 10, // the port carries milliunits
   cleared: true,
   date: today(),
   currencyCode: null,

@@ -8,7 +8,9 @@
  * (groupIndex / categoryIndex / accountIndex / categoryIndex / transferPeerIndex)
  * resolve against the order the payload itself declares.
  *
- * Money arrives as client-side CENTS; storage is signed MILLIUNITS (x10).
+ * Money arrives as MILLIUNITS (format_version 2), like storage. A legacy
+ * backup (format_version 1 or absent: the original syscd format, in CENTS) is
+ * upgraded first by `upgradeRestorePayload`, so old backup files still restore.
  * Balance columns on accounts (cleared/uncleared) are a delta-maintained
  * cache that the backup does not carry; they are recomputed from the restored
  * transactions before commit (recomputeAccountBalances).
@@ -19,6 +21,7 @@ import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import type { IdentityUser } from '../../user';
 import { budgetRestore } from '@shared/contracts/budget';
+import { upgradeRestorePayload } from '@shared/contracts/budget/schemas';
 import { recomputeAccountBalances } from '../domain/transactions';
 import { isBudgetMember, isBudgetOwnerOrAdmin } from '../ownership';
 import { budgetRouter } from '../router';
@@ -50,7 +53,8 @@ const FLAG_COLORS: Record<string, true> = {
 const isFlagColor = (flag: string): boolean => flag in FLAG_COLORS;
 
 export const operations = [
-  implement(budgetRestore, async (c, { budget_id: budgetId, ...payload }) => {
+  implement(budgetRestore, async (c, { budget_id: budgetId, ...input }) => {
+    const payload = upgradeRestorePayload(input);
     const user: IdentityUser | undefined = c.get('user');
     if (!user) return c.json({ error: 'unauthorized' }, 401);
     if (!(await isBudgetOwnerOrAdmin(user, budgetId))) return c.json({ error: 'not found' }, 404);
@@ -160,7 +164,7 @@ export const operations = [
           budgetId,
           accountId: accountIds[txn.accountIndex],
           date: txn.date,
-          amount: (txn.inflow - txn.outflow) * 10,
+          amount: txn.inflow - txn.outflow,
           payeeId,
           categoryId: txn.categoryIndex === null ? null : categoryIds[txn.categoryIndex],
           memo: txn.memo,
@@ -193,7 +197,7 @@ export const operations = [
           budgetId,
           assignment.month,
           categoryIds[assignment.categoryIndex],
-          assignment.budgeted * 10,
+          assignment.budgeted,
         );
       }
 

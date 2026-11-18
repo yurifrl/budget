@@ -698,3 +698,98 @@ production); follow-up filed.
   (400 like create) and a foreign `patch.matched_transaction_id` (400). The
   checks are any-state (tombstoned rows of the same budget still pass), so
   legitimate requests are unchanged.
+
+## Phase 5d: money units (G7)
+
+### The rule
+
+Every amount on the wire, in both directions, for every operation, is an
+integer number of **milliunits** (1/1000 of the currency unit: 12.34 = 12340,
+-5 = -5000). **Amount fields carry no unit suffix** (`amount`, `inflow`,
+`outflow`, `balance`, `budgeted`, `limit`, ...); a `*_cents` / `*Cents` field
+no longer exists anywhere on the wire. The rule is `MONEY_UNIT_RULE` /
+`milliunitsSchema` in `shared/src/validation.ts`, repeated in every money
+operation's description (that is what `budget schema`, `--help` and the MCP
+tool list show).
+
+Storage did not change (it was already milliunits, except
+`category_targets.amount_cents`, see below). The x10 / /10 that used to sit
+in handlers are gone; the remaining conversions are exactly:
+
+| Where | Conversion | Why |
+|---|---|---|
+| `connections/adapters/pluggy` `milliFrom` | `Math.round(amount * 100) * 10` | Pluggy floats -> port milliunits, once, at the adapter. Rounded to whole cents first so rows stored by earlier syncs (which stored `round(x*100)*10`) compare equal and are not "refreshed". |
+| `budget/routes/category-targets.ts` | wire `amount` / 10 -> `amount_cents`; x10 on read | That table stores cents. The contract only accepts multiples of 10, so nothing is rounded. |
+| `budget/routes/budget-export.ts` `category_targets[].amount` | `amount_cents * 10` | same table |
+| `upgradeRestorePayload` (shared) | x10 on a format-1 backup | legacy backups (below) |
+| client `data/` (`mapping.ts`, `api.ts`, `connections.ts`) | cents <-> milliunits | the app's domain keeps cents in memory |
+
+`BalanceDelta` (internal, `budget/domain/transactions.ts`) is milliunits too,
+so `deriveDeltas`, `applyBalanceDeltas`, repeat generation and the sync
+engine add stored amounts directly.
+
+### Inventory
+
+"In" = request input, "out" = response. Unit before -> after.
+
+| Operation | Field | Dir | Before | After |
+|---|---|---|---|---|
+| `budget_transactions_create` | `txn.inflow_cents`, `txn.outflow_cents` | in | cents | `txn.inflow`, `txn.outflow` milliunits |
+| `budget_transactions_create` | `subtransactions[].inflow_cents/outflow_cents` | in | cents | `subtransactions[].inflow/outflow` milliunits |
+| `budget_transactions_update` | `patch.inflow_cents/outflow_cents` | in | cents | `patch.inflow/outflow` milliunits |
+| `budget_transactions_update` | `subtransactions[].inflow_cents/outflow_cents` | in | cents | `inflow/outflow` milliunits |
+| `budget_transactions_bulk_import` | `txns[].inflow_cents/outflow_cents` | in | cents | `txns[].inflow/outflow` milliunits |
+| `budget_transaction_add` | `amount_cents` (signed) | in | cents | `amount` milliunits |
+| `budget_accounts_create` | `balance_cents` | in | cents | `balance` milliunits |
+| `budget_accounts_update` | `working_balance_cents` | in | cents | `working_balance` milliunits |
+| `budget_accounts_reconcile` | `stated_balance_cents` | in | cents | `stated_balance` milliunits |
+| `budget_repeat_rules_create` | `inflow_cents`, `outflow_cents` | in | cents | `inflow`, `outflow` milliunits |
+| `budget_category_targets_set` | `amount_cents` | in | cents | `amount` milliunits, multiple of 10 |
+| `budget_category_targets_set` / `_list` | `amount_cents` | out | cents | `amount` milliunits |
+| `budget_categories_set_target` | `target.amount_cents` | in | cents | `target.amount` milliunits |
+| `budget_plan_auto_assign` | `rows[].assign_cents` | in | cents | `rows[].assigned` milliunits |
+| `budget_restore` | `transactions[].outflow/inflow`, `assignments[].budgeted` | in | cents | milliunits when `format_version: 2`; absent/1 = legacy cents, upgraded |
+| `budget_export` | `transactions[].outflow/inflow`, `assignments[].budgeted` | out | cents | milliunits, plus `format_version: 2` |
+| `budget_export` | `category_targets[].amount_cents`, `repeat_rules[].amount_cents`, `splits[].amount_cents` | out | cents | `amount` milliunits |
+| `connections_upstream_list`, `connections_items_register` | `accounts[].balanceCents` | out | cents | `balance` milliunits |
+| same | `credit.{limitCents, availableCents, usedCents, minimumPaymentCents}` | out | cents | `credit.{limit, available, used, minimumPayment}` milliunits |
+| same | `credit.latestBill.{totalCents, minimumPaymentCents}` | out | cents | `latestBill.{total, minimumPayment}` milliunits |
+
+Already milliunits and unchanged: `budget_assignments_set` / `_batch`
+`budgeted` (in), and every read amount: transactions and split `amount`,
+account `cleared_balance` / `uncleared_balance`, assignment `budgeted`,
+category `goal_target`, repeat-rule `amount`, payee-ledger `amount`,
+connection summary `balance`, connection transactions `amount`. That is
+**36 fields converted** (each field of each row counted once; the shared upstream account shape counted once) across
+16 operations; rates (`rate` is a ratio) and jobs carry no money.
+
+### Validation of sub-cent values
+
+Any integer milliunit is accepted. The database already holds YNAB-imported
+values, and storing a value is lossless; the app's own writes are always
+multiples of 10 (its domain is cents), and it displays `Math.round(m / 10)`
+cents as before. The dev database has 0 sub-cent rows (checked:
+transactions, subtransactions, assignments, balances, goals), production was
+not inspected. The one exception is `budget_category_targets_set.amount`,
+which must be a multiple of 10 (400 otherwise) because `category_targets`
+stores whole cents and silent rounding would make write != read. Behaviour
+change, on purpose: a sub-cent row now exports and re-imports exactly (the old
+cents export emitted fractional cents, which its own restore rejected).
+
+### Backups
+
+- `budget_export` writes `format_version: 2` (milliunits). `budget_restore`
+  accepts `format_version` 2, or 1 / absent = the original syscd format in
+  cents, which `upgradeRestorePayload` (shared) scales x10 before anything is
+  written. Any other value is a 400. So every old backup file still restores
+  through the API, the CLI and MCP-less clients alike.
+- `api/src/budget/routes/fixtures/syscd-backup-v1.json` was produced by the
+  ORIGINAL export code (this repo at `08ff6fd`, the same code as syscd's) from
+  the seeded Trabalho budget; `budget-restore-legacy.test.ts` restores it,
+  checks every stored amount is cents x 10, that v1, unversioned and the
+  equivalent v2 document land identical rows, and that the re-export is the
+  same document in milliunits.
+- The app's backup files are the Plan/Register TSV archive
+  (`client/src/budget/transfer`), decimal strings with no unit, parsed into
+  the cents domain. That path is unchanged; `data/` converts the resulting
+  payload to a format-2 document before it is sent.

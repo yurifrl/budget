@@ -37,7 +37,7 @@ async function exercise(client: Client, label: string): Promise<void> {
   }
   const write = await client.callTool({
     name: 'budget_transaction_add',
-    arguments: { budget_id, account_id, amount_cents: -250, payee: `E2E MCP ${label}`, memo: `hobj e2e ${label}` },
+    arguments: { budget_id, account_id, amount: -2500, payee: `E2E MCP ${label}`, memo: `hobj e2e ${label}` },
   });
   say(`[${label}] call budget_transaction_add -> isError=${write.isError ?? false} ${redact(JSON.stringify(write.content)).slice(0, 160)}`);
 }
