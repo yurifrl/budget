@@ -5,16 +5,15 @@ import {
   createPlaceholderUser,
   EmailLinkError,
   linkEmailToPlaceholder,
-  personAvatarSql,
-  personPendingSql,
   provisionUserByEmail,
   renameUnclaimedUser,
   toPersonAvatar,
 } from '../../user';
-import type { IdentityUser, PersonAvatarRow } from '../../user';
+import type { IdentityUser } from '../../user';
 import { membersAdd, membersLinkEmail, membersList, membersRemove, membersRename } from '@shared/contracts/budget';
 import { isBudgetMember, isBudgetOwnerOrAdmin } from '../ownership';
 import { budgetRouter } from '../router';
+import * as membersStore from '../store/members';
 
 /**
  * Budget members — the people a budget is grouped by. Everyone listed sees
@@ -27,29 +26,10 @@ import { budgetRouter } from '../router';
  * The owner is always listed (even if the budget_members row is missing), and
  * an unowned budget lists the viewer.
  */
-interface MemberRow extends PersonAvatarRow {
-  user_id: string;
-  email: string | null;
-  name: string | null;
-  is_owner: boolean;
-  is_me: boolean;
-  pending: boolean;
-}
 
 /** Members as the API returns them: avatar nested, `is_me` relative to the viewer. */
 async function listMembers(budgetId: string, viewerId: string) {
-  const { rows } = await pool.query<MemberRow>(
-    `SELECT u.id AS user_id, u.email, u.name, COALESCE(u.id = b.owner_user_id, false) AS is_owner,
-            (u.id = $2) AS is_me, ${personPendingSql('u')}, ${personAvatarSql('u')}
-       FROM public.budgets b
-       JOIN public.users u ON u.id IN (
-              SELECT user_id FROM public.budget_members WHERE budget_id = b.id
-              UNION SELECT b.owner_user_id WHERE b.owner_user_id IS NOT NULL
-              UNION SELECT $2::uuid WHERE b.owner_user_id IS NULL)
-      WHERE b.id = $1
-      ORDER BY is_owner DESC, lower(COALESCE(u.name, u.email))`,
-    [budgetId, viewerId],
-  );
+  const rows = await membersStore.listMemberRows(pool, budgetId, viewerId);
   return rows.map(({ avatar_seed, avatar_image_version, ...m }) => ({
     ...m,
     avatar: toPersonAvatar({ avatar_seed, avatar_image_version }),
@@ -89,10 +69,7 @@ export const operations = [
       if (!body.name) throw new HttpError(400, 'name is required when no email is given');
       personId = (await createPlaceholderUser(body.name)).id;
     }
-    await pool.query('INSERT INTO public.budget_members (budget_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [
-      body.budget_id,
-      personId,
-    ]);
+    await membersStore.addMember(pool, body.budget_id, personId);
     return { members: await listMembers(body.budget_id, user.id) };
   }),
 
@@ -119,23 +96,9 @@ export const operations = [
 
   implement(membersRemove, async (c, { budget_id: budgetId, user_id: userId }) => {
     const user = await requireManager(c, budgetId);
-    const owner = await pool.query('SELECT 1 FROM public.budgets WHERE id = $1 AND owner_user_id = $2', [
-      budgetId,
-      userId,
-    ]);
-    if ((owner.rowCount ?? 0) > 0) throw new HttpError(400, 'the owner cannot be removed');
+    if (await membersStore.isBudgetOwner(pool, budgetId, userId)) throw new HttpError(400, 'the owner cannot be removed');
     // Their accounts and categories fall back to Shared in the same transaction as the removal.
-    await withTransaction(pool, async (client) => {
-      await client.query('DELETE FROM public.budget_members WHERE budget_id = $1 AND user_id = $2', [budgetId, userId]);
-      await client.query('UPDATE public.accounts SET user_id = NULL WHERE budget_id = $1 AND user_id = $2', [
-        budgetId,
-        userId,
-      ]);
-      await client.query('UPDATE public.categories SET user_id = NULL WHERE budget_id = $1 AND user_id = $2', [
-        budgetId,
-        userId,
-      ]);
-    });
+    await withTransaction(pool, (client) => membersStore.removeMemberAndUnassign(client, budgetId, userId));
     return { members: await listMembers(budgetId, user.id) };
   }),
 ];
