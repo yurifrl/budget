@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Group RN-core-coupled upgrades so incompatible RN/library pairs never merge alone (same rule as syscd-app)",
+      "matchPackageNames": [
+        "react-native",
+        "react-native-reanimated",
+        "react-native-worklets"
+      ],
+      "groupName": "react-native core"
+    },
+    {
+      "description": "expo-router is pinned to 58.0.23 on purpose: later 58.0.x patches replace the browser history entry on tab navigation (docs/evidence/parity/REPORT.md, regression 1). Unpin by hand after checking browser Back.",
+      "matchPackageNames": [
+        "expo-router"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Hold ESLint <10 and TypeScript <7 majors (same rule as syscd-app: plugins do not support them yet)",
+      "matchPackageNames": [
+        "eslint",
+        "typescript"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
+    }
+  ]
+}

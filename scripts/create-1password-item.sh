@@ -13,10 +13,15 @@
 # here at run time and never printed or written to the repo. Account-bound
 # values (Google, Pluggy, allow-list) are created EMPTY: fill them in the
 # 1Password app afterwards (docs/MORNING.md says what goes where). Empty
-# values count as unset in the API, so its auth guard keeps it from booting
-# until they are filled.
+# Google/allow-list values count as unset in the API, so its auth guard keeps
+# it from booting until they are filled. PLUGGY_SANDBOX is created as `false`
+# (production). CLIENT_USER_ID is NOT created: the Pluggy env schema takes an
+# empty string literally (it would replace the `syscd-app` default with "");
+# add the field only to override that default.
 #
-# Idempotent: an item that already exists is left untouched (skipped).
+# Idempotent: an item whose title already exists in the vault is left
+# untouched (skipped). If `op` cannot list the vault, or a title matches more
+# than one item, the script stops before creating anything.
 #
 # Usage: scripts/create-1password-item.sh
 #   OP_ACCOUNT  default my.1password.com
@@ -43,7 +48,20 @@ tmp="$(mktemp -d)"
 chmod 700 "$tmp"
 trap 'rm -rf "$tmp"' EXIT
 
-exists() { op item get "$1" --vault "$OP_VAULT" >/dev/null 2>&1; }
+# Exact-title lookup over the vault listing (titles only, no secret values).
+# Errors from `op` abort the script instead of reading as "missing", so a
+# transient failure can never create a duplicate item.
+titles="$(op item list --vault "$OP_VAULT" --format json | python3 -c 'import json,sys; print("\n".join(i.get("title","") for i in json.load(sys.stdin)))')"
+exists() {
+  local n
+  n="$(printf '%s\n' "$titles" | grep -cxF -- "$1" || true)"
+  if [ "$n" -gt 1 ]; then
+    echo "vault '$OP_VAULT' has $n items titled '$1'; resolve by hand first" >&2
+    exit 1
+  fi
+  [ "$n" -eq 1 ]
+}
+for t in budget budget-temporal argocd-budget; do exists "$t" || true; done
 
 # Build a Secure Note template from NAME=VALUE pairs (VALUE may be empty) and
 # create the item. Every field is CONCEALED. Values are passed through env
@@ -69,27 +87,35 @@ PY
 if exists budget; then
   echo "item 'budget' already exists: skipped"
 else
+  # Assign first, export after: `export X="$(cmd)"` would hide a failing cmd
+  # from `set -e` and store an empty secret.
   db_password="$(openssl rand -hex 24)"
+  session_secret="$(openssl rand -base64 48 | tr -d '\n')"
+  [ -n "$db_password" ] && [ -n "$session_secret" ] || { echo "random generation failed" >&2; exit 1; }
   export V_DB_PASSWORD="$db_password"
   export V_DATABASE_URL="postgres://${PG_USER}:${db_password}@${PG_HOST}/${PG_DB}"
-  export V_SESSION_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+  export V_SESSION_SECRET="$session_secret"
+  export V_PLUGGY_SANDBOX="false"
   # Left empty on purpose (filled by hand): GOOGLE_*, AUTH_ALLOWED_EMAILS,
-  # PLUGGY_*, CLIENT_USER_ID, OT_SERVICE_TOKEN.
+  # PLUGGY_CLIENT_ID/SECRET, PLUGGY_WEBHOOK_SECRET, PLUGGY_ITEM_IDS,
+  # OT_SERVICE_TOKEN (empty = lane disabled).
   create_item budget \
     DB_PASSWORD DATABASE_URL SESSION_SECRET \
     GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET AUTH_ALLOWED_EMAILS \
     PLUGGY_CLIENT_ID PLUGGY_CLIENT_SECRET PLUGGY_SANDBOX PLUGGY_WEBHOOK_SECRET \
-    PLUGGY_ITEM_IDS CLIENT_USER_ID OT_SERVICE_TOKEN
-  unset V_DB_PASSWORD V_DATABASE_URL V_SESSION_SECRET db_password
+    PLUGGY_ITEM_IDS OT_SERVICE_TOKEN
+  unset V_DB_PASSWORD V_DATABASE_URL V_SESSION_SECRET V_PLUGGY_SANDBOX db_password session_secret
 fi
 
 # ---- budget-temporal ------------------------------------------------------
 if exists budget-temporal; then
   echo "item 'budget-temporal' already exists: skipped"
 else
-  export V_DB_PASSWORD="$(openssl rand -hex 24)"
+  temporal_password="$(openssl rand -hex 24)"
+  [ -n "$temporal_password" ] || { echo "random generation failed" >&2; exit 1; }
+  export V_DB_PASSWORD="$temporal_password"
   create_item budget-temporal DB_PASSWORD
-  unset V_DB_PASSWORD
+  unset V_DB_PASSWORD temporal_password
 fi
 
 # ---- argocd-budget (deploy key) --------------------------------------------
@@ -97,12 +123,19 @@ if exists argocd-budget; then
   echo "item 'argocd-budget' already exists: skipped (deploy key not touched)"
 else
   ssh-keygen -q -t ed25519 -N '' -C "argocd@home-systems (yurifrl/budget, read-only)" -f "$tmp/argocd-budget"
-  export V_sshPrivateKey="$(cat "$tmp/argocd-budget")"
+  ssh_key="$(cat "$tmp/argocd-budget")"
+  export V_sshPrivateKey="$ssh_key"
   create_item argocd-budget sshPrivateKey
-  unset V_sshPrivateKey
-  # Read-only by default (no --allow-write).
-  gh repo deploy-key add "$tmp/argocd-budget.pub" --repo "$REPO" --title "argocd (home-systems)"
-  echo "added read-only deploy key to $REPO"
+  unset V_sshPrivateKey ssh_key
+  # Read-only by default (no --allow-write). If this fails the item exists and
+  # a rerun skips it, so say how to add the public half by hand.
+  if gh repo deploy-key add "$tmp/argocd-budget.pub" --repo "$REPO" --title "argocd (home-systems)"; then
+    echo "added read-only deploy key to $REPO"
+  else
+    echo "deploy key NOT added. Add it by hand (prints only the public key):" >&2
+    echo "  op read --account $OP_ACCOUNT --out-file k 'op://$OP_VAULT/argocd-budget/sshPrivateKey' && ssh-keygen -y -f k > k.pub && rm k && gh repo deploy-key add k.pub --repo $REPO --title 'argocd (home-systems)' && rm k.pub" >&2
+    exit 1
+  fi
 fi
 
 echo "done. Next: fill the empty fields of item 'budget' (docs/MORNING.md)."
