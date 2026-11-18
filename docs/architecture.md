@@ -79,6 +79,22 @@ start at `0100`). One image runs both the API and the worker
   (`upgradeRestorePayload`). `accounts.currency` (migration 0100) is an ISO
   4217 label, NULL = the budget's currency; bank sync fills it from the
   provider while it is NULL.
+- **Auth.** Two sign-in providers, both ending in the same stateless
+  `budget_session` (HS256 JWT, cookie on web, Bearer on native) and the same
+  `resolveOrCreateSessionUser` capture: Cloudflare Access
+  (`user/access.ts` verifies the `Cf-Access-Jwt-Assertion` RS256 JWT against
+  the team JWKS; `user/access-routes.ts`: `/auth/access`,
+  `/auth/access/native`, `POST /auth/exchange`) and Google
+  (`user/authz.ts`: `/auth/google*`, `/auth/token`). A provider's routes
+  answer 404 unless it is configured; `GET /auth/providers` says which are on
+  and the client's `LoginGate` picks (web + Access: one automatic redirect,
+  loop-guarded). The OAuth consent page hands logged-out browsers to Access
+  when configured, else Google. `isAllowed` (`user/config.ts`) is the one
+  allow-list rule: on `AUTH_ALLOWED_EMAILS` when set, otherwise everyone
+  only when Access is on (its policy is the list). `requireUser` reads
+  `users.status` per request: `disabled` = 401 `account_disabled` (how a
+  person is revoked). Config comes only from `auth-env.ts` (boot guard:
+  `checkAuthEnv`). Decisions and threat model: `decisions.md`, "Access sign-in".
 - **Access.** `budgetAccess` authorises the `budget_id` in query/body; path
   `:id` routes re-scope by `budget_id` in SQL. `src/access.test.ts` drives
   every path-param operation from the catalog as a non-member and expects 404.

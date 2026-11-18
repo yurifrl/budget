@@ -190,6 +190,7 @@ stayed in syscd; no carried test needs them).
   refused when `KUBERNETES_SERVICE_HOST` is set and ignored (full rules apply)
   when any auth env is present. Empty strings count as unset. `task api` sets
   the opt-in for local dev.
+  (Extended for Cloudflare Access: see "Access sign-in" below.)
 - The worker, CLI and stdio MCP do not use the auth config.
 
 ### Rebrand and defaults
@@ -1167,3 +1168,101 @@ import (3 rows), backup export, People add/rename/remove, New Budget stays
 format re-render live and persist (xef). Not run: iOS, auth-on sign-in,
 split editing, group drag. Seen, pre-existing on main: the add row defaults
 to a closed first account (budget-dho).
+
+## Access sign-in
+
+Cloudflare Access is an identity provider for the API next to (and able to
+replace) Google, so the e-mail allow-list can live in the Cloudflare policy
+and someone already logged in to Access is signed in without a prompt.
+
+### What was built
+
+- `api/src/user/access.ts`: the verifier (pure; injected fetch and clock).
+  RS256 only (`none`, HS* and anything else refused before a key is looked
+  up), `kid` required, JWKS cached by kid for 10 minutes, an unknown kid
+  refetches once (at most every 10 s), 5 s fetch timeout, every fetch failure
+  fails closed. `iss` must be exactly `https://<team>`, `aud` must share a tag
+  with `ACCESS_AUD`, `exp`/`nbf`/`iat` hold within 60 s, a non-empty `email`
+  is required and a `common_name` (service token) is refused.
+- `api/src/user/access-routes.ts`: `GET /auth/access?return_to=` (cookie,
+  redirect), `GET /auth/access/native?redirect_uri=` (one-time code on the
+  deep link) and `POST /auth/exchange` (`{ code }` -> `{ token, email }`).
+  The exchange code is an HS256 JWT of kind `access_exchange`, 2 minutes,
+  single use per process; the session token never goes in a URL.
+- `GET /auth/providers` (`shared/src/contracts/user/providers.ts`):
+  `{ access, google }`. A provider's routes answer 404 when it is off.
+- Return targets (`safeLoginRedirect`): a safe relative API path or a URL on
+  `APP_BASE_URL`'s origin; anything else falls back to the app origin.
+- The Access `sub` is not stored (it is not a Google subject: putting it in
+  `google_sub` would break the collision rule). A row signed in only through
+  Access therefore keeps `google_sub` NULL, which `renameUnclaimedUser`
+  reads as "never signed in" (members can rename such a person). Accepted
+  for now; the fix is a provider-neutral subject column.
+- Client: `features/auth/signIn.logic.ts` (decision, loop guard, URLs) and
+  `useSignIn.ts`. Web + Access: one automatic top-level navigation to
+  `/auth/access?return_to=<current URL>`, marked in sessionStorage; coming
+  back signed out within 2 minutes shows the login screen with an error and a
+  "Sign in" button instead of redirecting again. Google stays a button when
+  both are on. Native: "Sign in" runs `/auth/access/native` in
+  `expo-web-browser`'s auth session and swaps the code for the token.
+
+### Allow-list: every place it is enforced
+
+`isAllowed` (`user/config.ts`) is the single rule: with `AUTH_ALLOWED_EMAILS`
+set the e-mail must be on it (both providers); without it, everyone is allowed
+only when Access is configured (the Cloudflare policy is the list); neither =
+nobody. Call sites, unchanged in shape: the Google callback and `/auth/token`
+(sign-in), `/auth/access` and `/auth/exchange` (sign-in), `currentUser`
+and `cookieSessionUser` (every session request and the consent page),
+`accessPrincipal` (every OAuth access token, MCP included) and the consent
+POST in `oauth/authorize.ts`. In Access-only mode the per-request checks pass
+every validly signed session, so Access-issued sessions are not locked out.
+
+### Threat model
+
+Cloudflare guarantees that a request reaching `/auth/access` passed the Access
+policy and carries a fresh assertion it signed for that application. The API
+does not trust the network for this: it verifies the signature against the
+team's published keys, the exact issuer, the application AUD and the expiry,
+and requires a human e-mail. Only the `Cf-Access-Jwt-Assertion` header is
+read, never the `CF_Authorization` cookie or the query: the cookie can outlive
+a policy change and is attacker-steerable in ways the edge-added header is
+not. If the Access application is misconfigured as bypass (or the path is not
+covered), no header arrives and the answer is 401 `access_assertion_missing`,
+with no session. Revoking a person means removing them from the Cloudflare
+policy, which stops new sign-ins, AND setting `users.status = 'disabled'`
+(`requireUser` reads it on every request, so their live session and OAuth
+grants stop at once); without the second step an existing session lives until
+it expires (`SESSION_TTL_DAYS`, 30). Data routes stay bypassed at the edge
+because native apps and MCP/CLI clients cannot complete an Access login and
+the API already authenticates every one of them with its own session or
+token; only the sign-in path needs Cloudflare.
+
+### Open points
+
+- `/auth/logout` clears only the API cookie; with an Access session still
+  live, the next web visit signs straight back in. A sign-out should also
+  visit `https://<api>/cdn-cgi/access/logout` (no sign-out button exists in
+  the client today).
+- On web, a 401/403 from `/auth/access` is a JSON page on the API host, not a
+  screen in the app (the spec asked for JSON). The native route redirects
+  errors to the app instead (`?error=<code>`), since its in-app browser would
+  otherwise strand on that page.
+- With several API replicas an exchange code could be redeemed once per
+  replica inside its 2 minutes (it only ever yields the same person's
+  session). PKCE on the native flow would close custom-scheme interception;
+  not done, same as the Google native flow.
+- The worker does not read any auth env; setting the Access vars there is
+  harmless but not needed.
+
+### Checks (2026-11-18)
+
+shared 45 tests (was 43), api 895 (was 842) with `BUDGET_REQUIRE_TEST_DB=1`,
+client 1070 (was 1054); tsc and eslint clean in all three;
+`scripts/e2e-api.sh` exit 0; `expo export` web and ios OK. Browser check
+against a local stub (`docs/evidence/access-signin/`): the API ran with
+`ACCESS_CERTS_URL` pointed at `access-proxy.ts`, a local proxy that serves a
+JWKS for its own key and injects a signed assertion on `/auth/access*`:
+`01` signed in automatically on first visit; `02` with the proxy dropping the
+cookie, the app came back signed out once and showed the error screen (no
+second redirect); `03` the "Sign in" button then signed in.

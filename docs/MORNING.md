@@ -294,6 +294,35 @@ tailnet only).
    syscd no longer uses it, and change the `budget` entry's `owner` in
    postgres.yaml in the same change.
 
+## 5a. Switching sign-in to Cloudflare Access
+
+Code is on `main` (decisions.md, "Access sign-in"); nothing is deployed or
+created yet. Steps, in order:
+
+1. Cloudflare Zero Trust > Access > Applications: add a self-hosted
+   application for `budget-api.syscd.live/auth/access` (path `auth/access`
+   covers `/auth/access/native` too) with the Admin policy (the e-mails
+   allowed to use Budget). Everything else on `budget-api.syscd.live` stays
+   bypassed, in particular `POST /auth/exchange` (the native app's code
+   exchange, a plain fetch that cannot do a Cloudflare login).
+2. Copy the application's AUD tag.
+3. Set on the api (and worker, harmless) in item `budget`:
+   `ACCESS_TEAM_DOMAIN=syscd.cloudflareaccess.com`, `ACCESS_AUD=<AUD tag>`
+   (comma-separate a second tag if native gets its own application). Never
+   set `ACCESS_CERTS_URL` in the cluster (the API refuses to boot).
+4. Roll out and verify a real sign-in: open https://budget.syscd.live in a
+   fresh browser; it should go to Cloudflare's login (or straight in with a
+   live Access session) and land back signed in. `curl
+   https://budget-api.syscd.live/auth/providers` shows `"access":true`.
+   Also check the iOS app's "Sign in" and an MCP/CLI login (consent page).
+5. Then remove `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+   `AUTH_ALLOWED_EMAILS` (keep the last one only if you want an API-side list
+   on top of the policy) and roll out again.
+
+Revoking someone later: remove them from the policy AND
+`update public.users set status = 'disabled' where email = '...'` (their
+current session otherwise lives until it expires).
+
 ## 6. Open follow-ups (`tk list`)
 
 | Id | What |
