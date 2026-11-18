@@ -1,5 +1,14 @@
 # Changelog
 
+## v2026.11.18-04 2026-11-18 release
+
+### Changed
+
+- release: v2026.11.18-04
+- banks: regression cover for cross-budget unlink; the account's budget is a required argument
+- banks: scope bank-page Unlink/Change by the account's own budget
+
+
 ## v2026.11.18-03 2026-11-18 release
 
 ### Changed
