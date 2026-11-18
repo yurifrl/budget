@@ -8,6 +8,7 @@ import { useAppDispatch } from '@/store/hooks';
 import { useCreateBudgetMutation } from '../../data/api';
 import { switchBudget } from '../../state/thunks';
 import { MenuRow } from './menuRows';
+import { refetchBudgets } from './refetchBudgets';
 import { s } from './styles';
 
 /** New Budget form (the old 'new' view) — create, switch, close. */
@@ -23,7 +24,13 @@ export function NewBudgetPane() {
     setError(null);
     createBudget({ name: n })
       .unwrap()
-      .then((created) => dispatch(switchBudget(created.id)))
+      // Refetch the list before switching (as Fresh Start does): the shell
+      // reconciles the active id against the Budgets list and would bounce a
+      // not-yet-listed new budget back to the first one (budget-fwf).
+      .then(async (created) => {
+        await refetchBudgets(dispatch);
+        await dispatch(switchBudget(created.id));
+      })
       .then(() => nav.close())
       .catch((err) => setError(apiErrorMessage(err)));
   };

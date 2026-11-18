@@ -210,7 +210,7 @@ export function PlanScreen() {
         {shell.isDesktop && !selected ? (
           <View style={styles.summaryPanel}>
             <MonthSummary
-              key={month}
+              key={`${budgetId}:${month}`}
               budget={budget}
               budgetId={budgetId}
               bm={bm}

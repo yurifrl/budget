@@ -6,6 +6,7 @@ import { useAppDispatch } from '@/store/hooks';
 import { useSetMonthNoteMutation } from '../../data/api';
 import { assignedInFutureMonths, costToBeMe } from '../../domain/engine';
 import { formatMonth, nextMonth } from '../../domain/format';
+import { noteDraft, syncNoteDraft } from '../../domain/noteDraft';
 import { monthTotalsForPerson, type ActivityMap, type PersonFilter } from '../../domain/people';
 import type { Budget, MonthKey } from '../../domain/types';
 import type { BudgetMonth } from '../../domain/zeroSum';
@@ -38,7 +39,14 @@ export function MonthSummary({
   const { formatMoney } = useMoneyFormat();
   const dispatch = useAppDispatch();
   const [setMonthNote] = useSetMonthNoteMutation();
-  const [note, setNote] = useState(budget.monthNotes?.[month] ?? '');
+  // The draft follows the stored note when that changes (budget switch, notes
+  // arriving after mount): budget-xd6.
+  const savedNote = budget.monthNotes?.[month] ?? '';
+  const [noteState, setNoteState] = useState(() => noteDraft(savedNote));
+  const synced = syncNoteDraft(noteState, savedNote);
+  if (synced !== noteState) setNoteState(synced);
+  const note = synced.draft;
+  const setNote = (draft: string) => setNoteState((st) => ({ ...st, draft }));
   // Assigned/Available sum the categories the Plan shows for the selection;
   // Activity is the person's (their accounts). Everyone = the household sums.
   const totals = monthTotalsForPerson(bm, budget.categories, person, activityMap);
