@@ -50,18 +50,20 @@ prints a secret value, and it skips the item if it already exists.
 | set to `false` | `PLUGGY_SANDBOX` |
 | empty, for you | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_ALLOWED_EMAILS`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `PLUGGY_WEBHOOK_SECRET`, `PLUGGY_ITEM_IDS`, `OT_SERVICE_TOKEN` |
 
-**If you already ran the first version of the script** (it made three items:
-`budget`, `budget-temporal`, `argocd-budget`), fold the two extra ones into
-`budget` before archiving them, or the Temporal password and the deploy key
-are lost:
+**State on 2026-11-18 09:30 (done from the session, values never printed):**
+item `budget` already holds `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+`AUTH_ALLOWED_EMAILS` (copied from `syscd-app`), plus a NEW
+`TEMPORAL_DB_PASSWORD` and a NEW `ARGOCD_SSH_PRIVATE_KEY` (the earlier
+`budget-temporal` and `argocd-budget` items were gone, so both were
+regenerated). The `PLUGGY_*` fields are still empty on purpose (section 5).
+Still to do, blocked on GitHub being unreachable from the Mac:
 
 ```sh
-scripts/merge-1password-items.sh            # copies the two fields into `budget`
-scripts/merge-1password-items.sh --archive  # same, then archives the two old items
+# register the new deploy key's public half (read-only) and drop the old one
+gh repo deploy-key list --repo yurifrl/budget
+gh repo deploy-key add deploy/keys/argocd-budget.pub --repo yurifrl/budget --title "argocd (home-systems) 2026-11-18"
+gh repo deploy-key delete <id of the older "argocd (home-systems)" key> --repo yurifrl/budget
 ```
-
-The cluster reads only `budget` once home-systems commit "budget reads all
-its secrets from the one 1Password item" is on `main`.
 
 `DATABASE_URL` is `postgres://budget_app:<DB_PASSWORD>@pg-rw.databases.svc.cluster.local:5432/budget`,
 which is what `api/src/index.ts` and `api/src/worker.ts` read. If syscd-app's
