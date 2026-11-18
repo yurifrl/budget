@@ -122,11 +122,11 @@ module.exports = defineConfig([
   // the avatar types' one definition is in budget/domain, and the one theme
   // uses domain types.
   {
-    files: ['src/ui/avatar/types.ts', 'src/ui/theme.ts'],
+    files: ['src/ui/avatar/types.ts', 'src/ui/theme.ts', 'src/ui/moneyFormat.tsx'],
     rules: {
       'import/no-restricted-paths': [
         'error',
-        { zones: layerZones.map((z) => (z.target === `${SRC}/ui` && z.from === `${SRC}/budget` ? { ...z, except: ['domain/avatar.ts', 'domain/types.ts'] } : z)) },
+        { zones: layerZones.map((z) => (z.target === `${SRC}/ui` && z.from === `${SRC}/budget` ? { ...z, except: ['domain/avatar.ts', 'domain/types.ts', 'domain/format.ts'] } : z)) },
       ],
     },
   },
