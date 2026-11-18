@@ -76,6 +76,20 @@ export const budgetRowSchema = z.object({
   last_modified_on: z.string().optional(),
 });
 
+/**
+ * A budget as `budget_list` returns it: the row plus what a home page needs to
+ * split "My budgets" from "Shared with me". These three fields are always
+ * present in the list (and only there).
+ */
+export const budgetListRowSchema = budgetRowSchema.extend({
+  /** True when the caller owns the budget ("My budgets"); false = shared with the caller. */
+  is_owner: z.boolean(),
+  /** The owner (id, display name, email, avatar), for "shared by ...". Null only for a legacy budget nobody has claimed. */
+  owner: personRefSchema.nullable(),
+  /** People on the budget, owner included: the same set `budget_members_list` returns (placeholders and pending invitees count). 1 = not shared. */
+  member_count: z.number().int().nonnegative(),
+});
+
 export const freshStartResultSchema = z.object({ archived: budgetRowSchema, created: budgetRowSchema });
 export const budgetDeletedSchema = z.object({ deleted: z.boolean() });
 export const revisionSchema = z.object({ revision: z.number() });

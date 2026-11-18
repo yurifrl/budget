@@ -2,9 +2,9 @@ import type { Context, Hono, MiddlewareHandler } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { verifyAccessToken, verifySession } from './auth';
+import { verifyAccessToken, verifySession, type SessionClaims } from './auth';
 import { mountAccessRoutes } from './access-routes';
-import { accessConfigured, authConfig, isAllowed } from './config';
+import { accessConfigured, authConfig, googleAllowed, isAllowed } from './config';
 import { googleConfigured, googleAuthUrl, exchangeCode } from './google';
 import { implement, mountOperations } from '../core/operation';
 import { errorResponse } from '../core/validate';
@@ -13,7 +13,7 @@ import { authProviders } from '@shared/contracts/user/providers';
 import { safeReturnTo } from './return-to';
 import { mintSessionToken, setSessionCookie } from './session-cookie';
 import type { SessionPrincipal } from './types';
-import { EmailAlreadyProvisionedError, isGrantActive, resolveOrCreateSessionUser } from './store';
+import { activeGrant, EmailAlreadyProvisionedError, resolveOrCreateSessionUser } from './store';
 
 const STATE_COOKIE = 'g_state';
 const RETURN_COOKIE = 'g_return';
@@ -43,11 +43,11 @@ export function authDisabled(): boolean {
 }
 
 /** Session cookie only (browser flows: OAuth consent). Never a bearer. */
-export async function cookieSessionUser(c: Context): Promise<{ email: string } | null> {
+export async function cookieSessionUser(c: Context): Promise<SessionClaims | null> {
   const token = getCookie(c, COOKIE());
   if (!token) return null;
   const claims = await verifySession(secret(), token);
-  return claims && isAllowed(claims.email) ? claims : null;
+  return claims && isAllowed(claims.email, claims.idp) ? claims : null;
 }
 
 /** Audience every OAuth access token is minted for: the MCP resource URL. */
@@ -59,13 +59,13 @@ export const oauthResourceUrl = () => `${apiBaseUrl()}/mcp`;
  * domain). Session tokens only: OAuth access tokens are NOT accepted here
  * (see principalFromRequest), so pre-gate callers keep their exact behavior.
  */
-export async function currentUser(c: Context): Promise<{ email: string } | null> {
+export async function currentUser(c: Context): Promise<SessionClaims | null> {
   const auth = c.req.header('Authorization');
   const bearer = auth?.startsWith('Bearer ') ? auth.slice('Bearer '.length).trim() : '';
   const token = bearer || getCookie(c, COOKIE());
   if (!token) return null;
   const claims = await verifySession(secret(), token);
-  if (!claims || !isAllowed(claims.email)) return null;
+  if (!claims || !isAllowed(claims.email, claims.idp)) return null;
   return claims;
 }
 
@@ -83,16 +83,19 @@ export async function principalFromRequest(c: Context): Promise<SessionPrincipal
 
 /**
  * OAuth access token ONLY (from an Authorization header value): signature,
- * expiry, kind 'access', audience = the MCP resource, allow-listed email and
- * a live grant. Used by the MCP endpoint, which accepts nothing else.
+ * expiry, kind 'access', audience = the MCP resource, a live grant and an
+ * e-mail still allowed for the way that grant's approver signed in. Used by the MCP endpoint, which accepts nothing else.
  */
 export async function accessPrincipal(authorization: string | undefined | null): Promise<SessionPrincipal | null> {
   const bearer = authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length).trim() : '';
   if (!bearer) return null;
   const access = await verifyAccessToken(secret(), bearer, oauthResourceUrl());
-  if (!access || !isAllowed(access.email)) return null;
-  if (!(await isGrantActive(access.grantId, access.email))) return null;
-  return { email: access.email, scope: access.scope, grantId: access.grantId };
+  if (!access) return null;
+  const grant = await activeGrant(access.grantId, access.email);
+  // The grant remembers how its approver signed in, so an Access person's
+  // token is judged like their session (not against the Google list).
+  if (!grant || !isAllowed(access.email, grant.idp)) return null;
+  return { email: access.email, scope: access.scope, grantId: access.grantId, ...(grant.idp ? { idp: grant.idp } : {}) };
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -175,7 +178,7 @@ export function mountAuthRoutes(app: Hono): void {
 
     const id = await exchangeCode(code, `${apiBaseUrl()}/auth/google/callback`);
     if (!id || !id.emailVerified) return c.text('Could not verify your Google account.', 401);
-    if (!isAllowed(id.email)) return c.text('Not authorized.', 403);
+    if (!googleAllowed(id.email)) return c.text('Not authorized.', 403);
 
     // Sign-in-time identity capture (USER-01): the fully verified Google
     // identity lands google_sub + name now; per-request resolution remains
@@ -246,7 +249,7 @@ export function mountAuthRoutes(app: Hono): void {
     }
     const id = await exchangeCode(c.req.query('code') ?? '', `${apiBaseUrl()}/auth/google/native/callback`);
     if (!id || !id.emailVerified) return errorResponse(c, 401, 'could not verify your Google account');
-    if (!isAllowed(id.email)) return errorResponse(c, 403, 'not authorized');
+    if (!googleAllowed(id.email)) return errorResponse(c, 403, 'not authorized');
     try {
       await resolveOrCreateSessionUser(id.email, { sub: id.sub, name: id.name });
     } catch (err) {

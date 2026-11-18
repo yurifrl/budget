@@ -60,6 +60,9 @@ export const operations: readonly AnyOperation[] = [
 /** Integration seam: the real accounts router, mounted by connections' tests. */
 export { default as accountsRouter } from './routes/accounts';
 
+/** "May this user reach this budget" as SQL, for features that read budget rows by another key (connections). */
+export { accessibleBudgetSql } from './ownership';
+
 /** Ledger write API for the connections sync engine (imported rows, payees, balances, card payments). */
 export * as ledger from './ledger';
 

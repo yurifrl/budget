@@ -188,7 +188,7 @@ afterAll(async () => {
 });
 
 describe.skipIf(!dbReady)('budget route ownership (Phase 2, USER-04/05)', () => {
-  test('claims unowned budgets on first sign-in, idempotently', async () => {
+  test('an admin\'s app session claims unowned budgets, idempotently; nobody else does', async () => {
     // Re-orphan the two fixture budgets: a previous run's claim may have
     // finalized the column, and this test needs the pre-finalize phase.
     await dropNotNull();
@@ -203,14 +203,26 @@ describe.skipIf(!dbReady)('budget route ownership (Phase 2, USER-04/05)', () => 
     const before = await countUnowned();
     expect(before).toBeGreaterThanOrEqual(2);
 
-    // First real sign-in (session principal) claims every orphan.
+    // An ordinary person's sign-in claims nothing: a newcomer must never
+    // inherit budgets that happen to have no owner.
     currentUser = { ...owner, role: 'user', status: 'active' };
     hasPrincipal = true;
+    const plain = await budgets.request('/', { method: 'GET' });
+    expect(plain.status).toBe(200);
+    const plainList = budgetListSchema.parse(await plain.json());
+    expect(plainList.some((b) => b.id === ownedBudget)).toBe(true);
+    expect(plainList.some((b) => b.id === orphanBudget)).toBe(false);
+    expect(await countUnowned()).toBe(before);
+
+    // The admin's sign-in (session principal) claims every orphan.
+    currentUser = { ...admin, role: 'admin', status: 'active' };
     const first = await budgets.request('/', { method: 'GET' });
     expect(first.status).toBe(200);
     const list = budgetListSchema.parse(await first.json());
-    expect(list.some((b) => b.id === ownedBudget)).toBe(true);
     expect(list.some((b) => b.id === orphanBudget)).toBe(true);
+    // ...and still lists only budgets the admin is on: no role sees more.
+    expect(list.some((b) => b.id === ownedBudget)).toBe(false);
+    expect(list.some((b) => b.id === intrudersBudget)).toBe(false);
 
     const after = await countUnowned();
     // The claim sweep takes EVERY unowned budget (fixture orphans and any
@@ -234,7 +246,15 @@ describe.skipIf(!dbReady)('budget route ownership (Phase 2, USER-04/05)', () => 
       'SELECT owner_user_id FROM budgets WHERE id = $1',
       [orphanBudget],
     );
-    expect(still.rows[0].owner_user_id).toBe(owner.id);
+    expect(still.rows[0].owner_user_id).toBe(admin.id);
+
+    // Hand the claimed budgets to the fixture owner for the tests below.
+    await pool!.query('DELETE FROM public.budget_members WHERE user_id = $1', [admin.id]);
+    await pool!.query('UPDATE budgets SET owner_user_id = $2 WHERE owner_user_id = $1', [admin.id, owner.id]);
+    await pool!.query(
+      'INSERT INTO public.budget_members (budget_id, user_id) SELECT id, owner_user_id FROM budgets WHERE owner_user_id = $1 ON CONFLICT DO NOTHING',
+      [owner.id],
+    );
   });
 
   test('owner reads own budget; cross-owner read is 404, not 403', async () => {
@@ -303,12 +323,12 @@ describe.skipIf(!dbReady)('budget route ownership (Phase 2, USER-04/05)', () => 
     await pool!.query('DELETE FROM accounts WHERE id = $1', [createdAccountSchema.parse(await ok.json()).id]);
   });
 
-  test('admin bypasses ownership on read and write', async () => {
+  test('the admin role is no pass into a budget: 404 on read and write, like anyone else', async () => {
     currentUser = { ...admin, role: 'admin', status: 'active' };
     hasPrincipal = true;
 
     const read = await accounts.request(`/?budget_id=${intrudersBudget}`);
-    expect(read.status).toBe(200);
+    expect(read.status).toBe(404);
 
     const write = await accounts.request('/', {
       method: 'POST',
@@ -321,9 +341,26 @@ describe.skipIf(!dbReady)('budget route ownership (Phase 2, USER-04/05)', () => 
         balance: 0,
       }),
     });
-    expect(write.status).toBe(201);
-    const created = createdAccountSchema.parse(await write.json());
-    await pool!.query('DELETE FROM accounts WHERE id = $1', [created.id]);
+    expect(write.status).toBe(404);
+    expect((await pool!.query("SELECT 1 FROM accounts WHERE name = 'Admin Bypass Account'")).rowCount).toBe(0);
+
+    // Owner-only actions are closed to it too.
+    for (const [method, path, body] of [
+      ['PATCH', `/${intrudersBudget}`, { name: 'pwned' }],
+      ['POST', `/${intrudersBudget}/archive`, undefined],
+      ['DELETE', `/${intrudersBudget}`, undefined],
+      ['POST', '/fresh-start', { budget_id: intrudersBudget }],
+    ] as const) {
+      const res = await budgets.request(path, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      expect(res.status, `${method} ${path}`).toBe(404);
+    }
+    const row = await pool!.query<{ name: string; archived_at: string | null }>('SELECT name, archived_at FROM budgets WHERE id = $1', [intrudersBudget]);
+    expect(row.rows[0].archived_at).toBeNull();
+    expect(row.rows[0].name).not.toBe('pwned');
   });
 
   test('unowned budget is unowned-until-claimed: first claimer wins, the next is locked out', async () => {
@@ -339,9 +376,9 @@ describe.skipIf(!dbReady)('budget route ownership (Phase 2, USER-04/05)', () => 
       [orphanBudget, orphanBudget2],
     ]);
 
-    // The first session human to list budgets claims; here that is the
+    // The first admin session to list budgets claims; here that is the
     // intruder — the claim is blind, it sweeps everything unowned.
-    currentUser = { ...intruder, role: 'user', status: 'active' };
+    currentUser = { ...intruder, role: 'admin', status: 'active' };
     hasPrincipal = true;
     const claim = await budgets.request('/', { method: 'GET' });
     expect(claim.status).toBe(200);

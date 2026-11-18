@@ -40,6 +40,8 @@ export async function createClient(
 
 export interface NewCode {
   userId: string;
+  /** How the approving session signed in ('access'); null = Google or the dev bypass. */
+  idp: string | null;
   clientId: string;
   scope: string;
   resource: string;
@@ -56,10 +58,10 @@ export async function createGrantAndCode(n: NewCode): Promise<string> {
     // Opportunistic cleanup keeps the code table small without a scheduler.
     await client.query(`delete from public.oauth_codes where expires_at < now() - interval '1 day'`);
     const { rows } = await client.query<{ id: string }>(
-      `insert into public.oauth_grants (id, user_id, client_id, scope, resource, expires_at)
-       values (gen_random_uuid(), $1, $2, $3, $4, now() + make_interval(secs => $5))
+      `insert into public.oauth_grants (id, user_id, client_id, scope, resource, expires_at, idp)
+       values (gen_random_uuid(), $1, $2, $3, $4, now() + make_interval(secs => $5), $6)
        returning id`,
-      [n.userId, n.clientId, n.scope, n.resource, n.grantTtlSeconds],
+      [n.userId, n.clientId, n.scope, n.resource, n.grantTtlSeconds, n.idp],
     );
     await client.query(
       `insert into public.oauth_codes (code_hash, grant_id, redirect_uri, code_challenge, expires_at)

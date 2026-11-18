@@ -15,6 +15,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
+import { issueSession } from '../src/user/auth';
 import { approve } from './e2e-consent';
 
 const api = (process.env.BUDGET_API_URL ?? 'http://localhost:3100').replace(/\/+$/, '');
@@ -31,6 +32,7 @@ async function exercise(client: Client, label: string): Promise<void> {
   say(`[${label}] sample: ${names.slice(0, 5).join(', ')}`);
   const read = await client.callTool({ name: 'budget_list', arguments: {} });
   say(`[${label}] call budget_list -> isError=${read.isError ?? false} ${redact(JSON.stringify(read.content)).slice(0, 160)}`);
+  if (read.isError) throw new Error(`[${label}] budget_list failed`);
   if (!names.includes('budget_transaction_add')) {
     say(`[${label}] (read-only grant: no write tool listed)`);
     return;
@@ -40,6 +42,23 @@ async function exercise(client: Client, label: string): Promise<void> {
     arguments: { budget_id, account_id, amount: -2500, payee: `E2E MCP ${label}`, memo: `hobj e2e ${label}` },
   });
   say(`[${label}] call budget_transaction_add -> isError=${write.isError ?? false} ${redact(JSON.stringify(write.content)).slice(0, 160)}`);
+  if (write.isError) throw new Error(`[${label}] budget_transaction_add failed`);
+}
+
+/**
+ * The app's own first call, as E2E_EMAIL with a session cookie. On a fresh
+ * database that person is the first user, so an admin, and this is what claims
+ * the seed's unowned budgets for them. OAuth tokens never claim and no role
+ * reaches a budget it is not on, so without this the tools would see nothing.
+ */
+async function appSignIn(): Promise<void> {
+  const secret = process.env.SESSION_SECRET;
+  const email = process.env.E2E_EMAIL;
+  if (!secret || !email) throw new Error('SESSION_SECRET and E2E_EMAIL are required');
+  const res = await fetch(`${api}/budgets`, { headers: { Cookie: `budget_session=${await issueSession(secret, email, 600)}` } });
+  const rows = res.ok ? ((await res.json()) as { id: string; is_owner: boolean }[]) : [];
+  say(`[http] GET /budgets as the app (session) -> ${res.status}, ${rows.length} budgets`);
+  if (!rows.some((b) => b.id === budget_id && b.is_owner)) throw new Error(`E2E_BUDGET_ID ${budget_id} is not owned by ${email}`);
 }
 
 async function stdio(): Promise<void> {
@@ -114,6 +133,7 @@ async function http(): Promise<void> {
   const meta = await fetch(`${api}/.well-known/oauth-protected-resource`);
   say(`[http] GET /.well-known/oauth-protected-resource -> ${meta.status} ${JSON.stringify(await meta.json())}`);
 
+  await appSignIn();
   for (const scope of ['read write', 'read']) {
     const token = await oauthToken(scope);
     const client = new Client({ name: `e2e-http-${scope}`, version: '1.0.0' });

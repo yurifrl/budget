@@ -31,7 +31,7 @@ export const connectionsSettingsGet = defineOperation({
 
 export const connectionsSettingsUpdate = defineOperation({
   name: 'connections_settings_update',
-  description: 'Set the bank-sync window in days: 0 for all history, or 1 to 3650. App-wide setting. Returns the stored value.',
+  description: 'Set the bank-sync window in days: 0 for all history, or 1 to 3650. App-wide setting, so admins only (403 otherwise; each user sets their own banks with connections_settings_update_one). Returns the stored value.',
   input: z.object({ syncWindowDays: syncWindowDaysSchema }),
   output: connectionSettingsSchema,
   method: 'PATCH',

@@ -4,7 +4,8 @@
  * Queryable. Owner/member predicates come from ../ownership.
  */
 import type { Queryable } from '../../core/db';
-import { accessibleBudgetSql, ownerOrAdminSql } from '../ownership';
+import { personRefSql, type PersonRefRow } from '../../user';
+import { accessibleBudgetSql, ownerSql } from '../ownership';
 
 export interface BudgetRow {
   id: string;
@@ -18,34 +19,48 @@ export async function anyUnownedBudget(db: Queryable): Promise<boolean> {
   return (unowned.rowCount ?? 0) > 0;
 }
 
-/** Every budget (admin view). */
-export async function listAllBudgets(db: Queryable) {
-  return (await db.query('SELECT id, name, archived_at FROM public.budgets ORDER BY created_at')).rows;
+/** A budget as the list returns it: who owns it, relative to the caller, and how many people are on it. */
+export interface BudgetListRow extends BudgetRow, PersonRefRow {
+  is_owner: boolean;
+  member_count: number;
 }
 
-/** Budgets the user owns or is a member of. */
-export async function listAccessibleBudgets(db: Queryable, userId: string) {
+/**
+ * Budgets the user owns or is a member of (nothing else, whatever their role),
+ * each with its owner (personRefSql columns; all null for an unowned legacy
+ * budget), whether that owner is the caller, and the number of people on it
+ * (budget_members plus the owner: the same set budget_members_list returns).
+ */
+export async function listAccessibleBudgets(db: Queryable, userId: string): Promise<BudgetListRow[]> {
   return (
-    await db.query(
-      `SELECT id, name, archived_at FROM public.budgets b
-            WHERE ${accessibleBudgetSql('b', '$1')} ORDER BY created_at`,
+    await db.query<BudgetListRow>(
+      `SELECT b.id, b.name, b.archived_at,
+              COALESCE(b.owner_user_id = $1::uuid, false) AS is_owner,
+              (SELECT count(*)::int FROM (
+                 SELECT bm.user_id FROM public.budget_members bm WHERE bm.budget_id = b.id
+                 UNION SELECT b.owner_user_id WHERE b.owner_user_id IS NOT NULL) people) AS member_count,
+              ${personRefSql('o')}
+         FROM public.budgets b
+         LEFT JOIN public.users o ON o.id = b.owner_user_id
+        WHERE ${accessibleBudgetSql('b', '$1')}
+        ORDER BY b.created_at`,
       [userId],
     )
   ).rows;
 }
 
-/** Lock the budget for a fresh start when the caller owns it (or is admin). */
+/** Lock the budget for a fresh start when the caller owns it. */
 export async function lockOwnedBudget(
   db: Queryable,
   budgetId: string,
-  user: { id: string; role: string },
+  user: Caller,
 ): Promise<Pick<BudgetRow, 'id' | 'name' | 'archived_at'> | undefined> {
   const current = await db.query<Pick<BudgetRow, 'id' | 'name' | 'archived_at'>>(
     `SELECT id, name, archived_at FROM public.budgets
          WHERE id = $1
-           AND ${ownerOrAdminSql('budgets', '$2', '$3')}
+           AND ${ownerSql('budgets', '$2')}
          FOR UPDATE`,
-    [budgetId, user.id, user.role],
+    [budgetId, user.id],
   );
   return current.rows[0];
 }
@@ -375,16 +390,17 @@ export async function insertDefaultGroup(db: Queryable, budgetId: string): Promi
   await db.query('INSERT INTO category_groups (budget_id, name, sort_order) VALUES ($1, $2, $3)', [budgetId, 'Geral', 0]);
 }
 
-type Caller = { id: string; role: string };
+/** The signed-in caller; owner-only writes match on its id. */
+type Caller = { id: string };
 
 export async function renameOwnedBudget(db: Queryable, id: string, name: string, user: Caller) {
   const updated = await db.query(
     `UPDATE public.budgets
        SET name = $1
      WHERE id = $2
-       AND ${ownerOrAdminSql('budgets', '$3', '$4')}
+       AND ${ownerSql('budgets', '$3')}
      RETURNING id, name`,
-    [name, id, user.id, user.role],
+    [name, id, user.id],
   );
   return updated.rows[0];
 }
@@ -393,9 +409,9 @@ export async function archiveOwnedBudget(db: Queryable, id: string, user: Caller
   const archived = await db.query(
     `UPDATE public.budgets SET archived_at = now()
        WHERE id = $1
-         AND ${ownerOrAdminSql('budgets', '$2', '$3')}
+         AND ${ownerSql('budgets', '$2')}
      RETURNING id, name, archived_at`,
-    [id, user.id, user.role],
+    [id, user.id],
   );
   return archived.rows[0];
 }
@@ -404,9 +420,9 @@ export async function unarchiveOwnedBudget(db: Queryable, id: string, user: Call
   const restored = await db.query(
     `UPDATE public.budgets SET archived_at = NULL
        WHERE id = $1
-         AND ${ownerOrAdminSql('budgets', '$2', '$3')}
+         AND ${ownerSql('budgets', '$2')}
      RETURNING id, name, archived_at`,
-    [id, user.id, user.role],
+    [id, user.id],
   );
   return restored.rows[0];
 }
@@ -416,9 +432,9 @@ export async function deleteOwnedBudget(db: Queryable, id: string, user: Caller)
   const deleted = await db.query(
     `DELETE FROM public.budgets
        WHERE id = $1
-         AND ${ownerOrAdminSql('budgets', '$2', '$3')}
+         AND ${ownerSql('budgets', '$2')}
        RETURNING id`,
-    [id, user.id, user.role],
+    [id, user.id],
   );
   return deleted.rows[0];
 }
