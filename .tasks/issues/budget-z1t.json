@@ -4,14 +4,14 @@
   "id": "budget-z1t",
   "title": "Phase 4: admin, dev workflow, CI",
   "description": "",
-  "status": "open",
+  "status": "ready-to-review",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:58.007Z",
-  "updated_at": "2026-11-18T03:09:58.007Z",
+  "updated_at": "2026-11-18T03:46:45.706Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -25,8 +25,26 @@
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
+  "branch": "tk/budget-z1t",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-z1t",
+    "changeset": {
+      "base": "11a288c0398200b1666df212ce02afc5bf1cf915"
+    },
+    "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
+    "finished_at": "2026-11-18T03:46:45.537Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 12,
+        "files": 329,
+        "additions": 47724,
+        "deletions": 126
+      },
+      "head": "c44d6eea2750a93040df164057d8f9e474fd1ef9",
+      "at": "2026-11-18T03:46:45.537Z"
+    }
+  },
   "attachments": [],
   "dependencies": [],
   "dependency_count": 0,

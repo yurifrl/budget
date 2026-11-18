@@ -4,14 +4,14 @@
   "id": "budget-qps",
   "title": "Phase 3: client lift-and-shift",
   "description": "",
-  "status": "open",
+  "status": "ready-to-review",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:57.872Z",
-  "updated_at": "2026-11-18T03:09:57.872Z",
+  "updated_at": "2026-11-18T03:40:19.631Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -25,8 +25,26 @@
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
+  "branch": "tk/budget-qps",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-qps",
+    "changeset": {
+      "base": "f43723053a345657a624f76204a855a37afa0c30"
+    },
+    "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
+    "finished_at": "2026-11-18T03:40:19.449Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 13,
+        "files": 513,
+        "additions": 74616,
+        "deletions": 220
+      },
+      "head": "cf68e5c881c7fe59896334c2ed953200f1b9f681",
+      "at": "2026-11-18T03:40:19.449Z"
+    }
+  },
   "attachments": [],
   "dependencies": [],
   "dependency_count": 0,

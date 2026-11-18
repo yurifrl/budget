@@ -4,14 +4,14 @@
   "id": "budget-nwc",
   "title": "Phase 5b: API structure",
   "description": "",
-  "status": "open",
+  "status": "ready-to-review",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-18T03:09:58.311Z",
-  "updated_at": "2026-11-18T03:09:58.311Z",
+  "updated_at": "2026-11-18T05:15:27.163Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -25,8 +25,26 @@
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
+  "branch": "tk/budget-nwc",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-nwc",
+    "changeset": {
+      "base": "c44d6eea2750a93040df164057d8f9e474fd1ef9"
+    },
+    "agent_session": "884b13e1-7932-4cbe-9fcc-9def2363221a",
+    "finished_at": "2026-11-18T05:15:27.057Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 24,
+        "files": 60,
+        "additions": 3992,
+        "deletions": 1923
+      },
+      "head": "cc485975c690b12a2b81d413fc46d08a8a448d07",
+      "at": "2026-11-18T05:15:27.057Z"
+    }
+  },
   "attachments": [],
   "dependencies": [],
   "dependency_count": 0,
