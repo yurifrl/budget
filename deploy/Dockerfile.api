@@ -1,6 +1,8 @@
 # Budget API image. Build context is the REPO ROOT (shared/ sits beside api/):
 #   docker build -f deploy/Dockerfile.api -t budget-api .
-# Debian (not alpine): Temporal's native core-bridge fails to load on musl.
+# Debian (not alpine): Temporal's native core-bridge fails to load on musl
+# (ERR_DLOPEN_FAILED). The same image runs the jobs worker:
+#   docker run ... budget-api bun src/worker.ts
 FROM oven/bun:1.4.4
 
 WORKDIR /app
@@ -19,6 +21,9 @@ COPY shared/src shared/src
 # api/tsconfig.json carries the @shared/* path that bun resolves at runtime.
 COPY api/tsconfig.json api/
 COPY api/src api/src
+# Migrations are read from api/db/migrations at boot; VERSION feeds /health.
+COPY api/db/migrations api/db/migrations
+COPY api/VERSION api/
 
 WORKDIR /app/api
 ENV API_HOST=0.0.0.0 API_PORT=3100

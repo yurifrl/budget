@@ -1,6 +1,6 @@
 # Local dev dependencies for Budget. DEV ONLY.
 #
-#   postgres  localhost:55432   database=budget  user=postgres
+#   postgres  localhost:55432   database=budgetnew_dev  user=postgres
 #   temporal  localhost:57233 (gRPC)   UI http://localhost:58233
 #
 # Host ports and names are chosen so nothing collides with syscd-app
@@ -14,13 +14,18 @@ services:
     ports:
       - "55432:5432"
     environment:
-      POSTGRES_DB: budget
+      POSTGRES_DB: budgetnew_dev
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       # Apple container volumes contain lost+found; init into a subdirectory.
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - budget-postgres-data:/var/lib/postgresql/data
+      # First start only: api/db/dev-initdb.sh applies every migration, then
+      # the seed, then the seed-dependent 0010 data migration.
+      - ./api/db/migrations:/db-migrations:ro
+      - ./api/db/seed:/db-seed:ro
+      - ./api/db/dev-initdb.sh:/docker-entrypoint-initdb.d/0000_stage.sh:ro
 
   temporal:
     image: temporalio/temporal:1.5.1

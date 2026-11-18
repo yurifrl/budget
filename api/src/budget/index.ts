@@ -1,0 +1,95 @@
+/**
+ * Budget feature barrel (the server analog of a module barrel): mounts the
+ * budget routers under their public prefixes and owns the budget background
+ * tick. Mount order matters for readability only — no overlapping prefixes.
+ */
+import { Hono } from 'hono';
+
+import { createSingleFlight, startInterval } from '../core/interval';
+import type { AnyOperation } from '../core/operation';
+
+import budgets, { operations as budgetsOps } from './routes/budgets';
+import groups, { operations as groupsOps } from './routes/groups';
+import categoryBundles, { operations as categoryBundlesOps } from './routes/category-bundles';
+import categories, { operations as categoriesOps } from './routes/categories';
+import accounts, { operations as accountsOps } from './routes/accounts';
+import transactions, { operations as transactionsOps } from './routes/transactions';
+import repeatRules, { generateAllBudgets, operations as repeatRulesOps } from './routes/repeat-rules';
+import assignments, { operations as assignmentsOps } from './routes/assignments';
+import members, { operations as membersOps } from './routes/members';
+import budgetExport, { operations as budgetExportOps } from './routes/budget-export';
+import budgetRestore, { operations as budgetRestoreOps } from './routes/budget-restore';
+import monthNotes, { operations as monthNotesOps } from './routes/month-notes';
+import categoryNotes, { operations as categoryNotesOps } from './routes/category-notes';
+import payees, { operations as payeesOps } from './routes/payees';
+import categoryTargets, { operations as categoryTargetsOps } from './routes/category-targets';
+import planAutoAssign, { operations as planAutoAssignOps } from './routes/plan-auto-assign';
+import revision, { operations as revisionOps } from './routes/revision';
+import payeeSuggestions, { operations as payeeSuggestionsOps } from './routes/payee-suggestions';
+
+const app = new Hono();
+
+/**
+ * Every budget operation, in mount order — the feature catalog the MCP server
+ * and CLI generate from (aggregated by server/catalog.ts). Each route file
+ * mounts these same declarations behind budgetAccess, so what is listed here
+ * is exactly what is served.
+ */
+export const operations: readonly AnyOperation[] = [
+  ...budgetsOps,
+  ...groupsOps,
+  ...categoriesOps,
+  ...categoryBundlesOps,
+  ...accountsOps,
+  ...transactionsOps,
+  ...repeatRulesOps,
+  ...assignmentsOps,
+  ...membersOps,
+  ...budgetExportOps,
+  ...budgetRestoreOps,
+  ...monthNotesOps,
+  ...categoryNotesOps,
+  ...payeesOps,
+  ...categoryTargetsOps,
+  ...planAutoAssignOps,
+  ...payeeSuggestionsOps,
+  ...revisionOps,
+];
+
+/** Integration seam: the real accounts router, mounted by connections' tests. */
+export { default as accountsRouter } from './routes/accounts';
+
+/** Integration seam: pairs imported card-statement payments as transfers (connections sync). */
+export { linkCardPayments } from './domain/card-payments';
+
+app.route('/budgets', budgets);
+app.route('/groups', groups);
+app.route('/categories', categories);
+app.route('/bundles', categoryBundles);
+app.route('/accounts', accounts);
+app.route('/transactions', transactions);
+app.route('/repeat-rules', repeatRules);
+app.route('/assignments', assignments);
+app.route('/budgets/export', budgetExport);
+app.route('/budgets/restore', budgetRestore);
+app.route('/budget-members', members);
+app.route('/month-notes', monthNotes);
+app.route('/category-notes', categoryNotes);
+app.route('/payees', payees);
+app.route('/category-targets', categoryTargets);
+app.route('/plan-auto-assign', planAutoAssign);
+app.route('/payee-suggestions', payeeSuggestions);
+app.route('/budget-revision', revision);
+
+export default app;
+
+/**
+ * Boot/interval tick for repeat-rule occurrence generation (idempotent; run
+ * first at boot, then on the interval). Env parsing stays in the entrypoint.
+ */
+export function startBudgetRepeatTick(intervalSeconds: number): void {
+  const tick = createSingleFlight('Budget repeat-rule tick', generateAllBudgets);
+
+  void tick();
+  startInterval(tick, intervalSeconds * 1000);
+}
