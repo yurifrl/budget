@@ -32,3 +32,6 @@ expo-env.d.ts
 
 # local Temporal dev server state
 .tmp/
+
+# tk worktree pool (also in .git/info/exclude; kept here so clones ignore it too)
+.worktrees/

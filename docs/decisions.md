@@ -498,4 +498,51 @@ returning `[]` for `/connections/sync-status` (fixed in the stub, not the
 app). Screenshots: `docs/evidence/phase3/stub-*.png`. This is not the
 side-by-side parity pass against syscd with real data that the phase exit
 asks for; that, and the iOS simulator pass, remain open.
-||||||| f437230
+
+## Phase 6: deploy
+
+Deployed 2026-11-18 overnight (task budget-u1n). What needs the owner's
+accounts is in `docs/MORNING.md`.
+
+### What is where
+
+| Piece | Where |
+|---|---|
+| Repo | https://github.com/yurifrl/budget (private). The name used to redirect to the renamed 2019 repo `budget-haskell`; that redirect is gone now. |
+| Images | `ghcr.io/yurifrl/budget-{web,api,admin}`, release `2026.11.18` (amd64+arm64), built by `release.yml` run 44234399576, pinned in `k8s/values.yaml` by the bot commit `8bbcd88` |
+| Cluster app | home-systems `k8s/applications/budget.yaml`: ONE Application, namespace `budget`, support chart + the app's own Temporal server (temporal chart 1.8.0, release `budget-temporal`, Temporal namespace `budget`, task queue `budget-jobs`) as a second source |
+| Database | shared CNPG cluster `pg`, EXISTING database `budget` (syscd's live data), role `budget_app` with `inRoles: [syscd]`; Temporal on new databases `budget_temporal` + `budget_temporal_visibility`, role `budget_temporal` (home-systems `postgres.yaml`) |
+| Secrets | 1Password vault `Kubernetes`, items `budget`, `budget-temporal`, `argocd-budget`, via External Secrets (same `onepassword` ClusterSecretStore as syscd); created by `scripts/create-1password-item.sh` |
+| Hosts | `budget.syscd.live` (+ `budget.syscd.tech`), `budget-api.syscd.live` (Cloudflare Access bypass), `budget-admin.syscd.live` (Access Admin policy, + `.syscd.tech`), `budget-temporal.syscd.tech` (tailnet only) |
+
+### Decisions taken during the deploy
+
+- **Packages stay private.** syscd's `syscd-app*` packages are private too;
+  the Talos nodes pull from ghcr.io with registry auth in their
+  machineconfig. Making budget's public would expose the API image for no
+  gain. GitHub has no REST endpoint to change package visibility anyway;
+  MORNING.md has the clicks if pods ever show ImagePullBackOff.
+- **No ArgoCD credential yet, so image tags are inline.** ArgoCD reads
+  syscd-app through a per-repo deploy key (`argocd-syscd-app` in
+  argo-support.yaml); there is no credential template covering
+  `git@github.com:yurifrl/*`. `op` was not signed in, so the key could not be
+  stored. budget.yaml declares the `argocd-budget` repository ExternalSecret
+  itself (so its pending state shows only on this app), pins the four image
+  tags inline, and leaves the `$values` source commented until the secret
+  exists. The script creates the 1Password item and the read-only deploy key.
+- **Role access via membership.** `budget_app` is a member of `syscd`
+  (CNPG managed role `inRoles`, inherit by default), which gives it owner
+  rights on syscd's objects in `budget` without any manual GRANT. Checked in
+  CNPG v1.30.0 (the operator's version): a role whose password secret is
+  missing is reported in `CannotReconcile` and does not block other roles
+  (upstream fix #10053 is in v1.30.0).
+- **Dual-run settings.** `BUDGET_REPEAT_TICK=0` (syscd still runs the tick),
+  `JOBS_INSTANCE_ID=budget-prod` (syscd: `prod`), its own Temporal server.
+  Both workers would run `connections-sweep` on the same connections once
+  Pluggy credentials are filled; MORNING.md suggests leaving them empty until
+  syscd's budget is turned off.
+- **CI.** The first CI run (44234271033) failed only on `expo-doctor`, the
+  SDK version-mismatch check recorded in phase 3. Making the step
+  non-blocking was not done (left for the owner to decide), so `main` CI is
+  red on that one step; every other job passed (shared, api incl. e2e,
+  admin, three Docker builds).
