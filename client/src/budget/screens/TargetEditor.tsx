@@ -17,6 +17,7 @@ import { GhostButton, IndigoButton, MoneyInput } from '../ui/bits';
 import { DatePickerPopover } from './register/DatePickerPopover';
 import { barColor, colors, radius } from '../ui/theme';
 import { useMoneyFormat } from '../model/useDisplayPrefs';
+import { MONTH_ABBR, WEEKDAY_ABBR } from '../domain/format';
 import type { CategoryTarget, CategoryTargetConfig, Cents, FundingState, MonthKey, TargetKind } from '../domain/types';
 import { neededBy } from '../domain/targets';
 
@@ -35,8 +36,8 @@ const KINDS: { key: TargetKind; label: string }[] = [
   { key: 'custom', label: 'Custom' },
 ];
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAYS = WEEKDAY_ABBR;
+const MONTHS = MONTH_ABBR;
 
 /** Accepts calendar-picked or typed dates once committed as ISO (YYYY-MM-DD). */
 const BY_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -64,7 +65,7 @@ function ChipSelect({
   onSelect,
   columns,
 }: {
-  options: string[];
+  options: readonly string[];
   value: number;
   onSelect: (index: number) => void;
   columns?: number;

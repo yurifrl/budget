@@ -8,13 +8,13 @@
  */
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { useMemo, useState, type ReactNode } from 'react';
-import { formatMonthLong, makeMonth, nextMonth, prevMonth, splitMonth, todayIso } from '../../domain/format';
+import { formatMonthLong, makeMonth, nextMonth, prevMonth, splitMonth, todayIso, WEEKDAY_ABBR } from '../../domain/format';
 import { useMoneyFormat } from '../../model/useDisplayPrefs';
 import type { MonthKey } from '../../domain/types';
 import { colors } from '../../ui/theme';
 import { DropdownShell, dropdownStyles, pressNoBlur, useDropdownPortal, type DropdownKeyEvent } from './dropdown';
 
-const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const WEEKDAYS = WEEKDAY_ABBR.map((d) => d.slice(0, 2));
 
 interface DayCell {
   iso: string;

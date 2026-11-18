@@ -9,6 +9,7 @@
 import type { ConnectionAccountSummaryJson, ConnectionUpstreamJson, UpstreamAccountJson } from '../../data/connections';
 import type { AccountRow } from '../../data/rows';
 import { milliToCents } from '../../data/mapping';
+import { CASH_ACCOUNT_TYPES } from '../../domain/types';
 import { creditView, type CreditView } from './connections';
 
 /** Budget-side working balance (cleared + uncleared) in cents. */
@@ -45,7 +46,6 @@ export function matchHint(workingCents: number, bankCents: number | null): Match
 }
 
 const CREDIT_TYPES: ReadonlySet<string> = new Set(['creditCard']);
-const CASH_TYPES: ReadonlySet<string> = new Set(['checking', 'savings', 'cash']);
 
 /**
  * Warning when the budget account's type clearly clashes with the bank
@@ -53,7 +53,7 @@ const CASH_TYPES: ReadonlySet<string> = new Set(['checking', 'savings', 'cash'])
  * assets…) are ambiguous, so they never warn. Never blocks the link.
  */
 export function typeMismatchWarning(budgetType: string, upstreamType: 'BANK' | 'CREDIT'): string | null {
-  if (upstreamType === 'CREDIT' && CASH_TYPES.has(budgetType)) return 'This is a credit card, but the budget account is a cash account';
+  if (upstreamType === 'CREDIT' && CASH_ACCOUNT_TYPES.has(budgetType)) return 'This is a credit card, but the budget account is a cash account';
   if (upstreamType === 'BANK' && CREDIT_TYPES.has(budgetType)) return 'This is a bank account, but the budget account is a credit card';
   return null;
 }

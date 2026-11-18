@@ -18,10 +18,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import type { Budget, Transaction } from '../../domain/types';
 import { displayFlagLabel } from '../../domain/flagLabels';
-import { useFlagLabels } from '../../model/useDisplayPrefs';
+import { useFlagLabels, useMoneyFormat } from '../../model/useDisplayPrefs';
 import { REPEAT_FREQS, REPEAT_LABELS } from './InlineAddRow';
 import { FLAG_COLORS, colors, radius } from '../../ui/theme';
-import { centsFmt, shortDate, useTxnRowMenuActions } from './txnRowMenuShared';
+import { useTxnRowMenuActions } from './txnRowMenuShared';
 
 type MenuPanel = 'main' | 'match' | 'repeat' | 'move' | 'flag' | 'category';
 
@@ -62,6 +62,7 @@ export function TxnRowMenu({
   const [cardSize, setCardSize] = useState<{ w: number; h: number } | null>(null);
   const { width: winW, height: winH } = useWindowDimensions();
   const flagLabels = useFlagLabels();
+  const { formatDate, formatMoney } = useMoneyFormat();
   const {
     approve,
     reject,
@@ -197,7 +198,7 @@ export function TxnRowMenu({
   const cardTop = Math.min(anchor.y + 6, Math.max(12, winH - (cardSize?.h ?? 320) - 60));
 
   return (
-    <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Fechar menu da transação">
+    <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close transaction menu">
       {/* Swallow clicks so item presses don't bubble to the backdrop. */}
       <Pressable
         onPress={(e) => e.stopPropagation()}
@@ -272,7 +273,7 @@ export function TxnRowMenu({
                     {t.payee || '(no payee)'}
                   </Text>
                   <Text style={styles.itemHint}>
-                    {shortDate(t.date)} · {centsFmt.format((t.inflow - t.outflow) / 100)}
+                    {formatDate(t.date)} · {formatMoney(t.inflow - t.outflow)}
                   </Text>
                 </Pressable>
               ))

@@ -107,6 +107,9 @@ export type AccountType =
   | "credit"
   | "tracking";
 
+/** Account types that hold cash (also the YNAB wire types with the same names). */
+export const CASH_ACCOUNT_TYPES: ReadonlySet<string> = new Set(["checking", "savings", "cash"]);
+
 /** Left-rail grouping (PDD §4.1). */
 export type AccountGroup = "CASH" | "CREDIT" | "CLOSED";
 

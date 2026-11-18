@@ -10,10 +10,11 @@
 import { zipSync, unzipSync, strFromU8, strToU8 } from 'fflate';
 
 import { budgetMonth, categoryFigures } from '../domain/zeroSum';
+import { monthOfDate } from '../domain/format';
 import type { Budget } from '../domain/types';
 
 import { TRANSFER_PAYEE_RE } from '@shared/domain/transfers';
-import { budgetToPayload, pairTransfers as pairPayloadTransfers } from './payload';
+import { budgetToPayload, pairTransfers } from './payload';
 import type { TransferPayload } from './payload';
 import {
   parseTsv,
@@ -67,7 +68,6 @@ function stamp(date: Date): string {
   );
 }
 
-const monthOfDate = (date: string): number => Number(date.slice(0, 4)) * 100 + Number(date.slice(5, 7));
 
 /** Contiguous month keys from the first to the last month with a non-upcoming transaction or an assignment. */
 function ledgerMonths(budget: Budget): number[] {
@@ -408,7 +408,7 @@ function resolveCategoryCell(
   return index === -1 ? null : index;
 }
 
-function pairTransfers(
+function pairRegisterTransfers(
   transactions: TransferPayload['transactions'],
   accounts: { name: string }[],
   warnings: string[],
@@ -420,7 +420,7 @@ function pairTransfers(
       errors.push(`Register.tsv: transfer payee names unknown account ${JSON.stringify(other)}`);
     }
   }
-  pairPayloadTransfers(
+  pairTransfers(
     transactions,
     accounts.map((a) => a.name),
   );
@@ -477,7 +477,7 @@ export function parseTransferFiles(
 
   const { universe, assignments } = parsePlan(plan, opts?.people, warnings, errors);
   const { accounts, transactions } = parseRegister(register, universe, opts?.people, warnings, errors);
-  pairTransfers(transactions, accounts, warnings, errors);
+  pairRegisterTransfers(transactions, accounts, warnings, errors);
   return {
     payload: {
       groups: universe.groups,

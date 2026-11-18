@@ -18,7 +18,7 @@
  * All amounts are integer cents.
  */
 
-import { makeMonth } from "./format";
+import { monthOfDate } from "./format";
 import { neededBy } from "./targets";
 import { sumFigures, type BudgetMonth, type FigureTotals } from "./zeroSum";
 import type {
@@ -35,11 +35,6 @@ import type {
 // Small helpers
 // ---------------------------------------------------------------------------
 
-/** Month key of an ISO date (YYYY-MM-DD). */
-function monthOfDate(date: string): MonthKey {
-  const [y, m] = date.split("-");
-  return makeMonth(Number(y), Number(m));
-}
 
 // ---------------------------------------------------------------------------
 // Account balances

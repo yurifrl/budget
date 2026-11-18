@@ -24,17 +24,6 @@ import {
   useUpdateTransactionMutation,
 } from "../../data/api";
 
-export const centsFmt = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
-
-/** Short human date for match/move candidates (row uses DD/MM/YYYY). */
-export function shortDate(iso: string): string {
-  const [y, m, d] = iso.split("-");
-  return d && m ? `${d}/${m}/${y}` : iso;
-}
-
 /**
  * Match candidates (syscd-app-42f): live rows in the same account with the
  * exact same one-way amount — YNAB pairs an imported row with the manual row

@@ -18,10 +18,8 @@ import { usePersonFilter } from '../model/usePersonFilter';
 import { PersonFilterBar } from './PersonFilterBar';
 import { useBudgetShell } from './shell';
 
-const DAY_LABEL = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
-
 export function SpendingScreen() {
-  const { formatMoney } = useMoneyFormat();
+  const { formatMoney, formatDateLong } = useMoneyFormat();
   const shell = useBudgetShell();
   const { budget, budgetId, error } = useBudgetModel();
   const [updateTransaction] = useUpdateTransactionMutation();
@@ -72,7 +70,7 @@ export function SpendingScreen() {
         keyExtractor={(t) => t.id}
         contentContainerStyle={{ paddingHorizontal: 15, paddingBottom: 90 }}
         renderSectionHeader={({ section }) => (
-          <Text style={styles.dateHeader}>{DAY_LABEL.format(new Date(`${section.date}T12:00:00Z`))}</Text>
+          <Text style={styles.dateHeader}>{formatDateLong(section.date)}</Text>
         )}
         renderItem={({ item: t }) => {
           const categoryNameFor = (id: string) => {

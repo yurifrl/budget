@@ -29,10 +29,10 @@ import { disabled } from "@expo/ui/swift-ui/modifiers";
 
 import type { Budget, RepeatFrequency, Transaction } from "../../domain/types";
 import { displayFlagLabel } from "../../domain/flagLabels";
-import { useFlagLabels } from "../../model/useDisplayPrefs";
+import { useFlagLabels, useMoneyFormat } from "../../model/useDisplayPrefs";
 import { REPEAT_FREQS, REPEAT_LABELS } from "./InlineAddRow";
 import { FLAG_COLORS, colors } from "../../ui/theme";
-import { centsFmt, shortDate, useTxnRowMenuActions } from "./txnRowMenuShared";
+import { useTxnRowMenuActions } from "./txnRowMenuShared";
 
 export function TxnMenuTrigger({
   txn,
@@ -50,6 +50,7 @@ export function TxnMenuTrigger({
   children: ReactElement;
 }) {
   const flagLabels = useFlagLabels();
+  const { formatDate, formatMoney } = useMoneyFormat();
   const {
     approve,
     reject,
@@ -135,7 +136,7 @@ export function TxnMenuTrigger({
               ? candidates.map((c) => (
                   <Button
                     key={c.id}
-                    label={`${c.payee} — ${shortDate(c.date)} · ${centsFmt.format(Math.abs(c.inflow - c.outflow) / 100)}`}
+                    label={`${c.payee} — ${formatDate(c.date)} · ${formatMoney(Math.abs(c.inflow - c.outflow))}`}
                     onPress={() => match(c)}
                   />
                 ))

@@ -8,7 +8,7 @@
  * per-category Available, per-payment-category Available and Ready to Assign
  * across each month boundary.
  */
-import { nextMonth } from "./format";
+import { monthOfDate, nextMonth } from "./format";
 import { cardEnvelopeKey, isCardAccount, resolveCardLinks } from "./payments";
 import type { Account, Budget, Cents, MonthKey, Transaction } from "./types";
 
@@ -57,7 +57,6 @@ interface MonthLedger {
   balanceDelta: CardNets;
 }
 
-const monthOfDate = (iso: string): MonthKey => Number(iso.slice(0, 4)) * 100 + Number(iso.slice(5, 7));
 
 function addTo<K>(map: Map<K, Cents>, key: K, cents: Cents): void {
   map.set(key, (map.get(key) ?? 0) + cents);

@@ -10,6 +10,7 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { DEFAULT_FLAG_LABELS, type FlagLabels } from '../domain/flagLabels';
+import { currentMonthKey, monthKeyFromDate } from '../domain/format';
 import { DEFAULT_FMT_PREFS, type FmtPrefs } from '../domain/fmtPrefs';
 import { PERSON_ALL, type PersonFilter } from '../domain/people';
 import type { FlagColor, MonthKey } from '../domain/types';
@@ -62,15 +63,7 @@ export interface LoadedBudgetSettings {
   display?: { progressBars?: boolean; hiddenCategories?: boolean; closedAccounts?: boolean };
 }
 
-/** Month key for a Date: 2026-06-05 -> 202606. */
-export function monthKeyFromDate(date: Date): MonthKey {
-  return date.getFullYear() * 100 + (date.getMonth() + 1);
-}
-
-/** The current real-world month as a MonthKey (e.g. 202606). */
-export function currentMonthKey(): MonthKey {
-  return monthKeyFromDate(new Date());
-}
+export { currentMonthKey, monthKeyFromDate };
 
 const initialState: BudgetUiState = {
   activeBudgetId: null,

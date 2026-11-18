@@ -20,7 +20,7 @@
  * `CategoryTargetConfig` as the `category_targets.config` JSONB.
  */
 import type { Cents, CategoryTarget, CategoryTargetConfig, TargetKind, MonthKey } from "./types";
-import { makeMonth, splitMonth } from "./format";
+import { daysInMonth, makeMonth, splitMonth } from "./format";
 
 /** Weekday (0=Sunday) of the month identified by `key`, day 1. */
 function firstWeekdayOfMonth(key: MonthKey): number {
@@ -29,14 +29,14 @@ function firstWeekdayOfMonth(key: MonthKey): number {
 }
 
 /** Number of days in the month identified by `key`. */
-function daysInMonth(key: MonthKey): number {
+function daysInMonthKey(key: MonthKey): number {
   const { year, month } = splitMonth(key);
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return daysInMonth(year, month);
 }
 
 /** Clamp `day` into 1..daysInMonth(`key`) so due days like 31 never overflow. */
 function clampDay(day: number, key: MonthKey): number {
-  return Math.min(Math.max(day, 1), daysInMonth(key));
+  return Math.min(Math.max(day, 1), daysInMonthKey(key));
 }
 
 /**
@@ -45,7 +45,7 @@ function clampDay(day: number, key: MonthKey): number {
  */
 function weeklyTurns(key: MonthKey, anchor: number): number {
   const firstHit = ((anchor - firstWeekdayOfMonth(key) + 7) % 7) + 1;
-  const days = daysInMonth(key);
+  const days = daysInMonthKey(key);
   if (firstHit > days) return 0;
   return Math.floor((days - firstHit) / 7) + 1;
 }
@@ -139,19 +139,19 @@ export function targetBadge(
   const { year } = splitMonth(month);
   switch (target.kind) {
     case "weekly":
-      byLabel = "por semana";
+      byLabel = "per week";
       break;
     case "monthly":
-      byLabel = "por mês";
+      byLabel = "per month";
       break;
     case "yearly": {
       const due = makeMonth(year, target.config.monthOfYear ?? 12);
       const day = clampDay(target.config.dayOfMonth ?? 1, due);
-      byLabel = `até ${day}/${due % 100}`;
+      byLabel = `by ${day}/${due % 100}`;
       break;
     }
     case "custom":
-      if (target.config.byDate) byLabel = `até ${target.config.byDate.split("-").reverse().join("/")}`;
+      if (target.config.byDate) byLabel = `by ${target.config.byDate.split("-").reverse().join("/")}`;
       break;
   }
   return { state: "needed", more: Math.max(0, need - assigned), byLabel };

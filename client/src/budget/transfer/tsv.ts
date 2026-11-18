@@ -4,6 +4,11 @@
  * Every field is wrapped in double quotes; embedded quotes are doubled. The
  * codec is quote-aware, so fields containing tabs (real tab characters inside
  * quoted cells) round-trip correctly.
+ *
+ * The money/date/month formatters here are deliberately NOT the UI
+ * formatters (domain/format): they write the archive's fixed file format
+ * (`-R$2496,31`, `DD/MM/YYYY`, `Jan 2026`), independent of the user's number
+ * and date prefs, so an export always re-imports. Pinned by tsv.test.ts.
  */
 
 import type { ClearedStatus } from '../domain/types';

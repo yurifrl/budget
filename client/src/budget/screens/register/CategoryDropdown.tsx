@@ -17,12 +17,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
-import { DropdownShell, dropdownStyles, pressNoBlur, useDropdownPortal, type DropdownKeyEvent } from './dropdown';
+import { amountStyle, DropdownShell, dropdownStyles, pressNoBlur, useDropdownPortal, type DropdownKeyEvent } from './dropdown';
 import { transferPayeeName } from '@shared/domain/transfers';
 
 import { categoryLabel } from '../../domain/bundles';
 import { useMoneyFormat } from '../../model/useDisplayPrefs';
-import type { Account, Bundle, Cents, Category, CategoryGroup } from '../../domain/types';
+import type { Account, Bundle, Category, CategoryGroup } from '../../domain/types';
 import { categoryFigures, type BudgetMonth } from '../../domain/zeroSum';
 import { matchesCategoryQuery } from '../../ui/categoryPick';
 import { colors } from '../../ui/theme';
@@ -38,9 +38,6 @@ interface Item {
   checked: boolean;
 }
 
-/** Sign-colored amount style shared by every AVAILABLE readout in the menu. */
-const amountStyle = (cents: Cents) =>
-  cents > 0 ? dropdownStyles.amountPositive : cents < 0 ? dropdownStyles.amountNegative : dropdownStyles.amountZero;
 
 export function CategoryDropdown({
   categories,

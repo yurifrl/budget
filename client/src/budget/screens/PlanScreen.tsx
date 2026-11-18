@@ -710,7 +710,7 @@ export function PlanScreen() {
         </Pressable>
         {addingGroup === 'toolbar' ? (
           <InlineAddRow
-            placeholder="Nome do grupo"
+            placeholder="Group name"
             accessibilityLabel="New group name"
             onCommit={(name) => {
               setAddingGroup(null);
@@ -889,7 +889,7 @@ export function PlanScreen() {
                               onPress={() =>
                                 void setCategoryHidden({ budgetId, categoryId: c.id, hidden: false })
                               }>
-                              <Text style={styles.rowMenuText}>Restaurar</Text>
+                              <Text style={styles.rowMenuText}>Restore</Text>
                             </Pressable>
                           </View>
                         ))
@@ -898,7 +898,7 @@ export function PlanScreen() {
                 ) : null}
                 {addingGroup === 'footer' ? (
                   <InlineAddRow
-                    placeholder="Nome do grupo"
+                    placeholder="Group name"
                     accessibilityLabel="New group name"
                     onCommit={(name) => {
                       setAddingGroup(null);
@@ -993,7 +993,7 @@ export function PlanScreen() {
                 const groupId = section.group.id;
                 return (
                   <InlineAddRow
-                    placeholder="Nome da categoria"
+                    placeholder="Category name"
                     accessibilityLabel="New category name"
                     onCommit={(name) => {
                       const intoBundle = addCatBundle;
@@ -1417,7 +1417,7 @@ export function PlanScreen() {
         <Pressable style={styles.menuBackdrop} onPress={() => setConfirmDelete(null)}>
           <Pressable style={[styles.rowMenuCard, { top: 44, right: 16 }]} onPress={() => undefined}>
             <Text style={styles.menuItemText}>
-              Esta categoria tem atividade neste mês. Excluir? As transações manterão o histórico.
+              This category has activity this month. Delete it? Its transactions keep their history.
             </Text>
             <View style={styles.sheetRow}>
               <Pressable
@@ -1429,13 +1429,13 @@ export function PlanScreen() {
                   for (const cid of ids) void deleteCategory({ budgetId, categoryId: cid });
                   if (ids.length > 1) setCheckedRows(new Set());
                 }}>
-                <Text style={styles.menuItemTextDanger}>Excluir</Text>
+                <Text style={styles.menuItemTextDanger}>Delete</Text>
               </Pressable>
               <Pressable
                 style={styles.menuItem}
                 accessibilityLabel="Cancel delete"
                 onPress={() => setConfirmDelete(null)}>
-                <Text style={styles.menuItemText}>Cancelar</Text>
+                <Text style={styles.menuItemText}>Cancel</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -1762,19 +1762,19 @@ function RowMenu({
               onSubmitEditing={commitRename}
               onEndEditing={commitRename}
               style={styles.menuRenameInput}
-              accessibilityLabel="Renomear categoria"
+              accessibilityLabel="Rename category"
             />
             <View style={styles.renameRow}>
               {isGroup ? null : (
                 <Pressable style={styles.menuItem} onPress={onHide ?? undefined} disabled={!onHide}>
-                  <Text style={styles.menuItemText}>Ocultar</Text>
+                  <Text style={styles.menuItemText}>Hide</Text>
                 </Pressable>
               )}
               <Pressable style={styles.menuItem} onPress={onDelete}>
-                <Text style={styles.menuItemTextDanger}>Excluir</Text>
+                <Text style={styles.menuItemTextDanger}>Delete</Text>
               </Pressable>
               <Pressable style={styles.menuItem} onPress={() => setRenaming(false)}>
-                <Text style={styles.menuItemText}>Cancelar</Text>
+                <Text style={styles.menuItemText}>Cancel</Text>
               </Pressable>
               <Pressable style={styles.menuItem} onPress={commitRename}>
                 <Text style={styles.menuOk}>OK</Text>
@@ -1788,18 +1788,18 @@ function RowMenu({
             <Text style={styles.menuRowName}>{name}</Text>
             <Pressable style={styles.menuItem} onPress={onRename && !batch ? startRename : undefined} disabled={!onRename || batch}>
               <Text style={[styles.menuItemText, (!onRename || batch) && styles.viewsBtnDisabled]}>
-                Renomear
+                Rename
               </Text>
             </Pressable>
             {onHide ? (
               <Pressable style={styles.menuItem} onPress={onHide}>
-                <Text style={styles.menuItemText}>Ocultar</Text>
+                <Text style={styles.menuItemText}>Hide</Text>
               </Pressable>
             ) : null}
             {bundleItems}
             {assignBlock}
             <Pressable style={styles.menuItem} onPress={onDelete}>
-              <Text style={styles.menuItemTextDanger}>Excluir</Text>
+              <Text style={styles.menuItemTextDanger}>Delete</Text>
             </Pressable>
           </View>
         )}

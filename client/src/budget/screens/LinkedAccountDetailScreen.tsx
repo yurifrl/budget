@@ -29,6 +29,7 @@ import { connectionStatusView } from '../model/banks/connections';
 import { computeRunningBalances, workingBalance } from '../domain/engine';
 import { useMoneyFormat } from '../model/useDisplayPrefs';
 import type { Budget, Transaction } from '../domain/types';
+import { registerCategoryCell } from '../domain/register';
 import { useBudgetModel } from '../model/useBudgetModel';
 import { selectActiveBudgetId } from '../state/ui';
 import { LinkedBy } from '../ui/LinkedBy';
@@ -50,32 +51,6 @@ const ACCOUNT_TYPE_LABEL: Record<Budget['accounts'][number]['type'], string> = {
 /** Stable empty array so memos stay referentially equal while loading. */
 const EMPTY_TXNS: Transaction[] = [];
 const EMPTY_RUNNING = new Map<string, number>();
-
-/**
- * Category cell text — mirrors AccountsScreen's `categoryLabel` (kept local:
- * that screen belongs to another slice in this session).
- */
-function categoryLabel(
-  budget: Budget,
-  t: Transaction,
-): { text: string; warn: boolean } {
-  // Auto-booked adjustments (reconcile / balance edits) categorize to
-  // Ready to Assign, same as the main register.
-  if (
-    t.payee === 'Reconciliation Adjustment' ||
-    t.payee === 'Balance Adjustment'
-  ) {
-    return { text: 'Ready to Assign', warn: false };
-  }
-  if (!t.categoryId) {
-    if (t.splits?.length) return { text: `Split (${t.splits.length})`, warn: false };
-    return t.inflow > 0
-      ? { text: 'Ready to Assign', warn: false }
-      : { text: 'needs category', warn: true };
-  }
-  const cat = budget.categories.find((c) => c.id === t.categoryId);
-  return { text: cat?.name ?? '?', warn: false };
-}
 
 export function LinkedAccountDetailScreen() {
   const { formatDate, formatMoney } = useMoneyFormat();
@@ -219,7 +194,7 @@ export function LinkedAccountDetailScreen() {
           data={txns}
           keyExtractor={(t) => t.id}
           renderItem={({ item: t }) => {
-            const cat = categoryLabel(budget, t);
+            const cat = registerCategoryCell(budget, t, { transfers: false });
             if (!showWide) {
               // Phone card — AccountsScreen's txnCard layout without the
               // Pressable/editor: payee + Repeat + amount + cleared mark,

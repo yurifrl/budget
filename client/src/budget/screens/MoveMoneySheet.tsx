@@ -40,7 +40,7 @@ import { recordPlanEdit } from '../state/ui';
 import { GhostButton, IndigoButton, MoneyInput, OverlaySheet, SheetItem } from '../ui/bits';
 import { colors } from '../ui/theme';
 import { buildCategoryPickItems, type CategoryPickItem } from '../ui/categoryPick';
-import { DropdownShell, dropdownStyles, useDropdownPortal, type DropdownKeyEvent } from './register/dropdown';
+import { amountStyle, DropdownShell, dropdownStyles, useDropdownPortal, type DropdownKeyEvent } from './register/dropdown';
 
 export interface MoveMoneyRequest {
   /** Source category id, or null to assign out of Ready-to-Assign. */
@@ -56,10 +56,6 @@ export interface MoveMoneyRequest {
   unassign?: boolean;
 }
 
-/** Available-amount color, mirroring CategoryDropdown's right-aligned amounts. */
-function amountStyle(cents: Cents) {
-  return cents < 0 ? dropdownStyles.amountNegative : cents > 0 ? dropdownStyles.amountPositive : dropdownStyles.amountZero;
-}
 
 /**
  * Searchable "To" select for the Move Money sheet (syscd-app-aey). One input,

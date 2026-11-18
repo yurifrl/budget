@@ -15,9 +15,8 @@ import Svg, { Rect } from 'react-native-svg';
 
 import { filterChips, selectionCategoryIds, spendRows, type CategorySelection } from '../domain/bundleSpend';
 import { transactionActivity, workingBalance } from '../domain/engine';
-import { formatMonth } from '../domain/format';
+import { formatMonth, monthOfDate } from '../domain/format';
 import { useMoneyFormat } from '../model/useDisplayPrefs';
-import { monthKeyFromDate } from '../data/mapping';
 import { budgetForPerson } from '../domain/people';
 import type { Budget, Cents, MonthKey } from '../domain/types';
 import { colors, radius } from '../ui/theme';
@@ -42,7 +41,7 @@ function netWorthSeries(budget: Budget, months: MonthKey[]): { month: MonthKey; 
     let debts = 0;
     for (const account of budget.accounts) {
       const futureDelta = budget.transactions
-        .filter((t) => t.accountId === account.id && monthKeyFromDate(t.date) > m)
+        .filter((t) => t.accountId === account.id && monthOfDate(t.date) > m)
         .reduce((sum, t) => sum + transactionActivity(t), 0);
       const balance = workingBalance(account) - futureDelta;
       if (balance >= 0) assets += balance;
@@ -115,7 +114,7 @@ export function ReflectScreen() {
       (t) =>
         (accountFilter ? t.accountId === accountFilter : true) &&
         (catIds ? t.categoryId != null && catIds.has(t.categoryId) : true) &&
-        (months.length ? months.includes(monthKeyFromDate(t.date)) : true),
+        (months.length ? months.includes(monthOfDate(t.date)) : true),
     );
   }, [budget, accountFilter, categoryFilter, months]);
 
@@ -142,7 +141,7 @@ export function ReflectScreen() {
   const trendData = months.map((m) => ({
     label: formatMonth(m).split(' ')[0],
     value: txns
-      .filter((t) => monthKeyFromDate(t.date) === m && t.outflow > 0)
+      .filter((t) => monthOfDate(t.date) === m && t.outflow > 0)
       .reduce((sum, t) => sum + t.outflow, 0),
     accent: m === budget.currentMonth,
   }));

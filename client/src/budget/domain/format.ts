@@ -122,15 +122,17 @@ export function formatDateWith(prefs: Pick<FmtPrefs, 'dateFormat'>, iso: string)
   return prefs.dateFormat === "MM/DD/YYYY" ? `${m}/${d}/${y}` : `${d}/${m}/${y}`;
 }
 
-const MONTH_NAMES_PT = [
-  "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
-  "Jul", "Ago", "Set", "Out", "Nov", "Dez",
-];
+/** English month abbreviations, January first (UI labels; the TSV file format keeps its own). */
+export const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
-const MONTH_NAMES_PT_FULL = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
+/** English month names, January first. */
+export const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
+
+/** English weekday abbreviations, Sunday first (Date#getDay order). */
+export const WEEKDAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 /** Split a MonthKey (202606) into { year, month } where month is 1-12. */
 export function splitMonth(key: MonthKey): { year: number; month: number } {
@@ -145,13 +147,13 @@ export function makeMonth(year: number, month: number): MonthKey {
 /** Format a MonthKey as "Jun 2026". */
 export function formatMonth(key: MonthKey): string {
   const { year, month } = splitMonth(key);
-  return `${MONTH_NAMES_PT[month - 1] ?? "?"} ${year}`;
+  return `${MONTH_ABBR[month - 1] ?? "?"} ${year}`;
 }
 
-/** Format a MonthKey as "Junho 2026". */
+/** Format a MonthKey as "June 2026". */
 export function formatMonthLong(key: MonthKey): string {
   const { year, month } = splitMonth(key);
-  return `${MONTH_NAMES_PT_FULL[month - 1] ?? "?"} ${year}`;
+  return `${MONTH_NAMES[month - 1] ?? "?"} ${year}`;
 }
 
 /** The MonthKey immediately before the given one. */
@@ -164,6 +166,21 @@ export function prevMonth(key: MonthKey): MonthKey {
 export function nextMonth(key: MonthKey): MonthKey {
   const { year, month } = splitMonth(key);
   return month === 12 ? makeMonth(year + 1, 1) : makeMonth(year, month + 1);
+}
+
+/** MonthKey of an ISO date: "2026-06-13" -> 202606. */
+export function monthOfDate(iso: string): MonthKey {
+  return Number(iso.slice(0, 4)) * 100 + Number(iso.slice(5, 7));
+}
+
+/** MonthKey of a Date in the LOCAL zone: 2026-06-05 -> 202606. */
+export function monthKeyFromDate(date: Date): MonthKey {
+  return date.getFullYear() * 100 + (date.getMonth() + 1);
+}
+
+/** The current real-world month as a MonthKey (e.g. 202606). */
+export function currentMonthKey(now: Date = new Date()): MonthKey {
+  return monthKeyFromDate(now);
 }
 
 /** True if the ISO date falls within the given MonthKey. */
@@ -183,10 +200,22 @@ export function todayIso(now: Date = new Date()): string {
   return localToday(now);
 }
 
+/**
+ * Long English date following the date-format pref: "5 June 2026" for
+ * DD/MM/YYYY, "June 5, 2026" for MM/DD/YYYY. Section headers (Spending).
+ */
+export function formatDateLongWith(prefs: Pick<FmtPrefs, "dateFormat">, iso: string): string {
+  const [y, m, d] = iso.split("-");
+  const name = MONTH_NAMES[Number(m) - 1];
+  if (!y || !name || !d) return iso;
+  const day = Number(d);
+  return prefs.dateFormat === "MM/DD/YYYY" ? `${name} ${day}, ${y}` : `${day} ${name} ${y}`;
+}
+
 const DATE_SEP = /[-/.]/;
 
 /** Days in a month (1-12) for a given year, honoring leap years. */
-function daysInMonth(year: number, month: number): number {
+export function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
@@ -257,6 +286,7 @@ export interface MoneyFormat {
   formatAmount(cents: Cents): string;
   parseMoney(input: string): Cents;
   formatDate(iso: string): string;
+  formatDateLong(iso: string): string;
   parseDateInput(raw: string, today?: string): string | null;
 }
 
@@ -269,6 +299,7 @@ export function moneyFormat(prefs: FmtPrefs = DEFAULT_FMT_PREFS, masked = false)
     formatAmount: (cents) => formatAmountWith(prefs, cents, masked),
     parseMoney: (input) => parseMoneyWith(prefs.numberLocale, input),
     formatDate: (iso) => formatDateWith(prefs, iso),
+    formatDateLong: (iso) => formatDateLongWith(prefs, iso),
     parseDateInput: (raw, today = todayIso()) => parseDateInputWith(prefs, raw, today),
   };
 }

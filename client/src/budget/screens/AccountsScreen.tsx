@@ -37,6 +37,7 @@ import { computeRunningBalances, workingBalance } from "../domain/engine";
 import { todayIso } from "../domain/format";
 import { useMoneyFormat } from '../model/useDisplayPrefs';
 import type { Budget, Cents, Transaction } from "../domain/types";
+import { registerCategoryCell } from "../domain/register";
 import type { TransactionInput } from "../data/mapping";
 import { GhostButton, IndigoButton, MoneyInput } from "../ui/bits";
 import { colors, radius } from "../ui/theme";
@@ -63,7 +64,6 @@ import {
 import { TxnRowMenu } from "./register/TxnRowMenu";
 import { TxnMenuKebab } from "./register/TxnMenuKebab";
 import { TxnMenuTrigger } from "./register/TxnMenuTrigger";
-import { isInternalTransferPayee } from "@shared/domain/transfers";
 
 // Header subtitle (syscd-app-8uy): '<type label> · reconciled status'.
 const ACCOUNT_TYPE_LABEL: Record<Budget["accounts"][number]["type"], string> = {
@@ -75,32 +75,6 @@ const ACCOUNT_TYPE_LABEL: Record<Budget["accounts"][number]["type"], string> = {
 };
 /** Stable empty array so `visibleTxns` deps stay referentially equal while loading. */
 const EMPTY_CATEGORIES: Budget["categories"] = [];
-
-function categoryLabel(
-  budget: Budget,
-  t: Transaction,
-): { text: string; warn: boolean } {
-  // YNAB shows every auto-booked adjustment (reconcile or working-balance
-  // edit, including close zeroing) categorized to Inflow: Ready to Assign.
-  if (
-    t.payee === "Reconciliation Adjustment" ||
-    t.payee === "Balance Adjustment"
-  ) {
-    return { text: "Ready to Assign", warn: false };
-  }
-  if (!t.categoryId) {
-    if (t.splits?.length)
-      return { text: `Split (${t.splits.length})`, warn: false };
-    // On-budget <-> on-budget transfers carry no category by design.
-    if (isInternalTransferPayee(t.payee, budget.accounts))
-      return { text: "Transfer", warn: false };
-    return t.inflow > 0
-      ? { text: "Ready to Assign", warn: false }
-      : { text: "needs category", warn: true };
-  }
-  const cat = budget.categories.find((c) => c.id === t.categoryId);
-  return { text: cat?.name ?? "?", warn: false };
-}
 
 export function AccountsScreen() {
   const { formatDate, formatMoney, parseMoney } = useMoneyFormat();
@@ -1075,7 +1049,7 @@ export function AccountsScreen() {
             }
             renderItem={({ item: t }) => {
               const acct = budget.accounts.find((a) => a.id === t.accountId);
-              const cat = categoryLabel(budget, t);
+              const cat = registerCategoryCell(budget, t);
               if (!showWide) {
                 return (
                   <TxnMenuTrigger

@@ -14,6 +14,13 @@ import {
   dayOfMonth,
   parseDateInputWith,
   formatDateWith,
+  formatDateLongWith,
+  formatMonthLong,
+  monthOfDate,
+  monthKeyFromDate,
+  daysInMonth,
+  MONTH_ABBR,
+  WEEKDAY_ABBR,
 } from "./format";
 
 // The default-prefs formatters (what the store-backed wrappers used to return
@@ -299,5 +306,30 @@ describe("moneyFormat", () => {
     expect(f.formatMoney(-131451)).toBe("-1,314.51\u00a0US$");
     expect(f.formatAmount(131451)).toBe("1,314.51");
     expect(f.formatDate("2026-06-05")).toBe("06/05/2026");
+  });
+});
+
+describe("month and date helpers (one definition each)", () => {
+  it("month labels are English", () => {
+    expect(formatMonth(202602)).toBe("Feb 2026");
+    expect(formatMonth(202610)).toBe("Oct 2026");
+    expect(formatMonthLong(202611)).toBe("November 2026");
+    expect(MONTH_ABBR).toHaveLength(12);
+    expect(WEEKDAY_ABBR[0]).toBe("Sun");
+  });
+
+  it("monthOfDate / monthKeyFromDate / daysInMonth", () => {
+    expect(monthOfDate("2026-06-13")).toBe(202606);
+    expect(monthOfDate("2026-12-01")).toBe(202612);
+    expect(monthKeyFromDate(new Date(2026, 5, 5))).toBe(202606);
+    expect(daysInMonth(2024, 2)).toBe(29);
+    expect(daysInMonth(2026, 2)).toBe(28);
+    expect(daysInMonth(2026, 12)).toBe(31);
+  });
+
+  it("formatDateLongWith follows the date-format pref", () => {
+    expect(formatDateLongWith({ dateFormat: "DD/MM/YYYY" }, "2026-06-05")).toBe("5 June 2026");
+    expect(formatDateLongWith({ dateFormat: "MM/DD/YYYY" }, "2026-06-05")).toBe("June 5, 2026");
+    expect(formatDateLongWith({ dateFormat: "DD/MM/YYYY" }, "bad")).toBe("bad");
   });
 });

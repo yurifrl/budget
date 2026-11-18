@@ -333,3 +333,8 @@ const styles = StyleSheet.create({
   chevronWrap: { position: 'absolute', right: 8, top: 0, bottom: 0, justifyContent: 'center' },
   chevronText: { color: colors.faint, fontSize: 12 },
 });
+
+/** Sign-colored style for an Available amount in a dropdown row (category menus, Move Money "To"). */
+export function amountStyle(cents: number) {
+  return cents > 0 ? dropdownStyles.amountPositive : cents < 0 ? dropdownStyles.amountNegative : dropdownStyles.amountZero;
+}
