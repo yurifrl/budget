@@ -1,5 +1,25 @@
 # Changelog
 
+## v2026.11.18-05 2026-11-18 release
+
+### Changed
+
+- release: v2026.11.18-05
+- client: remove the settings cog next to the app switcher in the rail header
+- home: taps work while the keyboard is up (iOS); iOS evidence
+- docs: home page navigation and decisions; refreshed evidence
+- home: caption lines, archive date, backup import owner-only, profile sign-out lands on home; evidence
+- banks: a registered bank lands on /connect-bank instead of /accounts
+- client: home page (my budgets, shared with me), create and invite from it; the shell no longer picks a budget; owner-only settings hidden for members
+- e2e: fail the MCP run when a tool call errors
+- docs: multi-user decisions (sign-in, budgets list, who can do what)
+- api tests: first Access sign-in, and two people across the whole catalog
+- connections: app-wide sync window is admin-only; reads follow budget access
+- budget: owner or member only, no admin pass; list says owned vs shared
+- api: Access sign-ins need no API allow-list; signed_in_at marks a first sign-in
+- client: landing page for sign-in, explicit sign-out that stays signed out behind Access
+
+
 ## v2026.11.18-04 2026-11-18 release
 
 ### Changed
