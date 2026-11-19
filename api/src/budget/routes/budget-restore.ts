@@ -1,5 +1,9 @@
 /**
- * POST /budgets/restore?budget_id=<uuid> — full budget restore (budget backup).
+ * POST /budgets/restore?budget_id=<uuid> — budget restore (budget backup).
+ *
+ * `sections` ('plan' | 'register', default both) limits what is replaced; see
+ * domain/restore-scope.ts for how the two sections depend on each other.
+ * The text below describes the default, full restore.
  *
  * The client uploads a parsed budget backup payload: the restore wipes every
  * budget-scoped data table (accounts, category groups/categories, payees,
@@ -22,6 +26,7 @@ import { HttpError, errorResponse } from '../../core/validate';
 import type { IdentityUser } from '../../user';
 import { budgetRestore } from '@shared/contracts/budget';
 import { upgradeRestorePayload } from '@shared/contracts/budget/schemas';
+import { matchCategoryIds, restoreScope } from '../domain/restore-scope';
 import { recomputeAccountBalances } from '../domain/transactions';
 import { isBudgetMember, isBudgetOwner } from '../ownership';
 import { budgetRouter } from '../router';
@@ -34,9 +39,14 @@ import {
   insertRestoredGroup,
   insertRestoredTransaction,
   linkRestoredTransferPayees,
+  listCategoryKeys,
   linkRestoredTransferPeer,
+  relinkCategoryLinks,
+  snapshotCategoryLinks,
   upsertRestoredPayee,
   wipeBudgetData,
+  wipePlanData,
+  wipeRegisterData,
 } from '../store/restore';
 
 // Restore means "replace everything with mine": every incoming row is approved.
@@ -54,7 +64,9 @@ const isFlagColor = (flag: string): boolean => flag in FLAG_COLORS;
 
 export const operations = [
   implement(budgetRestore, async (c, { budget_id: budgetId, ...input }) => {
-    const payload = upgradeRestorePayload(input);
+    const { sections, ...body } = input;
+    const payload = upgradeRestorePayload(body);
+    const scope = restoreScope(sections);
     const user: IdentityUser | undefined = c.get('user');
     if (!user) return errorResponse(c, 401, 'unauthorized');
     if (!(await isBudgetOwner(user.id, budgetId))) return errorResponse(c, 404, 'not found');
@@ -64,11 +76,24 @@ export const operations = [
       // Budget must exist (the owner check above already proved it).
       if (!(await budgetExists(client, budgetId))) throw new HttpError(404, 'budget not found');
 
-      await wipeBudgetData(client, budgetId);
+      // Wipe only what the scope replaces. A plan-only restore first remembers
+      // which category (group+name) each surviving register row used.
+      if (scope.plan && scope.register) await wipeBudgetData(client, budgetId);
+      else if (scope.plan) {
+        await snapshotCategoryLinks(client, budgetId);
+        await wipePlanData(client, budgetId);
+      } else {
+        await wipeRegisterData(client, budgetId);
+      }
+
+      // Register-only: the plan stays, payload categories only name the targets.
+      const matchedCategoryIds = scope.plan
+        ? null
+        : matchCategoryIds(payload.groups, payload.categories, await listCategoryKeys(client, budgetId));
 
       // ---- category groups --------------------------------------------------
       const groupIds = payload.groups.map(() => crypto.randomUUID());
-      for (let i = 0; i < payload.groups.length; i++) {
+      for (let i = 0; scope.plan && i < payload.groups.length; i++) {
         await insertRestoredGroup(client, groupIds[i], budgetId, payload.groups[i], i);
       }
 
@@ -82,7 +107,7 @@ export const operations = [
       }
 
       // ---- bundles -----------------------------------------------------------
-      const bundles = payload.bundles ?? [];
+      const bundles = scope.plan ? (payload.bundles ?? []) : [];
       const bundleIds = bundles.map(() => crypto.randomUUID());
       for (let i = 0; i < bundles.length; i++) {
         if (bundles[i].groupIndex >= payload.groups.length) {
@@ -93,7 +118,7 @@ export const operations = [
 
       // ---- categories --------------------------------------------------------
       const categoryIds = payload.categories.map(() => crypto.randomUUID());
-      for (let i = 0; i < payload.categories.length; i++) {
+      for (let i = 0; scope.plan && i < payload.categories.length; i++) {
         const cat = payload.categories[i];
         if (cat.groupIndex >= payload.groups.length) {
           throw new HttpError(400, `category ${i}: groupIndex ${cat.groupIndex} out of range`);
@@ -116,7 +141,7 @@ export const operations = [
 
       // ---- accounts ----------------------------------------------------------
       const accountIds = payload.accounts.map(() => crypto.randomUUID());
-      for (let i = 0; i < payload.accounts.length; i++) {
+      for (let i = 0; scope.register && i < payload.accounts.length; i++) {
         await insertRestoredAccount(
           client,
           accountIds[i],
@@ -145,9 +170,11 @@ export const operations = [
       // ---- transactions ------------------------------------------------------
       // Amounts: signed milliunits. Peer indexes resolve after the batch so the
       // two legs of a transfer link regardless of insert order.
-      const txnIds = payload.transactions.map(() => crypto.randomUUID());
-      for (let i = 0; i < payload.transactions.length; i++) {
-        const txn = payload.transactions[i];
+      const transactions = scope.register ? payload.transactions : [];
+      const txnIds = transactions.map(() => crypto.randomUUID());
+      let uncategorized = 0;
+      for (let i = 0; i < transactions.length; i++) {
+        const txn = transactions[i];
         if (txn.accountIndex >= payload.accounts.length) {
           throw new HttpError(400, `transaction ${i}: accountIndex ${txn.accountIndex} out of range`);
         }
@@ -165,6 +192,14 @@ export const operations = [
         const payeeName = txn.payee === '' && peerAccountName ? `Transfer : ${peerAccountName}` : txn.payee;
         const payeeId = await payeeFor(payeeName);
 
+        const categoryId =
+          txn.categoryIndex === null
+            ? null
+            : matchedCategoryIds
+              ? matchedCategoryIds[txn.categoryIndex]
+              : categoryIds[txn.categoryIndex];
+        if (matchedCategoryIds && txn.categoryIndex !== null && categoryId === null) uncategorized++;
+
         const flag = txn.flag === '' ? null : txn.flag;
         await insertRestoredTransaction(client, {
           id: txnIds[i],
@@ -173,17 +208,17 @@ export const operations = [
           date: txn.date,
           amount: txn.inflow - txn.outflow,
           payeeId,
-          categoryId: txn.categoryIndex === null ? null : categoryIds[txn.categoryIndex],
+          categoryId,
           memo: txn.memo,
           cleared: txn.cleared,
           flagColor: isFlagColor(txn.flag) ? flag : null,
           flagName: isFlagColor(txn.flag) ? null : flag,
         });
       }
-      for (let i = 0; i < payload.transactions.length; i++) {
-        const peer = payload.transactions[i].transferPeerIndex;
+      for (let i = 0; i < transactions.length; i++) {
+        const peer = transactions[i].transferPeerIndex;
         if (peer === null) continue;
-        if (payload.transactions[peer].transferPeerIndex !== i) {
+        if (transactions[peer].transferPeerIndex !== i) {
           throw new HttpError(400, `transaction ${i}: transferPeerIndex ${peer} is not mutual`);
         }
         await linkRestoredTransferPeer(client, txnIds[i], txnIds[peer]);
@@ -191,10 +226,11 @@ export const operations = [
 
       // "Transfer : <account>" payees keep their picker linkage to the account,
       // mirroring the app's per-account transfer payee convention.
-      await linkRestoredTransferPayees(client, budgetId);
+      if (scope.register) await linkRestoredTransferPayees(client, budgetId);
 
       // ---- assignments -------------------------------------------------------
-      for (const assignment of payload.assignments) {
+      const assignments = scope.plan ? payload.assignments : [];
+      for (const assignment of assignments) {
         if (assignment.categoryIndex >= payload.categories.length) {
           throw new HttpError(400, `assignment: categoryIndex ${assignment.categoryIndex} out of range`);
         }
@@ -210,14 +246,17 @@ export const operations = [
 
       // Balances are a cached value maintained by per-write deltas; the bulk
       // inserts above bypass that path, so rebuild them from the restored ledger.
-      await recomputeAccountBalances(client, budgetId);
+      if (scope.register) await recomputeAccountBalances(client, budgetId);
+      // Plan-only: hand surviving register rows to the restored categories.
+      if (!scope.register) await relinkCategoryLinks(client, budgetId);
 
       return {
-        groups: payload.groups.length,
-        categories: payload.categories.length,
-        accounts: payload.accounts.length,
-        transactions: payload.transactions.length,
-        assignments: payload.assignments.length,
+        groups: scope.plan ? payload.groups.length : 0,
+        categories: scope.plan ? payload.categories.length : 0,
+        accounts: scope.register ? payload.accounts.length : 0,
+        transactions: transactions.length,
+        assignments: assignments.length,
+        uncategorized,
       };
     });
   }),

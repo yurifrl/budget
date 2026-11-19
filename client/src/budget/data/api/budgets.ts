@@ -84,23 +84,22 @@ export const budgetsApi = baseApi.injectEndpoints({
     }),
 
     /**
-     * Full budget restore from a transfer payload (backup import). Replaces
-     * the budget-scoped data: groups, categories, accounts, payees,
-     * transactions, assignments. Returns the counts written per table.
+     * Budget restore from a transfer payload (backup import). Replaces the
+     * budget-scoped data: groups, categories, accounts, payees, transactions,
+     * assignments, or only the plan / only the register (`sections`). Returns the counts written per table.
      */
     restoreBudget: b.mutation<
-      {
-        groups: number;
-        categories: number;
-        accounts: number;
-        transactions: number;
-        assignments: number;
-      },
+      OperationOutput<typeof budgetRestore>,
       // The transfer payload (transfer/payload.ts) is domain cents; sent as a format-2 (milliunit) document.
-      { budgetId: string; payload: CentsRestorePayload }
+      // `sections` limits the restore to the plan and/or the register; omitted = everything.
+      { budgetId: string; payload: CentsRestorePayload; sections?: RestoreWire['sections'] }
     >({
-      query: ({ budgetId, payload }) =>
-        contractRequest(budgetRestore, { budget_id: budgetId, ...(restorePayloadToWire(payload) as RestoreWire) }),
+      query: ({ budgetId, payload, sections }) =>
+        contractRequest(budgetRestore, {
+          budget_id: budgetId,
+          ...(restorePayloadToWire(payload) as RestoreWire),
+          ...(sections ? { sections } : {}),
+        }),
       invalidatesTags: (_r, _e, { budgetId }) => [
         { type: 'Groups', id: budgetId },
         { type: 'Categories', id: budgetId },

@@ -211,7 +211,25 @@ export function upgradeRestorePayload<
   };
 }
 
+/**
+ * Which parts of a backup a restore replaces. `plan` = category groups, bundles,
+ * categories and assignments (plus the per-category targets/notes and month
+ * notes, which the plan owns); `register` = accounts, payees and transactions
+ * (plus scheduled/repeat rows). Absent = both (the original all-or-nothing restore).
+ */
+export const RESTORE_SECTIONS = ['plan', 'register'] as const;
+export type RestoreSection = (typeof RESTORE_SECTIONS)[number];
+export const restoreSectionsSchema = z
+  .array(z.enum(RESTORE_SECTIONS))
+  .min(1)
+  .max(2)
+  .optional()
+  .describe(
+    "Sections to replace: 'plan' (groups, categories, assignments) and/or 'register' (accounts, transactions). Default both. Plan only: the register stays and its category links are re-pointed to the restored categories by group+name (unmatched become uncategorized). Register only: the plan stays and transaction categories are matched to existing categories by group+name (unmatched become uncategorized); payload groups/categories are used only for that matching.",
+  );
+
 export const restorePayloadShape = {
+  sections: restoreSectionsSchema,
   format_version: backupFormatVersionSchema,
   groups: z.array(z.string().min(1).max(500)).max(1000),
   categories: z

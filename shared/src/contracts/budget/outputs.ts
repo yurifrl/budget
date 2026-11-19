@@ -342,6 +342,8 @@ export const restoreCountsSchema = z.object({
   accounts: z.number(),
   transactions: z.number(),
   assignments: z.number(),
+  /** Restored transactions whose category had no match in the budget (register-only restore); 0 otherwise. */
+  uncategorized: z.number().optional(),
 });
 
 const exportTxn = z.object({

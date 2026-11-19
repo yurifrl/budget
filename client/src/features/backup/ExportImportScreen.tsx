@@ -3,16 +3,17 @@
  *
  * Export: builds the transfer zip ({@link buildTransferZip}: two TSV tables,
  * Plan + Register) and hands it to the platform share sheet (native) or a
- * direct download (web). Import: pick the two TSV tables separately — the Plan
- * file, then the Register file — parse them with {@link parseTransferFiles},
- * show a per-table summary and a destructive confirmation, then POST it to the
- * restore endpoint and show the counts written. The restore replaces every
- * budget-scoped table server-side and the `restoreBudget` mutation invalidates
- * all matching tags.
+ * direct download (web). Import: pick the Plan table, the Register table or
+ * both (loose TSVs), parse what was picked with {@link parseTransferFiles},
+ * show which sections the backup contains and let the user choose which to
+ * restore (see importScope.logic.ts for how the two depend on each other), then
+ * a destructive confirmation, then POST it to the restore endpoint with the
+ * chosen `sections` and show the counts written. The `restoreBudget` mutation
+ * invalidates all matching tags.
  */
 
-import { useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
@@ -31,6 +32,19 @@ import {
   REGISTER_SUFFIX,
 } from './transfer/transfer';
 import type { TransferPayload } from './transfer/payload';
+import {
+  countUnmatchedCategories,
+  dependencyNote,
+  orderSections,
+  plural,
+  replaceDescription,
+  scopedPayload,
+  SECTION_LABELS,
+  sectionCountsText,
+  toggleSection,
+  wireSections,
+} from './importScope.logic';
+import type { BackupSection } from './importScope.logic';
 import { useBudgetShell } from '@/shell/context';
 
 /** Payload table names shown in the import summary and restore result. */
@@ -41,10 +55,6 @@ const TABLE_LABELS: [keyof TransferPayload, string][] = [
   ['transactions', 'transaction'],
   ['assignments', 'assignment'],
 ];
-
-function plural(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? '' : 's'}`;
-}
 
 /**
  * Acceptable import content: the two loose TSV tables only — the zip archive is
@@ -117,14 +127,23 @@ export function ExportImportScreen() {
   const [pickedPlan, setPickedPlan] = useState<PickedImportFile | null>(null);
   const [pickedRegister, setPickedRegister] = useState<PickedImportFile | null>(null);
   /** Parsed payload waiting for the destructive confirmation. */
-  const [pending, setPending] = useState<TransferPayload | null>(null);
+  const [parsed, setParsed] = useState<{ payload: TransferPayload; available: BackupSection[] } | null>(null);
+  /** Sections the user ticked (subset of parsed.available). */
+  const [selected, setSelected] = useState<BackupSection[]>([]);
+  const [confirming, setConfirming] = useState(false);
   const [pendingWarnings, setPendingWarnings] = useState<string[]>([]);
   const [restoring, setRestoring] = useState(false);
-  const [restored, setRestored] = useState<Record<string, number> | null>(null);
+  const [restored, setRestored] = useState<Record<string, number | undefined> | null>(null);
 
   // A picker selection is one async unit; a cancel while a confirm sheet is
   // open must not clobber the pending payload, so guard by id.
   const pickSeq = useRef(0);
+
+  /** The budget's own categories (group + name): what a Register-only import matches against. */
+  const existingCategories = useMemo(() => {
+    const groupName = new Map((model.budget?.groups ?? []).map((g) => [g.id, g.name]));
+    return (model.budget?.categories ?? []).map((c) => ({ group: groupName.get(c.groupId) ?? '', name: c.name }));
+  }, [model.budget]);
 
   const doExport = async () => {
     if (!model.budget || exporting) return;
@@ -146,7 +165,8 @@ export function ExportImportScreen() {
     setImporting(kind);
     setImportError(null);
     setRestored(null);
-    setPending(null);
+    setParsed(null);
+    setConfirming(false);
     setPendingWarnings([]);
     try {
       const picked = await pickImportFile({ webAccept: TSV_WEB_ACCEPT, pickerTypes: TSV_PICKER_TYPES });
@@ -164,17 +184,18 @@ export function ExportImportScreen() {
       const register = kind === 'register' ? picked : pickedRegister;
       if (kind === 'plan') setPickedPlan(picked);
       else setPickedRegister(picked);
-      if (!plan || !register) return; // waiting for the other table
-      const result = parseTransferFiles([
-        { name: plan.name, bytes: plan.bytes },
-        { name: register.name, bytes: register.bytes },
-      ], { people });
+      const files = [plan, register]
+        .filter((f): f is PickedImportFile => f !== null)
+        .map((f) => ({ name: f.name, bytes: f.bytes }));
+      const result = parseTransferFiles(files, { people, existingCategories });
       if (result.errors.length > 0 || !result.payload) {
-        setImportError(result.errors.join('\n') || 'not a readable backup pair');
+        setImportError(result.errors.join('\n') || 'not a readable backup');
         return;
       }
       setPendingWarnings(result.warnings);
-      setPending(result.payload);
+      const available = orderSections(result.sections ?? []);
+      setParsed({ payload: result.payload, available });
+      setSelected(available);
     } catch (err) {
       setImportError(apiErrorMessage(err, 'failed to read the file'));
     } finally {
@@ -183,12 +204,17 @@ export function ExportImportScreen() {
   };
 
   const confirmRestore = async () => {
-    if (!model.budgetId || !pending) return;
+    if (!model.budgetId || !parsed || selected.length === 0) return;
     setRestoring(true);
     try {
-      const counts = await restore({ budgetId: model.budgetId, payload: pending }).unwrap();
+      const counts = await restore({
+        budgetId: model.budgetId,
+        payload: scopedPayload(parsed.payload, selected),
+        sections: wireSections(selected),
+      }).unwrap();
       setRestored(counts);
-      setPending(null);
+      setParsed(null);
+      setConfirming(false);
       setPendingWarnings([]);
       setPickedPlan(null);
       setPickedRegister(null);
@@ -198,6 +224,8 @@ export function ExportImportScreen() {
       setRestoring(false);
     }
   };
+
+  const unmatchedCategories = parsed ? countUnmatchedCategories(parsed.payload, existingCategories) : 0;
 
   if (!model.budgetId || !model.budget) {
     return (
@@ -229,8 +257,9 @@ export function ExportImportScreen() {
       {isOwner ? (
       <>
       <Text style={styles.hint}>
-        Restores the two backup tables into this budget. Everything currently in it — categories,
-        accounts, payees, transactions and assignments — is replaced.
+        Restores backup tables into this budget. Choose the Plan file, the Register file or both,
+        then pick which parts to restore: the plan (categories, assignments) and/or the register
+        (accounts, transactions). Whatever you restore replaces what is currently in the budget.
       </Text>
       <View style={styles.pickRow}>
         <GhostButton
@@ -267,22 +296,68 @@ export function ExportImportScreen() {
       {importError ? <Text style={styles.errorText}>{importError}</Text> : null}
       {restored ? (
         <Text style={styles.doneText}>
-          Restored {TABLE_LABELS.map(([key, noun]) => plural(restored[key] ?? 0, noun)).join(', ')}.
+          Restored {TABLE_LABELS.filter(([key]) => (restored[key] ?? 0) > 0).map(([key, noun]) => plural(restored[key] ?? 0, noun)).join(', ') || 'nothing'}.
+          {(restored.uncategorized ?? 0) > 0
+            ? ` ${plural(restored.uncategorized ?? 0, 'transaction')} had no matching category and stayed uncategorized.`
+            : ''}
         </Text>
       ) : null}
 
-      <OverlaySheet visible={pending != null} onClose={() => (restoring ? null : setPending(null))} title="Restore this backup?">
-        {pending ? (
+      {parsed ? (
+        <View style={styles.scopeCard}>
+          <Text style={styles.sectionTitle}>This backup contains</Text>
+          {(['plan', 'register'] as const).map((section) => {
+            const present = parsed.available.includes(section);
+            const checked = selected.includes(section);
+            return (
+              <Pressable
+                key={section}
+                disabled={!present}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked, disabled: !present }}
+                onPress={() => setSelected(toggleSection(selected, section, parsed.available))}
+                style={[styles.scopeRow, !present && styles.scopeRowOff]}
+              >
+                <View style={[styles.box, checked && styles.boxOn]}>
+                  {checked ? <Text style={styles.tick}>✓</Text> : null}
+                </View>
+                <View style={styles.scopeText}>
+                  <Text style={styles.scopeTitle}>{SECTION_LABELS[section]}</Text>
+                  <Text style={styles.hint}>
+                    {present ? sectionCountsText(parsed.payload, section) : 'not in the chosen file(s)'}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+          <View style={styles.actionRow}>
+            <IndigoButton
+              label={selected.length === 0 ? 'Choose what to restore' : 'Restore selected…'}
+              onPress={() => {
+                if (selected.length > 0) setConfirming(true);
+              }}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      <OverlaySheet visible={confirming && parsed != null} onClose={() => (restoring ? null : setConfirming(false))} title="Restore this backup?">
+        {parsed ? (
           <>
             <Text style={styles.confirmText}>
-              This replaces everything currently in “{model.budget.name}” with the contents of the
-              backup:
+              This replaces {replaceDescription(selected)} in “{model.budget.name}” with:
             </Text>
-            {TABLE_LABELS.map(([key, noun]) => (
-              <Text key={key} style={styles.confirmRow}>
-                {plural(pending[key].length, noun)}
+            {selected.map((section) => (
+              <Text key={section} style={styles.confirmRow}>
+                {SECTION_LABELS[section]}: {sectionCountsText(parsed.payload, section)}
               </Text>
             ))}
+            {dependencyNote(selected) ? <Text style={styles.hint}>{dependencyNote(selected)}</Text> : null}
+            {selected.length === 1 && selected[0] === 'register' && unmatchedCategories > 0 ? (
+              <Text style={styles.warnText}>
+                {plural(unmatchedCategories, 'transaction')} name a category this budget does not have and will be uncategorized.
+              </Text>
+            ) : null}
             {pendingWarnings.length > 0 ? (
               pendingWarnings.map((w) => (
                 <Text key={w} style={styles.warnText}>
@@ -292,12 +367,12 @@ export function ExportImportScreen() {
             ) : null}
             <View style={styles.confirmRow2}>
               <IndigoButton
-                label={restoring ? 'Restoring…' : 'Replace everything'}
+                label={restoring ? 'Restoring…' : 'Replace'}
                 onPress={() => {
                   void confirmRestore();
                 }}
               />
-              <GhostButton label="Cancel" onPress={() => setPending(null)} />
+              <GhostButton label="Cancel" onPress={() => setConfirming(false)} />
             </View>
           </>
         ) : null}
@@ -317,6 +392,14 @@ const styles = StyleSheet.create({
   errorText: { color: colors.redFg, fontSize: 12 },
   warnText: { color: colors.redFg, fontSize: 12 },
   doneText: { color: colors.greenPillFg, fontSize: 12 },
+  scopeCard: { gap: 8, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 10, padding: 12 },
+  scopeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  scopeRowOff: { opacity: 0.45 },
+  scopeText: { flexShrink: 1 },
+  scopeTitle: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  box: { width: 18, height: 18, borderRadius: 4, borderWidth: 1, borderColor: colors.border2, alignItems: 'center', justifyContent: 'center' },
+  boxOn: { backgroundColor: colors.indigo, borderColor: colors.indigo },
+  tick: { color: colors.text, fontSize: 12, lineHeight: 14, fontWeight: '700' },
   confirmText: { color: colors.text, fontSize: 13, lineHeight: 18, marginBottom: 4 },
   confirmRow: { color: colors.text, fontSize: 13, marginLeft: 8 },
   confirmRow2: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
