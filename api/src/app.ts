@@ -25,6 +25,8 @@ import { authMiddleware, mountAuthRoutes } from './user/authz';
 import { accessPrincipal, adminUsersRoutes, authDisabled, passwordChangeRoutes, profileRoutes, requireUser } from './user';
 import { httpOnError, errorResponse } from './core/validate';
 
+const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
 interface BuildAppParams {
   /** First CORS origin; the fixed local-dev origins are always included. */
   appOrigin: string;
@@ -41,11 +43,9 @@ interface BuildAppParams {
 export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssuer }: BuildAppParams): Hono {
   const app = new Hono();
 
-  // Browser origins allowed to call the API with credentials. The password
-  // and admin-user routes also refuse any other Origin (CSRF guard).
-  const trustedOrigins = [
-    appOrigin,
-    ...adminOrigins,
+  // Browser origins allowed to call the API with credentials (CORS): the app,
+  // the admin SPA and the fixed local-dev origins.
+  const devOrigins = [
     'http://localhost:8081',
     'http://localhost:8082',
     'http://localhost:19006',
@@ -54,13 +54,20 @@ export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssu
     'http://localhost:5174', // admin SPA dev server (task admin)
     'http://localhost:5191', // admin SPA dev server (task run)
   ];
+  const corsOrigins = [appOrigin, ...adminOrigins, ...devOrigins];
+  // The password and admin-user routes also refuse any other Origin (CSRF
+  // guard). The localhost dev origins count there only when the app itself
+  // runs on localhost (local dev); a deployment trusts its app and admin
+  // origins alone.
+  const trustedOrigins = LOCAL_ORIGIN.test(appOrigin) ? corsOrigins : [appOrigin, ...adminOrigins];
 
   app.use(
     cors({
-      origin: trustedOrigins,
+      origin: corsOrigins,
       allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization', 'Mcp-Session-Id', 'MCP-Protocol-Version'],
-      exposeHeaders: ['WWW-Authenticate'],
+      // Retry-After: the web app reads it on a 429 (password sign-in throttle).
+      exposeHeaders: ['WWW-Authenticate', 'Retry-After'],
       credentials: true,
     }),
   );

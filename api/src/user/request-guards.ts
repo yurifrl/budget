@@ -29,7 +29,9 @@ export function originGuard(trusted: TrustedOrigins): MiddlewareHandler {
 
 /** JSON bodies only: a cross-site form or text/plain POST would skip the CORS preflight. */
 export const requireJsonBody: MiddlewareHandler = async (c, next) => {
-  if (!(c.req.header('content-type') ?? '').toLowerCase().includes('application/json')) {
+  // The media type itself, compared exactly (parameters such as charset are ignored).
+  const mediaType = (c.req.header('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+  if (mediaType !== 'application/json') {
     return errorResponse(c, 415, 'request body must be application/json', 'unsupported_media_type');
   }
   await next();

@@ -18,7 +18,7 @@ import { defaultOAuthTtls } from '../oauth';
 import { issueAccessToken, issueSession, verifySession } from './auth';
 import { authConfig, configureAuth, type AuthConfig } from './config';
 import { CHANGE_TOKEN_TTL_SECONDS, generateTempPassword, hashPassword, TEMP_PASSWORD_ALPHABET } from './password';
-import { IP_MAX_FAILURES, resetIpLimiter } from './throttle';
+import { IP_MAX_ATTEMPTS, resetIpLimiter } from './throttle';
 
 const SECRET = 'p'.repeat(40);
 const API = 'https://api.test';
@@ -213,6 +213,30 @@ describe('POST /auth/password/login', () => {
       body: JSON.stringify({ email: `origin${D}`, password: GOOD }),
     });
     expect(res.status).toBe(415);
+    const sneaky = await app().request(`${API}/auth/password/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain; x=application/json' },
+      body: JSON.stringify({ email: `origin${D}`, password: GOOD }),
+    });
+    expect(sneaky.status).toBe(415);
+    const charset = await app().request(`${API}/auth/password/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'Application/JSON; charset=utf-8' },
+      body: JSON.stringify({ email: `origin${D}`, password: GOOD }),
+    });
+    expect(charset.status).toBe(200);
+  });
+
+  dbTest('localhost dev origins are trusted only when the app itself runs on localhost', async () => {
+    await makeUser('local', { password: GOOD });
+    expect((await login(`local${D}`, GOOD, {}, { origin: 'http://localhost:8091' })).json.code).toBe('origin_not_allowed');
+    const localApp = buildApp({ appOrigin: 'http://localhost:8091', version: 't' });
+    const res = await localApp.request(`${API}/auth/password/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'http://localhost:5191' },
+      body: JSON.stringify({ email: `local${D}`, password: GOOD }),
+    });
+    expect(res.status).toBe(200);
   });
 });
 
@@ -229,7 +253,7 @@ describe('throttling', () => {
     expect(r.json.code).toBe('too_many_attempts');
     const retry = Number(r.res.headers.get('retry-after'));
     expect(retry).toBeGreaterThan(0);
-    expect(retry).toBeLessThanOrEqual(60);
+    expect(retry).toBeLessThanOrEqual(62); // 60 s lock; DB and test clocks may differ slightly
   });
 
   dbTest('unknown e-mails lock the same way (no enumeration through the lockout)', async () => {
@@ -263,13 +287,54 @@ describe('throttling', () => {
     expect(r.json.status).toBe('password_change_required');
   });
 
-  dbTest('per client address: too many failures from one address are refused, another address is not', async () => {
+  dbTest('per client address: attempts (not only failures) are budgeted; another address is not affected', async () => {
     const ip = { 'cf-connecting-ip': '203.0.113.7' };
-    for (let i = 0; i < IP_MAX_FAILURES; i++) expect((await login(`spray${i}${D}`, 'bad password 123', {}, ip)).status).toBe(401);
+    for (let i = 0; i < IP_MAX_ATTEMPTS; i++) expect((await login(`spray${i}${D}`, 'bad password 123', {}, ip)).status).toBe(401);
+    const verify = spyOn(Bun.password, 'verify');
     const r = await login(`spray-last${D}`, 'bad password 123', {}, ip);
+    expect(verify.mock.calls.length).toBe(0);
+    verify.mockRestore();
     expect(r.status).toBe(429);
     expect(r.json.code).toBe('too_many_attempts');
     expect((await login(`spray-last${D}`, 'bad password 123', {}, { 'cf-connecting-ip': '203.0.113.8' })).status).toBe(401);
+  });
+
+  dbTest('parallel burst on one e-mail: at most 5 verifications, the rest 429 (known and unknown e-mails alike)', async () => {
+    await makeUser('burst', { password: GOOD });
+    for (const [email, ip] of [[`burst${D}`, '198.51.100.1'], [`burst-ghost${D}`, '198.51.100.2']] as const) {
+      const verify = spyOn(Bun.password, 'verify');
+      const results = await Promise.all(Array.from({ length: 25 }, () => login(email, 'bad password 123', {}, { 'cf-connecting-ip': ip })));
+      const verifications = verify.mock.calls.length;
+      verify.mockRestore();
+      expect(verifications, email).toBe(5);
+      expect(results.filter((r) => r.status === 401).length, email).toBe(5);
+      expect(results.filter((r) => r.status === 429).length, email).toBe(20);
+    }
+  });
+
+  dbTest('a correct password inside a burst after the limit is reached does not sign in', async () => {
+    await makeUser('burst2', { password: GOOD });
+    const ip = (n: number) => ({ 'cf-connecting-ip': `198.51.100.${10 + n}` });
+    await Promise.all(Array.from({ length: 5 }, (_, i) => login(`burst2${D}`, 'bad password 123', {}, ip(i))));
+    const verify = spyOn(Bun.password, 'verify');
+    const burst = await Promise.all([
+      ...Array.from({ length: 9 }, (_, i) => login(`burst2${D}`, 'bad password 123', {}, ip(20 + i))),
+      login(`burst2${D}`, GOOD, {}, ip(40)),
+    ]);
+    const verifications = verify.mock.calls.length;
+    verify.mockRestore();
+    expect(verifications).toBe(0);
+    expect(burst.map((r) => r.status)).toEqual(Array(10).fill(429));
+    expect(burst.some((r) => r.res.headers.get('set-cookie'))).toBe(false);
+  });
+
+  dbTest('Retry-After on a 429 is readable cross-origin (CORS exposes it)', async () => {
+    await makeUser('expose', { password: GOOD });
+    for (let i = 0; i < 5; i++) await login(`expose${D}`, 'bad password 123');
+    const r = await login(`expose${D}`, GOOD, {}, { origin: APP });
+    expect(r.status).toBe(429);
+    expect(r.res.headers.get('retry-after')).toBeTruthy();
+    expect((r.res.headers.get('access-control-expose-headers') ?? '').toLowerCase()).toContain('retry-after');
   });
 });
 
@@ -693,5 +758,202 @@ describe('OAuth consent (oauth/authorize.ts) with a password session', () => {
     await makeUser('consent-stale', { password: GOOD });
     const stale = await issueSession(SECRET, `consent-stale${D}`, 60, 'password', 99);
     expect((await startConsent(stale)).page.status).toBe(302);
+  });
+});
+
+// ---- review follow-ups -----------------------------------------------------------
+describe('change token edge cases', () => {
+  dbTest('an expired temporary password is refused at /auth/password/complete', async () => {
+    const u = await makeUser('exp-c', { password: 'temp-expire-later', mustChange: true });
+    const r = await login(`exp-c${D}`, 'temp-expire-later');
+    expect(r.json.status).toBe('password_change_required');
+    await pool.query(`update public.user_passwords set temp_expires_at = now() - interval '1 second' where user_id = $1`, [u.id]);
+    const done = await post('/auth/password/complete', { change_token: r.json.change_token, new_password: GOOD });
+    expect(done.status).toBe(401);
+    expect(done.json.code).toBe('temp_password_expired');
+    expect(done.res.headers.get('set-cookie')).toBeNull();
+  });
+
+  dbTest('a change token dies with a second admin reset, and works only once', async () => {
+    await makeUser('root-ct', { role: 'admin', password: GOOD });
+    const u = await makeUser('ct', { googleSub: 'g-ct' });
+    const c = withCookie(await cookieLogin(`root-ct${D}`));
+    const first = await post(`/admin/users/${u.id}/reset-password`, undefined, c);
+    const token1 = (await login(`ct${D}`, first.json.temp_password)).json.change_token as string;
+    const second = await post(`/admin/users/${u.id}/reset-password`, undefined, c);
+    const stale = await post('/auth/password/complete', { change_token: token1, new_password: GOOD });
+    expect(stale.status).toBe(401);
+    expect(stale.json.code).toBe('invalid_change_token');
+    const token2 = (await login(`ct${D}`, second.json.temp_password)).json.change_token as string;
+    expect((await post('/auth/password/complete', { change_token: token2, new_password: GOOD })).status).toBe(200);
+    const again = await post('/auth/password/complete', { change_token: token2, new_password: NEW_GOOD });
+    expect(again.json.code).toBe('invalid_change_token');
+    expect((await login(`ct${D}`, GOOD)).json.status).toBe('signed_in');
+    expect((await login(`ct${D}`, NEW_GOOD)).status).toBe(401);
+  });
+});
+
+describe('OAuth refresh after a password reset', () => {
+  dbTest('the refresh token of a grant approved from a password session stops working', async () => {
+    await makeUser('root-rf', { role: 'admin', password: GOOD });
+    const u = await makeUser('rf', { password: GOOD });
+    const REDIRECT = 'https://cb.test/callback';
+    const VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    const CHALLENGE = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
+    const a = app();
+    const uc = await cookieLogin(`rf${D}`);
+    const client = (await (await a.request(`${API}/oauth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ client_name: 'rf', redirect_uris: [REDIRECT] }),
+    })).json()) as { client_id: string };
+    const q = new URLSearchParams({ response_type: 'code', client_id: client.client_id, redirect_uri: REDIRECT, state: 's', code_challenge: CHALLENGE, code_challenge_method: 'S256' });
+    const page = await a.request(`${API}/oauth/authorize?${q}`, { headers: withCookie(uc) });
+    const fields: Record<string, string> = {};
+    for (const m of (await page.text()).matchAll(/<input type="hidden" name="([^"]*)" value="([^"]*)">/g)) fields[m[1]!] = m[2]!.replace(/&amp;/g, '&');
+    const approve = await a.request(`${API}/oauth/authorize`, {
+      method: 'POST',
+      headers: { ...withCookie(uc), origin: API, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ ...fields, decision: 'approve' }),
+    });
+    const code = new URL(approve.headers.get('location')!).searchParams.get('code')!;
+    const tokenReq = (params: Record<string, string>) =>
+      a.request(`${API}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params) });
+    const issued = (await (await tokenReq({ grant_type: 'authorization_code', code, code_verifier: VERIFIER, redirect_uri: REDIRECT, client_id: client.client_id })).json()) as { refresh_token: string; access_token: string };
+    expect((await get('/auth/me', bearer(issued.access_token))).status).toBe(200);
+    const refreshed = (await (await tokenReq({ grant_type: 'refresh_token', refresh_token: issued.refresh_token, client_id: client.client_id })).json()) as { refresh_token: string };
+    expect(refreshed.refresh_token).toBeTruthy();
+
+    const c = withCookie(await cookieLogin(`root-rf${D}`));
+    expect((await post(`/admin/users/${u.id}/reset-password`, undefined, c)).status).toBe(200);
+    const after = await tokenReq({ grant_type: 'refresh_token', refresh_token: refreshed.refresh_token, client_id: client.client_id });
+    expect(after.status).toBe(400);
+    expect(((await after.json()) as { error: string }).error).toBe('invalid_grant');
+    expect((await get('/auth/me', bearer(issued.access_token))).status).toBe(401);
+  });
+});
+
+describe('admin guards over HTTP', () => {
+  /** Only this test's admins are active admins while it runs (other files' admins are restored after). */
+  async function isolateAdmins(): Promise<() => Promise<void>> {
+    const { rows } = await pool.query<{ id: string }>(
+      `update public.users set role = 'user' where role = 'admin' and status = 'active' and email not like $1 returning id`,
+      [`%${D}`],
+    );
+    return async () => {
+      await pool.query(`update public.users set role = 'admin' where id = any($1)`, [rows.map((r) => r.id)]);
+    };
+  }
+
+  dbTest('two admins demoting (or disabling) each other at once: exactly one wins, an active admin always remains', async () => {
+    const restore = await isolateAdmins();
+    try {
+      for (const field of [{ role: 'user' }, { status: 'disabled' }] as const) {
+        await cleanup();
+        resetIpLimiter();
+        const a = await makeUser('duel-a', { role: 'admin', password: GOOD });
+        const b = await makeUser('duel-b', { role: 'admin', password: GOOD });
+        const ca = withCookie(await cookieLogin(`duel-a${D}`));
+        const cb = withCookie(await cookieLogin(`duel-b${D}`));
+        const [ra, rb] = await Promise.all([
+          post(`/admin/users/${b.id}`, field, ca, 'PATCH'),
+          post(`/admin/users/${a.id}`, field, cb, 'PATCH'),
+        ]);
+        const statuses = [ra.status, rb.status].sort();
+        expect(statuses[0], JSON.stringify([ra.json, rb.json])).toBe(200);
+        expect([401, 403, 409]).toContain(statuses[1]!);
+        const active = await pool.query(
+          `select count(*)::int as n from public.users where role = 'admin' and status = 'active' and email like $1`,
+          [`%${D}`],
+        );
+        expect(active.rows[0].n).toBe(1);
+      }
+    } finally {
+      await restore();
+    }
+  });
+
+  dbTest('the last active admin: self guard first, and a demoted admin cannot finish a change', async () => {
+    const restore = await isolateAdmins();
+    try {
+      const a = await makeUser('solo', { role: 'admin', password: GOOD });
+      const ca = withCookie(await cookieLogin(`solo${D}`));
+      for (const body of [{ role: 'user' }, { status: 'disabled' }]) {
+        expect((await post(`/admin/users/${a.id}`, body, ca, 'PATCH')).json.code).toBe('cannot_modify_self');
+      }
+      expect((await post(`/admin/users/${a.id}`, undefined, ca, 'DELETE')).json.code).toBe('cannot_modify_self');
+      // Demoted out of band: the next request is refused (requireAdmin, and again inside the transaction).
+      await pool.query(`update public.users set role = 'user' where id = $1`, [a.id]);
+      expect((await post(`/admin/users/${a.id}`, { name: 'x' }, ca, 'PATCH')).status).toBe(403);
+    } finally {
+      await restore();
+    }
+  });
+
+  dbTest('reserved service and dev e-mails: never created, patched, reset or deleted by an admin', async () => {
+    await makeUser('root-res', { role: 'admin', password: GOOD });
+    const c = withCookie(await cookieLogin(`root-res${D}`));
+    await pool.query(`delete from public.users where email = any($1)`, [['svc-budget-mcp@syscd.local', 'dev@localhost']]);
+    for (const email of ['svc-budget-mcp@syscd.local', 'SVC-Budget-MCP@syscd.local', 'dev@localhost']) {
+      const r = await post('/admin/users', { email, role: 'admin' }, c);
+      expect(r.status, email).toBe(400);
+      expect(r.json.code).toBe('invalid_input');
+    }
+    expect((await pool.query(`select 1 from public.users where email = any($1)`, [['svc-budget-mcp@syscd.local', 'dev@localhost']])).rowCount).toBe(0);
+    // The service token still resolves to the plain (non-admin) service row.
+    expect((await get('/admin/users', bearer(SVC_TOKEN))).status).toBe(403);
+    expect((await get('/jobs/runs', bearer(SVC_TOKEN))).status).toBe(403);
+    const ids = await pool.query<{ id: string }>(
+      `insert into public.users (id, email) values (gen_random_uuid(), 'dev@localhost') on conflict (email) do update set email = excluded.email returning id`,
+    );
+    const svc = await pool.query<{ id: string }>(`select id from public.users where email = 'svc-budget-mcp@syscd.local'`);
+    for (const id of [ids.rows[0]!.id, svc.rows[0]!.id]) {
+      expect((await post(`/admin/users/${id}`, { role: 'admin' }, c, 'PATCH')).status).toBe(404);
+      expect((await post(`/admin/users/${id}/reset-password`, undefined, c)).status).toBe(404);
+      expect((await post(`/admin/users/${id}`, undefined, c, 'DELETE')).status).toBe(404);
+    }
+    const left = await pool.query(`select role from public.users where email = any($1)`, [['svc-budget-mcp@syscd.local', 'dev@localhost']]);
+    expect(left.rows.every((r) => r.role === 'user')).toBe(true);
+    expect((await pool.query(`select 1 from public.user_passwords p join public.users u on u.id = p.user_id where u.email = any($1)`, [['svc-budget-mcp@syscd.local', 'dev@localhost']])).rowCount).toBe(0);
+    await pool.query(`delete from public.users where email = 'dev@localhost'`);
+  });
+
+  dbTest('delete is refused while the jobs ledger names the user (a non-FK reference)', async () => {
+    await makeUser('root-job', { role: 'admin', password: GOOD });
+    const u = await makeUser('jobber', { password: GOOD });
+    const c = withCookie(await cookieLogin(`root-job${D}`));
+    await pool.query(
+      `insert into jobs.job_runs (job_type, subject_key, instance_id, requested_by, status) values ('pwtest', $1, 'pwtest', $2, 'succeeded')`,
+      [crypto.randomUUID(), `user:${u.id}`],
+    );
+    try {
+      const r = await post(`/admin/users/${u.id}`, undefined, c, 'DELETE');
+      expect(r.status).toBe(409);
+      expect(r.json.code).toBe('user_has_data');
+    } finally {
+      await pool.query(`delete from jobs.job_runs where job_type = 'pwtest'`);
+    }
+    expect((await post(`/admin/users/${u.id}`, undefined, c, 'DELETE')).status).toBe(204);
+  });
+});
+
+describe('Google linking with AUTH_PASSWORD_LOGIN=0', () => {
+  dbTest('an admin-managed e-mail off the list is refused at sign-in (web and native) and its session stops', async () => {
+    const u = await makeUser('managed-off', { password: GOOD });
+    googleIdentity = { email: `managed-off${D}`, sub: 'g-managed-off', emailVerified: true };
+    const before = await app().request(`${API}/auth/google/callback?code=c&state=s1`, { headers: { cookie: 'g_state=s1' } });
+    const session = cookieOf(before)!;
+    expect((await get('/me', withCookie(session))).json.id).toBe(u.id);
+
+    configureAuth({ ...CONFIG(), passwordLogin: false });
+    expect((await app().request(`${API}/auth/google/callback?code=c&state=s1`, { headers: { cookie: 'g_state=s1' } })).status).toBe(403);
+    const nonce = 'n-off';
+    const state = `${nonce}.${createHmac('sha256', SECRET).update(nonce).digest('base64url')}`;
+    expect((await app().request(`${API}/auth/token?code=c&state=${encodeURIComponent(state)}`)).status).toBe(403);
+    expect((await get('/me', withCookie(session))).status).toBe(401);
+    // A listed e-mail is unaffected.
+    await makeUser('listed', { googleSub: 'g-listed-off' });
+    googleIdentity = { email: LISTED, sub: 'g-listed-off', emailVerified: true };
+    expect((await app().request(`${API}/auth/google/callback?code=c&state=s1`, { headers: { cookie: 'g_state=s1' } })).status).toBe(302);
   });
 });
