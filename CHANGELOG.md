@@ -1,5 +1,18 @@
 # Changelog
 
+## v2026.11.20-01 2026-11-20 release
+
+### Changed
+
+- release: v2026.11.20-01
+- fix(brand): favicon is the bare envelope mark, no dark box
+- fix(admin): features dropdown takes focus on open; tidy entry layout
+- feat(features): feature groups; admin dropdown of grouped, filterable user features
+- .dev
+- feat(features): client useFeatures hook and admin toggles
+- feat(features): typed feature list, overrides table, evaluation and admin operations
+
+
 ## v2026.11.20 2026-11-20 release
 
 ### Changed
