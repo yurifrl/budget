@@ -12,6 +12,7 @@ import { hostname } from 'node:os';
 
 import { configureDb, pool } from './core/db';
 import { runMigrations } from './core/migrate';
+import { configureSecretsFromEnv } from './secrets-env';
 import { createConnectionsActivities } from './connections/activities';
 import {
   configurePluggyEnv,
@@ -37,6 +38,8 @@ const instanceId = process.env.JOBS_INSTANCE_ID || 'budget-local';
 const workerId = `${hostname()}:${process.pid}`;
 
 configurePluggyEnv(process.env);
+// Same master key as the API: the sync activities decrypt users' own provider secrets.
+configureSecretsFromEnv(process.env);
 await runMigrations();
 
 configureJobs({ instanceId, taskQueue });

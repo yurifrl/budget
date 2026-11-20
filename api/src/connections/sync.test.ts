@@ -45,6 +45,7 @@ function fakeAggregator(
 ): BankAggregator {
   return {
     environment: 'production',
+    verifyCredentials: async () => true,
     createConnectToken: async (_input: ConnectTokenInput) => ({
       token: 't',
       clientId: 'c',

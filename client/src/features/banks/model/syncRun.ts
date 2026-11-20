@@ -87,6 +87,8 @@ export function syncStateView(state: SyncState): { label: string; tone: StatusTo
       return { label: 'Reconnect', tone: 'warn' };
     case 'quota':
       return { label: 'Bank limit reached', tone: 'warn' };
+    case 'paused':
+      return { label: 'Paused · needs your keys', tone: 'warn' };
     case 'error':
       return { label: 'Sync error', tone: 'bad' };
     default:

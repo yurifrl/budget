@@ -17,7 +17,25 @@
  * stale-not-broken: the provider's monthly quota is spent, so syncing pauses
  * until `connections.next_poll_at` (the start of next month).
  */
-export type ConnectionStatus = 'connected' | 'unauthorized' | 'disconnected' | 'error' | 'quota_exhausted';
+export type ConnectionStatus = 'connected' | 'unauthorized' | 'disconnected' | 'error' | 'quota_exhausted' | 'paused';
+// `paused` is set by the core, never by a provider: the connection's key set
+// may not be used by its owner right now (see ./keys.ts).
+
+/**
+ * Which key set created a connection's upstream item. A provider item is
+ * reachable only with the credentials that created it, so every call for a
+ * connection uses this key set and no other.
+ *  - shared: the installation's keys (provider env), gated per user by the
+ *    'shared-pluggy-key' feature
+ *  - own:    the owner's own key set (public.connection_credentials)
+ */
+export type KeySource = 'shared' | 'own';
+
+/** A user's own key set for a provider, decrypted, as an adapter consumes it. */
+export type ProviderCredentials = {
+  clientId: string;
+  clientSecret: string;
+};
 
 /** What an inbound webhook asks the core to do. */
 export type DeliveryAction = 'sync' | 'status' | 'ignore';
@@ -157,6 +175,13 @@ export type ListTransactionsInput = {
 export interface BankAggregator {
   /** Where these credentials point — 'sandbox' keeps auto-sync polling off. */
   readonly environment: 'sandbox' | 'production';
+
+  /**
+   * Check the credentials this aggregator was built with against the provider
+   * (one cheap call, no item touched). False = the provider refused the pair;
+   * any other failure (network, 5xx) is thrown.
+   */
+  verifyCredentials(): Promise<boolean>;
 
   /** Mint a connect token for the widget, scoped to `clientUserId`. */
   createConnectToken(input: ConnectTokenInput): Promise<ConnectToken>;

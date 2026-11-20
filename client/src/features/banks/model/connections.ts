@@ -33,6 +33,8 @@ export function connectionStatusView(status: string): { label: string; tone: 'ok
       return { label: 'Action needed', tone: 'warn' };
     case 'quota_exhausted':
       return { label: 'Bank limit reached', tone: 'warn' };
+    case 'paused':
+      return { label: 'Paused · needs your keys', tone: 'warn' };
     case 'error':
       return { label: 'Sync error', tone: 'bad' };
     default:

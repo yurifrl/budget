@@ -12,7 +12,7 @@
 import { ActivityFailure, ApplicationFailure, CancellationScope, isCancellation, proxyActivities, sleep, workflowInfo } from '@temporalio/workflow';
 
 import type { ConnectionsActivities } from './activities';
-import { USER_MESSAGES, type AggregatorErrorKind } from './errors';
+import { PAUSED_RUN_MESSAGE, USER_MESSAGES, type AggregatorErrorKind } from './errors';
 import { connectionIdFromSubject, PLUGGY_QUEUE_SUFFIX, type ConnectionSyncInput } from './jobspec';
 import { runTracked, type JobArgs } from '../jobs/workflows/tracked';
 
@@ -74,7 +74,12 @@ export async function connectionsSync(args: JobArgs): Promise<unknown> {
     },
     {
       failureUserMessage: userMessageForFailure,
-      successUserMessage: (r) => (r && typeof r === 'object' && 'skipped' in r && r.skipped === 'quota_exhausted' ? USER_MESSAGES.quota_exhausted : undefined),
+      successUserMessage: (r) => {
+        const skipped = r && typeof r === 'object' && 'skipped' in r ? r.skipped : undefined;
+        if (skipped === 'quota_exhausted') return USER_MESSAGES.quota_exhausted;
+        if (skipped === 'paused') return PAUSED_RUN_MESSAGE;
+        return undefined;
+      },
     },
   );
 }

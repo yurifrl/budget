@@ -20,6 +20,7 @@ import budget from './budget';
 import connections from './connections';
 import { featuresRoutes } from './features';
 import { setAggregators } from './connections/registry';
+import { configureSecretBox } from './core/secret-box';
 import * as connStore from './connections/store';
 import { syncConnectionTransactions } from './connections/sync';
 import type { AggregatedTransaction, BankAggregator, ExternalAccount } from './connections/types';
@@ -68,6 +69,7 @@ const imported: AggregatedTransaction = {
 };
 const aggregator = {
   environment: 'production',
+  verifyCredentials: async () => true,
   createConnectToken: async () => ({ token: 't', clientId: null, widgetUrl: null }),
   listExternalAccounts: async () => [upstreamAccount],
   fetchInstitution: async () => 'Catalog Bank',
@@ -188,13 +190,20 @@ beforeAll(async () => {
   await syncConnectionTransactions({ userId: user.id, connectionId: conn.id, aggregator, ignoreWatermark: true });
 
   // Features: a value for everyone and one user override, so the admin list validates real rows.
-  await ok('features_admin_set_everyone', { key: 'shared-pluggy-key', value: true });
-  await ok('features_admin_set_user', { key: 'shared-pluggy-key', user_id: user.id, value: false });
+  // The user's own value is ON: the connection above runs on the shared keys and must stay usable
+  // (off would pause it, and connections_upstream_list would answer accounts: null).
+  await ok('features_admin_set_everyone', { key: 'shared-pluggy-key', value: false });
+  await ok('features_admin_set_user', { key: 'shared-pluggy-key', user_id: user.id, value: true });
+
+  // The user's own key set, saved through the operation (checked with the fake provider, stored encrypted).
+  configureSecretBox({ current: 1, keys: new Map([[1, crypto.getRandomValues(new Uint8Array(32))]]) });
+  await ok('connections_credentials_save', { clientId: 'catalog-client-id', clientSecret: 'catalog-client-secret' });
 });
 
 afterAll(async () => {
   if (!dbReady) return;
   setAggregators(null);
+  configureSecretBox(null);
   await cleanup();
   if (authBefore) configureAuth(authBefore);
 });
@@ -221,6 +230,7 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     budget_repeat_rules_list: { budget_id: B },
     budget_export: { budget_id: B },
     connections_list: {},
+    connections_credentials_get: {},
     connections_settings_get: {},
     connections_upstream_list: {},
     connections_get: { id: seeded.connection },

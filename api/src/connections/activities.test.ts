@@ -75,6 +75,7 @@ const entry: AggregatorEntry = {
   create: () =>
     ({
       environment: 'production',
+      verifyCredentials: async () => true,
       createConnectToken: async () => ({ token: 't', clientId: null, widgetUrl: null }),
       listExternalAccounts: async () => [],
       listTransactions: async () => {
@@ -106,6 +107,8 @@ beforeAll(async () => {
     `insert into public.users (id, google_sub, email, role, status) values ($1, $2, 'connections-activities@syscd.local', 'user', 'active')`,
     [userId, userId],
   );
+  // The connections below run on the shared keys; this user may use them.
+  await pool.query(`insert into public.feature_overrides (feature_key, user_id, value) values ('shared-pluggy-key', $1, true)`, [userId]);
 });
 afterAll(async () => {
   setAggregators(null);

@@ -31,3 +31,17 @@ export const USER_MESSAGES = {
   transient: "Couldn't reach the bank. We will try again later.",
   permanent: "Couldn't sync with the bank. Try again later.",
 } as const satisfies Record<AggregatorErrorKind, string>;
+
+/**
+ * `status_message` of a 'paused' connection, by the key set it was created
+ * with. A provider item cannot move between key sets, so a paused shared-key
+ * connection is replaced (connected again with own keys), not converted.
+ */
+export const PAUSE_MESSAGES = {
+  shared:
+    "Paused: this bank was connected with the app's shared Pluggy keys, which are not available for your account. Add your own Pluggy keys and connect the bank again.",
+  own: 'Paused: the Pluggy keys this bank was connected with are no longer saved. Save that key set again to resume.',
+} as const;
+
+/** Run notice when a sync found its connection paused (nothing was pulled). */
+export const PAUSED_RUN_MESSAGE = 'Nothing synced: this bank is paused until its Pluggy keys can be used again.';

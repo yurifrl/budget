@@ -250,6 +250,10 @@ export class PluggyAggregator implements BankAggregator {
     return this.client.environment;
   }
 
+  async verifyCredentials(): Promise<boolean> {
+    return this.client.verifyCredentials();
+  }
+
   async createConnectToken(input: ConnectTokenInput): Promise<ConnectToken> {
     const upstream = await this.client.createConnectToken({
       ...(input.connectorId !== undefined ? { connectorId: input.connectorId } : {}),

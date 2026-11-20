@@ -10,6 +10,7 @@
  *                            UI can offer them as link candidates (the link
  *                            itself lives on the budget accounts row —
  *                            PATCH /accounts/:id, see server/budget/routes/accounts)
+ *   GET|PUT|DELETE /credentials → the caller's own provider key set (status, save, delete)
  *   GET    /               → list this user's connections (status → re-auth CTA)
  *   GET    /:id            → one connection's status
  *   PATCH  /:id/settings → per-bank sync window override (null = app default)
@@ -25,7 +26,17 @@
 import { Hono } from 'hono';
 import { z } from '@shared/zod';
 
-import { getAggregator, hasProvider } from './registry';
+import { hasProvider } from './registry';
+import {
+  keyAccessForConnection,
+  keyAccessForNewConnection,
+  keyAccessHttpError,
+  reconcileKeyAccess,
+  storeOwnCredentials,
+  type KeyAccess,
+} from './keys';
+import { getAggregator } from './registry';
+import { SecretBoxUnavailable, secretBoxConfigured } from '../core/secret-box';
 import { getSyncWindowDays, setSyncWindowDays } from './settings';
 import { withPostConnectSettle } from './settle';
 import * as store from './store';
@@ -41,18 +52,24 @@ import { pool } from '../core/db';
 import { implement } from '../core/operation';
 import { HttpError } from '../core/validate';
 import * as contracts from '@shared/contracts/connections/connections';
+import * as credentialContracts from '@shared/contracts/connections/credentials';
+import { CONNECTION_PAUSED, CREDENTIALS_KEY_MISSING, INVALID_CREDENTIALS } from '@shared/contracts/connections/credentials';
 import { connectionsRouter } from './router';
 
-/**
- * Aggregator resolution with HTTP semantics: an unknown provider → 404, a
- * registered one with missing credentials → 503 (fail loud — a silent null
- * would masquerade as an empty account list).
- */
-function aggregatorFor(provider: string) {
+/** An unknown provider is a 404 before anything else is looked at. */
+function requireProvider(provider: string): void {
   if (!hasProvider(provider)) throw new HttpError(404, `unknown connections provider ${provider}`);
-  const aggregator = getAggregator(provider);
-  if (!aggregator) throw new HttpError(503, `connections provider ${provider} is not configured`);
-  return aggregator;
+}
+
+/**
+ * Key-set resolution with HTTP semantics (fail loud: a silent null would
+ * masquerade as an empty account list): no usable key set → 403
+ * own_keys_required, shared keys missing from the env → 503, an own secret
+ * this server cannot decrypt → 503 credentials_key_missing.
+ */
+function usable(access: KeyAccess, provider: string): Extract<KeyAccess, { ok: true }> {
+  if (!access.ok) throw keyAccessHttpError(access.problem, provider);
+  return access;
 }
 
 /**
@@ -88,6 +105,7 @@ const connectionJson = (row: ConnectionWithLinker) => ({
   /** Sanitized user-facing reason for a non-connected status. */
   status_message: row.status_message,
   environment: row.environment,
+  key_source: row.key_source,
   institution: row.institution,
   last_synced_at: row.last_synced_at,
   sync_window_days: row.sync_window_days,
@@ -108,8 +126,20 @@ export const operations = [
   implement(contracts.connectionsConnectToken, async (c, body) => {
     const user = c.get('user');
     if (!user) throw new HttpError(401, 'unauthorized');
-    const aggregator = aggregatorFor(body.provider);
+    requireProvider(body.provider);
+    await reconcileKeyAccess(pool, user.id);
+    // Re-auth of an existing connection runs on the key set that created it;
+    // a new connection gets the caller's own keys, else the shared ones if allowed.
+    const existing = body.itemId ? await store.getConnectionByExternal(body.provider, body.itemId) : null;
+    const access =
+      existing && existing.user_id === user.id
+        ? await keyAccessForConnection(pool, existing)
+        : await keyAccessForNewConnection(pool, user.id, body.provider);
+    const { aggregator } = usable(access, body.provider);
     try {
+      // No webhookUrl, for either key set: shared-key items get their events
+      // through the URL set once in the shared application's dashboard, and
+      // own-key items get none (sweep and manual sync only).
       const token = await aggregator.createConnectToken({
         clientUserId: user.id,
         connectorId: body.connectorId,
@@ -131,10 +161,20 @@ export const operations = [
   implement(contracts.connectionsItemsRegister, async (c, body) => {
     const user = c.get('user');
     if (!user) throw new HttpError(401, 'unauthorized');
-    const aggregator = aggregatorFor(body.provider);
+    requireProvider(body.provider);
+    // Another user's upstream item is a 409 before any key set is resolved or
+    // any upstream call is made, so registration never leaks a foreign item.
+    const existing = await store.getConnectionByExternal(body.provider, body.itemId);
+    if (existing && existing.user_id !== user.id) {
+      throw new HttpError(409, 'conflict — connection already registered by another user');
+    }
+    // A known item keeps the key set that created it; a new one was just
+    // created by the widget with the same choice connect-token made.
+    const access = existing
+      ? await keyAccessForConnection(pool, existing)
+      : await keyAccessForNewConnection(pool, user.id, body.provider);
+    const { aggregator, keySource, keyClientId } = usable(access, body.provider);
     try {
-      // Claim first: another user's upstream item is a 409 before any upstream
-      // call, so registration never leaks a foreign item's accounts.
       const row = await store.upsertConnection({
         userId: user.id,
         provider: body.provider,
@@ -142,6 +182,8 @@ export const operations = [
         clientUserId: user.id,
         status: 'connected',
         environment: aggregator.environment,
+        keySource,
+        keyClientId,
       });
       const accounts = await withPostConnectSettle(() => aggregator.listExternalAccounts(body.itemId));
       // Item-level connector name first (the real bank identity); account-level
@@ -160,8 +202,61 @@ export const operations = [
   /** List the user's connections with their statuses (drives the re-auth CTA). */
   implement(contracts.connectionsList, async (c) => {
     const userId = requireUserId(c);
+    await reconcileKeyAccess(pool, userId);
     const rows = await store.listConnectionsByUser(userId);
     return rows.map(connectionJson);
+  }),
+
+  /**
+   * The caller's own key set for a provider: client id + whether a secret is
+   * stored. The secret never leaves the server.
+   */
+  implement(credentialContracts.connectionsCredentialsGet, async (c, { provider }) => {
+    const userId = requireUserId(c);
+    requireProvider(provider);
+    return credentialsJson(provider, await store.getCredentials(pool, userId, provider));
+  }),
+
+  /**
+   * Save or replace the caller's own key set. The pair is checked with the
+   * provider first (one cheap auth call through the adapter), then the secret
+   * is encrypted with the installation's master key and stored. Connections
+   * created with this client id resume; ones created with a replaced client
+   * id are paused (their items belong to the other application).
+   */
+  implement(credentialContracts.connectionsCredentialsSave, async (c, { provider, clientId, clientSecret }) => {
+    const userId = requireUserId(c);
+    requireProvider(provider);
+    if (!secretBoxConfigured()) throw credentialsKeyMissing();
+    const aggregator = getAggregator(provider, { clientId, clientSecret });
+    if (!aggregator) throw new HttpError(404, `unknown connections provider ${provider}`);
+    let accepted: boolean;
+    try {
+      accepted = await aggregator.verifyCredentials();
+    } catch (err) {
+      throwProviderMapped(err);
+    }
+    if (!accepted) {
+      throw new HttpError(400, 'Pluggy did not accept this client id and secret. Check both and try again.', INVALID_CREDENTIALS);
+    }
+    let saved: store.StoredCredentials;
+    try {
+      saved = await storeOwnCredentials(pool, userId, provider, { clientId, clientSecret });
+    } catch (err) {
+      if (err instanceof SecretBoxUnavailable) throw credentialsKeyMissing();
+      throw err;
+    }
+    await reconcileKeyAccess(pool, userId);
+    return credentialsJson(provider, saved);
+  }),
+
+  /** Delete the caller's own key set (idempotent). Its connections are paused, never deleted. */
+  implement(credentialContracts.connectionsCredentialsDelete, async (c, { provider }) => {
+    const userId = requireUserId(c);
+    requireProvider(provider);
+    await store.deleteCredentials(pool, userId, provider);
+    await reconcileKeyAccess(pool, userId);
+    return { ok: true };
   }),
 
   /**
@@ -189,6 +284,7 @@ export const operations = [
    */
   implement(contracts.connectionsUpstream, async (c) => {
     const userId = requireUserId(c);
+    await reconcileKeyAccess(pool, userId);
     const rows = (await store.listConnectionsByUser(userId)).filter((row) => row.status !== 'disconnected');
     const linked = await pool.query<{ connection_id: string; external_account_id: string; account_id: string }>(
       `SELECT connection_id, external_account_id, id AS account_id
@@ -202,7 +298,14 @@ export const operations = [
     );
     return Promise.all(
       rows.map(async (row) => {
-        const aggregator = aggregatorFor(row.provider);
+        // Paused: its key set may not be used, so the provider is not called.
+        // The row still comes back (status 'paused' + message) with no accounts.
+        if (row.status === 'paused') return { connection: connectionJson(row), accounts: null };
+        requireProvider(row.provider);
+        const access = await keyAccessForConnection(pool, row);
+        // Own keys this server cannot decrypt break that one bank only, like a provider failure.
+        if (!access.ok && access.problem === 'secret_unavailable') return { connection: connectionJson(row), accounts: null };
+        const { aggregator } = usable(access, row.provider);
         let accounts: (ExternalAccount & { linkedAccountId: string | null })[] | null;
         try {
           const external = await aggregator.listExternalAccounts(row.external_id);
@@ -235,6 +338,7 @@ export const operations = [
   /** One connection's status — cross-user ids surface as 404. */
   implement(contracts.connectionsGet, async (c, { id }) => {
     const userId = requireUserId(c);
+    await reconcileKeyAccess(pool, userId);
     const row = await store.getConnectionByUser(userId, id);
     if (!row) throw new HttpError(404, 'not found');
     return connectionJson(row);
@@ -297,18 +401,38 @@ export const operations = [
         `still linked to ${linked.rows.map((r) => r.name).join(', ')} — unlink in the account editor first`,
       );
     }
-    const aggregator = aggregatorFor(row.provider);
-    try {
-      await aggregator.deleteConnection(row.external_id);
-    } catch (err) {
-      // Upstream already gone (or the user deleted it in the provider's
-      // dashboard) → the local disconnect still proceeds.
-      if (err instanceof HttpError) throw err;
+    requireProvider(row.provider);
+    // The item is removed with the key set that created it. A paused
+    // shared-key connection can still be removed (the feature gates connecting
+    // and syncing, not cleanup); an own-key one whose keys are gone is only
+    // disconnected locally, since nothing here can reach the item any more.
+    const access = await keyAccessForConnection(pool, row, { enforceFeature: false });
+    if (!access.ok && access.problem !== 'own_keys_missing' && access.problem !== 'secret_unavailable') {
+      throw keyAccessHttpError(access.problem, row.provider);
+    }
+    if (access.ok) {
+      try {
+        await access.aggregator.deleteConnection(row.external_id);
+      } catch (err) {
+        // Upstream already gone (or the user deleted it in the provider's
+        // dashboard) → the local disconnect still proceeds.
+        if (err instanceof HttpError) throw err;
+      }
     }
     await store.markDisconnected(row.id);
     return { ok: true };
   }),
 ];
+
+const credentialsJson = (provider: string, row: store.StoredCredentials | null) => ({
+  provider,
+  clientId: row?.client_id ?? null,
+  hasSecret: row != null,
+  updatedAt: row?.updated_at ?? null,
+});
+
+const credentialsKeyMissing = () =>
+  new HttpError(503, 'Own bank keys cannot be saved: this installation has no encryption key configured.', CREDENTIALS_KEY_MISSING);
 
 type TxnState = 'imported' | 'edited' | 'removed';
 
@@ -454,15 +578,19 @@ const runJson = (run: JobRun) => ({
  * in the subject key (see jobspec.ts) and the watermark the job uses.
  */
 async function requestSync(userId: string, id: string, mode: SyncMode) {
+  await reconcileKeyAccess(pool, userId);
   const row = await store.getConnectionByUser(userId, id);
   if (!row) throw new HttpError(404, 'not found');
   if (row.status === 'disconnected') throw new HttpError(409, 'connection is disconnected');
-  aggregatorFor(row.provider); // fail fast (404/503) when the provider is unknown/unconfigured
+  if (row.status === 'paused') throw new HttpError(409, row.status_message ?? 'connection is paused', CONNECTION_PAUSED);
+  requireProvider(row.provider);
+  usable(await keyAccessForConnection(pool, row), row.provider); // fail fast (403/503) when its key set cannot be used
   const { run, created } = await enqueueConnectionSync(pool, row, mode, `user:${userId}`);
   return { connection: connectionJson(row), run: runJson(run), created };
 }
 
 async function syncStatus(userId: string) {
+  await reconcileKeyAccess(pool, userId);
   const rows = await store.listConnectionsByUser(userId);
   const keys = rows.flatMap((r) => [syncSubjectKey(r.id, 'sync'), syncSubjectKey(r.id, 'reimport')]);
   const [{ active, lastFinished }, health] = await Promise.all([

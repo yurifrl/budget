@@ -15,9 +15,11 @@
  * connections sweep prunes it (30-day retention).
  */
 
-import { pool } from '../core/db';
+import { pool, type Queryable } from '../core/db';
 import { personRefSql, toPersonRef, type PersonRef, type PersonRefRow } from '../user';
 import { HttpError } from '../core/validate';
+import { PAUSE_MESSAGES } from './errors';
+import type { KeySource } from './types';
 
 export type ConnectionRow = {
   id: string;
@@ -29,6 +31,10 @@ export type ConnectionRow = {
   /** Sanitized user-facing reason for a non-connected status. */
   status_message: string | null;
   environment: string | null;
+  /** Key set that created the upstream item: 'shared' or 'own' (migration 0104). */
+  key_source: KeySource;
+  /** For 'own': the client id the item was created with; null for 'shared'. */
+  key_client_id: string | null;
   institution: string | null;
   last_synced_at: Date | null;
   next_poll_at: Date | null;
@@ -43,7 +49,7 @@ export type ConnectionRow = {
 export type ConnectionWithLinker = ConnectionRow & { linked_by: PersonRef | null };
 
 const CONNECTION_COLUMNS =
-  'id, user_id, provider, external_id, client_user_id, status, status_message, environment, institution, ' +
+  'id, user_id, provider, external_id, client_user_id, status, status_message, environment, key_source, key_client_id, institution, ' +
   'last_synced_at, next_poll_at, poll_failures, sync_window_days, created_at, updated_at';
 
 /**
@@ -59,6 +65,12 @@ export async function upsertConnection(input: {
   status: string;
   institution?: string | null;
   environment?: string | null;
+  /**
+   * Key set the item was created with. Written on INSERT only: an item never
+   * moves between key sets, so re-registering keeps what the row recorded.
+   */
+  keySource?: KeySource;
+  keyClientId?: string | null;
 }): Promise<ConnectionRow> {
   const existing = await pool.query<ConnectionRow>(
     `select ${CONNECTION_COLUMNS}
@@ -84,8 +96,8 @@ export async function upsertConnection(input: {
 
   const inserted = await pool.query<ConnectionRow>(
     `insert into public.connections
-       (id, user_id, provider, external_id, client_user_id, status, environment, institution)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
+       (id, user_id, provider, external_id, client_user_id, status, environment, institution, key_source, key_client_id)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      returning ${CONNECTION_COLUMNS}`,
     [
       crypto.randomUUID(),
@@ -96,6 +108,8 @@ export async function upsertConnection(input: {
       input.status,
       input.environment ?? null,
       input.institution ?? null,
+      input.keySource ?? 'shared',
+      input.keySource === 'own' ? (input.keyClientId ?? null) : null,
     ],
   );
   return inserted.rows[0]!;
@@ -236,7 +250,7 @@ export async function listSweepConnections(now: Date): Promise<ConnectionRow[]> 
     `select ${CONNECTION_COLUMNS}
      from public.connections
      where environment is distinct from 'sandbox'
-       and (status = 'connected'
+       and (status in ('connected', 'paused')
             or (status = 'quota_exhausted' and (next_poll_at is null or next_poll_at <= $1)))
      order by created_at`,
     [now],
@@ -279,4 +293,85 @@ export async function pruneConnectionEvents(olderThan: Date): Promise<number> {
     [olderThan],
   );
   return result.rowCount ?? 0;
+}
+
+// ---- key sets ----------------------------------------------------------------
+
+/**
+ * Pause and resume one user's connections so `status` follows whether each
+ * connection's key set may be used right now (rules: ./keys.ts):
+ *   shared → usable while `sharedAllowed` (the 'shared-pluggy-key' feature);
+ *   own    → usable while the owner stores a key set with the client id the
+ *            connection was created with.
+ * Not usable → 'paused' with the matching message; usable again → back to
+ * 'connected' (the next sync or sweep re-reads the provider's real state).
+ * Disconnected rows are never touched. Two statements, idempotent, so it is
+ * safe to run on every read. Returns how many rows changed.
+ */
+export async function reconcilePausedConnections(db: Queryable, userId: string, sharedAllowed: boolean): Promise<number> {
+  const usable = `((c.key_source = 'shared' and $2::boolean)
+        or (c.key_source = 'own' and exists (
+              select 1 from public.connection_credentials k
+               where k.user_id = c.user_id and k.provider = c.provider and k.client_id = c.key_client_id)))`;
+  const paused = await db.query(
+    `update public.connections c
+        set status = 'paused',
+            status_message = case when c.key_source = 'own' then $4 else $3 end,
+            next_poll_at = null, updated_at = now()
+      where c.user_id = $1 and c.status not in ('disconnected', 'paused') and not ${usable}`,
+    [userId, sharedAllowed, PAUSE_MESSAGES.shared, PAUSE_MESSAGES.own],
+  );
+  const resumed = await db.query(
+    `update public.connections c
+        set status = 'connected', status_message = null, updated_at = now()
+      where c.user_id = $1 and c.status = 'paused' and ${usable}`,
+    [userId, sharedAllowed],
+  );
+  return (paused.rowCount ?? 0) + (resumed.rowCount ?? 0);
+}
+
+/** A user's own key set as stored: the secret only as ciphertext + nonce. */
+export type StoredCredentials = {
+  user_id: string;
+  provider: string;
+  client_id: string;
+  secret_ciphertext: Buffer;
+  secret_nonce: Buffer;
+  key_version: number;
+  created_at: Date;
+  updated_at: Date;
+};
+
+const CREDENTIAL_COLUMNS = 'user_id, provider, client_id, secret_ciphertext, secret_nonce, key_version, created_at, updated_at';
+
+/** The user's own key set for `provider`, or null. */
+export async function getCredentials(db: Queryable, userId: string, provider: string): Promise<StoredCredentials | null> {
+  const { rows } = await db.query<StoredCredentials>(
+    `select ${CREDENTIAL_COLUMNS} from public.connection_credentials where user_id = $1 and provider = $2`,
+    [userId, provider],
+  );
+  return rows[0] ?? null;
+}
+
+/** Save or replace the user's own key set (one per user and provider). */
+export async function saveCredentials(
+  db: Queryable,
+  input: { userId: string; provider: string; clientId: string; ciphertext: Uint8Array; nonce: Uint8Array; keyVersion: number },
+): Promise<StoredCredentials> {
+  const { rows } = await db.query<StoredCredentials>(
+    `insert into public.connection_credentials (user_id, provider, client_id, secret_ciphertext, secret_nonce, key_version)
+     values ($1, $2, $3, $4, $5, $6)
+     on conflict (user_id, provider) do update
+       set client_id = excluded.client_id, secret_ciphertext = excluded.secret_ciphertext,
+           secret_nonce = excluded.secret_nonce, key_version = excluded.key_version, updated_at = now()
+     returning ${CREDENTIAL_COLUMNS}`,
+    [input.userId, input.provider, input.clientId, Buffer.from(input.ciphertext), Buffer.from(input.nonce), input.keyVersion],
+  );
+  return rows[0]!;
+}
+
+/** Delete the user's own key set; false when there was none. */
+export async function deleteCredentials(db: Queryable, userId: string, provider: string): Promise<boolean> {
+  const { rowCount } = await db.query('delete from public.connection_credentials where user_id = $1 and provider = $2', [userId, provider]);
+  return (rowCount ?? 0) > 0;
 }

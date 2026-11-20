@@ -103,6 +103,10 @@ let accountsDropped: number = 0;
 class FakeAggregator implements BankAggregator {
   readonly environment = 'production' as const;
 
+  async verifyCredentials(): Promise<boolean> {
+    return true;
+  }
+
   async createConnectToken(): Promise<{ token: string; clientId: string | null; widgetUrl: string | null }> {
     calls.push('createConnectToken');
     return { token: 'token-1', clientId: 'cid-1', widgetUrl: 'https://conn.test/checkout' };
@@ -187,6 +191,11 @@ beforeAll(async () => {
     `INSERT INTO public.users (id, google_sub, email, role, status)
      VALUES ($1, null, $2, 'user', 'active'), ($3, null, $4, 'user', 'active')`,
     [userAId, EMAIL_A, userBId, EMAIL_B],
+  );
+  // These suites exercise the installation's shared keys: both users may use them.
+  await pool.query(
+    `INSERT INTO public.feature_overrides (feature_key, user_id, value) VALUES ('shared-pluggy-key', $1, true), ('shared-pluggy-key', $2, true)`,
+    [userAId, userBId],
   );
   await pool.query('INSERT INTO budgets (id, name, owner_user_id) VALUES ($1, $2, $3), ($4, $5, $6)', [
     budgetId,

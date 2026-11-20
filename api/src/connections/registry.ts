@@ -9,7 +9,7 @@
  */
 
 import adapterEntries, { type AggregatorEntry } from './adapters';
-import type { BankAggregator } from './types';
+import type { BankAggregator, ProviderCredentials } from './types';
 
 export type { AggregatorEntry };
 
@@ -20,10 +20,17 @@ export function setAggregators(map: Record<string, AggregatorEntry> | null): voi
   entries = map ?? adapterEntries;
 }
 
-/** Adapter for `provider`, or null when unknown or not configured. */
-export function getAggregator(provider: string): BankAggregator | null {
+/**
+ * Adapter for `provider` on the installation's shared keys, or null when the
+ * provider is unknown or its shared keys are not configured. With
+ * `credentials` the adapter runs on that user's own key set instead, and the
+ * shared keys need not be configured (null only for an unknown provider).
+ */
+export function getAggregator(provider: string, credentials?: ProviderCredentials): BankAggregator | null {
   const entry = entries[provider];
-  if (!entry || !entry.configured()) return null;
+  if (!entry) return null;
+  if (credentials) return entry.create(credentials);
+  if (!entry.configured()) return null;
   return entry.create();
 }
 
