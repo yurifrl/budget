@@ -15,6 +15,8 @@ import { z } from './zod';
 
 export interface FeatureDefinition {
   readonly key: string;
+  /** Short label the admin groups features under, e.g. "Banks". Reuse an existing one where it fits. */
+  readonly group: string;
   /** One sentence shown to the admin: what a person with the feature on may do. */
   readonly description: string;
   /** The value when neither the person nor "everyone" has one. */
@@ -24,6 +26,7 @@ export interface FeatureDefinition {
 export const FEATURES = [
   {
     key: 'shared-pluggy-key',
+    group: 'Banks',
     description: "May connect and sync banks with the installation's shared Pluggy keys.",
     default: false,
   },

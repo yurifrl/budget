@@ -61,6 +61,7 @@ async function adminFeatures(keys: readonly FeatureKey[] = FEATURE_KEYS): Promis
     const everyone = mine.find((r) => r.user_id === null);
     return {
       key: f.key,
+      group: f.group,
       description: f.description,
       default: f.default,
       everyone: everyone ? toValue(everyone) : null,

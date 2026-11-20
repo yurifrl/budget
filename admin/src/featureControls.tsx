@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ApiError, clearFeatureUser, setFeatureUser, type AdminFeature } from './api';
-import { changedLabel, userState, type ToggleState } from './features.logic';
+import { changedLabel, groupFeatures, popoverPlacement, shownLabel, userState, userSummary, type Placement, type ToggleState } from './features.logic';
 import { errorMessage } from './users.logic';
 
 const msg = (e: unknown) => (e instanceof ApiError ? errorMessage(e.code, e.message, e.status) : String(e));
@@ -60,37 +60,136 @@ export function FeatureToggle(props: {
   );
 }
 
-/** Every feature for one user (the expanded row of the Users page). */
-export function UserFeatures(props: { user: { id: string; email: string }; features: readonly AdminFeature[]; reload: () => Promise<void> | void }) {
+/**
+ * One user's features as a dropdown: a button with a short summary that opens
+ * a popover listing every feature under its group heading, with a filter box
+ * (focused on open). Each entry has its switch, inherited/overridden with who
+ * and when, and "Inherit". Closes on Escape and on a click outside.
+ */
+export function UserFeaturesDropdown(props: {
+  user: { id: string; email: string };
+  /** null while the list is loading. */
+  features: readonly AdminFeature[] | null;
+  reload: () => Promise<void> | void;
+  /** Filter text the popover opens with (the Features page opens it on its own feature). */
+  initialFilter?: string;
+}) {
   const { user, features } = props;
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [place, setPlace] = useState<Placement | null>(null);
+  const rootRef = useRef<HTMLSpanElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const filterRef = useRef<HTMLInputElement>(null);
   const { busy, notice, run } = useFeatureActions(props.reload);
+
+  const close = useCallback((refocus: boolean) => {
+    setOpen(false);
+    if (refocus) buttonRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const position = () => {
+      const r = buttonRef.current?.getBoundingClientRect();
+      if (r) setPlace(popoverPlacement(r, { width: window.innerWidth, height: window.innerHeight }));
+    };
+    const outside = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) close(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      close(true);
+    };
+    position();
+    filterRef.current?.focus();
+    document.addEventListener('mousedown', outside);
+    document.addEventListener('keydown', key);
+    window.addEventListener('resize', position);
+    window.addEventListener('scroll', position, true);
+    return () => {
+      document.removeEventListener('mousedown', outside);
+      document.removeEventListener('keydown', key);
+      window.removeEventListener('resize', position);
+      window.removeEventListener('scroll', position, true);
+    };
+  }, [open, close]);
+
+  const toggle = () => {
+    if (open) return close(false);
+    setQ(props.initialFilter ?? '');
+    setPlace(null);
+    setOpen(true);
+  };
+
+  const all = features ?? [];
+  const groups = open ? groupFeatures(all, q) : [];
+  const shown = groups.reduce((n, g) => n + g.features.length, 0);
   const now = Date.now();
-  if (features.length === 0) return <div className="muted">No features are defined.</div>;
+  const listId = `features-of-${user.id}`;
+
   return (
-    <div className="user-features" data-testid={`user-features-${user.email}`}>
-      {notice && <div className="err">{notice}</div>}
-      {features.map((f) => {
-        const id = `${f.key}:${user.id}`;
-        return (
-          <div className="user-feature" key={f.key}>
-            <div className="user-feature-name">
-              <a href={`#/features/${encodeURIComponent(f.key)}`}>
-                <code>{f.key}</code>
-              </a>
-              <div className="muted sub">{f.description}</div>
-            </div>
-            <FeatureToggle
-              state={userState(f, user.id)}
-              name={`${f.key} for ${user.email}`}
-              clearLabel="Inherit"
-              busy={busy.has(id)}
-              now={now}
-              onSet={(value) => void run(id, () => setFeatureUser(f.key, user.id, value))}
-              onClear={() => void run(id, () => clearFeatureUser(f.key, user.id))}
+    <span className="features-dropdown" ref={rootRef}>
+      <button ref={buttonRef} className="dropdown-button" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? listId : undefined} disabled={!features} onClick={toggle}>
+        {features ? userSummary(all, user.id).label : 'Loading'}
+        <span className="caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div
+          id={listId}
+          className="features-popover"
+          role="dialog"
+          aria-label={`Features for ${user.email}`}
+          data-testid={`features-popover-${user.email}`}
+          style={place ? { ...place } : { visibility: 'hidden' }}
+        >
+          <div className="popover-head">
+            <input
+              ref={filterRef}
+              className="grow"
+              type="search"
+              placeholder="Filter features by name, group or description"
+              aria-label="Filter features"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
             />
+            <span className="muted sub">{shownLabel(shown, all.length, q)}</span>
           </div>
-        );
-      })}
-    </div>
+          <div className="muted sub popover-who">{user.email}</div>
+          {notice && <div className="err popover-notice">{notice}</div>}
+          <div className="popover-list">
+            {groups.map((g) => (
+              <section key={g.group} aria-label={g.group}>
+                <h4>{g.group}</h4>
+                {g.features.map((f) => {
+                  const id = `${f.key}:${user.id}`;
+                  return (
+                    <div className="popover-feature" key={f.key}>
+                      <div className="popover-feature-name">
+                        <code>{f.key}</code>
+                        <div className="muted sub">{f.description}</div>
+                      </div>
+                      <FeatureToggle
+                        state={userState(f, user.id)}
+                        name={`${f.key} for ${user.email}`}
+                        clearLabel="Inherit"
+                        busy={busy.has(id)}
+                        now={now}
+                        onSet={(value) => void run(id, () => setFeatureUser(f.key, user.id, value))}
+                        onClear={() => void run(id, () => clearFeatureUser(f.key, user.id))}
+                      />
+                    </div>
+                  );
+                })}
+              </section>
+            ))}
+            {groups.length === 0 && <div className="muted popover-empty">{all.length === 0 ? 'No features are defined.' : 'No feature matches the filter.'}</div>}
+          </div>
+        </div>
+      )}
+    </span>
   );
 }

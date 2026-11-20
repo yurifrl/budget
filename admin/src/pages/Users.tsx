@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ApiError,
@@ -12,8 +12,7 @@ import {
   type AdminUser,
   type AdminUserWithTempPassword,
 } from '../api';
-import { UserFeatures } from '../featureControls';
-import { userSummary } from '../features.logic';
+import { UserFeaturesDropdown } from '../featureControls';
 import { usePolled } from '../hooks';
 import { fmt } from '../badge';
 import {
@@ -40,8 +39,6 @@ export function UsersPage() {
   const users = usePolled(listUsers, [], 15000);
   const me = usePolled(getMe, [], 60000);
   const features = usePolled(listFeatures, [], 15000);
-  /** Users whose feature toggles are shown (the row under theirs). */
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [q, setQ] = useState('');
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -68,12 +65,6 @@ export function UsersPage() {
     }
     void users.reload();
   };
-  const toggleFeatures = (id: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
   const open = (d: Dialog) => {
     setNotice(null);
     setDialog(d);
@@ -101,6 +92,7 @@ export function UsersPage() {
             <th>Sign-in</th>
             <th>Password</th>
             <th>Last seen</th>
+            <th>Features</th>
             <th />
           </tr>
         </thead>
@@ -110,10 +102,8 @@ export function UsersPage() {
             const methods = signInMethods(u);
             const pw = passwordState(u, now);
             const lock = lockLabel(u.locked_until, now);
-            const showFeatures = expanded.has(u.id);
             return (
-              <Fragment key={u.id}>
-              <tr>
+              <tr key={u.id}>
                 <td>
                   {u.email}
                   {isSelf && <span className="muted"> (you)</span>}
@@ -138,11 +128,11 @@ export function UsersPage() {
                   {lock && <div className="err sub">{lock}</div>}
                 </td>
                 <td title={fmt(u.last_seen_at)}>{relativeTime(u.last_seen_at, now)}</td>
+                <td>
+                  <UserFeaturesDropdown user={u} features={features.data} reload={features.reload} />
+                </td>
                 <td className="row-actions" title={hint ?? undefined}>
                   <button onClick={() => open({ kind: 'edit', user: u })}>Edit</button>
-                  <button aria-expanded={showFeatures} disabled={!features.data} onClick={() => toggleFeatures(u.id)}>
-                    Features{features.data ? ` (${userSummary(features.data, u.id).label})` : ''}
-                  </button>
                   <button disabled={locked || busy.has(u.id)} onClick={() => void flip(u, { status: u.status === 'active' ? 'disabled' : 'active' })}>
                     {u.status === 'active' ? 'Disable' : 'Enable'}
                   </button>
@@ -153,19 +143,11 @@ export function UsersPage() {
                   {hint && <div className="muted sub">{hint}</div>}
                 </td>
               </tr>
-              {showFeatures && features.data && (
-                <tr className="detail">
-                  <td colSpan={8}>
-                    <UserFeatures user={u} features={features.data} reload={features.reload} />
-                  </td>
-                </tr>
-              )}
-              </Fragment>
             );
           })}
           {users.data && rows.length === 0 && (
             <tr>
-              <td colSpan={8} className="muted">
+              <td colSpan={9} className="muted">
                 {users.data.length === 0 ? 'No users.' : 'No user matches the filter.'}
               </td>
             </tr>

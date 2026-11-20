@@ -115,7 +115,7 @@ start at `0100`). One image runs both the API and the worker
   path-param and `budget_id` operation as a non-member (and as a non-member
   admin) and expects 404, then shares the budget and expects the reads to open.
 - **Features.** On/off switches for everyone or for one person. The list is
-  code (`shared/src/features.ts`: key, description, default); nothing creates
+  code (`shared/src/features.ts`: key, group, description, default); nothing creates
   a feature at runtime and a stored key that is no longer listed is ignored.
   Stored values: `public.feature_overrides` (migration 0103; `user_id` NULL =
   everyone; who and when on each row, no history). Order: the user's override,
@@ -222,8 +222,9 @@ under `src/` and on a non-pure domain import.
 ## admin/
 
 Hash-routed SPA: the jobs ledger (`Runs`, `RunDetail`) over the `jobs_*`
-contracts, `Users` (`/admin/users`, with each user's feature toggles) and
-`Features` (per feature: the everyone switch and every user's switch). API base URL: `VITE_API_URL` at build time, or a
+contracts, `Users` (`/admin/users`; each user's features are a dropdown, grouped and
+filterable) and `Features` (every feature under its group with the everyone
+switch; `#/features/<key>` shows one feature's users). API base URL: `VITE_API_URL` at build time, or a
 `/config.json` `{ "apiUrl": ... }` mounted into the image at runtime.
 Requests are built with `@shared/contract-request` (the copy is gone).
 

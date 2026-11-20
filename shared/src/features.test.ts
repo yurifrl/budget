@@ -19,15 +19,17 @@ describe('feature list', () => {
     const feature = FEATURES.find((f) => f.key === 'shared-pluggy-key');
     expect(feature).toBeDefined();
     expect(feature!.default).toBe(false);
+    expect(feature!.group).toBe('Banks');
     expect(feature!.description).toContain('shared Pluggy keys');
     expect(featureDefinition('shared-pluggy-key')).toBe(feature!);
   });
 
-  test('every feature has a unique kebab-case key, a description and a boolean default', () => {
+  test('every feature has a unique kebab-case key, a short group, a description and a boolean default', () => {
     expect(new Set(FEATURE_KEYS).size).toBe(FEATURES.length);
     for (const f of FEATURES) {
       expect(f.key).toMatch(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/);
       expect(f.description.trim().length).toBeGreaterThan(10);
+      expect(f.group).toMatch(/^\S.{0,22}\S$/);
       expect(typeof f.default).toBe('boolean');
     }
   });

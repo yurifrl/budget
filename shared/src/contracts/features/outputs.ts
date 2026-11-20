@@ -27,6 +27,8 @@ export type FeatureUserOverride = z.infer<typeof featureUserOverrideSchema>;
 /** A feature from the list in code plus what is stored for it. */
 export const adminFeatureSchema = z.object({
   key: z.string(),
+  /** Short label the admin groups features under. */
+  group: z.string(),
   description: z.string(),
   /** The default in code. */
   default: z.boolean(),

@@ -56,9 +56,10 @@ describe('features contracts', () => {
 
   test('the admin row carries who and when on every stored value', () => {
     const change = { value: true, changed_by: { id: USER, email: 'a@b.test', name: null }, changed_at: '2026-11-20T10:00:00.000Z' };
-    const row = { key: 'shared-pluggy-key', description: 'd', default: false, everyone: change, overrides: [{ ...change, user_id: USER }] };
+    const row = { key: 'shared-pluggy-key', group: 'Banks', description: 'd', default: false, everyone: change, overrides: [{ ...change, user_id: USER }] };
     expect(adminFeatureSchema.parse(row)).toEqual(row);
     expect(adminFeatureSchema.parse({ ...row, everyone: null, overrides: [] }).everyone).toBeNull();
     expect(() => adminFeatureSchema.parse({ ...row, everyone: { value: true } })).toThrow();
+    expect(() => adminFeatureSchema.parse({ ...row, group: undefined })).toThrow();
   });
 });

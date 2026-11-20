@@ -226,8 +226,8 @@ describe('/admin/features', () => {
     const list = await send('GET', '/admin/features', admin.cookie);
     expect(list.status).toBe(200);
     for (const row of list.json) adminFeatureSchema.parse(row);
-    expect(list.json).toEqual(FEATURES.map((f) => ({ key: f.key, description: f.description, default: f.default, everyone: null, overrides: [] })));
-    expect(list.json.find((f: { key: string }) => f.key === KEY)).toMatchObject({ default: false, everyone: null });
+    expect(list.json).toEqual(FEATURES.map((f) => ({ key: f.key, group: f.group, description: f.description, default: f.default, everyone: null, overrides: [] })));
+    expect(list.json.find((f: { key: string }) => f.key === KEY)).toMatchObject({ group: 'Banks', default: false, everyone: null });
   });
 
   dbTest('set and clear the everyone value; the row stores who and when', async () => {
