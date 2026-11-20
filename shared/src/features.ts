@@ -59,11 +59,16 @@ export function featureSource(stored: FeatureStored): FeatureSource {
   return 'default';
 }
 
-/** The one resolution rule: user override, else the everyone value, else the default in code. */
-export function resolveFeature(key: FeatureKey, stored: FeatureStored = {}): boolean {
+/** The one resolution rule: user override, else the everyone value, else the given default. */
+export function resolveFeatureValue(defaultValue: boolean, stored: FeatureStored = {}): boolean {
   if (typeof stored.user === 'boolean') return stored.user;
   if (typeof stored.everyone === 'boolean') return stored.everyone;
-  return featureDefinition(key).default;
+  return defaultValue;
+}
+
+/** A listed feature's value for one person: `resolveFeatureValue` with the default in code. */
+export function resolveFeature(key: FeatureKey, stored: FeatureStored = {}): boolean {
+  return resolveFeatureValue(featureDefinition(key).default, stored);
 }
 
 /** Every feature at its default in code (what a client assumes before the API answered). */

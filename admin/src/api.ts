@@ -1,4 +1,5 @@
 import type { z } from '@shared/zod';
+import { contracts as featureContracts, type AdminFeature } from '@shared/contracts/features';
 import { contracts as jobContracts } from '@shared/contracts/jobs';
 import {
   contracts as userContracts,
@@ -42,7 +43,7 @@ export class ApiError extends Error {
 }
 
 function contract(name: string): OperationContract {
-  const found = [...jobContracts, ...userContracts].find((c) => c.name === name);
+  const found = [...jobContracts, ...userContracts, ...featureContracts].find((c) => c.name === name);
   if (!found) throw new Error(`unknown contract ${name}`);
   return found;
 }
@@ -104,3 +105,12 @@ export const updateUser = (input: { id: string; name?: string | null; role?: 'ad
   call<AdminUser>('user_admin_users_update', input);
 export const resetUserPassword = (id: string) => call<AdminUserWithTempPassword>('user_admin_users_reset_password', { id });
 export const deleteUser = (id: string) => call<null>('user_admin_users_delete', { id });
+
+export type { AdminFeature };
+
+export const listFeatures = () => call<AdminFeature[]>('features_admin_list');
+export const setFeatureEveryone = (key: string, value: boolean) => call<AdminFeature>('features_admin_set_everyone', { key, value });
+export const clearFeatureEveryone = (key: string) => call<AdminFeature>('features_admin_clear_everyone', { key });
+export const setFeatureUser = (key: string, userId: string, value: boolean) =>
+  call<AdminFeature>('features_admin_set_user', { key, user_id: userId, value });
+export const clearFeatureUser = (key: string, userId: string) => call<AdminFeature>('features_admin_clear_user', { key, user_id: userId });

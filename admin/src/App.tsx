@@ -1,5 +1,6 @@
 import { getHealth, loginUrl } from './api';
 import { usePolled, useHashPath } from './hooks';
+import { FeaturesPage } from './pages/Features';
 import { RunDetailPage } from './pages/RunDetail';
 import { RunsPage } from './pages/Runs';
 import { UsersPage } from './pages/Users';
@@ -50,6 +51,8 @@ export function App() {
       )}
       {path.startsWith('/users') ? (
         <UsersPage />
+      ) : path.startsWith('/features') ? (
+        <FeaturesPage path={path} />
       ) : detail ? (
         <RunDetailPage id={detail[1]} uiUrl={health.data?.ui_url ?? null} />
       ) : (
@@ -61,6 +64,7 @@ export function App() {
 
 function Shell({ children, path = '/' }: { children: React.ReactNode; path?: string }) {
   const users = path.startsWith('/users');
+  const features = path.startsWith('/features');
   return (
     <div className="shell">
       <header>
@@ -68,11 +72,14 @@ function Shell({ children, path = '/' }: { children: React.ReactNode; path?: str
           Budget admin
         </a>
         <nav>
-          <a href="#/" className={users ? '' : 'active'}>
+          <a href="#/" className={users || features ? '' : 'active'}>
             Jobs
           </a>
           <a href="#/users" className={users ? 'active' : ''}>
             Users
+          </a>
+          <a href="#/features" className={features ? 'active' : ''}>
+            Features
           </a>
         </nav>
       </header>

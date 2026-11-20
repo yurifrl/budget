@@ -9,6 +9,7 @@ import {
   featureSource,
   isFeatureKey,
   resolveFeature,
+  resolveFeatureValue,
   withFeatureDefaults,
   type FeatureKey,
 } from './features';
@@ -60,6 +61,15 @@ describe('resolveFeature', () => {
     expect(resolveFeature(key, { everyone: false, user: true })).toBe(true);
     expect(resolveFeature(key, { user: true })).toBe(true);
     expect(featureSource({ everyone: true, user: false })).toBe('user');
+  });
+});
+
+describe('resolveFeatureValue', () => {
+  test('same order with any default: user, else everyone, else the default', () => {
+    expect(resolveFeatureValue(true)).toBe(true);
+    expect(resolveFeatureValue(true, { everyone: false })).toBe(false);
+    expect(resolveFeatureValue(true, { everyone: false, user: true })).toBe(true);
+    expect(resolveFeatureValue(false, { user: null, everyone: null })).toBe(false);
   });
 });
 
