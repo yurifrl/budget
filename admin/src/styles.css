@@ -104,3 +104,4 @@ table.feature-list tr.group-row th { background:var(--bg); color:var(--fg); font
 .popover-feature-name { min-width:0; flex:1 1 220px; }
 .popover-feature .feature-toggle { flex:0 0 auto; justify-content:flex-end; max-width:330px; }
 .popover-empty { padding:14px 12px; }
+.popover-feature .feature-toggle > .sub { order:5; flex-basis:100%; text-align:right; }

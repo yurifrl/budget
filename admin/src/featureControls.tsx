@@ -88,12 +88,13 @@ export function UserFeaturesDropdown(props: {
     if (refocus) buttonRef.current?.focus();
   }, []);
 
+  const position = useCallback(() => {
+    const r = buttonRef.current?.getBoundingClientRect();
+    if (r) setPlace(popoverPlacement(r, { width: window.innerWidth, height: window.innerHeight }));
+  }, []);
+
   useEffect(() => {
     if (!open) return;
-    const position = () => {
-      const r = buttonRef.current?.getBoundingClientRect();
-      if (r) setPlace(popoverPlacement(r, { width: window.innerWidth, height: window.innerHeight }));
-    };
     const outside = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) close(false);
     };
@@ -102,7 +103,6 @@ export function UserFeaturesDropdown(props: {
       e.stopPropagation();
       close(true);
     };
-    position();
     filterRef.current?.focus();
     document.addEventListener('mousedown', outside);
     document.addEventListener('keydown', key);
@@ -114,12 +114,13 @@ export function UserFeaturesDropdown(props: {
       window.removeEventListener('resize', position);
       window.removeEventListener('scroll', position, true);
     };
-  }, [open, close]);
+  }, [open, close, position]);
 
   const toggle = () => {
     if (open) return close(false);
     setQ(props.initialFilter ?? '');
-    setPlace(null);
+    // Placed before it renders: a hidden popover could not take the focus.
+    position();
     setOpen(true);
   };
 
@@ -137,14 +138,14 @@ export function UserFeaturesDropdown(props: {
           ▾
         </span>
       </button>
-      {open && (
+      {open && place && (
         <div
           id={listId}
           className="features-popover"
           role="dialog"
           aria-label={`Features for ${user.email}`}
           data-testid={`features-popover-${user.email}`}
-          style={place ? { ...place } : { visibility: 'hidden' }}
+          style={{ ...place }}
         >
           <div className="popover-head">
             <input
