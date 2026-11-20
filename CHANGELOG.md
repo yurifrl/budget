@@ -1,5 +1,24 @@
 # Changelog
 
+## v2026.11.20 2026-11-20 release
+
+### Changed
+
+- release: v2026.11.20
+- chore(repo): add mise tooling config and agent guidance
+- tasks
+- client: password review fixes (older providers answer, token save failures, forbidden message, kept e-mail, real form on web)
+- admin: readable message for 400 invalid_input (reserved e-mail)
+- api: reserve password attempts before verifying, refuse reserved e-mails, review fixes
+- admin: users page polish (in-flight guard, stale notice, table scroll, /me-unresolved lock, network message)
+- client: e-mail + password sign-in, forced new-password step, change password in profile
+- admin: Users page (list, create, edit, disable, delete, reset password) with one-time temp password dialog
+- api: e-mail + password sign-in, Google linking for admin-managed users, /admin/users
+- shared: password sign-in and admin user contracts, password policy
+- wip
+- client: rail layout with title + collapse button on top and a sectioned account menu at the bottom
+
+
 ## v2026.11.18-05 2026-11-18 release
 
 ### Changed
