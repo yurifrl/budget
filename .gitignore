@@ -35,3 +35,6 @@ expo-env.d.ts
 
 # tk worktree pool (also in .git/info/exclude; kept here so clones ignore it too)
 .worktrees/
+
+#
+data/
