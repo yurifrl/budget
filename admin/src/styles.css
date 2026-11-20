@@ -64,3 +64,4 @@ dialog form, .field { display:flex; flex-direction:column; gap:10px; }
 button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
 .secret { display:flex; gap:8px; align-items:center; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; margin:10px 0; }
 .secret code { flex:1; font-size:16px; user-select:all; word-break:break-all; }
+.table-wrap { overflow-x:auto; }

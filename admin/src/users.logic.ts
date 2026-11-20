@@ -63,13 +63,17 @@ export function matchesFilter(u: Pick<AdminUser, 'email' | 'name'>, q: string): 
 
 export interface SelfLimits {
   isSelf: boolean;
-  /** Why disable / demote / delete are off on this row; null when allowed. */
+  /** Disable / demote / delete are off: this is the signed-in admin, or `/me` is unresolved so nobody can be told apart. */
+  locked: boolean;
+  /** Why they are off; null when allowed. */
   hint: string | null;
 }
 export const selfLimits = (u: Pick<AdminUser, 'email'>, meEmail: string | null): SelfLimits => {
-  const isSelf = !!meEmail && u.email.toLowerCase() === meEmail.toLowerCase();
+  if (!meEmail) return { isSelf: false, locked: true, hint: 'Checking who you are: disable and delete stay off until your identity is known.' };
+  const isSelf = u.email.toLowerCase() === meEmail.toLowerCase();
   return {
     isSelf,
+    locked: isSelf,
     hint: isSelf ? 'This is you: you cannot disable, demote or delete your own account.' : null,
   };
 };
@@ -87,6 +91,7 @@ const MESSAGES: Record<string, string> = {
   password_login_disabled: 'Password login is turned off on the server (AUTH_PASSWORD_LOGIN=0).',
 };
 
-export function errorMessage(code: string | undefined, fallback: string): string {
+export function errorMessage(code: string | undefined, fallback: string, status?: number | 'network'): string {
+  if (status === 'network') return 'Cannot reach the API. Check your connection and that the API is running, then retry.';
   return (code && MESSAGES[code]) || fallback;
 }

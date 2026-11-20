@@ -53,8 +53,13 @@ test('filter matches e-mail or name, case-insensitive', () => {
 
 test('selfLimits', () => {
   expect(selfLimits({ email: 'A@b.c' }, 'a@B.c').isSelf).toBe(true);
-  expect(selfLimits({ email: 'a@b.c' }, 'x@y.z')).toEqual({ isSelf: false, hint: null });
-  expect(selfLimits({ email: 'a@b.c' }, null).isSelf).toBe(false);
+  expect(selfLimits({ email: 'A@b.c' }, 'a@B.c').locked).toBe(true);
+  expect(selfLimits({ email: 'a@b.c' }, 'x@y.z')).toEqual({ isSelf: false, locked: false, hint: null });
+  // /me unresolved or failed: every row is locked, with a hint
+  const unknown = selfLimits({ email: 'a@b.c' }, null);
+  expect(unknown.isSelf).toBe(false);
+  expect(unknown.locked).toBe(true);
+  expect(unknown.hint).not.toBeNull();
 });
 
 test('errorMessage maps codes and falls back', () => {
@@ -62,4 +67,6 @@ test('errorMessage maps codes and falls back', () => {
     expect(errorMessage(c, 'raw')).not.toBe('raw');
   expect(errorMessage('weird', 'raw')).toBe('raw');
   expect(errorMessage(undefined, 'raw')).toBe('raw');
+  expect(errorMessage(undefined, 'Failed to fetch', 'network')).toMatch(/^Cannot reach the API/);
+  expect(errorMessage('user_exists', 'raw', 409)).toBe('A user with that e-mail already exists.');
 });

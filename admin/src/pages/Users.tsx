@@ -31,7 +31,7 @@ type Dialog =
   | { kind: 'reset'; user: AdminUser }
   | { kind: 'secret'; result: AdminUserWithTempPassword; reason: 'created' | 'reset' };
 
-const msg = (e: unknown) => (e instanceof ApiError ? errorMessage(e.code, e.message) : String(e));
+const msg = (e: unknown) => (e instanceof ApiError ? errorMessage(e.code, e.message, e.status) : String(e));
 
 export function UsersPage() {
   const users = usePolled(listUsers, [], 15000);
@@ -39,31 +39,45 @@ export function UsersPage() {
   const [q, setQ] = useState('');
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const now = Date.now();
 
   const rows = useMemo(() => (users.data ?? []).filter((u) => matchesFilter(u, q)), [users.data, q]);
   const meEmail = me.data?.email ?? null;
 
   const flip = async (u: AdminUser, patch: { role?: 'admin' | 'user'; status?: 'active' | 'disabled' }) => {
+    if (busy.has(u.id)) return;
     setNotice(null);
+    setBusy((b) => new Set(b).add(u.id));
     try {
       await updateUser({ id: u.id, ...patch });
     } catch (e) {
       setNotice(msg(e));
+    } finally {
+      setBusy((b) => {
+        const n = new Set(b);
+        n.delete(u.id);
+        return n;
+      });
     }
     void users.reload();
+  };
+  const open = (d: Dialog) => {
+    setNotice(null);
+    setDialog(d);
   };
 
   return (
     <>
       <div className="toolbar">
         <input className="grow" placeholder="Filter by e-mail or name" value={q} onChange={(e) => setQ(e.target.value)} />
-        <button className="primary" onClick={() => setDialog({ kind: 'create' })}>
+        <button className="primary" onClick={() => open({ kind: 'create' })}>
           Create user
         </button>
       </div>
       {users.error && <div className="banner error">{msg(users.error)}</div>}
       {notice && <div className="banner error">{notice}</div>}
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -79,7 +93,7 @@ export function UsersPage() {
         </thead>
         <tbody>
           {rows.map((u) => {
-            const { isSelf, hint } = selfLimits(u, meEmail);
+            const { isSelf, locked, hint } = selfLimits(u, meEmail);
             const methods = signInMethods(u);
             const pw = passwordState(u, now);
             const lock = lockLabel(u.locked_until, now);
@@ -110,15 +124,15 @@ export function UsersPage() {
                 </td>
                 <td title={fmt(u.last_seen_at)}>{relativeTime(u.last_seen_at, now)}</td>
                 <td className="row-actions" title={hint ?? undefined}>
-                  <button onClick={() => setDialog({ kind: 'edit', user: u })}>Edit</button>
-                  <button disabled={isSelf} onClick={() => void flip(u, { status: u.status === 'active' ? 'disabled' : 'active' })}>
+                  <button onClick={() => open({ kind: 'edit', user: u })}>Edit</button>
+                  <button disabled={locked || busy.has(u.id)} onClick={() => void flip(u, { status: u.status === 'active' ? 'disabled' : 'active' })}>
                     {u.status === 'active' ? 'Disable' : 'Enable'}
                   </button>
-                  <button onClick={() => setDialog({ kind: 'reset', user: u })}>Reset password</button>
-                  <button className="danger" disabled={isSelf} onClick={() => setDialog({ kind: 'delete', user: u })}>
+                  <button onClick={() => open({ kind: 'reset', user: u })}>Reset password</button>
+                  <button className="danger" disabled={locked} onClick={() => open({ kind: 'delete', user: u })}>
                     Delete
                   </button>
-                  {isSelf && <div className="muted sub">{hint}</div>}
+                  {hint && <div className="muted sub">{hint}</div>}
                 </td>
               </tr>
             );
@@ -132,6 +146,7 @@ export function UsersPage() {
           )}
         </tbody>
       </table>
+      </div>
       {dialog?.kind === 'create' && (
         <CreateDialog
           onClose={() => setDialog(null)}
@@ -144,7 +159,7 @@ export function UsersPage() {
       {dialog?.kind === 'edit' && (
         <EditDialog
           user={dialog.user}
-          isSelf={selfLimits(dialog.user, meEmail).isSelf}
+          locked={selfLimits(dialog.user, meEmail).hint}
           onClose={() => setDialog(null)}
           onDone={() => {
             setDialog(null);
@@ -185,14 +200,14 @@ export function UsersPage() {
   );
 }
 
-/** A modal <dialog>; Escape and the backdrop call onClose. */
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+/** A modal <dialog>. Escape always calls onClose; a backdrop click does only with `backdropClose` (not for forms or the temp password, so nothing is lost by a stray click). */
+function Modal({ title, onClose, backdropClose, children }: { title: string; onClose: () => void; backdropClose?: boolean; children: React.ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
   }, []);
   return (
-    <dialog ref={ref} onClose={onClose} onCancel={onClose}>
+    <dialog ref={ref} onClose={onClose} onCancel={onClose} onClick={(e) => backdropClose && e.target === e.currentTarget && onClose()}>
       <h3>{title}</h3>
       {children}
     </dialog>
@@ -261,7 +276,7 @@ function CreateDialog({ onClose, onDone }: { onClose: () => void; onDone: (r: Ad
   );
 }
 
-function EditDialog({ user, isSelf, onClose, onDone }: { user: AdminUser; isSelf: boolean; onClose: () => void; onDone: () => void }) {
+function EditDialog({ user, locked, onClose, onDone }: { user: AdminUser; locked: string | null; onClose: () => void; onDone: () => void }) {
   const [name, setName] = useState(user.name ?? '');
   const [role, setRole] = useState(user.role);
   const [status, setStatus] = useState(user.status);
@@ -287,19 +302,19 @@ function EditDialog({ user, isSelf, onClose, onDone }: { user: AdminUser; isSelf
         </div>
         <div className="field">
           <label htmlFor="eu-role">Role</label>
-          <select id="eu-role" value={role} disabled={isSelf} onChange={(e) => setRole(e.target.value as 'admin' | 'user')}>
+          <select id="eu-role" value={role} disabled={!!locked} onChange={(e) => setRole(e.target.value as 'admin' | 'user')}>
             <option value="user">user</option>
             <option value="admin">admin</option>
           </select>
         </div>
         <div className="field">
           <label htmlFor="eu-status">Status</label>
-          <select id="eu-status" value={status} disabled={isSelf} onChange={(e) => setStatus(e.target.value as 'active' | 'disabled')}>
+          <select id="eu-status" value={status} disabled={!!locked} onChange={(e) => setStatus(e.target.value as 'active' | 'disabled')}>
             <option value="active">active</option>
             <option value="disabled">disabled</option>
           </select>
         </div>
-        {isSelf && <div className="muted sub">This is you: role and status cannot be changed on your own account.</div>}
+        {locked && <div className="muted sub">Role and status are locked. {locked}</div>}
         {error && <div className="err">{error}</div>}
         <div className="dialog-actions">
           <button type="button" onClick={onClose}>
@@ -325,7 +340,7 @@ function ConfirmDialog(props: {
 }) {
   const { busy, error, submit } = useSubmit(props.run, props.onDone);
   return (
-    <Modal title={props.title} onClose={props.onClose}>
+    <Modal title={props.title} onClose={props.onClose} backdropClose>
       <p>{props.body}</p>
       {error && <div className="err">{error}</div>}
       <div className="dialog-actions">
