@@ -1,5 +1,5 @@
 /**
- * Contract outputs (G9), catalog-level: every budget and connections
+ * Contract outputs (G9), catalog-level: every budget, connections and features
  * operation declares an `output` schema, and every READ operation, called
  * over HTTP on seeded data, answers 200 with a body that parses with it.
  * Lists are seeded so each one validates real rows, never just `[]`.
@@ -18,20 +18,22 @@ import { makeOpCaller } from './core/test-op';
 import { httpOnError } from './core/validate';
 import budget from './budget';
 import connections from './connections';
+import { featuresRoutes } from './features';
 import { setAggregators } from './connections/registry';
 import * as connStore from './connections/store';
 import { syncConnectionTransactions } from './connections/sync';
 import type { AggregatedTransaction, BankAggregator, ExternalAccount } from './connections/types';
-import type { IdentityUser } from './user';
+import { authConfig, configureAuth, type IdentityUser } from './user';
 
-const covered = contracts.filter((c) => c.name.startsWith('budget_') || c.name.startsWith('connections_'));
+const covered = contracts.filter((c) => c.name.startsWith('budget_') || c.name.startsWith('connections_') || c.name.startsWith('features_'));
 const reads = covered.filter((c) => c.kind === 'read' && c.expose.api);
 
 const user: IdentityUser = {
   id: crypto.randomUUID(),
   email: 'catalog-outputs@catalogoutputs.test',
   googleSub: null,
-  role: 'user',
+  // admin: the features admin list is one of the reads below.
+  role: 'admin',
   status: 'active',
 };
 const B = crypto.randomUUID();
@@ -85,6 +87,7 @@ app.use('*', (c, next) => {
 });
 app.route('/connections', connections);
 app.route('/', budget);
+app.route('/', featuresRoutes());
 const op = makeOpCaller(app, contracts);
 
 /** Ids captured while seeding, used to build each read's sample input. */
@@ -96,8 +99,11 @@ async function ok(name: string, input: Record<string, unknown>) {
   return res.json;
 }
 
+let authBefore: ReturnType<typeof authConfig> | null = null;
+
 async function cleanup() {
   await pool.query('DELETE FROM public.budgets WHERE owner_user_id = $1', [user.id]);
+  await pool.query(`DELETE FROM public.feature_overrides WHERE feature_key = 'shared-pluggy-key'`);
   await pool.query('DELETE FROM public.connections WHERE user_id = $1', [user.id]);
   await pool.query(`DELETE FROM public.users WHERE email LIKE '%@catalogoutputs.test'`);
 }
@@ -106,7 +112,10 @@ beforeAll(async () => {
   if (!dbReady) return;
   await cleanup();
   setAggregators({ pluggy: { create: () => aggregator, configured: () => true } });
-  await pool.query(`INSERT INTO public.users (id, email, role) VALUES ($1, $2, 'user')`, [user.id, user.email]);
+  // The harness sets the user with no session principal: the first-party guard of /admin/features passes only with auth off.
+  authBefore = authConfig();
+  configureAuth({ ...authBefore, authDisabled: true });
+  await pool.query(`INSERT INTO public.users (id, email, role) VALUES ($1, $2, 'admin')`, [user.id, user.email]);
   await pool.query(`INSERT INTO budgets (id, name, owner_user_id) VALUES ($1, 'catalog-outputs', $2)`, [B, user.id]);
   await pool.query(`INSERT INTO budget_members (budget_id, user_id) VALUES ($1, $2)`, [B, user.id]);
 
@@ -177,12 +186,17 @@ beforeAll(async () => {
   seeded.connection = conn.id;
   await ok('budget_accounts_update', { id: card.id, budget_id: B, link: { connectionId: conn.id, externalAccountId: EXT_ACC } });
   await syncConnectionTransactions({ userId: user.id, connectionId: conn.id, aggregator, ignoreWatermark: true });
+
+  // Features: a value for everyone and one user override, so the admin list validates real rows.
+  await ok('features_admin_set_everyone', { key: 'shared-pluggy-key', value: true });
+  await ok('features_admin_set_user', { key: 'shared-pluggy-key', user_id: user.id, value: false });
 });
 
 afterAll(async () => {
   if (!dbReady) return;
   setAggregators(null);
   await cleanup();
+  if (authBefore) configureAuth(authBefore);
 });
 
 /** Sample input for every read; a new read operation fails the coverage test until it has one. */
@@ -213,12 +227,14 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     connections_sync_status: {},
     connections_accounts_summary: { id: seeded.connection },
     connections_transactions_list: { id: seeded.connection, accountId: seeded.card },
+    features_mine: {},
+    features_admin_list: {},
   };
   return samples[name];
 }
 
 describe('contract outputs: coverage', () => {
-  test('every budget and connections operation declares an output schema', () => {
+  test('every budget, connections and features operation declares an output schema', () => {
     const missing = covered.filter((c) => !c.output).map((c) => c.name);
     expect(missing).toEqual([]);
     expect(covered.length).toBeGreaterThan(80);

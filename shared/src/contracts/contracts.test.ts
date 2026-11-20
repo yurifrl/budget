@@ -3,12 +3,13 @@ import { describe, expect, test } from 'bun:test';
 import { pathParamNames } from '../operation-contract';
 import { contracts as budget } from './budget';
 import { contracts as connections } from './connections';
+import { contracts as features } from './features';
 import { contracts as jobs } from './jobs';
 import { contracts as oauth } from './oauth';
 import { contracts as rates } from './rates';
 import { contracts as user } from './user';
 
-const all = { budget, connections, jobs, oauth, rates, user };
+const all = { budget, connections, features, jobs, oauth, rates, user };
 
 describe('contract barrels', () => {
   for (const [feature, list] of Object.entries(all)) {

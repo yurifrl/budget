@@ -125,8 +125,12 @@ export async function updateUserFields(
   await db.query(`update public.users set ${sets.join(', ')} where id = $1`, values);
 }
 
-/** Tables that are the user's own credentials, not data: they go with the user. */
-const CREDENTIAL_TABLES = new Set(['public.user_passwords']);
+/**
+ * Tables that are the user's own credentials or settings, not data: they go
+ * with the user. feature_overrides: the user's own overrides cascade away, and
+ * a value the user set as an admin stays with changed_by cleared (0103).
+ */
+const CREDENTIAL_TABLES = new Set(['public.user_passwords', 'public.feature_overrides']);
 
 /**
  * References to a user that are NOT foreign keys (so userReferenceColumns

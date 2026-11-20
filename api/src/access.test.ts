@@ -40,6 +40,7 @@ import { Hono } from 'hono';
 
 import { contracts as budgetContracts } from '@shared/contracts/budget';
 import { contracts as connectionsContracts } from '@shared/contracts/connections';
+import { contracts as featuresContracts } from '@shared/contracts/features';
 import { contracts as jobsContracts } from '@shared/contracts/jobs';
 import { budgetListRowSchema } from '@shared/contracts/budget/outputs';
 import { inputLocations, type OperationContract } from '@shared/operation-contract';
@@ -48,12 +49,13 @@ import { z } from '@shared/zod';
 import budget from './budget';
 import { contracts as catalog } from './catalog';
 import connections from './connections';
+import { featuresRoutes } from './features';
 import jobs from './jobs';
 import { grantsRoutes } from './oauth';
 import { pool } from './core/db';
 import { dbReady } from './core/test-gate';
 import { httpOnError } from './core/validate';
-import type { IdentityUser } from './user';
+import { authConfig, configureAuth, type IdentityUser } from './user';
 
 const mkUser = (tag: string): IdentityUser => ({
   id: crypto.randomUUID(),
@@ -109,6 +111,7 @@ app.route('/', budget);
 app.route('/connections', connections);
 app.route('/jobs', jobs);
 app.route('/', grantsRoutes);
+app.route('/', featuresRoutes());
 
 /** Sample inputs (victim row ids; attacker's budget id) per path-param operation. */
 const samples: Record<string, Record<string, unknown>> = {
@@ -633,6 +636,12 @@ const notBudgetAddressed: Record<string, string> = {
   connections_settings_update: 'app-wide sync window: admin only (403 asserted below)',
   connections_sync_status: "sync state of the caller's own connections",
   connections_upstream_list: "upstream accounts of the caller's own connections",
+  features_admin_clear_everyone: 'feature toggles: admin + first-party session only (403 asserted below)',
+  features_admin_clear_user: 'feature toggles: admin + first-party session only (403 asserted below)',
+  features_admin_list: 'feature toggles: admin + first-party session only (403 asserted below)',
+  features_admin_set_everyone: 'feature toggles: admin + first-party session only (403 asserted below)',
+  features_admin_set_user: 'feature toggles: admin + first-party session only (403 asserted below)',
+  features_mine: "the caller's own feature values, no budget data (asserted below)",
   jobs_cancel_run: 'jobs ledger: admin only (403 asserted below)',
   jobs_get_run: 'jobs ledger: admin only (403 asserted below)',
   jobs_health: 'jobs ledger: admin only (403 asserted below)',
@@ -831,6 +840,50 @@ describe.skipIf(!dbReady)('D: two people, every budget operation', () => {
     for (const c of jobsContracts.filter((op) => op.expose.api)) {
       const input = inputLocations(c).path.length > 0 ? { id: crypto.randomUUID() } : {};
       expect((await app.request(buildRequest(c, input))).status, c.name).toBe(403);
+    }
+  });
+
+  test('features: 403 for an ordinary user on every admin operation; a user reads only their own values', async () => {
+    // The harness sets the user with no session principal, so the first-party
+    // guard passes only with auth off: every 403 below is the admin check.
+    const before = authConfig();
+    configureAuth({ ...before, authDisabled: true });
+    const key = 'shared-pluggy-key';
+    const adminInputs: Record<string, Record<string, unknown>> = {
+      features_admin_list: {},
+      features_admin_set_everyone: { key, value: true },
+      features_admin_clear_everyone: { key },
+      features_admin_set_user: { key, user_id: attacker.id, value: true },
+      features_admin_clear_user: { key, user_id: victim.id },
+    };
+    const adminOps = featuresContracts.filter((c) => c.name !== 'features_mine');
+    const stored = async () => (await pool.query('SELECT user_id, value FROM public.feature_overrides WHERE feature_key = $1 ORDER BY user_id NULLS FIRST', [key])).rows;
+    try {
+      expect(adminOps.map((c) => c.name).sort()).toEqual(Object.keys(adminInputs).sort());
+      await pool.query('DELETE FROM public.feature_overrides WHERE feature_key = $1', [key]);
+      // The operator (admin role) turns the feature on for the victim only.
+      acting = operator;
+      expect((await send('features_admin_list', {})).status).toBe(200);
+      expect((await send('features_admin_set_user', { key, user_id: victim.id, value: true })).status).toBe(200);
+      const expected = [{ user_id: victim.id, value: true }];
+      expect(await stored()).toEqual(expected);
+
+      for (const who of [attacker, victim]) {
+        acting = who;
+        for (const c of adminOps) expect((await app.request(buildRequest(c, adminInputs[c.name]!))).status, `${c.name} as ${who.email}`).toBe(403);
+      }
+      // No refused write changed anything: the attacker gave themself nothing and took nothing from the victim.
+      expect(await stored()).toEqual(expected);
+
+      acting = attacker;
+      const mine = await send('features_mine', {});
+      expect(mine.status).toBe(200);
+      expect(await mine.json()).toEqual({ features: { [key]: false } });
+      acting = victim;
+      expect(await (await send('features_mine', {})).json()).toEqual({ features: { [key]: true } });
+    } finally {
+      await pool.query('DELETE FROM public.feature_overrides WHERE feature_key = $1', [key]);
+      configureAuth(before);
     }
   });
 

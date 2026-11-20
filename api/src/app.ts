@@ -8,14 +8,15 @@
  *  - Pre-gate: auth routes + the two agent-client sinks that do their own
  *    auth (channel config, connections webhook).
  *  - `authMiddleware` + `requireUser` gate everything mounted after them.
- *  - Post-gate: budget (its routers carry their own prefixes), rates,
- *    connections routes, jobs admin.
+ *  - Post-gate: features, budget (its routers carry their own prefixes),
+ *    rates, connections routes, jobs admin.
  */
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
 import budget from './budget';
 import connections, { webhook as connectionsWebhook } from './connections';
+import { featuresRoutes } from './features';
 import { contracts } from './catalog';
 import { createMcpRouter } from './mcp/index';
 import { createOAuthRouter, grantsRoutes, type OAuthConfig } from './oauth';
@@ -114,6 +115,9 @@ export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssu
   // Change password (first-party session) and admin user management.
   app.route('/', passwordChangeRoutes({ trustedOrigins }));
   app.route('/', adminUsersRoutes({ trustedOrigins }));
+
+  // Features: the caller's own values (/features) and the admin toggles (/admin/features).
+  app.route('/', featuresRoutes({ trustedOrigins }));
 
   // Connected apps (OAuth grants of the caller)
   app.route('/', grantsRoutes);
