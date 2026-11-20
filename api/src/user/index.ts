@@ -3,6 +3,8 @@ export { requireUser, requireAdmin, requireUserId, rejectUnlessActiveSession, re
 export { admitSession, admitGrant, resolvePrincipalUser } from './session-gate';
 export { passwordChangeRoutes } from './password-routes';
 export { adminUsersRoutes } from './admin-users-routes';
+export { noStore, originGuard } from './request-guards';
+export type { TrustedOrigins } from './request-guards';
 export { authDisabled, serviceTokenMatches } from './authz';
 export type { IdentityUser } from './types';
 export { accessPrincipal, cookieSessionUser, apiBaseUrl, oauthResourceUrl, isAllowed, authMiddleware, mountAuthRoutes } from './authz';

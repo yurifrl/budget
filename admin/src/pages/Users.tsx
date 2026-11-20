@@ -5,12 +5,14 @@ import {
   createUser,
   deleteUser,
   getMe,
+  listFeatures,
   listUsers,
   resetUserPassword,
   updateUser,
   type AdminUser,
   type AdminUserWithTempPassword,
 } from '../api';
+import { UserFeaturesDropdown } from '../featureControls';
 import { usePolled } from '../hooks';
 import { fmt } from '../badge';
 import {
@@ -36,6 +38,7 @@ const msg = (e: unknown) => (e instanceof ApiError ? errorMessage(e.code, e.mess
 export function UsersPage() {
   const users = usePolled(listUsers, [], 15000);
   const me = usePolled(getMe, [], 60000);
+  const features = usePolled(listFeatures, [], 15000);
   const [q, setQ] = useState('');
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -76,6 +79,7 @@ export function UsersPage() {
         </button>
       </div>
       {users.error && <div className="banner error">{msg(users.error)}</div>}
+      {features.error && <div className="banner error">Features: {msg(features.error)}</div>}
       {notice && <div className="banner error">{notice}</div>}
       <div className="table-wrap">
       <table>
@@ -88,6 +92,7 @@ export function UsersPage() {
             <th>Sign-in</th>
             <th>Password</th>
             <th>Last seen</th>
+            <th>Features</th>
             <th />
           </tr>
         </thead>
@@ -123,6 +128,9 @@ export function UsersPage() {
                   {lock && <div className="err sub">{lock}</div>}
                 </td>
                 <td title={fmt(u.last_seen_at)}>{relativeTime(u.last_seen_at, now)}</td>
+                <td>
+                  <UserFeaturesDropdown user={u} features={features.data} reload={features.reload} />
+                </td>
                 <td className="row-actions" title={hint ?? undefined}>
                   <button onClick={() => open({ kind: 'edit', user: u })}>Edit</button>
                   <button disabled={locked || busy.has(u.id)} onClick={() => void flip(u, { status: u.status === 'active' ? 'disabled' : 'active' })}>
@@ -139,7 +147,7 @@ export function UsersPage() {
           })}
           {users.data && rows.length === 0 && (
             <tr>
-              <td colSpan={8} className="muted">
+              <td colSpan={9} className="muted">
                 {users.data.length === 0 ? 'No users.' : 'No user matches the filter.'}
               </td>
             </tr>

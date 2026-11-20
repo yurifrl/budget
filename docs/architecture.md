@@ -25,11 +25,12 @@ first. Details and trade-offs: `docs/decisions.md`.
 ## shared/
 
 `src/operation-contract.ts` (the contract type, `defineOperation`,
-`inputLocations`, `OperationOutput`), `src/contracts/{budget,connections,rates,user,oauth,jobs}`
+`inputLocations`, `OperationOutput`), `src/contracts/{budget,connections,features,rates,user,oauth,jobs}`
 (one operation contract per endpoint: method, path, zod input and output;
 budget and connections keep their response row schemas in `outputs.ts`),
 `src/contract-request.ts` (the request builder every client uses),
-`src/errors.ts` (`{ error, code }`), `src/domain/{payees,transfers}` (pure
+`src/errors.ts` (`{ error, code }`), `src/features.ts` (the typed feature
+list and its resolution rule), `src/domain/{payees,transfers}` (pure
 logic both sides need), `src/validation.ts` (uuid, dates, `milliunitsSchema`,
 `currencyCodeSchema`, `MONEY_UNIT_RULE`), `src/zod.ts`. Lint: only zod, no
 React, hono or pg. Wire rules: every amount is integer milliunits with no
@@ -40,7 +41,7 @@ unit suffix (phase 5d); see `shared/README.md`.
 Entrypoints in `src/`: `index.ts` (HTTP), `worker.ts` (Temporal worker +
 outbox relay), `cli.ts`, `mcp.ts` (stdio). Features: `core` (db, migrate,
 operation helpers), `user`, `oauth`, `mcp`, `cli`, `jobs`, `budget`,
-`connections`, `rates`. `catalog.ts` lists every shared contract; the CLI and
+`connections`, `rates`, `features`. `catalog.ts` lists every shared contract; the CLI and
 MCP tools are generated from it. `core` imports no feature; a feature imports
 another only through its `index.ts` (the remaining seams are the Temporal
 workflow-bundle ones, listed in `decisions.md`). Postgres schema:
@@ -113,6 +114,19 @@ start at `0100`). One image runs both the API and the worker
   `src/access.test.ts` classifies every catalog operation, drives each
   path-param and `budget_id` operation as a non-member (and as a non-member
   admin) and expects 404, then shares the budget and expects the reads to open.
+- **Features.** On/off switches for everyone or for one person. The list is
+  code (`shared/src/features.ts`: key, group, description, default); nothing creates
+  a feature at runtime and a stored key that is no longer listed is ignored.
+  Stored values: `public.feature_overrides` (migration 0103; `user_id` NULL =
+  everyone; who and when on each row, no history). Order: the user's override,
+  else the everyone value, else the default. The API enforces with
+  `isEnabled(db, feature, userId)` from the `features` barrel, called in
+  handlers and Temporal activities only (never a workflow file) and reading
+  the database on every check. `GET /features` gives a signed-in user their
+  own values (client: `useFeatures()` in `state/useFeatures.ts`, refetched on
+  focus, show/hide only); `/admin/features` (admin + first-party session)
+  sets and clears them. Never called "flags": in the client a flag is a
+  transaction colour.
 - **Repeat-rule tick.** Still an in-process interval in the API
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.
@@ -207,8 +221,10 @@ under `src/` and on a non-pure domain import.
 
 ## admin/
 
-Hash-routed SPA (`Runs`, `RunDetail`) over the `jobs_*` contracts from
-`@shared/contracts/jobs`. API base URL: `VITE_API_URL` at build time, or a
+Hash-routed SPA: the jobs ledger (`Runs`, `RunDetail`) over the `jobs_*`
+contracts, `Users` (`/admin/users`; each user's features are a dropdown, grouped and
+filterable) and `Features` (every feature under its group with the everyone
+switch; `#/features/<key>` shows one feature's users). API base URL: `VITE_API_URL` at build time, or a
 `/config.json` `{ "apiUrl": ... }` mounted into the image at runtime.
 Requests are built with `@shared/contract-request` (the copy is gone).
 

@@ -28,6 +28,7 @@ describe('contracts catalog', () => {
     const features = await Promise.all([
       import('./budget'),
       import('./connections'),
+      import('./features'),
       import('./jobs'),
       import('./oauth'),
       import('./rates'),
