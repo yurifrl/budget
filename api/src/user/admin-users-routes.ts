@@ -20,7 +20,9 @@ import {
 } from '@shared/contracts/user/admin-users';
 import { ADMIN_REFUSAL_MESSAGES, adminChangeRefusal } from './admin-guards';
 import {
+  actorStillAdmin,
   getManagedUser,
+  isReservedEmail,
   insertUser,
   listManagedUsers,
   lockAdminGuard,
@@ -52,6 +54,11 @@ function requirePasswordLogin(): void {
   if (!passwordLoginEnabled()) throw new HttpError(409, 'password sign-in is turned off', 'password_login_disabled');
 }
 
+/** Inside the transaction: the caller must still be an active admin (403 otherwise). */
+async function recheckActor(tx: Parameters<typeof actorStillAdmin>[0], actorId: string): Promise<void> {
+  if (!(await actorStillAdmin(tx, actorId))) throw new HttpError(403, 'forbidden');
+}
+
 const tempExpiry = () => new Date(Date.now() + TEMP_PASSWORD_TTL_DAYS * 86_400_000);
 
 async function mustGet(id: string): Promise<AdminUser> {
@@ -65,9 +72,15 @@ export const operations: readonly AnyOperation[] = [
 
   implement(adminUsersCreate, async (c, { email, name, role }) => {
     requirePasswordLogin();
+    // The service and dev rows are the app's own: an admin can never create
+    // them (the service token resolves to the service row by e-mail).
+    if (isReservedEmail(email)) throw new HttpError(400, 'this e-mail is reserved', 'invalid_input');
+    const me = actor(c);
     const temp = generateTempPassword();
     const hash = await hashPassword(temp);
     const id = await withTransaction(pool, async (tx) => {
+      await lockAdminGuard(tx);
+      await recheckActor(tx, me.id);
       const newId = await insertUser(tx, email, name ?? null, role ?? 'user');
       if (!newId) return null;
       await setPassword(tx, newId, hash, { mustChange: true, tempExpiresAt: tempExpiry() });
@@ -83,6 +96,7 @@ export const operations: readonly AnyOperation[] = [
     const me = actor(c);
     const changed = await withTransaction(pool, async (tx) => {
       await lockAdminGuard(tx);
+      await recheckActor(tx, me.id);
       const target = await getManagedUser(tx, id, true);
       if (!target) throw notFound();
       const refusal = adminChangeRefusal({
@@ -107,14 +121,19 @@ export const operations: readonly AnyOperation[] = [
 
   implement(adminUsersResetPassword, async (c, { id }) => {
     requirePasswordLogin();
-    const target = await mustGet(id);
+    const me = actor(c);
     const temp = generateTempPassword();
     const hash = await hashPassword(temp);
-    await withTransaction(pool, async (tx) => {
+    const target = await withTransaction(pool, async (tx) => {
+      await lockAdminGuard(tx);
+      await recheckActor(tx, me.id);
+      const t = await getManagedUser(tx, id, true);
+      if (!t) throw notFound();
       // Bumps session_version: every password session of the user ends.
       await setPassword(tx, id, hash, { mustChange: true, tempExpiresAt: tempExpiry() });
       await revokePasswordGrants(tx, id);
-      await clearThrottle(tx, target.email);
+      await clearThrottle(tx, t.email);
+      return t;
     });
     audit(c, 'reset_password', target.email);
     return { user: await mustGet(id), temp_password: temp };
@@ -124,6 +143,8 @@ export const operations: readonly AnyOperation[] = [
     const me = actor(c);
     const email = await withTransaction(pool, async (tx) => {
       await lockAdminGuard(tx);
+      await recheckActor(tx, me.id);
+      // Locks the row: referencing inserts wait, then fail, never cascade away unseen.
       const target = await getManagedUser(tx, id, true);
       if (!target) throw notFound();
       const refusal = adminChangeRefusal({ actorId: me.id, target, change: 'delete', otherActiveAdmins: await otherActiveAdmins(tx, id) });

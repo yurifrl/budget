@@ -1623,8 +1623,19 @@ last_seen_at, created_at`. `GET /auth/providers` gained `password`; `/me`
   referencing the user other than `user_passwords`: budgets, memberships,
   accounts, avatars, OAuth grants...; disable instead),
   `password_login_disabled` (create and reset while `AUTH_PASSWORD_LOGIN=0`).
-  Role/status/delete run under an advisory lock so two admins cannot demote
-  each other to zero. Every action logs one JSON line
+  Create, update, reset and delete run in one transaction under an advisory
+  lock and re-read the caller inside it (still an active admin, else 403), so
+  two admins cannot demote each other to zero and a request in flight from an
+  admin just demoted or disabled does not complete. Create refuses the
+  reserved e-mails (`svc-budget-mcp@syscd.local`, `dev@localhost`) with 400
+  `invalid_input` before any insert; the other operations answer 404 for those
+  rows. Delete locks the user row, then checks every foreign key to users
+  (except `user_passwords`) and the non-FK reference `jobs.job_runs.requested_by`
+  (`user:<id>` / `admin:<id>`), then deletes, in the same transaction; a
+  referencing insert racing it waits for the row lock and then fails its FK
+  check instead of being cascaded away. `last_admin` is effectively a
+  defence in depth: the in-transaction check makes the caller an active admin,
+  so the last one can only be the caller, who hits `cannot_modify_self`. Every action logs one JSON line
   (`event: admin_user_action`, actor, action, target, changed fields).
 
 ### Rules
@@ -1635,17 +1646,30 @@ last_seen_at, created_at`. `GET /auth/providers` gained `password`; `/me`
 - Temporary passwords: server-generated, 20 symbols from a 31-letter alphabet
   without look-alikes in four groups (`abcde-fghjk-mnpqr-stuvw`, about 99
   bits), stored hashed, expire after 7 days, force a change, returned once.
-- Throttle per normalised e-mail (unknown e-mails too): after 5 consecutive
-  failures the e-mail is locked 1 minute, each further failure doubles it up
-  to 15 minutes; the lock is checked before any verification. Success,
-  completion and admin reset clear it; rows idle for a day are pruned. Per
-  client address (CF-Connecting-IP, else the socket): at most 30 failures per
-  15 minutes per process (in memory).
+- Throttle per normalised e-mail (unknown e-mails too): every attempt is
+  RESERVED before any verification (`reserveAttempt`: one transaction that
+  row-locks the e-mail's `auth_login_throttle` row, refuses while it is
+  locked, otherwise counts the attempt). The 5th consecutive attempt starts a
+  1-minute lock itself, and each later admitted attempt (one per lock window)
+  doubles it, up to 15 minutes. So at most 5 argon2 verifications run before
+  the first lock and one per window after it, whatever the concurrency; a
+  refused attempt is a 429 with `Retry-After` and runs no argon2. A correct
+  password (also a correct temporary one, or the correct current password at
+  change) and an admin reset clear the count; rows idle for a day are pruned.
+  The same budget guards `/auth/password/change` (keyed by the caller's
+  e-mail). `/auth/password/complete` has only the address budget: its
+  credential is the signed, single-use, 10-minute change token, not a guess.
+- Per client address (CF-Connecting-IP, else the socket): at most 30
+  attempts (not only failures) per 15 minutes per process, reserved before
+  verification (in memory, synchronous, so atomic within a process).
 - Origin: login, complete, change and every `/admin/users` route refuse an
-  Origin header that is not in the CORS list built in `app.ts` (app origin,
-  `ADMIN_ORIGIN`, local dev origins; `http://localhost:5191`, the admin dev
-  server, was added to that list). The cookie is SameSite=Lax on the parent
-  domain, so a sibling subdomain would otherwise be same-site.
+  Origin header outside the trusted list built in `app.ts`: the app origin and
+  `ADMIN_ORIGIN`, plus the fixed localhost dev origins only when the app
+  origin itself is localhost (local dev). The CORS list is unchanged apart
+  from `http://localhost:5191` (the admin dev server) and now exposes
+  `Retry-After`. The cookie is SameSite=Lax on the parent domain, so a sibling
+  subdomain would otherwise be same-site. Login, complete and change also
+  require the media type `application/json` exactly (parameters ignored).
 - Changing a password (self or reset) bumps `session_version` (ends the
   user's other password sessions), revokes grants approved from a password
   session, and re-issues the caller's password session (cookie, or `token` in
@@ -1655,6 +1679,26 @@ last_seen_at, created_at`. `GET /auth/providers` gained `password`; `/me`
   value refuses to boot). Password login is never on with auth disabled.
   It does not count as a sign-in provider for the boot check: the first admin
   still comes from Access or Google.
+
+### Migration probe
+
+`MIGRATION_SIGNATURES` now accepts a list of probes (all must exist); 0102
+probes both `public.user_passwords` and `public.auth_login_throttle`.
+
+### Known limits
+
+- Anyone who knows an e-mail can keep it locked by sending a wrong password
+  once per lock window (at most 15 minutes at a time, by design). Only time
+  or an admin reset unlocks it; Google and Access sign-in are unaffected.
+- The per-address limit trusts `CF-Connecting-IP`. Behind Cloudflare that is
+  the client; a request reaching the API directly can set it to anything, so
+  the per-e-mail budget is the real bound. The limit is per process (several
+  replicas each allow 30).
+- Deleting a user and recreating one with the same e-mail at the same moment
+  as a sign-in can race (rated low risk in review): a sign-in resolving the
+  old row may fail with 401 and must be retried. A managed Google session
+  admitted just before its row is deleted is resolved through the
+  create-on-resolve path of Google sessions and could recreate a plain row.
 
 ### Out of scope
 
