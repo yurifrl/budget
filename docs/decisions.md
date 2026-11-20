@@ -1706,3 +1706,102 @@ Password recovery, e-mail sending, self sign-up, MFA, changing an e-mail,
 users setting a first password themselves. The OAuth consent page still
 sends a signed-out browser to Access or Google (a password user signs in on
 the web app first; the cookie is shared).
+
+## Own Pluggy keys (budget-lqi, 2026-11-20)
+
+The owner's decisions are in the task: own keys by default, the shared keys
+only with feature `shared-pluggy-key`, one own key set per user, own keys win,
+feature off pauses (never deletes) shared-key connections, own-key connections
+get no webhooks, secrets encrypted by the API with a master key from the
+environment. What follows are the choices the task did not dictate.
+
+### Storage and encryption
+
+- `public.connection_credentials` (migration 0104), primary key
+  `(user_id, provider)`: one own key set per user (and per provider, so a
+  second aggregator needs no new table). `client_id` is plain: it is shown
+  back to the user and handed to the connect widget. The secret is
+  `secret_ciphertext` + `secret_nonce` + `key_version`.
+- `core/secret-box.ts`: WebCrypto AES-256-GCM, a random 96-bit nonce per
+  value, and `connection_credentials:<user>:<provider>` as additional
+  authenticated data, so a ciphertext copied onto another user's row does not
+  decrypt. `key_version` is stamped (1 today); the box already opens by
+  version from a keyring, so rotation later is "configure two keys, re-seal,
+  drop the old one" with no schema change. Only one env var exists today.
+- `CREDENTIALS_ENCRYPTION_KEY`: 32 bytes, base64 or hex. `secrets-env.ts`
+  (API and worker): missing in a cluster = boot fails; missing locally = boot
+  continues and saving or using own keys answers 503
+  `credentials_key_missing`; set but malformed = boot fails everywhere.
+  Changing the key makes stored secrets unreadable (the user saves again);
+  nothing else is lost, since the connection rows keep their client id.
+
+### Which key set
+
+- `connections.key_source` ('shared' | 'own', default 'shared' = the backfill)
+  and `connections.key_client_id` (the own client id the item was created
+  with). The client id is recorded because "one own key set per user" can be
+  REPLACED by another application's keys, and the old items are then
+  unreachable: without it a sync would fail with a provider 404 and mark the
+  bank broken instead of saying which keys are missing.
+- New connection: own if saved, else shared if the feature is on, else 403
+  `own_keys_required`. Existing connection (sync, sweep, upstream, re-auth
+  connect-token, re-register, delete): always the recorded key set. Adding own
+  keys does not move a shared-key connection: Pluggy has no item transfer, so
+  the person connects that bank again.
+- The feature gates connecting and syncing, not cleanup: deleting a paused
+  shared-key connection still removes the item upstream with the shared keys.
+  An own-key connection whose keys are gone is disconnected locally only.
+- The port gained `verifyCredentials()` and the registry entry
+  `create(credentials?)`; `getAggregator(provider)` with no credentials is the
+  shared-key adapter exactly as before, so `webhook.ts` is untouched.
+- Own keys run on the installation's `PLUGGY_BASE_URL` / `PLUGGY_SANDBOX` and
+  never on `PLUGGY_ITEM_IDS`. Blank values of those count as unset for own
+  keys only (`loadPluggyOwnConfig`): the 1Password item leaves `PLUGGY_*`
+  empty and own keys must work then. The shared loader still takes blanks
+  literally (budget-hd3, not fixed here).
+
+### Paused
+
+- New `connections.status` value `paused` (the column is free text) with a
+  `status_message` per key set (`PAUSE_MESSAGES`), and sync state `paused`.
+- Evaluated at use time, not on the admin toggle: `reconcileKeyAccess(db,
+  userId)` (one feature read, two idempotent updates) runs in the sync
+  activity, the sweep check, connect-token, upstream, the lists, get, sync
+  status and sync/reimport requests. Paused rows stay in the sweep's list, so
+  the 6-hourly sweep both pauses (feature turned off, nobody opened the app)
+  and resumes (and then enqueues a sync whatever the watermark says). A
+  paused connection never reaches the provider: the sync run succeeds with
+  `skipped: 'paused'`, a manual sync is 409 `connection_paused`.
+- Resume sets `connected`; the next sync or sweep re-reads the item's real
+  state (it may turn `unauthorized` again).
+- The same mechanism pauses own-key connections when their key set is deleted
+  or replaced, and resumes them when the same client id is saved again.
+
+### Webhooks
+
+`connect-token` never sent a `webhookUrl` (shared-key items get their events
+through the URL set once in the shared application's dashboard), so "own-key
+connections pass no webhookUrl" was already true; it is now stated in the
+handler and pinned by a test. A person who sets a webhook in their own Pluggy
+dashboard would need the shared secret, which they do not have.
+
+### Migration 0104 and the old app
+
+- Turns the feature on (`feature_overrides`, value true, `on conflict do
+  nothing`) for every user with a shared-key connection, in any status: all
+  connections before this migration were created with the shared keys. A
+  re-run never overrides a value an admin set.
+- syscd-app shares the database: it names none of the new objects, its
+  inserts get `key_source = 'shared'`, and its sweep reads only
+  `status = 'connected'`, so it leaves paused rows alone. Two limits while it
+  still runs: it does not know the feature (its worker keeps syncing a
+  shared-key connection until this API pauses it), and its sweep will ask the
+  shared application about own-key items (the provider answers not found;
+  counted as a sweep error, no status change).
+
+### Out of scope
+
+The client screen for own keys (the next task; the client only got the
+`paused` labels so existing screens keep working), admin changes, a rate-limit
+queue per credential, key rotation tooling.
+

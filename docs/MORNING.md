@@ -86,6 +86,7 @@ boots** (see section 3). The API keeps crash-looping until 2.2, by design.
 | `PLUGGY_WEBHOOK_SECRET` | the shared secret Pluggy sends | `syscd-app` `PLUGGY_WEBHOOK_SECRET` |
 | `PLUGGY_ITEM_IDS` | optional | `syscd-app` `PLUGGY_ITEM_IDS` if set; empty is fine |
 | `OT_SERVICE_TOKEN` | optional machine bearer token; empty disables that lane | leave empty, or a new random value of 48+ characters |
+| `CREDENTIALS_ENCRYPTION_KEY` | **required** (budget-api and budget-worker refuse to boot without it): master key that encrypts users' own Pluggy secrets. The script generates it for a new item; an item created before this field existed needs it added by hand | new value: `openssl rand -base64 32`. Never reuse another secret; never change it afterwards (stored secrets become unreadable and users must save their keys again) |
 
 Do not add a `CLIENT_USER_ID` field unless you want a value other than
 `syscd-app`: the API takes an empty value literally instead of falling back to
