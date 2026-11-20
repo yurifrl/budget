@@ -31,15 +31,14 @@ import {
 import {
   clearThrottle,
   findPasswordAccount,
-  lockedUntil,
-  recordFailure,
   replacePasswordIfVersion,
+  reserveAttempt,
   revokePasswordGrants,
   stampSignIn,
 } from './password-store';
 import { clientAddress, noStore, originGuard, requireJsonBody, type TrustedOrigins } from './request-guards';
 import { mintSessionToken, setSessionCookie } from './session-cookie';
-import { ipRetryAfter, recordIpFailure, retryAfterSeconds } from './throttle';
+import { reserveIpAttempt, retryAfterSeconds } from './throttle';
 
 export interface PasswordRouteOptions {
   /** Browser origins allowed to call these routes (the CORS list). */
@@ -76,24 +75,29 @@ async function signIn(c: Context, email: string, version: number, delivery: Sess
   return { status: 'signed_in' as const, email };
 }
 
-async function failedAttempt(c: Context, email: string): Promise<never> {
-  await recordFailure(pool, email);
-  recordIpFailure(clientAddress(c));
-  throw invalidCredentials();
+/**
+ * Reserve the attempt (address, then e-mail) BEFORE any verification; a
+ * refusal is a 429 and runs no argon2 at all. Returns the 429 or null.
+ */
+async function reserve(c: Context, email: string | null): Promise<Response | null> {
+  const ipWait = reserveIpAttempt(clientAddress(c));
+  if (ipWait > 0) return tooManyAttempts(c, ipWait);
+  if (email === null) return null;
+  const r = await reserveAttempt(pool, email);
+  return r.allowed ? null : tooManyAttempts(c, Math.max(1, retryAfterSeconds(r.lockedUntil)));
 }
 
 export const passwordSignInOperations: readonly AnyOperation[] = [
   implement(authPasswordLogin, async (c, { email, password, session }) => {
-    const ipWait = ipRetryAfter(clientAddress(c));
-    if (ipWait > 0) return tooManyAttempts(c, ipWait);
-    // Locked = 429 BEFORE any verification (unknown e-mails lock the same way).
-    const wait = retryAfterSeconds(await lockedUntil(pool, email));
-    if (wait > 0) return tooManyAttempts(c, wait);
+    // Unknown e-mails are reserved and locked exactly like real ones.
+    const refused = await reserve(c, email);
+    if (refused) return refused;
 
     const account = await findPasswordAccount(pool, email);
-    // Exactly one argon2 verification on every path (dummy when nothing to check).
+    // Exactly one argon2 verification on every admitted path (dummy when nothing to check).
     const ok = account?.password ? await verifyPassword(password, account.password.hash) : await verifyDummy(password);
-    if (!ok || !account?.password || account.status !== 'active') return failedAttempt(c, email);
+    // The attempt is already counted: a failure writes nothing more.
+    if (!ok || !account?.password || account.status !== 'active') throw invalidCredentials();
 
     const pw = account.password;
     if (pw.mustChange) {
@@ -115,12 +119,11 @@ export const passwordSignInOperations: readonly AnyOperation[] = [
   }),
 
   implement(authPasswordComplete, async (c, { change_token, new_password, session }) => {
-    const ipWait = ipRetryAfter(clientAddress(c));
-    if (ipWait > 0) return tooManyAttempts(c, ipWait);
-    const invalidToken = () => {
-      recordIpFailure(clientAddress(c));
-      return new HttpError(401, 'sign-in expired, start again', 'invalid_change_token');
-    };
+    // The change token is the credential (signed, 10 minutes, single use), so
+    // only the address budget applies here; it is reserved before any argon2.
+    const refused = await reserve(c, null);
+    if (refused) return refused;
+    const invalidToken = () => new HttpError(401, 'sign-in expired, start again', 'invalid_change_token');
     const claims = await verifyChangeToken(change_token);
     if (!claims) throw invalidToken();
     const account = await findPasswordAccount(pool, claims.email);
@@ -152,22 +155,21 @@ export const passwordChangeOperations: readonly AnyOperation[] = [
     const user = c.get('user');
     const principal = c.get('principal');
     if (!user || !principal) throw new HttpError(403, 'forbidden');
-    const ipWait = ipRetryAfter(clientAddress(c));
-    if (ipWait > 0) return tooManyAttempts(c, ipWait);
-    const wait = retryAfterSeconds(await lockedUntil(pool, user.email));
-    if (wait > 0) return tooManyAttempts(c, wait);
-
     const account = await findPasswordAccount(pool, user.email);
     const pw = account?.password;
     if (!account || !pw) throw new HttpError(400, 'this account has no password', 'no_password');
-    if (!(await verifyPassword(current_password, pw.hash))) return failedAttempt(c, user.email);
+    // Same budget as login, reserved before verifying the current password.
+    const refused = await reserve(c, account.email);
+    if (refused) return refused;
+    if (!(await verifyPassword(current_password, pw.hash))) throw invalidCredentials();
+    // The current password was right: forget the count before the policy check.
+    await clearThrottle(pool, account.email);
     await checkNewPassword(new_password, account.email, pw.hash);
     const hash = await hashPassword(new_password);
     const version = await withTransaction(pool, async (tx) => {
       const v = await replacePasswordIfVersion(tx, account.userId, pw.version, hash, false);
       if (v === null) return null;
       await revokePasswordGrants(tx, account.userId);
-      await clearThrottle(tx, account.email);
       return v;
     });
     if (version === null) throw new HttpError(409, 'the password changed meanwhile, try again', 'conflict');

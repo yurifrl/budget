@@ -9,8 +9,10 @@ import type { AdminUser } from '@shared/contracts/user/admin-users';
 import { SVC_EMAIL, userReferenceColumns } from './store';
 import type { IdentityRole, IdentityStatus } from './types';
 
-/** E-mails of rows the app creates for itself; never manageable. */
+/** E-mails of rows the app creates for itself; never manageable, never creatable by an admin. */
 export const SYNTHETIC_EMAILS: readonly string[] = [SVC_EMAIL, 'dev@localhost'];
+
+export const isReservedEmail = (email: string): boolean => SYNTHETIC_EMAILS.includes(email.toLowerCase().trim());
 
 // Advisory-lock key serialising admin role/status/delete changes, so two
 // admins demoting each other at once cannot leave zero active admins.
@@ -85,6 +87,19 @@ export async function lockAdminGuard(db: Queryable): Promise<void> {
   await db.query('select pg_advisory_xact_lock($1)', [ADMIN_GUARD_LOCK_KEY]);
 }
 
+/**
+ * Is the acting admin still an active admin? Read inside the caller's
+ * transaction (after lockAdminGuard), so an admin demoted or disabled while
+ * their request was in flight cannot finish a change.
+ */
+export async function actorStillAdmin(db: Queryable, actorId: string): Promise<boolean> {
+  const { rows } = await db.query<{ ok: boolean }>(
+    `select (role = 'admin' and status = 'active') as ok from public.users where id = $1 for share`,
+    [actorId],
+  );
+  return rows[0]?.ok === true;
+}
+
 /** Active admins other than `exceptId`. */
 export async function otherActiveAdmins(db: Queryable, exceptId: string): Promise<number> {
   const { rows } = await db.query<{ n: number }>(
@@ -113,9 +128,29 @@ export async function updateUserFields(
 /** Tables that are the user's own credentials, not data: they go with the user. */
 const CREDENTIAL_TABLES = new Set(['public.user_passwords']);
 
-/** Tables (other than credentials) holding rows that reference the user. */
+/**
+ * References to a user that are NOT foreign keys (so userReferenceColumns
+ * cannot find them): the jobs ledger records who asked for a run as
+ * `user:<id>` / `admin:<id>` text.
+ */
+const NON_FK_REFERENCES: ReadonlyArray<{ table: string; where: string }> = [
+  { table: 'jobs.job_runs', where: `requested_by in ('user:' || $1::text, 'admin:' || $1::text)` },
+];
+
+/**
+ * Tables (other than credentials) holding rows that reference the user, by
+ * foreign key or by the known non-FK references. Run it in the delete's
+ * transaction AFTER locking the user row (getManagedUser(..., true)): a
+ * concurrent insert of a referencing row needs a KEY SHARE lock on that row,
+ * so it waits for the delete and then fails its FK check instead of being
+ * cascaded away unseen.
+ */
 export async function userDataReferences(db: Queryable, id: string): Promise<string[]> {
   const found: string[] = [];
+  for (const { table, where } of NON_FK_REFERENCES) {
+    const { rowCount } = await db.query(`select 1 from ${table} where ${where} limit 1`, [id]);
+    if ((rowCount ?? 0) > 0) found.push(table);
+  }
   for (const { table, column } of await userReferenceColumns(db)) {
     if (CREDENTIAL_TABLES.has(table)) continue;
     const { rowCount } = await db.query(`select 1 from ${table} where ${column} = $1 limit 1`, [id]);

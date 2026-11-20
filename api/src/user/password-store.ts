@@ -4,8 +4,10 @@
  * lookups password sessions need. Functions take a Queryable (pool or a
  * transaction client). Never selects a hash outside `findPasswordAccount`.
  */
-import type { Queryable } from '../core/db';
+import { withTransaction, type Queryable } from '../core/db';
 import { lockSecondsAfter } from './throttle';
+
+type TxPool = Parameters<typeof withTransaction>[0];
 import type { IdentityRole, IdentityStatus, IdentityUser } from './types';
 
 const norm = (email: string) => email.toLowerCase().trim();
@@ -153,43 +155,65 @@ export async function findSessionUser(db: Queryable, email: string): Promise<Ide
 
 // ---- throttle ----------------------------------------------------------------
 
-/** When the e-mail's lock ends; null = not locked now. */
-export async function lockedUntil(db: Queryable, email: string): Promise<Date | null> {
-  const { rows } = await db.query<{ locked_until: Date }>(
-    `select locked_until from public.auth_login_throttle where email = $1 and locked_until > now()`,
-    [norm(email)],
-  );
-  return rows[0]?.locked_until ?? null;
-}
+export type AttemptReservation = { allowed: true } | { allowed: false; lockedUntil: Date };
 
 /**
- * Count one failed attempt for `email` (any string: unknown e-mails too) and
- * lock it when the count reaches the threshold (see ./throttle.ts). A count
- * whose last failure is over a day old starts again. Old rows are pruned.
+ * Reserve ONE password attempt for `email` (any string: unknown e-mails too)
+ * BEFORE verifying it. Row-locked, so concurrency cannot widen the budget:
+ *  - locked now: refused, nothing changes (no verification may run);
+ *  - otherwise the attempt is counted up front (`failures` = consecutive
+ *    attempts not followed by a success; a count idle for a day restarts at
+ *    1) and, from the LOCK_AFTER-th attempt on, the lock starts with this very
+ *    attempt (see ./throttle.ts).
+ * So at most LOCK_AFTER verifications run before the first lock and one per
+ * lock window after it, whatever the concurrency. A success calls
+ * {@link clearThrottle}, which forgets the count.
  */
-export async function recordFailure(db: Queryable, email: string): Promise<void> {
+export async function reserveAttempt(pool: TxPool, email: string): Promise<AttemptReservation> {
   const e = norm(email).slice(0, 320);
-  const { rows } = await db.query<{ failures: number }>(
-    `insert into public.auth_login_throttle (email, failures, last_failure_at) values ($1, 1, now())
-     on conflict (email) do update
-       set failures = case when public.auth_login_throttle.last_failure_at < now() - interval '1 day' then 1
-                           else public.auth_login_throttle.failures + 1 end,
-           last_failure_at = now()
-     returning failures`,
-    [e],
-  );
-  const failures = rows[0]!.failures;
-  const seconds = lockSecondsAfter(failures);
-  if (seconds > 0) {
-    await db.query(
-      `update public.auth_login_throttle set locked_until = now() + make_interval(secs => $2) where email = $1 and failures = $3`,
-      [e, seconds, failures],
-    );
+  for (let i = 0; i < 3; i++) {
+    const result = await withTransaction(pool, async (tx): Promise<AttemptReservation | null> => {
+      await tx.query(
+        `insert into public.auth_login_throttle (email, failures, last_failure_at) values ($1, 0, now()) on conflict (email) do nothing`,
+        [e],
+      );
+      const { rows } = await tx.query<{ failures: number; locked_until: Date | null; stale: boolean; locked: boolean }>(
+        `select failures, locked_until,
+                last_failure_at < now() - interval '1 day' as stale,
+                coalesce(locked_until > now(), false) as locked
+           from public.auth_login_throttle where email = $1 for update`,
+        [e],
+      );
+      const row = rows[0];
+      // Deleted by a concurrent success between the insert and the lock: retry.
+      if (!row) return null;
+      if (row.locked) return { allowed: false, lockedUntil: row.locked_until! };
+      const failures = row.stale ? 1 : row.failures + 1;
+      const seconds = lockSecondsAfter(failures);
+      await tx.query(
+        `update public.auth_login_throttle
+            set failures = $2, last_failure_at = now(),
+                locked_until = case when $3::int > 0 then now() + make_interval(secs => $3::int) end
+          where email = $1`,
+        [e, failures, seconds],
+      );
+      return { allowed: true };
+    });
+    if (result) {
+      if (result.allowed && Math.random() < 0.05) await pruneThrottle(pool);
+      return result;
+    }
   }
-  // Opportunistic pruning keeps the table small without a scheduler.
-  await db.query(
-    `delete from public.auth_login_throttle
-      where last_failure_at < now() - interval '1 day' and (locked_until is null or locked_until < now())`,
+  throw new Error('reserveAttempt: could not reserve an attempt');
+}
+
+/** Rows idle for a day and not locked are forgotten. */
+async function pruneThrottle(pool: TxPool): Promise<void> {
+  await withTransaction(pool, (tx) =>
+    tx.query(
+      `delete from public.auth_login_throttle
+        where last_failure_at < now() - interval '1 day' and (locked_until is null or locked_until < now())`,
+    ),
   );
 }
 
