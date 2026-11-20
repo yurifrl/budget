@@ -14,6 +14,9 @@ import { BrandedPage } from '@/ui/BrandedPage';
 import { useMedia } from '@/ui/media';
 import { colors, radius, spacing } from '@/ui/theme';
 import { landingLayout, PRODUCT_NAME, type LandingView } from './landing.logic';
+import { CHANGE_BODY, CHANGE_HEADLINE, OR_EMAIL_LABEL } from './password.logic';
+import { NewPasswordForm, PasswordSignInForm } from './PasswordForms';
+import type { PasswordSignIn } from './usePasswordSignIn';
 import type { LoginButton } from './signIn.logic';
 
 type Provider = LoginButton['provider'];
@@ -22,9 +25,11 @@ interface Props {
   view: LandingView;
   onSignIn: (provider: Provider) => Promise<void> | void;
   onRetry: () => void;
+  /** The e-mail + password flow; null when the API does not offer it. */
+  password?: PasswordSignIn | null;
 }
 
-export function LandingPage({ view, onSignIn, onRetry }: Props) {
+export function LandingPage({ view, onSignIn, onRetry, password = null }: Props) {
   const split = landingLayout(useMedia()) === 'split';
   // Native: the in-app browser is open until the flow resolves; no double starts.
   const [busy, setBusy] = useState<Provider | null>(null);
@@ -39,14 +44,18 @@ export function LandingPage({ view, onSignIn, onRetry }: Props) {
     }
   };
 
+  const changing = view.kind === 'sign-in' && password?.step.kind === 'change' ? password.step : null;
+
   const content = (
     <View style={[styles.content, split ? styles.contentSplit : styles.contentStacked]}>
       <Text accessibilityRole="header" style={[styles.headline, split && styles.headlineSplit]}>
-        {view.headline}
+        {changing ? CHANGE_HEADLINE : view.headline}
       </Text>
-      <Text style={styles.body}>{view.body}</Text>
+      <Text style={styles.body}>{changing ? CHANGE_BODY : view.body}</Text>
 
-      {view.kind === 'sign-in' ? (
+      {changing && password ? (
+        <NewPasswordForm flow={password} email={changing.email} />
+      ) : view.kind === 'sign-in' ? (
         <>
           {view.notice ? (
             <View accessibilityRole="alert" style={styles.notice}>
@@ -65,6 +74,12 @@ export function LandingPage({ view, onSignIn, onRetry }: Props) {
               />
             ))}
           </View>
+          {view.passwordForm && password ? (
+            <>
+              {view.buttons.length > 0 ? <Text style={styles.divider}>{OR_EMAIL_LABEL}</Text> : null}
+              <PasswordSignInForm flow={password} primary={view.buttons.length === 0} />
+            </>
+          ) : null}
           <Text style={styles.footnote}>{view.footnote}</Text>
         </>
       ) : (
@@ -147,5 +162,6 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.5 },
   buttonText: { color: colors.white, fontSize: 16, fontWeight: '700' },
 
+  divider: { color: colors.muted, fontSize: 14, marginTop: spacing.sm },
   footnote: { color: colors.muted, fontSize: 14, lineHeight: 20 },
 });

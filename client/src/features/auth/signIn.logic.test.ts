@@ -17,9 +17,9 @@ import {
 } from './signIn.logic';
 
 const NOW = 1_800_000_000_000;
-const ACCESS = { access: true, google: false };
-const GOOGLE = { access: false, google: true };
-const BOTH = { access: true, google: true };
+const ACCESS = { access: true, google: false, password: false };
+const GOOGLE = { access: false, google: true, password: false };
+const BOTH = { access: true, google: true, password: false };
 const state = (over: Partial<SignInState> = {}): SignInState => ({
   status: 'out',
   platform: 'web',
@@ -122,7 +122,13 @@ describe('parseProviders', () => {
     expect(parseProviders(404, { error: 'not found' })).toEqual(LEGACY_PROVIDERS);
     expect(parseProviders(500, null)).toEqual(LEGACY_PROVIDERS);
     expect(parseProviders(200, { access: 'yes' })).toEqual(LEGACY_PROVIDERS);
-    expect(parseProviders(200, { access: false, google: false })).toEqual(LEGACY_PROVIDERS);
+    expect(parseProviders(200, { access: false, google: false, password: false })).toEqual(LEGACY_PROVIDERS);
+  });
+
+  it('keeps a password-only answer (no buttons, just the form)', () => {
+    const only = { access: false, google: false, password: true };
+    expect(parseProviders(200, only)).toEqual(only);
+    expect(loginButtons(only)).toEqual([]);
   });
 });
 

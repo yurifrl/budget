@@ -11,6 +11,7 @@ import { AuthSessionContext } from './authSession';
 import { gateView } from './landing.logic';
 import { LandingPage } from './LandingPage';
 import { useAuth } from './useAuth';
+import { usePasswordSignIn } from './usePasswordSignIn';
 import { useSignIn } from './useSignIn';
 
 /** Gates the app behind a sign-in when the API requires auth (401 on the
@@ -25,6 +26,7 @@ export function LoginGate({ apiUrl, children }: { apiUrl: string; children: Reac
   const storage = useService(Tokens.Storage);
   const { status, refresh } = useAuth(apiUrl, storage);
   const { action, providers, notice, signIn, signOut } = useSignIn(apiUrl, status, storage, refresh);
+  const password = usePasswordSignIn(apiUrl, storage, refresh);
   const dispatch = useAppDispatch();
   const session = useMemo(() => ({ signOut }), [signOut]);
 
@@ -51,7 +53,7 @@ export function LoginGate({ apiUrl, children }: { apiUrl: string; children: Reac
     );
   }
   if (view.kind === 'landing') {
-    return <LandingPage view={view.view} onSignIn={signIn} onRetry={() => refresh(true)} />;
+    return <LandingPage view={view.view} onSignIn={signIn} onRetry={() => refresh(true)} password={providers.password ? password : null} />;
   }
   return <AuthSessionContext.Provider value={session}>{children}</AuthSessionContext.Provider>;
 }

@@ -24,7 +24,7 @@ import type { z } from '@shared/zod';
 export type Providers = z.infer<typeof authProvidersSchema>;
 
 /** What an API that predates /auth/providers (or can't be asked) offers: Google, as before. */
-export const LEGACY_PROVIDERS: Providers = { access: false, google: true };
+export const LEGACY_PROVIDERS: Providers = { access: false, google: true, password: false };
 
 /** sessionStorage key holding the time (ms) of the last automatic Access redirect. */
 export const ACCESS_REDIRECT_KEY = 'budget.accessAutoRedirectAt';
@@ -62,7 +62,7 @@ export function parseSignedOutMark(raw: string | null | undefined): boolean {
 export function parseProviders(status: number, body: unknown): Providers {
   if (status !== 200) return LEGACY_PROVIDERS;
   const parsed = authProvidersSchema.safeParse(body);
-  if (!parsed.success || (!parsed.data.access && !parsed.data.google)) return LEGACY_PROVIDERS;
+  if (!parsed.success || (!parsed.data.access && !parsed.data.google && !parsed.data.password)) return LEGACY_PROVIDERS;
   return parsed.data;
 }
 

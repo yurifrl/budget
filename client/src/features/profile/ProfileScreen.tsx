@@ -11,6 +11,7 @@ import { colors, radius } from '@/ui/theme';
 import { useSignOutAndLeave } from '@/features/auth';
 import { useGetMeQuery } from '@/profile/api';
 import { AvatarEditor } from './AvatarEditor';
+import { ChangePasswordCard } from './ChangePasswordCard';
 import { displayName } from '@/profile/model';
 import { NameField } from './NameField';
 import { ui } from './ui';
@@ -56,6 +57,7 @@ export function ProfileScreen() {
               </View>
               <AvatarEditor me={me} />
               <NameField me={me} />
+              {me.has_password ? <ChangePasswordCard email={me.email} /> : null}
               <Pressable
                 accessibilityRole="button"
                 onPress={() => router.push('/connected-apps' as Href)}

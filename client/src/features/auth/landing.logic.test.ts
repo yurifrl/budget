@@ -6,7 +6,7 @@ import { ACCESS_RETRY_ERROR } from './signIn.logic';
 const gate = (over: Partial<GateState> = {}): GateState => ({
   status: 'out',
   action: { kind: 'show-login', error: null },
-  providers: { access: true, google: false },
+  providers: { access: true, google: false, password: false },
   notice: null,
   apiUrl: 'https://budget-api.example',
   dev: false,
@@ -31,7 +31,7 @@ describe('gateView', () => {
     expect(v.view.buttons).toEqual([{ provider: 'access', label: 'Sign in' }]);
     expect(v.view.notice).toBeNull();
 
-    const both = gateView(gate({ providers: { access: true, google: true } }));
+    const both = gateView(gate({ providers: { access: true, google: true, password: false } }));
     if (both.kind !== 'landing' || both.view.kind !== 'sign-in') throw new Error('expected the sign-in landing page');
     expect(both.view.buttons.map((b) => b.provider)).toEqual(['access', 'google']);
   });
@@ -61,5 +61,16 @@ describe('landingLayout', () => {
   it('splits only on wide windows', () => {
     expect(landingLayout({ lg: true })).toBe('split');
     expect(landingLayout({ lg: false })).toBe('stacked');
+  });
+});
+
+describe('gateView password form', () => {
+  it('shows the password form only when the API offers it', () => {
+    const on = gateView(gate({ providers: { access: false, google: true, password: true } }));
+    const off = gateView(gate({}));
+    if (on.kind !== 'landing' || on.view.kind !== 'sign-in') throw new Error('expected sign-in');
+    if (off.kind !== 'landing' || off.view.kind !== 'sign-in') throw new Error('expected sign-in');
+    expect(on.view.passwordForm).toBe(true);
+    expect(off.view.passwordForm).toBe(false);
   });
 });

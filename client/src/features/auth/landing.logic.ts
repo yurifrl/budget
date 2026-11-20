@@ -19,7 +19,7 @@ export const UNREACHABLE_HEADLINE = 'Can’t reach the API';
 export const UNREACHABLE_DEV_HINT = 'Start it with `task api`. If the URL looks wrong, restart Expo with `bun start --clear`.';
 
 export type LandingView =
-  | { kind: 'sign-in'; headline: string; body: string; footnote: string; buttons: LoginButton[]; notice: string | null }
+  | { kind: 'sign-in'; headline: string; body: string; footnote: string; buttons: LoginButton[]; passwordForm: boolean; notice: string | null }
   | { kind: 'unreachable'; headline: string; body: string; hint: string | null };
 
 export type GateView = { kind: 'app' } | { kind: 'loading' } | { kind: 'landing'; view: LandingView };
@@ -58,6 +58,7 @@ export function gateView(s: GateState): GateView {
       body: LANDING_BODY,
       footnote: LANDING_FOOTNOTE,
       buttons: loginButtons(s.providers),
+      passwordForm: s.providers.password,
       notice: s.notice,
     },
   };
