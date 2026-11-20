@@ -82,6 +82,14 @@ describe('passwordChange', () => {
     expect((calls[0]!.init.headers as Record<string, string>).Authorization).toBe('Bearer old');
     expect(storage.data.get('auth.sessionToken')).toBe('new');
   });
+  it('a failing token save is a failure, not a throw', async () => {
+    const storage = memory();
+    storage.set = async () => {
+      throw new Error('disk');
+    };
+    const r = await passwordChange('http://api', storage, { current: 'c', next: 'n' }, fakeFetch(200, { ok: true, token: 'new' }).f);
+    expect(r.ok).toBe(false);
+  });
   it('leaves storage alone for a cookie caller and on failure', async () => {
     const storage = memory();
     await passwordChange('http://api', storage, { current: 'c', next: 'n' }, fakeFetch(200, { ok: true }).f);

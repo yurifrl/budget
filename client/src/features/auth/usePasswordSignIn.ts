@@ -12,6 +12,8 @@ export type PasswordStep = { kind: 'form' } | { kind: 'change'; email: string };
 export interface PasswordSignIn {
   step: PasswordStep;
   error: string | null;
+  /** The e-mail last typed at sign-in; kept when a dead change token sends the person back. */
+  email: string;
   busy: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   /** Finish the temporary-password step with the chosen password. */
@@ -32,6 +34,7 @@ export function usePasswordSignIn(apiUrl: string, storage: KVStore, refresh: () 
   const [step, setStep] = useState<PasswordStep>({ kind: 'form' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState('');
   // The change token is not render state: a ref keeps it out of anything that is mirrored or logged.
   const changeToken = useRef<string | null>(null);
 
@@ -45,7 +48,11 @@ export function usePasswordSignIn(apiUrl: string, storage: KVStore, refresh: () 
     async (data: { token?: string | undefined }) => {
       if (native) {
         if (!data.token) return setError(GENERIC_FAILURE);
-        await saveSessionToken(storage, data.token);
+        try {
+          await saveSessionToken(storage, data.token);
+        } catch {
+          return setError(GENERIC_FAILURE);
+        }
       }
       changeToken.current = null;
       refresh();
@@ -56,6 +63,7 @@ export function usePasswordSignIn(apiUrl: string, storage: KVStore, refresh: () 
   const signIn = useCallback(
     async (email: string, password: string) => {
       setError(null);
+      setEmail(email);
       setBusy(true);
       try {
         const r = await passwordLogin(apiUrl, { email, password, native });
@@ -98,5 +106,5 @@ export function usePasswordSignIn(apiUrl: string, storage: KVStore, refresh: () 
 
   const cancel = useCallback(() => backToForm(null), [backToForm]);
 
-  return { step, error, busy, signIn, choose, cancel };
+  return { step, error, email, busy, signIn, choose, cancel };
 }

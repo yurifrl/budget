@@ -9,11 +9,12 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { colors, radius, spacing } from '@/ui/theme';
 import { checkLogin, checkNewPassword, FIELD_HINTS, newPasswordHint } from './password.logic';
+import { FormWrap } from './FormWrap';
 import { PasswordField, type InputRef } from './PasswordField';
 import type { PasswordSignIn } from './usePasswordSignIn';
 
 export function PasswordSignInForm({ flow, primary }: { flow: PasswordSignIn; primary: boolean }) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(flow.email);
   const [password, setPassword] = useState('');
   const [local, setLocal] = useState<string | null>(null);
   const passwordRef = useRef<InputRef>(null);
@@ -29,7 +30,7 @@ export function PasswordSignInForm({ flow, primary }: { flow: PasswordSignIn; pr
   const error = local ?? flow.error;
 
   return (
-    <View style={styles.form}>
+    <FormWrap>
       <PasswordField
         label="E-mail"
         value={email}
@@ -51,7 +52,7 @@ export function PasswordSignInForm({ flow, primary }: { flow: PasswordSignIn; pr
       />
       {error ? <ErrorNotice text={error} /> : null}
       <SubmitButton label="Sign in with e-mail" primary={primary} busy={flow.busy} onPress={() => void submit()} />
-    </View>
+    </FormWrap>
   );
 }
 
@@ -72,7 +73,7 @@ export function NewPasswordForm({ flow, email }: { flow: PasswordSignIn; email: 
   const error = local ?? flow.error;
 
   return (
-    <View style={styles.form}>
+    <FormWrap>
       <Text style={styles.account}>{email}</Text>
       <PasswordField
         label="New password"
@@ -99,7 +100,7 @@ export function NewPasswordForm({ flow, email }: { flow: PasswordSignIn; email: 
       <Pressable accessibilityRole="button" onPress={flow.cancel} style={styles.link}>
         <Text style={styles.linkText}>Back to sign in</Text>
       </Pressable>
-    </View>
+    </FormWrap>
   );
 }
 
@@ -125,7 +126,6 @@ function SubmitButton({ label, primary, busy, onPress }: { label: string; primar
 }
 
 const styles = StyleSheet.create({
-  form: { gap: 12 },
   account: { color: colors.muted, fontSize: 15 },
   hint: { color: colors.muted, fontSize: 13, marginTop: -4 },
   notice: { backgroundColor: colors.redPillBg, borderRadius: radius.card10, paddingVertical: 12, paddingHorizontal: 14 },

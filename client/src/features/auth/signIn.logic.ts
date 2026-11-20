@@ -19,7 +19,10 @@
  * the mark, as does any successful sign-in.
  */
 import { authProvidersSchema } from '@shared/contracts/user/providers';
-import type { z } from '@shared/zod';
+import { z } from '@shared/zod';
+
+/** An API that predates the `password` field answers without it: that means off. */
+const clientProvidersSchema = authProvidersSchema.extend({ password: z.boolean().default(false) });
 
 export type Providers = z.infer<typeof authProvidersSchema>;
 
@@ -61,7 +64,7 @@ export function parseSignedOutMark(raw: string | null | undefined): boolean {
 /** The providers answer, or LEGACY_PROVIDERS for anything unusable (404, bad JSON, none on). */
 export function parseProviders(status: number, body: unknown): Providers {
   if (status !== 200) return LEGACY_PROVIDERS;
-  const parsed = authProvidersSchema.safeParse(body);
+  const parsed = clientProvidersSchema.safeParse(body);
   if (!parsed.success || (!parsed.data.access && !parsed.data.google && !parsed.data.password)) return LEGACY_PROVIDERS;
   return parsed.data;
 }

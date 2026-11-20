@@ -125,6 +125,10 @@ describe('parseProviders', () => {
     expect(parseProviders(200, { access: false, google: false, password: false })).toEqual(LEGACY_PROVIDERS);
   });
 
+  it('an older API without `password` still gives its real providers', () => {
+    expect(parseProviders(200, { access: true, google: false })).toEqual({ access: true, google: false, password: false });
+  });
+
   it('keeps a password-only answer (no buttons, just the form)', () => {
     const only = { access: false, google: false, password: true };
     expect(parseProviders(200, only)).toEqual(only);

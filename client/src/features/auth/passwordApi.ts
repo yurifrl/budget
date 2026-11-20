@@ -19,7 +19,7 @@ import type { PasswordLoginResult, SessionDelivery } from '@shared/contracts/use
 
 import { loadAuthHeaders, saveSessionToken } from '@/platform/storage/sessionToken';
 import type { KVStore } from '@/platform/storage/types';
-import { parseRetryAfter, type PasswordFailure } from './password.logic';
+import { parseRetryAfter, SESSION_NOT_SAVED, type PasswordFailure } from './password.logic';
 
 export type PasswordResult<T> = { ok: true; data: T } | { ok: false; failure: PasswordFailure };
 
@@ -102,6 +102,12 @@ export async function passwordChange(
     return parsed.success ? parsed.data : null;
   }, doFetch);
   if (!result.ok) return result;
-  if (result.data.token) await saveSessionToken(storage, result.data.token);
+  if (result.data.token) {
+    try {
+      await saveSessionToken(storage, result.data.token);
+    } catch {
+      return { ok: false, failure: SESSION_NOT_SAVED };
+    }
+  }
   return { ok: true, data: null };
 }

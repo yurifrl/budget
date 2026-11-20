@@ -19,6 +19,9 @@ export interface PasswordFailure {
   retryAfter: number | null;
 }
 
+/** The API answered but the new session token could not be stored: shown as the generic failure. */
+export const SESSION_NOT_SAVED: PasswordFailure = { status: 200, code: 'session_not_saved', retryAfter: null };
+
 export type PasswordFormKind = 'login' | 'complete' | 'change';
 
 export const GENERIC_FAILURE = 'Something went wrong. Please try again.';
@@ -78,6 +81,8 @@ export function failureMessage(kind: PasswordFormKind, f: PasswordFailure): stri
       return CHANGE_LINK_EXPIRED;
     case 'no_password':
       return 'This account has no password to change. It signs in another way.';
+    case 'forbidden':
+      return 'Your password can’t be changed from this kind of session. Sign out, sign in with your e-mail and password, and try again.';
     case 'origin_not_allowed':
       return 'Signing in is not allowed from this address.';
     case 'invalid_input':

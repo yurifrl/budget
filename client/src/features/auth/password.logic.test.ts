@@ -8,6 +8,8 @@ import {
   failureMessage,
   FIELD_HINTS,
   formatWait,
+  GENERIC_FAILURE,
+  SESSION_NOT_SAVED,
   newPasswordHint,
   parseRetryAfter,
   POLICY_MESSAGES,
@@ -59,6 +61,13 @@ describe('failureMessage', () => {
     expect(failureMessage('login', fail(0, null))).toContain('Can’t reach');
     expect(failureMessage('login', fail(500, null))).toContain('Something went wrong');
     expect(failureMessage('login', fail(404, 'not_found'))).toContain('turned off');
+  });
+});
+
+describe('more failures', () => {
+  it('403 forbidden on change is explained; an unsaved session is the generic failure', () => {
+    expect(failureMessage('change', fail(403, 'forbidden'))).toContain('kind of session');
+    expect(failureMessage('login', SESSION_NOT_SAVED)).toBe(GENERIC_FAILURE);
   });
 });
 
