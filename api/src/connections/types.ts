@@ -183,6 +183,13 @@ export interface BankAggregator {
    */
   verifyCredentials(): Promise<boolean>;
 
+  /**
+   * Can these credentials reach the upstream item? False = the provider says
+   * the item does not exist for them (it belongs to another key set); any
+   * other failure is thrown. One provider call, no side effects.
+   */
+  hasItem(externalItemId: string): Promise<boolean>;
+
   /** Mint a connect token for the widget, scoped to `clientUserId`. */
   createConnectToken(input: ConnectTokenInput): Promise<ConnectToken>;
 

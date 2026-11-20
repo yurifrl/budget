@@ -2,7 +2,7 @@
  * Reversible encryption for secrets the API must hand back to a provider
  * (a user's own bank-provider client secret). AES-256-GCM through WebCrypto,
  * a fresh random 96-bit nonce per value, and a caller-supplied `context`
- * bound as additional authenticated data (so a ciphertext copied onto another
+ * plus the key version bound as additional authenticated data (so a ciphertext copied onto another
  * row or user does not decrypt).
  *
  * The master key comes from the entrypoint (`configureSecretBox`; core reads
@@ -66,7 +66,8 @@ export function configureSecretBox(config: { current: number; keys: ReadonlyMap<
 
 export const secretBoxConfigured = (): boolean => keyring !== null;
 
-const aad = (context: string): BufferSource => new TextEncoder().encode(context) as BufferSource;
+/** Additional authenticated data: the caller's context AND the key version, so neither can be changed on a stored row. */
+const aad = (context: string, keyVersion: number): BufferSource => new TextEncoder().encode(`v${keyVersion}|${context}`) as BufferSource;
 
 /** Encrypt `plaintext` under the current master key. `context` must be given again to open it. */
 export async function sealSecret(plaintext: string, context: string): Promise<SealedSecret> {
@@ -74,7 +75,7 @@ export async function sealSecret(plaintext: string, context: string): Promise<Se
   const key = await keyring.keys.get(keyring.current)!;
   const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
   const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: nonce as BufferSource, additionalData: aad(context) },
+    { name: 'AES-GCM', iv: nonce as BufferSource, additionalData: aad(context, keyring.current) },
     key,
     new TextEncoder().encode(plaintext) as BufferSource,
   );
@@ -89,7 +90,7 @@ export async function openSecret(sealed: SealedSecret, context: string): Promise
   const key = await pending;
   try {
     const plain = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: sealed.nonce as BufferSource, additionalData: aad(context) },
+      { name: 'AES-GCM', iv: sealed.nonce as BufferSource, additionalData: aad(context, sealed.keyVersion) },
       key,
       sealed.ciphertext as BufferSource,
     );

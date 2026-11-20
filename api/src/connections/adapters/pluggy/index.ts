@@ -254,6 +254,17 @@ export class PluggyAggregator implements BankAggregator {
     return this.client.verifyCredentials();
   }
 
+  /** An item of another application answers 404 (403 tolerated): not reachable with these keys. */
+  async hasItem(externalItemId: string): Promise<boolean> {
+    try {
+      await this.client.getItem(externalItemId);
+      return true;
+    } catch (err) {
+      if (err instanceof PluggyError && (err.status === 404 || err.status === 403)) return false;
+      throw classifyPluggyError(err);
+    }
+  }
+
   async createConnectToken(input: ConnectTokenInput): Promise<ConnectToken> {
     const upstream = await this.client.createConnectToken({
       ...(input.connectorId !== undefined ? { connectorId: input.connectorId } : {}),

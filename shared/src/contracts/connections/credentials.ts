@@ -22,6 +22,8 @@ export const OWN_KEYS_REQUIRED = 'own_keys_required';
 export const INVALID_CREDENTIALS = 'invalid_credentials';
 export const CREDENTIALS_KEY_MISSING = 'credentials_key_missing';
 export const CONNECTION_PAUSED = 'connection_paused';
+/** Register: none of the caller's key sets reaches the item (409). */
+export const ITEM_NOT_REACHABLE = 'item_not_reachable';
 
 const provider = z.string().min(1).default('pluggy').describe('Bank provider the key set belongs to (default pluggy)');
 

@@ -107,6 +107,10 @@ class FakeAggregator implements BankAggregator {
     return true;
   }
 
+  async hasItem(): Promise<boolean> {
+    return true;
+  }
+
   async createConnectToken(): Promise<{ token: string; clientId: string | null; widgetUrl: string | null }> {
     calls.push('createConnectToken');
     return { token: 'token-1', clientId: 'cid-1', widgetUrl: 'https://conn.test/checkout' };

@@ -33,8 +33,13 @@ import * as store from './store';
 import type { ConnectionRow, StoredCredentials } from './store';
 import type { BankAggregator, KeySource, ProviderCredentials } from './types';
 
-/** Bound into the ciphertext (AES-GCM additional data): a secret opens only for its own user and provider. */
-const secretContext = (userId: string, provider: string): string => `connection_credentials:${userId}:${provider}`;
+/**
+ * Bound into the ciphertext (AES-GCM additional data; the box adds the key
+ * version): a secret opens only on the row it was sealed for, i.e. the same
+ * user, provider AND client id. JSON so no value can run into the next.
+ */
+const secretContext = (userId: string, provider: string, clientId: string): string =>
+  JSON.stringify(['connection_credentials', userId, provider, clientId]);
 
 /** Encrypt and store the caller's own key set (replacing any earlier one). */
 export async function storeOwnCredentials(
@@ -43,7 +48,7 @@ export async function storeOwnCredentials(
   provider: string,
   credentials: ProviderCredentials,
 ): Promise<StoredCredentials> {
-  const sealed = await sealSecret(credentials.clientSecret, secretContext(userId, provider));
+  const sealed = await sealSecret(credentials.clientSecret, secretContext(userId, provider, credentials.clientId));
   return store.saveCredentials(db, {
     userId,
     provider,
@@ -58,7 +63,7 @@ export async function storeOwnCredentials(
 export async function openOwnCredentials(row: StoredCredentials): Promise<ProviderCredentials> {
   const clientSecret = await openSecret(
     { ciphertext: new Uint8Array(row.secret_ciphertext), nonce: new Uint8Array(row.secret_nonce), keyVersion: row.key_version },
-    secretContext(row.user_id, row.provider),
+    secretContext(row.user_id, row.provider, row.client_id),
   );
   return { clientId: row.client_id, clientSecret };
 }
@@ -115,6 +120,32 @@ export async function keyAccessForNewConnection(db: Queryable, userId: string, p
   if (own) return ownAccess(provider, own);
   if (!(await sharedKeysAllowed(db, userId))) return { ok: false, problem: 'own_keys_required' };
   return sharedAccess(provider);
+}
+
+/**
+ * Every key set this user may use for `provider` right now, in preference
+ * order (own first). Registering a new item probes these to find the one the
+ * item actually lives in. `problem` is why the list is empty.
+ */
+export async function usableKeySets(
+  db: Queryable,
+  userId: string,
+  provider: string,
+): Promise<{ usable: Array<Extract<KeyAccess, { ok: true }>>; problem: KeyAccessProblem }> {
+  const usable: Array<Extract<KeyAccess, { ok: true }>> = [];
+  let problem: KeyAccessProblem = 'own_keys_required';
+  const own = await store.getCredentials(db, userId, provider);
+  if (own) {
+    const access = await ownAccess(provider, own);
+    if (access.ok) usable.push(access);
+    else problem = access.problem;
+  }
+  if (await sharedKeysAllowed(db, userId)) {
+    const access = sharedAccess(provider);
+    if (access.ok) usable.push(access);
+    else if (!own) problem = access.problem;
+  }
+  return { usable, problem };
 }
 
 /**

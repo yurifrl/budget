@@ -46,6 +46,7 @@ function fakeAggregator(
   return {
     environment: 'production',
     verifyCredentials: async () => true,
+    hasItem: async () => true,
     createConnectToken: async (_input: ConnectTokenInput) => ({
       token: 't',
       clientId: 'c',

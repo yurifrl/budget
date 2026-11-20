@@ -76,6 +76,7 @@ const entry: AggregatorEntry = {
     ({
       environment: 'production',
       verifyCredentials: async () => true,
+      hasItem: async () => true,
       createConnectToken: async () => ({ token: 't', clientId: null, widgetUrl: null }),
       listExternalAccounts: async () => [],
       listTransactions: async () => {

@@ -1723,9 +1723,11 @@ environment. What follows are the choices the task did not dictate.
   back to the user and handed to the connect widget. The secret is
   `secret_ciphertext` + `secret_nonce` + `key_version`.
 - `core/secret-box.ts`: WebCrypto AES-256-GCM, a random 96-bit nonce per
-  value, and `connection_credentials:<user>:<provider>` as additional
-  authenticated data, so a ciphertext copied onto another user's row does not
-  decrypt. `key_version` is stamped (1 today); the box already opens by
+  value. Additional authenticated data binds the ciphertext to its row: user,
+  provider, client id (`keys.ts`) and the key version (added by the box), so
+  a ciphertext copied onto another row, or a row whose client id or
+  `key_version` was edited, does not decrypt. Chosen before any data exists:
+  changing it later means re-encrypting. `key_version` is stamped (1 today); the box already opens by
   version from a keyring, so rotation later is "configure two keys, re-seal,
   drop the old one" with no schema change. Only one env var exists today.
 - `CREDENTIALS_ENCRYPTION_KEY`: 32 bytes, base64 or hex. `secrets-env.ts`
@@ -1744,14 +1746,19 @@ environment. What follows are the choices the task did not dictate.
   unreachable: without it a sync would fail with a provider 404 and mark the
   bank broken instead of saying which keys are missing.
 - New connection: own if saved, else shared if the feature is on, else 403
-  `own_keys_required`. Existing connection (sync, sweep, upstream, re-auth
+  `own_keys_required`. That is connect-token's choice; register does not
+  repeat it blindly, because own keys can be saved or deleted while the widget
+  is open: it probes the item (`hasItem`, one GET item) with every key set
+  the caller may use now, own first, and records the one that reaches it.
+  None reaches it: 409 `item_not_reachable`, nothing stored. The client
+  never names a key set. connect-token with another user's `itemId` is 404. Existing connection (sync, sweep, upstream, re-auth
   connect-token, re-register, delete): always the recorded key set. Adding own
   keys does not move a shared-key connection: Pluggy has no item transfer, so
   the person connects that bank again.
 - The feature gates connecting and syncing, not cleanup: deleting a paused
   shared-key connection still removes the item upstream with the shared keys.
   An own-key connection whose keys are gone is disconnected locally only.
-- The port gained `verifyCredentials()` and the registry entry
+- The port gained `verifyCredentials()`, `hasItem()` and the registry entry
   `create(credentials?)`; `getAggregator(provider)` with no credentials is the
   shared-key adapter exactly as before, so `webhook.ts` is untouched.
 - Own keys run on the installation's `PLUGGY_BASE_URL` / `PLUGGY_SANDBOX` and
@@ -1772,8 +1779,17 @@ environment. What follows are the choices the task did not dictate.
   and resumes (and then enqueues a sync whatever the watermark says). A
   paused connection never reaches the provider: the sync run succeeds with
   `skipped: 'paused'`, a manual sync is 409 `connection_paused`.
-- Resume sets `connected`; the next sync or sweep re-reads the item's real
-  state (it may turn `unauthorized` again).
+- Pausing remembers the row's status, message and quota pause-until in
+  `connections.paused_from` (jsonb, NULL unless paused); resume restores
+  them, so an `unauthorized` or quota-paused bank does not come back looking
+  healthy. Nothing remembered: `connected`.
+- Only the reconcile leaves `paused`: `setConnectionStatus` skips paused rows
+  (as it does disconnected ones), so a webhook status event or a sync that
+  finishes after the pause cannot un-pause. A disconnect and a fresh register
+  of the same item are the two other exits.
+- The sweep also takes own-key connections in `error` (shared-key ones still
+  wait for a webhook or the user): with no webhook, nothing else would ever
+  retry them.
 - The same mechanism pauses own-key connections when their key set is deleted
   or replaced, and resumes them when the same client id is saved again.
 

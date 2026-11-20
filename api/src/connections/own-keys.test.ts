@@ -20,6 +20,7 @@ import { createConnectionsActivities } from './activities';
 import { PAUSE_MESSAGES } from './errors';
 import { setAggregators, type AggregatorEntry } from './registry';
 import connectionsApp from './routes';
+import webhookApp from './webhook';
 import * as store from './store';
 import type { BankAggregator, ConnectTokenInput, ProviderCredentials } from './types';
 
@@ -43,6 +44,11 @@ type Call = { op: string; keys: string; secretOk: boolean; arg?: unknown };
 const calls: Call[] = [];
 let sharedConfigured = true;
 let lastUpdatedAt: string | null = null;
+/** Which key set an upstream item lives in ('shared' or an own client id). Unlisted items are reachable by any. */
+const itemHome = new Map<string, string>();
+/** Item status the provider reports, and a hook run while the item is being read (mid-sync). */
+let itemStatus: 'connected' | 'unauthorized' | 'quota_exhausted' = 'connected';
+let duringItemRead: (() => Promise<void>) | null = null;
 
 function fakeAggregator(credentials?: ProviderCredentials): BankAggregator {
   const keys = credentials ? credentials.clientId : 'shared';
@@ -53,6 +59,10 @@ function fakeAggregator(credentials?: ProviderCredentials): BankAggregator {
     verifyCredentials: async () => {
       record('verifyCredentials');
       return secretOk;
+    },
+    hasItem: async (itemId) => {
+      record('hasItem', itemId);
+      return !itemHome.has(itemId) || itemHome.get(itemId) === keys;
     },
     createConnectToken: async (input: ConnectTokenInput) => {
       record('createConnectToken', input);
@@ -71,9 +81,13 @@ function fakeAggregator(credentials?: ProviderCredentials): BankAggregator {
     fetchInstitution: async () => null,
     getItemState: async (itemId) => {
       record('getItemState', itemId);
-      return { status: 'connected', lastUpdatedAt };
+      await duringItemRead?.();
+      return { status: itemStatus, lastUpdatedAt };
     },
-    mapWebhookDelivery: () => null,
+    mapWebhookDelivery: (payload) => {
+      const p = payload as { eventId: string; event: string; itemId: string };
+      return { eventId: p.eventId, event: p.event, externalItemId: p.itemId, clientUserId: null, action: 'status', status: 'unauthorized', raw: payload };
+    },
     mapStatus: () => 'connected',
     verifyWebhookHeaders: () => true,
   };
@@ -143,6 +157,9 @@ beforeEach(() => {
   calls.length = 0;
   sharedConfigured = true;
   lastUpdatedAt = null;
+  itemHome.clear();
+  itemStatus = 'connected';
+  duringItemRead = null;
 });
 
 describe.skipIf(!dbReady)('1. own key set: save, replace, read status, delete', () => {
@@ -631,5 +648,196 @@ describe.skipIf(!dbReady)('8. migration 0104', () => {
     expect(column.rows[0]!.column_default).toContain('shared');
     await expect(pool.query(`update public.connections set key_source = 'other' where id = $1`, [id])).rejects.toThrow(/connections_key_source_check/);
     expect((await pool.query(`select count(*)::int as n from public.connections where key_source is null`)).rows[0].n).toBe(0);
+  });
+});
+
+describe.skipIf(!dbReady)('review fixes', () => {
+  test('1. the sweep retries an own-key connection in error; a shared-key one in error still waits', async () => {
+    const { user, call } = await newUser('sweep-error');
+    await setSharedKeys(user.id, true);
+    const shared = await connect(call, item('shared'));
+    itemHome.clear();
+    await saveKeys(call, 'own-client-1', SECRET_1);
+    const own = await connect(call, item('own'));
+    expect(own.key_source).toBe('own');
+    await store.setConnectionStatus(shared.id, 'error', 'boom');
+    await store.setConnectionStatus(own.id, 'error', 'boom');
+
+    const listed = (await acts.connectionsSweepList()).map((r) => r.id);
+    expect(listed).toContain(own.id);
+    expect(listed).not.toContain(shared.id);
+
+    calls.length = 0;
+    lastUpdatedAt = '2000-01-01T00:00:00Z'; // nothing new upstream: an error row is retried anyway
+    expect(await acts.connectionsSweepCheck({ connectionId: own.id })).toBe('enqueued');
+    expect(await acts.connectionsSweepCheck({ connectionId: shared.id })).toBe('skipped');
+    expect(callsOf('getItemState').map((c) => c.keys)).toEqual(['own-client-1']);
+    // The enqueued sync clears the error.
+    await syncWork(own.id);
+    expect(await reload(own.id)).toMatchObject({ status: 'connected', status_message: null });
+    expect((await reload(shared.id)).status).toBe('error');
+  });
+
+  test('2a. register: a shared-key item stays shared although own keys were saved after the token was issued', async () => {
+    const { user, call } = await newUser('probe-shared');
+    await setSharedKeys(user.id, true);
+    expect((await call('POST', '/connect-token', { provider: PROVIDER })).json).toMatchObject({ token: 'token-shared' });
+    const itemId = item('made-with-shared');
+    itemHome.set(itemId, 'shared');
+    // Another tab: own keys saved while the widget is open. Own would now win for a NEW choice.
+    await saveKeys(call, 'own-client-1', SECRET_1);
+    calls.length = 0;
+    const row = await connect(call, itemId);
+    expect(row.key_source).toBe('shared');
+    expect(await reload(row.id)).toMatchObject({ key_source: 'shared', key_client_id: null });
+    expect(callsOf('hasItem').map((c) => c.keys)).toEqual(['own-client-1', 'shared']);
+    // Everything after the probe ran on the key set that holds the item.
+    expect(callsOf('listExternalAccounts').map((c) => c.keys)).toEqual(['shared']);
+  });
+
+  test('2b. register: an own-key item is recorded as own; when its keys are gone mid-flow nothing is stored', async () => {
+    const { user, call } = await newUser('probe-own');
+    await setSharedKeys(user.id, true);
+    await saveKeys(call, 'own-client-1', SECRET_1);
+    expect((await call('POST', '/connect-token', { provider: PROVIDER })).json).toMatchObject({ token: 'token-own-client-1' });
+    const kept = item('made-with-own');
+    itemHome.set(kept, 'own-client-1');
+    expect(await reload((await connect(call, kept)).id)).toMatchObject({ key_source: 'own', key_client_id: 'own-client-1' });
+
+    // Second item created with the own keys, which are then deleted (or replaced) before register.
+    const lost = item('made-with-own-then-deleted');
+    itemHome.set(lost, 'own-client-1');
+    for (const change of [() => call('DELETE', `/credentials?provider=${PROVIDER}`), () => saveKeys(call, 'own-client-2', SECRET_2)]) {
+      await change();
+      calls.length = 0;
+      const res = await call('POST', '/items', { provider: PROVIDER, itemId: lost });
+      expect(res.status).toBe(409);
+      expect(res.json.code).toBe('item_not_reachable');
+      expect(callsOf('listExternalAccounts')).toEqual([]);
+      expect((await pool.query('select 1 from public.connections where external_id = $1', [lost])).rowCount).toBe(0);
+    }
+    // The client cannot name a key set: an extra field is ignored and the probe still decides.
+    const forced = await call('POST', '/items', { provider: PROVIDER, itemId: lost, keySource: 'shared', key_source: 'shared' });
+    expect(forced.status).toBe(409);
+
+    // A provider outage during the probe is a 502, nothing stored.
+    const outage = item('outage');
+    setAggregators({ [PROVIDER]: { configured: () => true, create: (c) => ({ ...fakeAggregator(c), hasItem: async () => Promise.reject(new Error('Pluggy API 503: down')) }) } });
+    try {
+      expect((await call('POST', '/items', { provider: PROVIDER, itemId: outage })).status).toBe(502);
+    } finally {
+      setAggregators({ [PROVIDER]: entry });
+    }
+    expect((await pool.query('select 1 from public.connections where external_id = $1', [outage])).rowCount).toBe(0);
+  });
+
+  test("3. connect-token with another user's itemId is a 404 and the item id never goes upstream", async () => {
+    const owner = await newUser('foreign-owner');
+    await setSharedKeys(owner.user.id, true);
+    const itemId = item('theirs');
+    await connect(owner.call, itemId);
+    const other = await newUser('foreign-other');
+    await setSharedKeys(other.user.id, true);
+    calls.length = 0;
+    const res = await other.call('POST', '/connect-token', { provider: PROVIDER, itemId });
+    expect(res.status).toBe(404);
+    expect(calls).toEqual([]);
+    // Without the item id they still get a token for a new connection.
+    expect((await other.call('POST', '/connect-token', { provider: PROVIDER })).status).toBe(200);
+  });
+
+  test('4. a paused connection is not un-paused by a webhook status event or by a sync that finishes after the pause', async () => {
+    const { user, call } = await newUser('paused-guard');
+    await setSharedKeys(user.id, true);
+    const itemId = item('shared');
+    const shared = await connect(call, itemId);
+
+    // A sync is running (item read in flight) when the admin turns the feature off and the pause lands.
+    duringItemRead = async () => {
+      duringItemRead = null;
+      await setSharedKeys(user.id, false);
+      await call('GET', '');
+      expect((await reload(shared.id)).status).toBe('paused');
+    };
+    await syncWork(shared.id);
+    expect(await reload(shared.id)).toMatchObject({ status: 'paused', status_message: PAUSE_MESSAGES.shared });
+
+    // Webhook item/error (maps to status 'unauthorized' in this fake).
+    const hook = new Hono();
+    hook.onError(httpOnError);
+    hook.route('/connections', webhookApp);
+    const res = await hook.request(`/connections/webhook/${PROVIDER}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ eventId: crypto.randomUUID(), event: 'item/error', itemId }),
+    });
+    expect(res.status).toBe(200);
+    expect(await reload(shared.id)).toMatchObject({ status: 'paused', status_message: PAUSE_MESSAGES.shared });
+
+    // Every generic writer is refused; a not-paused row still takes the same write.
+    await store.setConnectionStatus(shared.id, 'connected', null);
+    await store.setConnectionStatus(shared.id, 'error', 'x');
+    expect((await reload(shared.id)).status).toBe('paused');
+    await acts.connectionsMarkFailed({ connectionId: shared.id, failureType: 'Transient' });
+    expect((await reload(shared.id)).status).toBe('paused');
+
+    // Only the reconcile path resumes it.
+    await setSharedKeys(user.id, true);
+    await call('GET', '');
+    expect((await reload(shared.id)).status).toBe('connected');
+    await pool.query(`delete from public.connection_events where external_item_id = $1`, [itemId]);
+  });
+
+  test('5. resume restores the status the row had when it was paused (unauthorized, quota with its pause-until)', async () => {
+    const { user, call } = await newUser('restore');
+    await setSharedKeys(user.id, true);
+    const reauth = await connect(call, item('reauth'));
+    const quota = await connect(call, item('quota'));
+    const healthy = await connect(call, item('healthy'));
+    const until = new Date(Date.now() + 5 * 24 * 3600 * 1000);
+    await store.setConnectionStatus(reauth.id, 'unauthorized', 'Reconnect your bank');
+    await store.setConnectionStatus(quota.id, 'quota_exhausted', 'Bank limits reached', until);
+
+    await setSharedKeys(user.id, false);
+    await call('GET', '');
+    for (const c of [reauth, quota, healthy]) {
+      expect(await reload(c.id)).toMatchObject({ status: 'paused', status_message: PAUSE_MESSAGES.shared, next_poll_at: null });
+    }
+
+    await setSharedKeys(user.id, true);
+    // Resumed by the sweep: the restored states decide what it does next.
+    calls.length = 0;
+    expect(await acts.connectionsSweepCheck({ connectionId: reauth.id })).toBe('skipped');
+    expect(await acts.connectionsSweepCheck({ connectionId: quota.id })).toBe('skipped');
+    expect(calls).toEqual([]);
+    expect(await reload(reauth.id)).toMatchObject({ status: 'unauthorized', status_message: 'Reconnect your bank', next_poll_at: null });
+    const restored = await reload(quota.id);
+    expect(restored).toMatchObject({ status: 'quota_exhausted', status_message: 'Bank limits reached' });
+    expect(restored.next_poll_at?.getTime()).toBe(until.getTime());
+    expect(await reload(healthy.id)).toMatchObject({ status: 'connected', status_message: null });
+    const left = await pool.query(`select count(*)::int as n from public.connections where user_id = $1 and paused_from is not null`, [user.id]);
+    expect(left.rows[0].n).toBe(0);
+    // The quota-paused one is not swept before its date.
+    expect((await acts.connectionsSweepList()).map((r) => r.id)).not.toContain(quota.id);
+  });
+
+  test('6. the ciphertext is bound to the client id and the key version of its row', async () => {
+    const { user, call } = await newUser('aad');
+    await saveKeys(call, 'own-client-1', SECRET_1);
+    expect((await call('POST', '/connect-token', { provider: PROVIDER })).status).toBe(200);
+
+    // Same user, same provider, same bytes, another client id on the row: does not open.
+    await pool.query(`update public.connection_credentials set client_id = 'own-client-2' where user_id = $1`, [user.id]);
+    calls.length = 0;
+    const swapped = await call('POST', '/connect-token', { provider: PROVIDER });
+    expect(swapped.status).toBe(503);
+    expect(swapped.json.code).toBe('credentials_key_missing');
+    expect(calls).toEqual([]);
+
+    // Client id back, key version relabelled to another configured key: does not open either.
+    await pool.query(`update public.connection_credentials set client_id = 'own-client-1' where user_id = $1`, [user.id]);
+    expect((await call('POST', '/connect-token', { provider: PROVIDER })).status).toBe(200);
+    await pool.query(`update public.connection_credentials set key_version = 99 where user_id = $1`, [user.id]);
+    expect((await call('POST', '/connect-token', { provider: PROVIDER })).json.code).toBe('credentials_key_missing');
   });
 });

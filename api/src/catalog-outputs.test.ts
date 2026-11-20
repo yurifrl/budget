@@ -70,6 +70,7 @@ const imported: AggregatedTransaction = {
 const aggregator = {
   environment: 'production',
   verifyCredentials: async () => true,
+  hasItem: async () => true,
   createConnectToken: async () => ({ token: 't', clientId: null, widgetUrl: null }),
   listExternalAccounts: async () => [upstreamAccount],
   fetchInstitution: async () => 'Catalog Bank',

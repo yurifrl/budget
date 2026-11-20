@@ -163,7 +163,11 @@ export function createConnectionsActivities(db: Pool, trackedAttempt: Tracked) {
       const before = await getConnectionById(args.connectionId);
       const row = await currentConnection(args.connectionId);
       // 'paused' is skipped here: the key set may not be used, so not even the item is read.
-      if (!row || (row.status !== 'connected' && row.status !== 'quota_exhausted')) return 'skipped';
+      // An own-key connection in 'error' is retried here: it has no webhook to revive it.
+      const ownError = row?.status === 'error' && row.key_source === 'own';
+      if (!row || (row.status !== 'connected' && row.status !== 'quota_exhausted' && !ownError)) return 'skipped';
+      // A quota pause restored by a resume may still be running.
+      if (row.status === 'quota_exhausted' && row.next_poll_at != null && row.next_poll_at.getTime() > Date.now()) return 'skipped';
       const access = await keyAccessForConnection(db, row);
       if (!access.ok) return 'skipped';
       const { aggregator } = access;

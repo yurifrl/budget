@@ -59,6 +59,14 @@ describe('secret box (AES-256-GCM)', () => {
     await expect(openSecret(old, 'ctx')).rejects.toBeInstanceOf(SecretBoxUnavailable);
   });
 
+  test('the key version is authenticated: a row relabelled to another configured version does not open', async () => {
+    const k1 = key();
+    use(1, [[1, k1], [2, k1]]); // even with the SAME key bytes under both versions
+    const sealed = await sealSecret('secret', 'ctx');
+    expect(await openSecret(sealed, 'ctx')).toBe('secret');
+    await expect(openSecret({ ...sealed, keyVersion: 2 }, 'ctx')).rejects.toBeInstanceOf(SecretBoxOpenError);
+  });
+
   test('rejects a key of the wrong size and a current version with no key', () => {
     expect(() => use(1, [[1, new Uint8Array(16)]])).toThrow(/32 bytes/);
     expect(() => use(2, [[1, key()]])).toThrow(/current version/);

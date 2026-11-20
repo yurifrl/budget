@@ -26,16 +26,16 @@
 import { Hono } from 'hono';
 import { z } from '@shared/zod';
 
-import { hasProvider } from './registry';
 import {
   keyAccessForConnection,
   keyAccessForNewConnection,
   keyAccessHttpError,
   reconcileKeyAccess,
   storeOwnCredentials,
+  usableKeySets,
   type KeyAccess,
 } from './keys';
-import { getAggregator } from './registry';
+import { getAggregator, hasProvider } from './registry';
 import { SecretBoxUnavailable, secretBoxConfigured } from '../core/secret-box';
 import { getSyncWindowDays, setSyncWindowDays } from './settings';
 import { withPostConnectSettle } from './settle';
@@ -53,7 +53,7 @@ import { implement } from '../core/operation';
 import { HttpError } from '../core/validate';
 import * as contracts from '@shared/contracts/connections/connections';
 import * as credentialContracts from '@shared/contracts/connections/credentials';
-import { CONNECTION_PAUSED, CREDENTIALS_KEY_MISSING, INVALID_CREDENTIALS } from '@shared/contracts/connections/credentials';
+import { CONNECTION_PAUSED, CREDENTIALS_KEY_MISSING, INVALID_CREDENTIALS, ITEM_NOT_REACHABLE } from '@shared/contracts/connections/credentials';
 import { connectionsRouter } from './router';
 
 /** An unknown provider is a 404 before anything else is looked at. */
@@ -131,8 +131,10 @@ export const operations = [
     // Re-auth of an existing connection runs on the key set that created it;
     // a new connection gets the caller's own keys, else the shared ones if allowed.
     const existing = body.itemId ? await store.getConnectionByExternal(body.provider, body.itemId) : null;
+    // Somebody else's item: indistinguishable from an unknown one, and never sent upstream.
+    if (existing && existing.user_id !== user.id) throw new HttpError(404, 'not found');
     const access =
-      existing && existing.user_id === user.id
+      existing
         ? await keyAccessForConnection(pool, existing)
         : await keyAccessForNewConnection(pool, user.id, body.provider);
     const { aggregator } = usable(access, body.provider);
@@ -168,12 +170,14 @@ export const operations = [
     if (existing && existing.user_id !== user.id) {
       throw new HttpError(409, 'conflict — connection already registered by another user');
     }
-    // A known item keeps the key set that created it; a new one was just
-    // created by the widget with the same choice connect-token made.
-    const access = existing
-      ? await keyAccessForConnection(pool, existing)
-      : await keyAccessForNewConnection(pool, user.id, body.provider);
-    const { aggregator, keySource, keyClientId } = usable(access, body.provider);
+    // A known item keeps the key set that created it. A new one is PROBED:
+    // connect-token chose a key set earlier, and the caller may have saved or
+    // deleted own keys since, so the item is looked up with every key set the
+    // caller may use now and the row records the one that reaches it. Nothing
+    // the client sends decides this.
+    const { aggregator, keySource, keyClientId } = existing
+      ? usable(await keyAccessForConnection(pool, existing), body.provider)
+      : await keySetHoldingItem(user.id, body.provider, body.itemId);
     try {
       const row = await store.upsertConnection({
         userId: user.id,
@@ -423,6 +427,30 @@ export const operations = [
     return { ok: true };
   }),
 ];
+
+/**
+ * The key set, among those the user may use now, that reaches a just-connected
+ * item. None usable → the usual key-access error; none reaches it → 409
+ * item_not_reachable, and the caller stores nothing.
+ */
+async function keySetHoldingItem(userId: string, provider: string, itemId: string): Promise<Extract<KeyAccess, { ok: true }>> {
+  const { usable: candidates, problem } = await usableKeySets(pool, userId, provider);
+  if (candidates.length === 0) throw keyAccessHttpError(problem, provider);
+  for (const candidate of candidates) {
+    let found: boolean;
+    try {
+      found = await candidate.aggregator.hasItem(itemId);
+    } catch (err) {
+      throwProviderMapped(err);
+    }
+    if (found) return candidate;
+  }
+  throw new HttpError(
+    409,
+    'This bank was connected with Pluggy keys that are not available to your account any more. Connect it again.',
+    ITEM_NOT_REACHABLE,
+  );
+}
 
 const credentialsJson = (provider: string, row: store.StoredCredentials | null) => ({
   provider,

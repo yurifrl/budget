@@ -140,7 +140,8 @@ start at `0100`). One image runs both the API and the worker
   `key_client_id`), because a Pluggy item is reachable only with those
   credentials. `connections/keys.ts` is the one place that picks a key set: a
   new connection gets own keys if saved, else shared if the feature is on,
-  else 403 `own_keys_required`; an existing one always uses its own.
+  else 403 `own_keys_required`; an existing one always uses its own; register
+  probes which key set holds a new item before recording it.
   `getAggregator(provider, credentials?)` builds the adapter on either. A
   connection whose key set may not be used is `status = 'paused'` (never
   deleted): `reconcileKeyAccess` sets and clears that wherever a connection is

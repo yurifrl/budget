@@ -86,7 +86,7 @@ export async function upsertConnection(input: {
     }
     const updated = await pool.query<ConnectionRow>(
       `update public.connections
-         set client_user_id = $2, status = $3, status_message = null, environment = $4, institution = $5, updated_at = now()
+         set client_user_id = $2, status = $3, status_message = null, paused_from = null, environment = $4, institution = $5, updated_at = now()
        where id = $1
        returning ${CONNECTION_COLUMNS}`,
       [row.id, input.clientUserId ?? null, input.status, input.environment ?? null, input.institution ?? null],
@@ -199,7 +199,7 @@ export async function linkedAccounts(connectionId: string): Promise<Array<{ id: 
 export async function markDisconnected(id: string): Promise<void> {
   await pool.query(
     `update public.connections
-       set status = 'disconnected', status_message = null, next_poll_at = null, updated_at = now()
+       set status = 'disconnected', status_message = null, next_poll_at = null, paused_from = null, updated_at = now()
      where id = $1`,
     [id],
   );
@@ -210,6 +210,9 @@ export async function markDisconnected(id: string): Promise<void> {
  * `pausedUntil` is only meaningful for 'quota_exhausted'; any other status
  * clears it so the sweep considers the connection again.
  */
+// A 'paused' row is left alone too: only reconcilePausedConnections (or a
+// disconnect, or a fresh register) may take a row out of 'paused'. A webhook
+// event or a sync that finishes after the pause must not un-pause it.
 export async function setConnectionStatus(
   id: string,
   status: string,
@@ -219,7 +222,7 @@ export async function setConnectionStatus(
   await pool.query(
     `update public.connections
        set status = $2, status_message = $3, next_poll_at = $4, updated_at = now()
-     where id = $1 and status <> 'disconnected'`,
+     where id = $1 and status not in ('disconnected', 'paused')`,
     [id, status, message, pausedUntil],
   );
 }
@@ -245,12 +248,16 @@ export async function getConnectionById(id: string): Promise<ConnectionRow | nul
  * or a webhook, and sandbox items never auto-sync (provider sandboxes churn
  * data hourly).
  */
+// Also: 'paused' rows (the sweep is what resumes them) and OWN-key rows in
+// 'error' (they get no webhook, so nothing else would ever retry them).
+// Shared-key 'error' rows still wait for the user or a webhook, as before.
 export async function listSweepConnections(now: Date): Promise<ConnectionRow[]> {
   const rows = await pool.query<ConnectionRow>(
     `select ${CONNECTION_COLUMNS}
      from public.connections
      where environment is distinct from 'sandbox'
        and (status in ('connected', 'paused')
+            or (status = 'error' and key_source = 'own')
             or (status = 'quota_exhausted' and (next_poll_at is null or next_poll_at <= $1)))
      order by created_at`,
     [now],
@@ -303,8 +310,11 @@ export async function pruneConnectionEvents(olderThan: Date): Promise<number> {
  *   shared → usable while `sharedAllowed` (the 'shared-pluggy-key' feature);
  *   own    → usable while the owner stores a key set with the client id the
  *            connection was created with.
- * Not usable → 'paused' with the matching message; usable again → back to
- * 'connected' (the next sync or sweep re-reads the provider's real state).
+ * Not usable → 'paused' with the matching message, remembering in
+ * `paused_from` the status, message and quota pause-until the row had; usable
+ * again → that state is restored (so an unauthorized or quota-paused bank does
+ * not come back looking healthy), 'connected' when nothing was remembered.
+ * Only this function takes a row out of 'paused'.
  * Disconnected rows are never touched. Two statements, idempotent, so it is
  * safe to run on every read. Returns how many rows changed.
  */
@@ -315,7 +325,8 @@ export async function reconcilePausedConnections(db: Queryable, userId: string, 
                where k.user_id = c.user_id and k.provider = c.provider and k.client_id = c.key_client_id)))`;
   const paused = await db.query(
     `update public.connections c
-        set status = 'paused',
+        set paused_from = jsonb_build_object('status', c.status, 'status_message', c.status_message, 'next_poll_at', c.next_poll_at),
+            status = 'paused',
             status_message = case when c.key_source = 'own' then $4 else $3 end,
             next_poll_at = null, updated_at = now()
       where c.user_id = $1 and c.status not in ('disconnected', 'paused') and not ${usable}`,
@@ -323,7 +334,10 @@ export async function reconcilePausedConnections(db: Queryable, userId: string, 
   );
   const resumed = await db.query(
     `update public.connections c
-        set status = 'connected', status_message = null, updated_at = now()
+        set status = case when c.paused_from->>'status' in ('unauthorized', 'error', 'quota_exhausted') then c.paused_from->>'status' else 'connected' end,
+            status_message = case when c.paused_from->>'status' in ('unauthorized', 'error', 'quota_exhausted') then c.paused_from->>'status_message' end,
+            next_poll_at = case when c.paused_from->>'status' = 'quota_exhausted' then (c.paused_from->>'next_poll_at')::timestamptz end,
+            paused_from = null, updated_at = now()
       where c.user_id = $1 and c.status = 'paused' and ${usable}`,
     [userId, sharedAllowed],
   );

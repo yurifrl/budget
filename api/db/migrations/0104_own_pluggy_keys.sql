@@ -25,6 +25,11 @@
 --      the API at use time (api/src/connections/keys.ts); syscd-app's sweep
 --      only reads status = 'connected' and so leaves paused rows alone.
 --
+--      connections.paused_from: what a row was when it was paused
+--      ({status, status_message, next_poll_at}), restored on resume so an
+--      unauthorized or quota-paused bank does not come back looking healthy.
+--      NULL whenever the row is not paused.
+--
 --   4. Feature 'shared-pluggy-key' (default off, public.feature_overrides from
 --      0103) is turned ON for every user who already has a connection: those
 --      were all created with the shared keys. `on conflict do nothing` keeps a
@@ -43,6 +48,7 @@ create table if not exists public.connection_credentials (
 
 alter table public.connections add column if not exists key_source text not null default 'shared';
 alter table public.connections add column if not exists key_client_id text;
+alter table public.connections add column if not exists paused_from jsonb;
 
 do $$
 begin

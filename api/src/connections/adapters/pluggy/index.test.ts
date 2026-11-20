@@ -628,3 +628,21 @@ describe('adapter: webhook actions (table)', () => {
     });
   }
 });
+
+describe('adapter: hasItem', () => {
+  it('true when the item is readable; false on 404/403 (another application\'s item); other failures are thrown', async () => {
+    const { fetchImpl } = makeFetch((url) => {
+      if (url.pathname === '/auth') return authJson();
+      if (url.pathname === '/items/mine') return { json: { id: 'mine', status: 'UPDATED' } };
+      if (url.pathname === '/items/theirs') return { status: 404, json: { message: 'not found' } };
+      if (url.pathname === '/items/forbidden') return { status: 403, json: { message: 'forbidden' } };
+      if (url.pathname === '/items/down') return { status: 500, text: 'boom' };
+      throw new Error(`unexpected ${url.pathname}`);
+    });
+    const agg = makeAggregator(fetchImpl);
+    expect(await agg.hasItem('mine')).toBe(true);
+    expect(await agg.hasItem('theirs')).toBe(false);
+    expect(await agg.hasItem('forbidden')).toBe(false);
+    await expect(agg.hasItem('down')).rejects.toThrow();
+  });
+});
