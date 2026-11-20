@@ -93,5 +93,7 @@ const MESSAGES: Record<string, string> = {
 
 export function errorMessage(code: string | undefined, fallback: string, status?: number | 'network'): string {
   if (status === 'network') return 'Cannot reach the API. Check your connection and that the API is running, then retry.';
+  // 400 invalid_input carries the server's own reason (e.g. "this e-mail is reserved"): keep it, with a lead-in.
+  if (code === 'invalid_input') return `Not accepted: ${fallback}.`;
   return (code && MESSAGES[code]) || fallback;
 }

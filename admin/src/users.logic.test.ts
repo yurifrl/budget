@@ -66,6 +66,7 @@ test('errorMessage maps codes and falls back', () => {
   for (const c of ['user_exists', 'cannot_modify_self', 'last_admin', 'user_has_data', 'password_login_disabled', 'forbidden', 'not_found'])
     expect(errorMessage(c, 'raw')).not.toBe('raw');
   expect(errorMessage('weird', 'raw')).toBe('raw');
+  expect(errorMessage('invalid_input', 'this e-mail is reserved', 400)).toBe('Not accepted: this e-mail is reserved.');
   expect(errorMessage(undefined, 'raw')).toBe('raw');
   expect(errorMessage(undefined, 'Failed to fetch', 'network')).toMatch(/^Cannot reach the API/);
   expect(errorMessage('user_exists', 'raw', 409)).toBe('A user with that e-mail already exists.');
