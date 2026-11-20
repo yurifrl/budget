@@ -12,22 +12,26 @@ export type Profile = {
   email: string;
   name: string | null;
   role: IdentityRole;
+  has_password: boolean;
   avatar: PersonAvatar;
 };
 
-type ProfileRow = PersonAvatarRow & { id: string; email: string; name: string | null; role: IdentityRole };
+type ProfileRow = PersonAvatarRow & { id: string; email: string; name: string | null; role: IdentityRole; has_password: boolean };
 
 const toProfile = (r: ProfileRow): Profile => ({
   id: r.id,
   email: r.email,
   name: r.name,
   role: r.role,
+  has_password: r.has_password,
   avatar: toPersonAvatar(r),
 });
 
 export async function getProfile(userId: string): Promise<Profile | null> {
   const { rows } = await pool.query<ProfileRow>(
-    `select u.id, u.email, u.name, u.role, ${personAvatarSql('u')} from public.users u where u.id = $1`,
+    `select u.id, u.email, u.name, u.role,
+            exists (select 1 from public.user_passwords p where p.user_id = u.id) as has_password,
+            ${personAvatarSql('u')} from public.users u where u.id = $1`,
     [userId],
   );
   return rows[0] ? toProfile(rows[0]) : null;

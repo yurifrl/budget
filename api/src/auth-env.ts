@@ -96,7 +96,22 @@ export function checkAuthEnv(e: Env): string[] {
   }
   const secret = val(e, 'SESSION_SECRET');
   if (!secret || secret.length < 32) errors.push('SESSION_SECRET must be set and >= 32 chars');
+  if (passwordLoginFromEnv(e) === null) errors.push('AUTH_PASSWORD_LOGIN must be 1/0 (or true/false, on/off, yes/no)');
   return errors;
+}
+
+const ON = ['1', 'true', 'on', 'yes'];
+const OFF = ['0', 'false', 'off', 'no'];
+
+/**
+ * AUTH_PASSWORD_LOGIN: e-mail + password sign-in, on unless explicitly off.
+ * null = an unrecognised value (a boot error in checkAuthEnv).
+ */
+export function passwordLoginFromEnv(e: Env): boolean | null {
+  const v = val(e, 'AUTH_PASSWORD_LOGIN')?.toLowerCase();
+  if (v === undefined || ON.includes(v)) return true;
+  if (OFF.includes(v)) return false;
+  return null;
 }
 
 /** Abort boot on fatal auth misconfiguration (call once at startup). */
@@ -129,5 +144,7 @@ export function authConfigFromEnv(e: Env): AuthConfig {
     accessAud: splitTags(val(e, 'ACCESS_AUD')),
     // Dev/test only; checkAuthEnv refuses it in a cluster (belt and braces here).
     accessCertsUrl: val(e, 'KUBERNETES_SERVICE_HOST') ? '' : (val(e, 'ACCESS_CERTS_URL') ?? ''),
+    // Fail closed on a value checkAuthEnv would have refused.
+    passwordLogin: passwordLoginFromEnv(e) === true,
   };
 }

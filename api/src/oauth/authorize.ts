@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 
-import { accessConfigured, authDisabled, cookieSessionUser, isAllowed, resolveOrCreateSessionUser, safeReturnTo } from '../user';
+import { accessConfigured, admitGrant, authDisabled, cookieSessionUser, resolveOrCreateSessionUser, resolvePrincipalUser, safeReturnTo } from '../user';
 import { CHALLENGE_RE, hmacBase64Url, safeEqual } from './crypto';
 import { DEFAULT_SCOPE, SCOPES, type OAuthConfig } from './config';
 import { renderConsent, renderError } from './consent-page';
@@ -161,10 +161,12 @@ export function authorizeRoutes(cfg: OAuthConfig): Hono {
     if (form.decision !== 'approve') {
       return c.redirect(redirectWith(q.redirectUri, cfg.issuer, { error: 'access_denied', state: q.state }), 303);
     }
-    if (!cfg.devEmail || !authDisabled()) {
-      if (!isAllowed(email, who.idp)) return c.html(renderError('Not authorized.'), 403);
-    }
-    const user = await resolveOrCreateSessionUser(email);
+    const devBypass = !!cfg.devEmail && authDisabled();
+    // Same per-request rule as every session (user/session-gate.ts).
+    if (!devBypass && !(await admitGrant(email, who.idp))) return c.html(renderError('Not authorized.'), 403);
+    // A password approver never creates a row (null = deleted meanwhile).
+    const user = devBypass ? await resolveOrCreateSessionUser(email) : await resolvePrincipalUser({ email, idp: who.idp });
+    if (!user) return c.html(renderError('Your session expired. Start again.'), 401);
     if (user.status !== 'active') return c.html(renderError('Account disabled.'), 403);
     const code = await createGrantAndCode({
       userId: user.id,

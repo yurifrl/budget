@@ -26,7 +26,30 @@ export const ERROR_CODE_BY_STATUS: Readonly<Record<number, string>> = {
 };
 
 /** Codes thrown explicitly somewhere in the API, beyond the per-status defaults. */
-export const SPECIFIC_ERROR_CODES = ['invalid_input', 'account_disabled', 'insufficient_scope', 'already_archived'] as const;
+export const SPECIFIC_ERROR_CODES = [
+  'invalid_input',
+  'account_disabled',
+  'insufficient_scope',
+  'already_archived',
+  // Password sign-in and user management (docs/decisions.md).
+  'invalid_credentials',
+  'temp_password_expired',
+  'invalid_change_token',
+  'too_many_attempts',
+  'origin_not_allowed',
+  'unsupported_media_type',
+  'no_password',
+  'password_too_short',
+  'password_too_long',
+  'password_is_email',
+  'password_too_common',
+  'password_unchanged',
+  'password_login_disabled',
+  'user_exists',
+  'cannot_modify_self',
+  'last_admin',
+  'user_has_data',
+] as const;
 
 export function defaultErrorCode(status: number): string {
   return ERROR_CODE_BY_STATUS[status] ?? (status >= 500 ? 'internal' : 'error');

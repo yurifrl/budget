@@ -1514,3 +1514,195 @@ under it, icon nav, avatar at the bottom.
   Profile page and the menu's Log Out.
 - The rail no longer links the avatar to `/profile`; the menu's "Profile"
   row does.
+
+## Password sign-in and user management (budget-uns, 2026-11-20)
+
+API and contracts half of epic `budget-bst`: e-mail + password sign-in next
+to Google and Cloudflare Access, Google linking for admin-managed users, and
+`/admin/users`. Contracts: `shared/src/contracts/user/password.ts`,
+`admin-users.ts`; password rules: `shared/src/password-policy.ts`.
+
+### Identity and storage
+
+- One user row per e-mail, unchanged. The password is an extra credential in
+  a NEW table (migration `0102_password_login.sql`; `public.users` is not
+  altered, the database is shared with syscd-app):
+  `user_passwords (user_id PK -> users ON DELETE CASCADE, password_hash,
+  must_change, temp_expires_at, session_version, changed_at, created_at)` and
+  `auth_login_throttle (email PK, failures, locked_until, last_failure_at)`.
+- "Admin-managed" = has a `user_passwords` row. Only an admin creates one
+  (create user, or reset the password of any user). No sign-up, no recovery,
+  no e-mail sending.
+- Hashes: argon2id through `Bun.password` with Bun's defaults (64 MiB, t=2).
+  `AuthConfig.passwordHashCost` lowers the cost for tests only; it is never
+  read from env. Passwords, temporary passwords and hashes are never logged or
+  returned, except the one-time `temp_password` field of the admin responses.
+
+### Sessions
+
+- A password session is the same HS256 session JWT with `idp: 'password'` and
+  `pwv` = the row's `session_version`. `verifySession` refuses a password
+  session without `pwv` (it is never downgraded to an unmarked session).
+- The per-request rule lives in `api/src/user/session-gate.ts`
+  (`decideSession`, pure; `admitSession` / `admitGrant` load what it needs):
+  - `password`: password login on, user exists and is active, password row
+    exists, and (sessions) `pwv` equals `session_version`. Grants approved from
+    a password session (`oauth_grants.idp = 'password'`) follow the same rule
+    without the version and are revoked on a password change or reset.
+  - otherwise the old config rule (`isAllowed`) with no DB read; an unmarked
+    (Google) session off `AUTH_ALLOWED_EMAILS` passes only for an active
+    admin-managed user while password login is on.
+  - Call sites: `currentUser` and `cookieSessionUser` (so `requireUser`,
+    `/auth/me`, `principalFromRequest`, `rejectUnlessActiveSession` and the
+    consent page), `accessPrincipal` (OAuth tokens, MCP included) and the
+    consent POST in `oauth/authorize.ts`.
+  - The row is then resolved by `resolvePrincipalUser`: password principals
+    use `findSessionUser` (UPDATE ... RETURNING, never INSERT); others keep
+    `resolveOrCreateSessionUser`. A password session can never create a row.
+- Deviation from the epic: instead of `sessions_valid_after` compared with the
+  token's `iat`, the row holds an integer `session_version` copied into the
+  token (`pwv`). `iat` has one-second resolution, so "invalidate everything
+  older, then re-issue the caller's session" cannot be expressed without either
+  killing the fresh session or keeping others issued in the same second (and
+  hono refuses a future `iat`). Behaviour is the one the epic asks for.
+
+### Google linking
+
+`googleSignInAllowed` (session-gate.ts): the Google web callback and native
+`/auth/token` admit an e-mail on `AUTH_ALLOWED_EMAILS` (as before) or one that
+belongs to an active admin-managed user while password login is on.
+`email_verified` stays mandatory; the row is resolved with
+`resolveOrCreateSessionUser` as before (same row, `google_sub` back-filled, a
+different `google_sub` still 403). Per request the unmarked session passes
+through the same exception. Removing the password row, disabling the user or
+`AUTH_PASSWORD_LOGIN=0` ends it. The reverse holds: a Google/Access user given
+a password by an admin signs in with it into the same row.
+
+### Endpoints
+
+All api-only (no CLI, no MCP). Errors are `{ error, code }`.
+
+| Operation | Method, path | Input | Output |
+|---|---|---|---|
+| `user_auth_password_login` | POST `/auth/password/login` (pre-gate) | `{ email, password, session?: 'cookie'\|'token' }` | `{ status: 'signed_in', email, token? }` or `{ status: 'password_change_required', email, change_token, expires_in }` |
+| `user_auth_password_complete` | POST `/auth/password/complete` (pre-gate) | `{ change_token, new_password, session? }` | `{ status: 'signed_in', email, token? }` |
+| `user_auth_password_change` | POST `/auth/password/change` (post-gate) | `{ current_password, new_password }` | `{ ok: true, token? }` |
+| `user_admin_users_list` | GET `/admin/users` | `{}` | `AdminUser[]` |
+| `user_admin_users_create` | POST `/admin/users` (201) | `{ email, name?, role? }` | `{ user: AdminUser, temp_password }` |
+| `user_admin_users_update` | PATCH `/admin/users/:id` | `{ id, name?: string\|null, role?, status? }` | `AdminUser` |
+| `user_admin_users_reset_password` | POST `/admin/users/:id/reset-password` | `{ id }` | `{ user: AdminUser, temp_password }` |
+| `user_admin_users_delete` | DELETE `/admin/users/:id` | `{ id }` | 204 |
+
+`AdminUser`: `id, email, name, role, status, has_password,
+must_change_password, temp_expires_at, locked_until, has_google, signed_in_at,
+last_seen_at, created_at`. `GET /auth/providers` gained `password`; `/me`
+(and the other profile operations) gained `has_password`.
+
+- Login: `session: 'cookie'` (default) sets `budget_session`, no token in the
+  body; `'token'` returns `token` and sets no cookie. A correct, unexpired
+  temporary password returns a change token (HS256, kind `password_change`,
+  10 minutes) and no session. Kind separation keeps it out of
+  `verifySession`, `verifyAccessToken` and the Access exchange; completion
+  is a compare-and-swap on `session_version`, so it works once.
+- Failure codes: 401 `invalid_credentials` for unknown e-mail, no password,
+  wrong password and disabled user (each path runs exactly one argon2
+  verification, against a dummy hash when there is nothing to check);
+  401 `temp_password_expired` only after the temporary password was right;
+  401 `invalid_change_token`; 400 `password_too_short` | `password_too_long` |
+  `password_is_email` | `password_too_common` | `password_unchanged`;
+  400 `no_password` (change, account without a password); 409 `conflict`
+  (change raced another change); 403 `origin_not_allowed`; 415
+  `unsupported_media_type` (login/complete/change need `application/json`);
+  403 `forbidden` (change by an OAuth token or the service token); 404 `not_found` while password login is off; 429
+  `too_many_attempts` with `Retry-After`.
+- Admin: 401 `unauthorized`; 403 `forbidden` (not admin, or not a first-party
+  session: OAuth tokens and the service token are refused); 403
+  `origin_not_allowed`; 404 `not_found` (unknown id, synthetic rows
+  `svc-budget-mcp@syscd.local` / `dev@localhost`, placeholders); 409
+  `user_exists`, `cannot_modify_self`, `last_admin`, `user_has_data` (any row
+  referencing the user other than `user_passwords`: budgets, memberships,
+  accounts, avatars, OAuth grants...; disable instead),
+  `password_login_disabled` (create and reset while `AUTH_PASSWORD_LOGIN=0`).
+  Create, update, reset and delete run in one transaction under an advisory
+  lock and re-read the caller inside it (still an active admin, else 403), so
+  two admins cannot demote each other to zero and a request in flight from an
+  admin just demoted or disabled does not complete. Create refuses the
+  reserved e-mails (`svc-budget-mcp@syscd.local`, `dev@localhost`) with 400
+  `invalid_input` before any insert; the other operations answer 404 for those
+  rows. Delete locks the user row, then checks every foreign key to users
+  (except `user_passwords`) and the non-FK reference `jobs.job_runs.requested_by`
+  (`user:<id>` / `admin:<id>`), then deletes, in the same transaction; a
+  referencing insert racing it waits for the row lock and then fails its FK
+  check instead of being cascaded away. `last_admin` is effectively a
+  defence in depth: the in-transaction check makes the caller an active admin,
+  so the last one can only be the caller, who hits `cannot_modify_self`. Every action logs one JSON line
+  (`event: admin_user_action`, actor, action, target, changed fields).
+
+### Rules
+
+- Chosen passwords: 12 to 128 code points, no composition rules, not the
+  e-mail, not the current/temporary password, not in a small built-in list of
+  common passwords (`shared/src/password-policy.ts`).
+- Temporary passwords: server-generated, 20 symbols from a 31-letter alphabet
+  without look-alikes in four groups (`abcde-fghjk-mnpqr-stuvw`, about 99
+  bits), stored hashed, expire after 7 days, force a change, returned once.
+- Throttle per normalised e-mail (unknown e-mails too): every attempt is
+  RESERVED before any verification (`reserveAttempt`: one transaction that
+  row-locks the e-mail's `auth_login_throttle` row, refuses while it is
+  locked, otherwise counts the attempt). The 5th consecutive attempt starts a
+  1-minute lock itself, and each later admitted attempt (one per lock window)
+  doubles it, up to 15 minutes. So at most 5 argon2 verifications run before
+  the first lock and one per window after it, whatever the concurrency; a
+  refused attempt is a 429 with `Retry-After` and runs no argon2. A correct
+  password (also a correct temporary one, or the correct current password at
+  change) and an admin reset clear the count; rows idle for a day are pruned.
+  The same budget guards `/auth/password/change` (keyed by the caller's
+  e-mail). `/auth/password/complete` has only the address budget: its
+  credential is the signed, single-use, 10-minute change token, not a guess.
+- Per client address (CF-Connecting-IP, else the socket): at most 30
+  attempts (not only failures) per 15 minutes per process, reserved before
+  verification (in memory, synchronous, so atomic within a process).
+- Origin: login, complete, change and every `/admin/users` route refuse an
+  Origin header outside the trusted list built in `app.ts`: the app origin and
+  `ADMIN_ORIGIN`, plus the fixed localhost dev origins only when the app
+  origin itself is localhost (local dev). The CORS list is unchanged apart
+  from `http://localhost:5191` (the admin dev server) and now exposes
+  `Retry-After`. The cookie is SameSite=Lax on the parent domain, so a sibling
+  subdomain would otherwise be same-site. Login, complete and change also
+  require the media type `application/json` exactly (parameters ignored).
+- Changing a password (self or reset) bumps `session_version` (ends the
+  user's other password sessions), revokes grants approved from a password
+  session, and re-issues the caller's password session (cookie, or `token` in
+  the body for a Bearer caller).
+- Env: `AUTH_PASSWORD_LOGIN` (default on when auth is on; `0/false/off/no`
+  = off: routes 404, password sessions invalid, no Google exception; another
+  value refuses to boot). Password login is never on with auth disabled.
+  It does not count as a sign-in provider for the boot check: the first admin
+  still comes from Access or Google.
+
+### Migration probe
+
+`MIGRATION_SIGNATURES` now accepts a list of probes (all must exist); 0102
+probes both `public.user_passwords` and `public.auth_login_throttle`.
+
+### Known limits
+
+- Anyone who knows an e-mail can keep it locked by sending a wrong password
+  once per lock window (at most 15 minutes at a time, by design). Only time
+  or an admin reset unlocks it; Google and Access sign-in are unaffected.
+- The per-address limit trusts `CF-Connecting-IP`. Behind Cloudflare that is
+  the client; a request reaching the API directly can set it to anything, so
+  the per-e-mail budget is the real bound. The limit is per process (several
+  replicas each allow 30).
+- Deleting a user and recreating one with the same e-mail at the same moment
+  as a sign-in can race (rated low risk in review): a sign-in resolving the
+  old row may fail with 401 and must be retried. A managed Google session
+  admitted just before its row is deleted is resolved through the
+  create-on-resolve path of Google sessions and could recreate a plain row.
+
+### Out of scope
+
+Password recovery, e-mail sending, self sign-up, MFA, changing an e-mail,
+users setting a first password themselves. The OAuth consent page still
+sends a signed-out browser to Access or Google (a password user signs in on
+the web app first; the cookie is shared).

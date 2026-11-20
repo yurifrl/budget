@@ -2,6 +2,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 
 import { authDisabled, currentUser } from './authz';
 
+import { resolvePrincipalUser } from './session-gate';
 import { ensureDevAdminRole, resolveOrCreateSessionUser, resolveServiceUser } from './store';
 import { HttpError, errorResponse } from '../core/validate';
 import type { IdentityUser } from './types';
@@ -23,7 +24,8 @@ export const requireUser: MiddlewareHandler = async (c, next) => {
   if (principal) {
     // Old cookies carry no sub (JWT shape frozen per D-01): per-request
     // callers pass no identity, so any stored google_sub stays untouched.
-    user = await resolveOrCreateSessionUser(principal.email);
+    // Password principals never create a row (resolvePrincipalUser).
+    user = await resolvePrincipalUser(principal);
   } else if (authDisabled()) {
     // Dev bypass: provision exactly one persisted synthetic admin. The
     // bypassed machine has no other authority, so its row is idempotently
@@ -64,7 +66,7 @@ function rejectUnlessActive(c: Context, user: IdentityUser | null | undefined): 
  */
 export async function rejectUnlessActiveSession(c: Context): Promise<Response | null> {
   const claims = await currentUser(c);
-  const user = claims ? await resolveOrCreateSessionUser(claims.email) : null;
+  const user = claims ? await resolvePrincipalUser(claims) : null;
   return rejectUnlessActive(c, user);
 }
 
@@ -89,6 +91,18 @@ export function requireUserId(c: Context): string {
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * First-party session only: a signed-in session (cookie or Bearer session
+ * token). An OAuth access token (principal with a `scope`) and the service
+ * lane (no principal) get 403 `forbidden`. The dev bypass passes (auth off).
+ */
+export const requireFirstPartySession: MiddlewareHandler = async (c, next) => {
+  if (authDisabled()) return next();
+  const principal = c.get('principal');
+  if (!principal || principal.scope !== undefined) return errorResponse(c, 403, 'forbidden');
+  await next();
+};
 
 /**
  * Own-identity writes (name, picture) are first-party only: an OAuth access

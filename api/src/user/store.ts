@@ -5,7 +5,7 @@ import { pool, withTransaction } from '../core/db';
 
 import type { IdentityRole, IdentityUser } from './types';
 
-const SVC_EMAIL = 'svc-budget-mcp@syscd.local';
+export const SVC_EMAIL = 'svc-budget-mcp@syscd.local';
 const SVC_SUB = 'svc:budget-mcp';
 
 /**

@@ -20,6 +20,8 @@ export const meSchema = z.object({
   email: z.string(),
   name: z.string().nullable(),
   role: z.enum(['admin', 'user']),
+  /** The user has a password (admin-managed account): the client may offer "Change password". */
+  has_password: z.boolean(),
   avatar: z.object({ seed: z.string(), image_version: z.number().nullable() }),
 });
 

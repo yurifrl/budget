@@ -22,9 +22,10 @@ const MIGRATIONS_DIR = join(import.meta.dir, '..', '..', 'db', 'migrations');
  * Format: `table:<schema>.<table>`, `index:<schema>.<index>`,
  * `column:<schema>.<table>.<column>`, or `absent:<schema>.<table>` (the probe
  * is the object's non-existence — e.g. a schema that was dropped). Column
- * probes where the migration only ALTERs an existing table.
+ * probes where the migration only ALTERs an existing table. A list of probes
+ * means every one must be present (a file creating several objects).
  */
-const MIGRATION_SIGNATURES: Record<string, string> = {
+const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0001_budget_schema.sql': 'table:public.transactions',
   '0003_payees.sql': 'table:public.payees',
   '0004_ynab_compat.sql': 'table:public.subtransactions',
@@ -60,6 +61,7 @@ const MIGRATION_SIGNATURES: Record<string, string> = {
   '0033_budget_revision.sql': 'column:public.budgets.revision',
   '0100_account_currency.sql': 'column:public.accounts.currency',
   '0101_multi_user.sql': 'column:public.users.signed_in_at',
+  '0102_password_login.sql': ['table:public.user_passwords', 'table:public.auth_login_throttle'],
 };
 
 /**
@@ -79,7 +81,11 @@ export { MIGRATION_SIGNATURES };
 /** Serializes concurrent runners (two API pods booting together). */
 const MIGRATE_LOCK_KEY = 7_204_001;
 
-async function signaturePresent(signature: string): Promise<boolean> {
+async function signaturePresent(signature: string | readonly string[]): Promise<boolean> {
+  if (typeof signature !== 'string') {
+    for (const one of signature) if (!(await signaturePresent(one))) return false;
+    return true;
+  }
   const kindIndex = signature.indexOf(':');
   const kind = signature.slice(0, kindIndex);
   const target = signature.slice(kindIndex + 1);

@@ -12,14 +12,15 @@ export const sessionTtlSeconds = (): number => authConfig().sessionTtlDays * 864
 
 /**
  * A fresh stateless session token for `email` (native apps send it as Bearer).
- * `idp` marks a Cloudflare Access sign-in (see `isAllowed` in ./config).
+ * `idp` marks a Cloudflare Access or password sign-in (see ./session-gate.ts);
+ * `pwv` is the password session version (password sessions only).
  */
-export const mintSessionToken = (email: string, idp?: SessionIdp): Promise<string> =>
-  issueSession(authConfig().sessionSecret, email, sessionTtlSeconds(), idp);
+export const mintSessionToken = (email: string, idp?: SessionIdp, pwv?: number): Promise<string> =>
+  issueSession(authConfig().sessionSecret, email, sessionTtlSeconds(), idp, pwv);
 
-export async function setSessionCookie(c: Context, email: string, idp?: SessionIdp): Promise<void> {
+export async function setSessionCookie(c: Context, email: string, idp?: SessionIdp, pwv?: number): Promise<void> {
   const cfg = authConfig();
-  setCookie(c, cfg.cookieName, await mintSessionToken(email, idp), {
+  setCookie(c, cfg.cookieName, await mintSessionToken(email, idp, pwv), {
     httpOnly: true,
     secure: true,
     sameSite: 'Lax',

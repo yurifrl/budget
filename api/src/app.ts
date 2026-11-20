@@ -22,8 +22,10 @@ import { createOAuthRouter, grantsRoutes, type OAuthConfig } from './oauth';
 import jobs from './jobs';
 import rates from './rates';
 import { authMiddleware, mountAuthRoutes } from './user/authz';
-import { accessPrincipal, authDisabled, profileRoutes, requireUser } from './user';
+import { accessPrincipal, adminUsersRoutes, authDisabled, passwordChangeRoutes, profileRoutes, requireUser } from './user';
 import { httpOnError, errorResponse } from './core/validate';
+
+const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
 interface BuildAppParams {
   /** First CORS origin; the fixed local-dev origins are always included. */
@@ -41,21 +43,31 @@ interface BuildAppParams {
 export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssuer }: BuildAppParams): Hono {
   const app = new Hono();
 
+  // Browser origins allowed to call the API with credentials (CORS): the app,
+  // the admin SPA and the fixed local-dev origins.
+  const devOrigins = [
+    'http://localhost:8081',
+    'http://localhost:8082',
+    'http://localhost:19006',
+    'http://localhost:8091', // budget web dev server (task web)
+    'http://localhost:3100',
+    'http://localhost:5174', // admin SPA dev server (task admin)
+    'http://localhost:5191', // admin SPA dev server (task run)
+  ];
+  const corsOrigins = [appOrigin, ...adminOrigins, ...devOrigins];
+  // The password and admin-user routes also refuse any other Origin (CSRF
+  // guard). The localhost dev origins count there only when the app itself
+  // runs on localhost (local dev); a deployment trusts its app and admin
+  // origins alone.
+  const trustedOrigins = LOCAL_ORIGIN.test(appOrigin) ? corsOrigins : [appOrigin, ...adminOrigins];
+
   app.use(
     cors({
-      origin: [
-        appOrigin,
-        ...adminOrigins,
-        'http://localhost:8081',
-        'http://localhost:8082',
-        'http://localhost:19006',
-        'http://localhost:8091', // budget web dev server (task web)
-        'http://localhost:3100',
-        'http://localhost:5174', // admin SPA dev server (task admin)
-      ],
+      origin: corsOrigins,
       allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization', 'Mcp-Session-Id', 'MCP-Protocol-Version'],
-      exposeHeaders: ['WWW-Authenticate'],
+      // Retry-After: the web app reads it on a 429 (password sign-in throttle).
+      exposeHeaders: ['WWW-Authenticate', 'Retry-After'],
       credentials: true,
     }),
   );
@@ -65,7 +77,7 @@ export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssu
   app.get('/health', (c) => c.json({ ok: true, version }));
 
   // Agent (hermes) client routes
-  mountAuthRoutes(app);
+  mountAuthRoutes(app, { trustedOrigins });
 
   // OAuth authorization server (discovery, registration, consent, tokens):
   // pre-gate, each endpoint authenticates itself.
@@ -98,6 +110,10 @@ export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssu
 
   // Profile + avatars (/me, /users/:id/avatar)
   app.route('/', profileRoutes);
+
+  // Change password (first-party session) and admin user management.
+  app.route('/', passwordChangeRoutes({ trustedOrigins }));
+  app.route('/', adminUsersRoutes({ trustedOrigins }));
 
   // Connected apps (OAuth grants of the caller)
   app.route('/', grantsRoutes);
