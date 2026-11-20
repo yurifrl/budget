@@ -3,7 +3,7 @@
 * { box-sizing: border-box; }
 body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; }
 a { color:var(--accent); }
-header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 24px; }
+header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 24px; display:flex; align-items:center; gap:24px; }
 .brand { font-weight:700; text-decoration:none; color:var(--fg); }
 .brand span { color:var(--muted); font-weight:400; }
 main { max-width:1200px; margin:0 auto; padding:20px 24px; }
@@ -39,3 +39,29 @@ dt { color:var(--muted); } dd { margin:0; word-break:break-all; }
 .log { display:flex; gap:10px; padding:2px 0; }
 .log .ts, .log .lvl { color:var(--muted); min-width:70px; }
 .log.warn .lvl { color:#b07a00; } .log.error .lvl, .log.error .msg { color:#b3261e; }
+nav { display:flex; gap:4px; }
+nav a { text-decoration:none; color:var(--muted); padding:4px 10px; border-radius:6px; }
+nav a.active { color:var(--fg); background:var(--bg); font-weight:600; }
+.badge.admin { background:#e6dcff; color:#4a2a9c; }
+.badge.user { background:#e3e6ea; color:#333; }
+.badge.active { background:#d4f0dc; color:#17692f; }
+.badge.disabled { background:#ececec; color:#666; }
+.badge.warn { background:#fff0c2; color:#7a5a00; }
+.badge.bad { background:#fbd9d7; color:#9c1c14; }
+.badge.google { background:#d6e4ff; color:#1d4fb8; }
+.chips { display:flex; gap:4px; flex-wrap:wrap; }
+.sub { font-size:12px; }
+.toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+.toolbar .grow { flex:1; }
+td.row-actions { white-space:nowrap; }
+td.row-actions button { padding:3px 8px; margin-right:4px; font-size:13px; }
+dialog { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:20px; width:min(480px, 92vw); }
+dialog::backdrop { background:rgba(0,0,0,.4); }
+dialog h3 { margin:0 0 10px; }
+dialog form, .field { display:flex; flex-direction:column; gap:10px; }
+.field label { font-size:12px; color:var(--muted); }
+.dialog-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+.secret { display:flex; gap:8px; align-items:center; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; margin:10px 0; }
+.secret code { flex:1; font-size:16px; user-select:all; word-break:break-all; }
+.table-wrap { overflow-x:auto; }

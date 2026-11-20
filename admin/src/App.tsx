@@ -2,6 +2,7 @@ import { getHealth, loginUrl } from './api';
 import { usePolled, useHashPath } from './hooks';
 import { RunDetailPage } from './pages/RunDetail';
 import { RunsPage } from './pages/Runs';
+import { UsersPage } from './pages/Users';
 
 export function App() {
   const path = useHashPath();
@@ -11,11 +12,12 @@ export function App() {
   const status = health.error?.status;
   if (status === 401) {
     return (
-      <Shell>
+      <Shell path={path}>
         <div className="notice">
           <h2>Sign in required</h2>
           <p>
-            Sign in at <a href={loginUrl()}>{loginUrl()}</a> with an admin account, then reload this page.
+            Sign in at <a href={loginUrl()}>{loginUrl()}</a> with an admin account, then reload this page. Signing in at the
+            app (with any method: password, Google or Access) also works, since the session cookie is shared.
           </p>
         </div>
       </Shell>
@@ -23,7 +25,7 @@ export function App() {
   }
   if (status === 403) {
     return (
-      <Shell>
+      <Shell path={path}>
         <div className="notice">
           <h2>Not an admin</h2>
           <p>Your account is not an admin.</p>
@@ -33,7 +35,7 @@ export function App() {
   }
 
   return (
-    <Shell>
+    <Shell path={path}>
       {health.error && <div className="banner error">Cannot reach the API: {health.error.message}</div>}
       {health.data && !health.data.temporal.up && (
         <div className="banner warn">
@@ -46,18 +48,33 @@ export function App() {
           Scheduler up · {health.data.queued} queued · instance <code>{health.data.instance_id}</code>
         </div>
       )}
-      {detail ? <RunDetailPage id={detail[1]} uiUrl={health.data?.ui_url ?? null} /> : <RunsPage />}
+      {path.startsWith('/users') ? (
+        <UsersPage />
+      ) : detail ? (
+        <RunDetailPage id={detail[1]} uiUrl={health.data?.ui_url ?? null} />
+      ) : (
+        <RunsPage />
+      )}
     </Shell>
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, path = '/' }: { children: React.ReactNode; path?: string }) {
+  const users = path.startsWith('/users');
   return (
     <div className="shell">
       <header>
         <a href="#/" className="brand">
-          Budget admin <span>jobs</span>
+          Budget admin
         </a>
+        <nav>
+          <a href="#/" className={users ? '' : 'active'}>
+            Jobs
+          </a>
+          <a href="#/users" className={users ? 'active' : ''}>
+            Users
+          </a>
+        </nav>
       </header>
       <main>{children}</main>
     </div>

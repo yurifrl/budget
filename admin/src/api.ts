@@ -1,5 +1,11 @@
 import type { z } from '@shared/zod';
-import { contracts } from '@shared/contracts/jobs';
+import { contracts as jobContracts } from '@shared/contracts/jobs';
+import {
+  contracts as userContracts,
+  type AdminUser,
+  type AdminUserWithTempPassword,
+  type meSchema,
+} from '@shared/contracts/user';
 import type { InputSchema, OperationContract } from '@shared/operation-contract';
 
 import { contractRequest } from '@shared/contract-request';
@@ -28,13 +34,15 @@ export class ApiError extends Error {
   constructor(
     readonly status: number | 'network',
     message: string,
+    /** The API's machine-readable error code (`{ error, code }` body), when present. */
+    readonly code?: string,
   ) {
     super(message);
   }
 }
 
 function contract(name: string): OperationContract {
-  const found = contracts.find((c) => c.name === name);
+  const found = [...jobContracts, ...userContracts].find((c) => c.name === name);
   if (!found) throw new Error(`unknown contract ${name}`);
   return found;
 }
@@ -57,13 +65,15 @@ async function call<T>(name: string, input: Record<string, unknown> = {}): Promi
   }
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
+    let code: string | undefined;
     try {
-      const body = (await res.json()) as { error?: string };
+      const body = (await res.json()) as { error?: string; code?: string };
       if (body.error) message = body.error;
+      code = body.code;
     } catch {
       // keep default
     }
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, code);
   }
   return res.status === 204 ? (null as T) : ((await res.json()) as T);
 }
@@ -82,3 +92,15 @@ export const getRun = (id: string) => call<RunDetail>('jobs_get_run', { id });
 export const retryRun = (id: string) => call<{ run: JobRun; created: boolean }>('jobs_retry_run', { id });
 export const cancelRun = (id: string) => call<JobRun>('jobs_cancel_run', { id });
 export const getHealth = () => call<JobsHealth>('jobs_health');
+
+export type { AdminUser, AdminUserWithTempPassword };
+export type Me = z.infer<typeof meSchema>;
+
+export const getMe = () => call<Me>('user_me_get');
+export const listUsers = () => call<AdminUser[]>('user_admin_users_list');
+export const createUser = (input: { email: string; name?: string; role?: 'admin' | 'user' }) =>
+  call<AdminUserWithTempPassword>('user_admin_users_create', input);
+export const updateUser = (input: { id: string; name?: string | null; role?: 'admin' | 'user'; status?: 'active' | 'disabled' }) =>
+  call<AdminUser>('user_admin_users_update', input);
+export const resetUserPassword = (id: string) => call<AdminUserWithTempPassword>('user_admin_users_reset_password', { id });
+export const deleteUser = (id: string) => call<null>('user_admin_users_delete', { id });
