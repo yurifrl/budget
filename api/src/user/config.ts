@@ -49,6 +49,19 @@ export interface AuthConfig {
   accessCertsUrl: string;
   /** fetch used for the JWKS (tests inject a fake); undefined = global fetch. */
   accessFetch?: typeof fetch;
+  /**
+   * E-mail + password sign-in (AUTH_PASSWORD_LOGIN, default on). Effective
+   * only while auth is on: see `passwordLoginEnabled`. Off = the password
+   * routes answer 404, every password session is refused and admin-managed
+   * e-mails get no Google exception.
+   */
+  passwordLogin: boolean;
+  /**
+   * argon2id cost for NEW hashes. Never read from env: production always uses
+   * the default (Bun's argon2id, 64 MiB, t=2). Tests lower it to stay fast;
+   * verification always uses the parameters stored in the hash.
+   */
+  passwordHashCost?: { memoryCost: number; timeCost: number };
 }
 
 export const DEFAULT_AUTH_CONFIG: AuthConfig = {
@@ -67,6 +80,7 @@ export const DEFAULT_AUTH_CONFIG: AuthConfig = {
   accessTeamDomain: '',
   accessAud: [],
   accessCertsUrl: '',
+  passwordLogin: true,
 };
 
 let current: AuthConfig = DEFAULT_AUTH_CONFIG;
@@ -81,6 +95,9 @@ export const authConfig = (): AuthConfig => current;
 
 /** Cloudflare Access sign-in is on: a team domain and at least one AUD tag. */
 export const accessConfigured = (): boolean => !!current.accessTeamDomain && current.accessAud.length > 0;
+
+/** Password sign-in is on: auth is on, a session secret exists and AUTH_PASSWORD_LOGIN is not 0. */
+export const passwordLoginEnabled = (): boolean => !current.authDisabled && current.passwordLogin && current.sessionSecret.length > 0;
 
 const normalizeEmail = (email: string): string => email.toLowerCase().trim();
 

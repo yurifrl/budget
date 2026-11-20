@@ -4,13 +4,15 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { verifyAccessToken, verifySession, type SessionClaims } from './auth';
 import { mountAccessRoutes } from './access-routes';
-import { accessConfigured, authConfig, googleAllowed, isAllowed } from './config';
+import { accessConfigured, authConfig, googleAllowed, isAllowed, passwordLoginEnabled } from './config';
 import { googleConfigured, googleAuthUrl, exchangeCode } from './google';
 import { implement, mountOperations } from '../core/operation';
 import { errorResponse } from '../core/validate';
 import { authMe } from '@shared/contracts/user/me';
 import { authProviders } from '@shared/contracts/user/providers';
+import { mountPasswordRoutes, type PasswordRouteOptions } from './password-routes';
 import { safeReturnTo } from './return-to';
+import { admitGrant, admitSession, googleSignInAllowed } from './session-gate';
 import { mintSessionToken, setSessionCookie } from './session-cookie';
 import type { SessionPrincipal } from './types';
 import { activeGrant, EmailAlreadyProvisionedError, resolveOrCreateSessionUser } from './store';
@@ -47,7 +49,7 @@ export async function cookieSessionUser(c: Context): Promise<SessionClaims | nul
   const token = getCookie(c, COOKIE());
   if (!token) return null;
   const claims = await verifySession(secret(), token);
-  return claims && isAllowed(claims.email, claims.idp) ? claims : null;
+  return claims && (await admitSession(claims)) ? claims : null;
 }
 
 /** Audience every OAuth access token is minted for: the MCP resource URL. */
@@ -65,7 +67,9 @@ export async function currentUser(c: Context): Promise<SessionClaims | null> {
   const token = bearer || getCookie(c, COOKIE());
   if (!token) return null;
   const claims = await verifySession(secret(), token);
-  if (!claims || !isAllowed(claims.email, claims.idp)) return null;
+  // The per-request rule (./session-gate.ts): config lists, password
+  // sessions (DB: user, status, password row, version) and Google linking.
+  if (!claims || !(await admitSession(claims))) return null;
   return claims;
 }
 
@@ -92,9 +96,9 @@ export async function accessPrincipal(authorization: string | undefined | null):
   const access = await verifyAccessToken(secret(), bearer, oauthResourceUrl());
   if (!access) return null;
   const grant = await activeGrant(access.grantId, access.email);
-  // The grant remembers how its approver signed in, so an Access person's
-  // token is judged like their session (not against the Google list).
-  if (!grant || !isAllowed(access.email, grant.idp)) return null;
+  // The grant remembers how its approver signed in, so an Access or password
+  // person's token is judged like their session (not against the Google list).
+  if (!grant || !(await admitGrant(access.email, grant.idp))) return null;
   return { email: access.email, scope: access.scope, grantId: access.grantId, ...(grant.idp ? { idp: grant.idp } : {}) };
 }
 
@@ -132,12 +136,13 @@ export const authOperations = [
     return user ? { email: user.email } : errorResponse(c, 401, 'unauthorized');
   }),
   // Which sign-in the client should start (LoginGate). Pre-gate and open.
-  implement(authProviders, () => ({ access: accessConfigured(), google: googleConfigured() })),
+  implement(authProviders, () => ({ access: accessConfigured(), google: googleConfigured(), password: passwordLoginEnabled() })),
 ];
 
-export function mountAuthRoutes(app: Hono): void {
+export function mountAuthRoutes(app: Hono, options: PasswordRouteOptions = {}): void {
   mountOperations(app, authOperations);
   mountAccessRoutes(app);
+  mountPasswordRoutes(app, options);
 
   // Google routes answer 404 (as if not mounted) unless Google is configured.
   const googleOff = (c: Context) => errorResponse(c, 404, 'not found');
@@ -178,7 +183,8 @@ export function mountAuthRoutes(app: Hono): void {
 
     const id = await exchangeCode(code, `${apiBaseUrl()}/auth/google/callback`);
     if (!id || !id.emailVerified) return c.text('Could not verify your Google account.', 401);
-    if (!googleAllowed(id.email)) return c.text('Not authorized.', 403);
+    // On the Google list, or an active admin-managed user (Google linking).
+    if (!(await googleSignInAllowed(id.email, googleAllowed))) return c.text('Not authorized.', 403);
 
     // Sign-in-time identity capture (USER-01): the fully verified Google
     // identity lands google_sub + name now; per-request resolution remains
@@ -249,7 +255,7 @@ export function mountAuthRoutes(app: Hono): void {
     }
     const id = await exchangeCode(c.req.query('code') ?? '', `${apiBaseUrl()}/auth/google/native/callback`);
     if (!id || !id.emailVerified) return errorResponse(c, 401, 'could not verify your Google account');
-    if (!googleAllowed(id.email)) return errorResponse(c, 403, 'not authorized');
+    if (!(await googleSignInAllowed(id.email, googleAllowed))) return errorResponse(c, 403, 'not authorized');
     try {
       await resolveOrCreateSessionUser(id.email, { sub: id.sub, name: id.name });
     } catch (err) {

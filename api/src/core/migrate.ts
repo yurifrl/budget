@@ -60,6 +60,7 @@ const MIGRATION_SIGNATURES: Record<string, string> = {
   '0033_budget_revision.sql': 'column:public.budgets.revision',
   '0100_account_currency.sql': 'column:public.accounts.currency',
   '0101_multi_user.sql': 'column:public.users.signed_in_at',
+  '0102_password_login.sql': 'table:public.auth_login_throttle',
 };
 
 /**

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, test } from 'bun:test';
 
-import { authConfigFromEnv, authDisabledFromEnv, checkAuthEnv } from './auth-env';
+import { authConfigFromEnv, authDisabledFromEnv, checkAuthEnv, passwordLoginFromEnv } from './auth-env';
 
 const SECRET = 'x'.repeat(32);
 const FULL = {
@@ -129,5 +129,21 @@ describe('checkAuthEnv: provider matrix (Cloudflare Access / Google)', () => {
     expect(cfg.accessTeamDomain).toBe('syscd.cloudflareaccess.com');
     expect(cfg.accessAud).toEqual(['AbC1', 'def2']);
     expect(cfg.allowedEmails).toEqual([]);
+  });
+});
+
+describe('AUTH_PASSWORD_LOGIN', () => {
+  test('on by default, off only when explicitly off, unknown values are a boot error', () => {
+    expect(passwordLoginFromEnv({})).toBe(true);
+    expect(passwordLoginFromEnv({ AUTH_PASSWORD_LOGIN: '' })).toBe(true);
+    expect(passwordLoginFromEnv({ AUTH_PASSWORD_LOGIN: '1' })).toBe(true);
+    for (const v of ['0', 'false', 'OFF', 'no']) expect(passwordLoginFromEnv({ AUTH_PASSWORD_LOGIN: v })).toBe(false);
+    expect(passwordLoginFromEnv({ AUTH_PASSWORD_LOGIN: 'maybe' })).toBeNull();
+    expect(authConfigFromEnv({ ...FULL }).passwordLogin).toBe(true);
+    expect(authConfigFromEnv({ ...FULL, AUTH_PASSWORD_LOGIN: '0' }).passwordLogin).toBe(false);
+    expect(authConfigFromEnv({ ...FULL, AUTH_PASSWORD_LOGIN: 'maybe' }).passwordLogin).toBe(false);
+    expect(checkAuthEnv({ ...FULL, AUTH_PASSWORD_LOGIN: 'maybe' }).join()).toContain('AUTH_PASSWORD_LOGIN');
+    expect(checkAuthEnv({ ...FULL, AUTH_PASSWORD_LOGIN: '0' })).toEqual([]);
+    expect(authConfigFromEnv({ ...FULL }).passwordHashCost).toBeUndefined();
   });
 });
