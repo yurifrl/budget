@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-vio",
+  "title": "client: rail layout — title + collapse icon at top, sectioned account menu with Log out at the bottom",
+  "description": "",
+  "status": "ready-to-review",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-20T12:06:58.923Z",
+  "updated_at": "2026-11-20T12:17:23.432Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Implemented on tk/budget-vio: title + collapse button on top, icon+label nav, account row at the bottom opening the sectioned menu upward (budget / settings / account / Log Out). client: tsc, eslint clean, bun test 1117 pass. Verified on web at 1440x900 and 390x844 (sub-pane, back, Escape, People open request, Profile, All budgets, Log Out). Not run on iOS. Screenshots attached (01-04).",
+  "design": null,
+  "acceptance_criteria": "Expanded rail: app title (logo + Budget) top-left, collapse-sidebar icon top-right. Bottom: account trigger (avatar, name, budget name) opening a sectioned menu upward (budget / settings / account) ending in Log Out that signs out. Collapsed rail and tablet/phone drawer still work. Settings panes and openPeople request still open. typecheck, eslint, bun test pass in client/. Screenshots attached: web desktop expanded, menu open, collapsed, phone drawer.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-vio",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-vio",
+    "changeset": {
+      "base": "fee59ff3a2d16ab91345e5a8f5e5199bb4439bc0"
+    },
+    "agent_session": "6c5f0e6f-91a1-4c3c-af21-90fec13ac417",
+    "finished_at": "2026-11-20T12:17:23.355Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 16,
+        "additions": 590,
+        "deletions": 379
+      },
+      "head": "6cc39cab1000e8cc7a4e93ba9500b2bd5bb910a4",
+      "at": "2026-11-20T12:17:23.355Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-76d22e",
+      "name": "01-desktop-expanded.png",
+      "mime": "image/png",
+      "size": 149972,
+      "sha256": "d08493abdf1f4bba26a799328e0df232966a9cdaa54270d9924b374c8d5c0258",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-4c98cf",
+      "name": "02-desktop-menu-open.png",
+      "mime": "image/png",
+      "size": 154274,
+      "sha256": "db6888d197182e756bdf3711e97b95ec03c7a355acc9e5c65a3d938cfc465bf1",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d7b44d",
+      "name": "03-desktop-collapsed.png",
+      "mime": "image/png",
+      "size": 131153,
+      "sha256": "25a92d32bdc4912940e8de539a7eee4b51eafa9a17fde2bd90978581a95df6a3",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-8b5593",
+      "name": "04-phone-drawer-menu-open.png",
+      "mime": "image/png",
+      "size": 58812,
+      "sha256": "0075d01e8d96ff20ed7ab87873b78b83347d5a3189706fce3066e41b5cf79d94",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

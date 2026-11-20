@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-fgj",
+  "title": "Onboarding client: landing/login page",
+  "description": "",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-18T21:25:53.693Z",
+  "updated_at": "2026-11-18T22:32:41.317Z",
+  "started_at": null,
+  "closed_at": "2026-11-18T22:32:34.461Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Landing page (features/auth/LandingPage.tsx + landing.logic.ts), Sign out on Profile, signed-out-on-purpose rule in signIn.logic.ts. client: tsc + eslint clean, bun test 1084 pass. Browser-checked on web (1440 and 390 wide) against docs/evidence/landing-login/stub-api.ts, not the real API. iOS simulator not run.\nApproved by Yuri ('ship it') 2026-11-18. Merged to main via tk/budget-ygu; on merged main: typecheck+lint clean, shared 47, client 1107, api 1049 pass.",
+  "design": null,
+  "acceptance_criteria": "Signed-out visitors see a designed landing page (what Budget is, one Sign in action per provider, no sign-up). On web behind Cloudflare Access a live Access session still signs in with no click; after an explicit sign-out the landing page stays up instead of bouncing straight back in. Errors and the unreachable state fit the same page. Screenshots of web desktop + mobile width attached.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-fgj",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-fgj",
+    "changeset": {
+      "base": "9f1bf26c1fa35d9b33bd1c22e3a275e8a0c55960",
+      "head": "46d537e94af0ab96c7ec09467899777a620cfc4c",
+      "commits": [
+        {
+          "sha": "46d537e",
+          "subject": "client: landing page for sign-in, explicit sign-out that stays signed out behind Access"
+        }
+      ],
+      "files": [
+        {
+          "path": "client/src/features/auth/LandingPage.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/LoginGate.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/authSession.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/landing.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/landing.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/signIn.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/signIn.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/useSignIn.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/ProfileScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/evidence/landing-login/01-web-desktop.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/02-web-phone.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/03-web-desktop-error.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/04-web-phone-error.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/05-web-desktop-unreachable.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/06-web-phone-unreachable.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/07-web-phone-two-providers.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/stub-api.ts",
+          "status": "A"
+        }
+      ],
+      "counts": {
+        "additions": 561,
+        "deletions": 61
+      }
+    },
+    "agent_session": "943a273a-4901-48f2-b219-f5f445ef3c6a",
+    "finished_at": "2026-11-18T21:35:37.680Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 20,
+        "additions": 561,
+        "deletions": 61
+      },
+      "head": "46d537e94af0ab96c7ec09467899777a620cfc4c",
+      "at": "2026-11-18T21:35:37.680Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-315bc8",
+      "name": "01-web-desktop.png",
+      "mime": "image/png",
+      "size": 49709,
+      "sha256": "2895719229673a429858f91aa5cd8aba1a12012804ccef7a64ced623e42d2d6d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a400b1",
+      "name": "02-web-phone.png",
+      "mime": "image/png",
+      "size": 30649,
+      "sha256": "7d69ed215fe505d589813b0cbc7a566392ce8ec9d6650d17517adcb09bacd88d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ad586f",
+      "name": "03-web-desktop-error.png",
+      "mime": "image/png",
+      "size": 57088,
+      "sha256": "8009a83bdb3450d4b2b0a75423fb8c411925594f9c75c19dd626eaf4590240b0",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-14033d",
+      "name": "04-web-phone-error.png",
+      "mime": "image/png",
+      "size": 36867,
+      "sha256": "f4454296a5b02b5c49083345461cf93f5ee67b0f93e9bba9fb1a1ecd25d450a8",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-be412f",
+      "name": "05-web-desktop-unreachable.png",
+      "mime": "image/png",
+      "size": 42022,
+      "sha256": "33d7c35326925e652212fc92b4a6ff136c3260030b5787c1467b34387b92c364",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-49ccfc",
+      "name": "06-web-phone-unreachable.png",
+      "mime": "image/png",
+      "size": 27311,
+      "sha256": "df69e24d7f652d9e7dea27ece9cec061576d1920292ece91578a84916a216d6a",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-cd5fc1",
+      "name": "07-web-phone-two-providers.png",
+      "mime": "image/png",
+      "size": 39541,
+      "sha256": "079efa35d7c388a480ba62cfb6190a4627ca51a971a0ae97847bafb552640c54",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

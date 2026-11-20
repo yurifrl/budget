@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-jda",
+  "title": "Bank page: Unlink/Change fails with 'account not found' for accounts in a non-active budget",
+  "description": "",
+  "status": "ready-to-review",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-18T21:01:33.052Z",
+  "updated_at": "2026-11-18T21:38:45.509Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Cause: bank page sent the active budget id on PATCH /accounts/:id; accounts fed by a (per-user) connection can live in another budget -> 404. Fix ea58cba on tk/budget-jda: summary returns budgetId per account, page uses it for Unlink and Change. Checks: tsc + eslint clean in all packages; client 1070 pass; shared 45 pass; api connections/catalog-outputs/access 333 pass (compose Postgres :55432). Not verified against production data.\nFollow-up commit: regression test api/src/connections/cross-budget-link.test.ts (3 tests) + unlink/move require the account's budget. Full suites: api 901 pass, client 1070 pass, shared 45 pass; tsc + eslint clean.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-jda",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-jda",
+    "changeset": {
+      "base": "9f1bf26c1fa35d9b33bd1c22e3a275e8a0c55960"
+    },
+    "agent_session": "049a07a2-d979-4e9b-88ac-b37ab68f6c86",
+    "finished_at": "2026-11-18T21:38:45.422Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 2,
+        "files": 10,
+        "additions": 175,
+        "deletions": 29
+      },
+      "head": "025f31e5ce7f19a598910ac2656e33e5b1d04c4a",
+      "at": "2026-11-18T21:38:45.422Z"
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

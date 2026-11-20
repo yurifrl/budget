@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-kly",
+  "title": "client: after connecting a bank account, redirect to /connect-bank",
+  "description": "After the user finishes connecting an account (the bank-connect flow in client/src/features/banks: ConnectBankWidget / ConnectBankScreen and any follow-on linking step such as linked-account or connection), the app must send them to the Connect Bank page, i.e. https://budget.syscd.live/connect-bank in production. That is the existing route client/src/app/(budget)/connect-bank.tsx. Today the flow ends somewhere else (or stays put); find where and change it.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-18T22:00:22.128Z",
+  "updated_at": "2026-11-18T22:31:19.889Z",
+  "started_at": null,
+  "closed_at": "2026-11-18T22:31:13.408Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Before: new-bank success (useConnectFlow.ts onWidgetMessage register -> landOnAccounts) did router.replace('/accounts'). Re-auth success (refresh) calls finish() and stays on /connect-bank (unchanged). Close/cancel button also used landOnAccounts -> /accounts (unchanged). After: register success replaces to /connect-bank via pure stepSuccessRoute (connectBank.logic.ts, tested); landOnAccounts kept for Close.\nValidator: PASS. tsc/eslint/bun test (1072) green. Only new-bank register success now replaces to /connect-bank; refresh/close/error unchanged. Not verified in a running app.\nApproved by Yuri. Validator PASS: a newly registered bank now router.replace's to /connect-bank instead of /accounts (useConnectFlow.ts, stepSuccessRoute in connectBank.logic.ts with tests); cancel, close, error and re-auth paths unchanged; no hardcoded production URL. Landed on local main as dfed478 (fast-forward, not pushed). tsc, eslint, bun test (1072 pass, 0 fail) green on merged main. No real widget connection run on web or iOS.",
+  "design": null,
+  "acceptance_criteria": "1) On a successful account connection the app navigates to the /connect-bank route (https://budget.syscd.live/connect-bank in production), on web and iOS. 2) Navigation uses the app router with the route path, not a hardcoded absolute production URL, so dev and e2e origins still work. 3) Cancelled or failed connections keep their current behaviour. 4) The redirect decision lives in a pure function or thin hook with a *.test.ts covering success vs cancel/error, where the existing structure allows it. 5) A tk note records where the flow landed before the change. 6) bunx tsc --noEmit, bunx eslint ., bun test pass in client/.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-kly",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-kly",
+    "changeset": {
+      "base": "99f8889bc832494ee0d723bcbdc881f0ed60ec17",
+      "head": "dfed478c16c359d81ef35404f1deb014edb30680",
+      "commits": [
+        {
+          "sha": "dfed478",
+          "subject": "banks: a registered bank lands on /connect-bank instead of /accounts"
+        }
+      ],
+      "files": [
+        {
+          "path": "client/src/features/banks/connect-bank/connectBank.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/connectBank.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/useConnectFlow.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 40,
+        "deletions": 3
+      }
+    },
+    "agent_session": "3c0a624c-3904-4fe9-a160-d032f8e0f1af",
+    "finished_at": "2026-11-18T22:01:52.789Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 3,
+        "additions": 40,
+        "deletions": 3
+      },
+      "head": "dfed478c16c359d81ef35404f1deb014edb30680",
+      "at": "2026-11-18T22:01:52.789Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-8af275",
+      "name": "budget-kly-checks.txt",
+      "mime": "text/plain",
+      "size": 186,
+      "sha256": "699658b7edbbc5f0aa358332e73ba1b2371f4f44d919c0a5c0a19e5da3cca8d7",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

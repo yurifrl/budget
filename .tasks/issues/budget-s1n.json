@@ -1,0 +1,248 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-s1n",
+  "title": "Onboarding API: any Access-authenticated person gets a user; budgets list tells owned from shared; isolation audit",
+  "description": "",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-18T21:25:53.530Z",
+  "updated_at": "2026-11-18T22:32:34.295Z",
+  "started_at": null,
+  "closed_at": "2026-11-18T22:32:24.782Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Implemented on tk/budget-s1n: Access sign-in without API allow-list (idp claim + oauth_grants.idp, migration 0101 with users.signed_in_at), budget_list is_owner/owner/member_count, admin role no longer reaches budgets, admin-only claim and app-wide sync window, connection reads follow budget access, catalog-wide two-user isolation test. api 1046 pass, shared 47 pass. Remaining: full typecheck/lint in client+admin and e2e.\nChecks from the worktree (private Postgres container on :55439, since :5432 was down): task typecheck exit 0, task lint exit 0, shared 47 pass, task test:api 1046 pass / 0 fail (BUDGET_REQUIRE_TEST_DB=1), task test:e2e exit 0, client 1070 pass.\nApproved by Yuri ('ship it') 2026-11-18. Merged to main via tk/budget-ygu; on merged main: typecheck+lint clean, shared 47, client 1107, api 1049 pass.",
+  "design": null,
+  "acceptance_criteria": "A first-time Access identity signs in without a manual allow-list step and lands with zero budgets (no error). budgets list output carries, per budget, whether the caller owns it and who shared it (owner name/email) plus member count. Tests prove user B cannot read, list or write user A's unshared budget across every budget operation, and can after A adds B. task typecheck, lint, test:api pass.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-s1n",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-s1n",
+    "changeset": {
+      "base": "9f1bf26c1fa35d9b33bd1c22e3a275e8a0c55960",
+      "head": "562e28dd0867cc86fa52cedd70d3d554a673d717",
+      "commits": [
+        {
+          "sha": "562e28d",
+          "subject": "e2e: fail the MCP run when a tool call errors"
+        },
+        {
+          "sha": "bfcb11e",
+          "subject": "docs: multi-user decisions (sign-in, budgets list, who can do what)"
+        },
+        {
+          "sha": "bd0aaac",
+          "subject": "api tests: first Access sign-in, and two people across the whole catalog"
+        },
+        {
+          "sha": "2c94000",
+          "subject": "connections: app-wide sync window is admin-only; reads follow budget access"
+        },
+        {
+          "sha": "dc444c0",
+          "subject": "budget: owner or member only, no admin pass; list says owned vs shared"
+        },
+        {
+          "sha": "2a9deaa",
+          "subject": "api: Access sign-ins need no API allow-list; signed_in_at marks a first sign-in"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0101_multi_user.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/scripts/e2e-mcp.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/access-signin.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/auth-env.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ownership.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ownership.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/router.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-export.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/members.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/authorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/access-routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/auth.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/authz.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/authz.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/config.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/person.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/session-cookie.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/budgets.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/connections.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 1219,
+        "deletions": 253
+      }
+    },
+    "agent_session": "943a273a-4901-48f2-b219-f5f445ef3c6a",
+    "finished_at": "2026-11-18T21:45:37.501Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 6,
+        "files": 39,
+        "additions": 1219,
+        "deletions": 253
+      },
+      "head": "562e28dd0867cc86fa52cedd70d3d554a673d717",
+      "at": "2026-11-18T21:45:37.501Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 1,
+  "comments": [],
+  "comment_count": 0
+}

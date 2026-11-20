@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-i8k",
+  "title": "client: remove the settings cog next to the app switcher in the rail header",
+  "description": "The rail header shows a gear/cog icon button to the right of the 'APP Budget' switcher pill (see attached screenshot). Remove that cog button.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-18T21:33:59.894Z",
+  "updated_at": "2026-11-18T22:31:13.248Z",
+  "started_at": null,
+  "closed_at": "2026-11-18T22:31:05.485Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Removed the gear button (expanded + collapsed variants) and its styles from client/src/shell/SettingsMenu.tsx, plus stale comments in BudgetRail.tsx. The cog opened the same settings menu as the APP/Budget pill (openTo()), so no entry point is lost; the pill still opens it. No screens/routes deleted.\nIndependent validation PASS: cog removed from expanded+collapsed rail; no leftovers; settings menu still opens via APP/Budget pill (toggle->openTo) and B badge when collapsed; tsc/eslint/bun test (1070 pass) all green in worktree.\nApproved by Yuri. Validator PASS: cog button removed from client/src/shell/SettingsMenu.tsx (expanded and collapsed rail) with its styles; settings menu still opens from the APP/Budget pill and collapsed B badge. Landed on local main as d4a801a (rebased, fast-forward, not pushed). tsc, eslint, bun test (1072 pass, 0 fail) green on merged main. Not visually run on web or iOS.",
+  "design": null,
+  "acceptance_criteria": "1) The cog icon button next to the app switcher is no longer rendered (web and iOS). 2) Code used only by that button (handlers, styles, imports, props) is removed; nothing else in the header changes. 3) Any screen the cog led to stays reachable by its other entry points; if the cog was the only entry point, say so in a tk note instead of deleting the screen. 4) bunx tsc --noEmit, bunx eslint ., bun test all pass in client/.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-i8k",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-i8k",
+    "changeset": {
+      "base": "9f1bf26c1fa35d9b33bd1c22e3a275e8a0c55960",
+      "head": "d4a801ab4d0b32b58651a1b6a1a7786dbb2bf8a0",
+      "commits": [
+        {
+          "sha": "d4a801a",
+          "subject": "client: remove the settings cog next to the app switcher in the rail header"
+        },
+        {
+          "sha": "dfed478",
+          "subject": "banks: a registered bank lands on /connect-bank instead of /accounts"
+        },
+        {
+          "sha": "99f8889",
+          "subject": "deploy: images 2026.11.18-04"
+        },
+        {
+          "sha": "ff51d8f",
+          "subject": "docs: release notes v2026.11.18-04"
+        },
+        {
+          "sha": "4acce05",
+          "subject": "release: v2026.11.18-04"
+        },
+        {
+          "sha": "1219749",
+          "subject": "Merge tk/budget-jda: bank-page Unlink/Change across budgets"
+        },
+        {
+          "sha": "025f31e",
+          "subject": "banks: regression cover for cross-budget unlink; the account's budget is a required argument"
+        },
+        {
+          "sha": "ea58cba",
+          "subject": "banks: scope bank-page Unlink/Change by the account's own budget"
+        }
+      ],
+      "files": [
+        {
+          "path": "CHANGELOG.md",
+          "status": "M"
+        },
+        {
+          "path": "api/VERSION",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/cross-budget-link.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/history.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/VERSION",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/accountEdit/useAccountEdit.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/LinkSheets.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/OverviewTab.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/useAccountLink.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/connectBank.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/connectBank.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/useConnectFlow.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/linkPicker.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/linkPicker.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/SettingsMenu.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetRail.tsx",
+          "status": "M"
+        },
+        {
+          "path": "k8s/values.yaml",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 234,
+        "deletions": 66
+      }
+    },
+    "agent_session": "3c0a624c-3904-4fe9-a160-d032f8e0f1af",
+    "finished_at": "2026-11-18T21:35:01.220Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 2,
+        "additions": 4,
+        "deletions": 28
+      },
+      "head": "bc6f2a408bc79e6ff730637722b8d71c6faae846",
+      "at": "2026-11-18T21:35:01.220Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "path": "/Users/yuri/Library/Application Support/CleanShot/media/media_MwO5isIFZx/CleanShot 2026-11-18 at 18.33.37.png",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-717ffb",
+      "name": "i8k-evidence.txt",
+      "mime": "text/plain",
+      "size": 992,
+      "sha256": "b946273bb6e59ac9e866f71bb1cd05464cbecd3da92e0ba85e735812d97a6cf1",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

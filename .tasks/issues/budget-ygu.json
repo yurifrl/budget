@@ -1,0 +1,693 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-ygu",
+  "title": "Onboarding client: home page with my budgets and budgets shared with me",
+  "description": "",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-18T21:25:53.861Z",
+  "updated_at": "2026-11-18T22:32:53.565Z",
+  "started_at": null,
+  "closed_at": "2026-11-18T22:32:41.479Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Home page, shellGate, owner-only gating done; web verified against the real API with 3 identities (owner/admin, member, zero-budget). iOS simulator build in progress.\nApproved by Yuri ('ship it') 2026-11-18. Merged to main via tk/budget-ygu; on merged main: typecheck+lint clean, shared 47, client 1107, api 1049 pass.",
+  "design": null,
+  "acceptance_criteria": "After sign-in the user lands on a home page listing 'My budgets' and 'Shared with me' (who shared each), can create a budget, open one, and invite people to one they own. A user with zero budgets sees a first-run empty state that leads to creating the first budget. Switching back to home from inside a budget is one click. Screenshots attached.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-ygu",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-ygu",
+    "changeset": {
+      "base": "4acce056f03d77e8f71bfe8f3512fc1f6333a8e8",
+      "head": "f02bd6114bf0eb900ea780a3f73a1ab89fe11822",
+      "commits": [
+        {
+          "sha": "f02bd61",
+          "subject": "home: taps work while the keyboard is up (iOS); iOS evidence"
+        },
+        {
+          "sha": "db34f84",
+          "subject": "docs: home page navigation and decisions; refreshed evidence"
+        },
+        {
+          "sha": "39a0662",
+          "subject": "home: caption lines, archive date, backup import owner-only, profile sign-out lands on home; evidence"
+        },
+        {
+          "sha": "27b2e70",
+          "subject": "client: home page (my budgets, shared with me), create and invite from it; the shell no longer picks a budget; owner-only settings hidden for members"
+        },
+        {
+          "sha": "279c5d5",
+          "subject": "Merge branch 'tk/budget-fgj' into tk/budget-ygu"
+        },
+        {
+          "sha": "614e106",
+          "subject": "Merge branch 'tk/budget-s1n' into tk/budget-ygu"
+        },
+        {
+          "sha": "562e28d",
+          "subject": "e2e: fail the MCP run when a tool call errors"
+        },
+        {
+          "sha": "bfcb11e",
+          "subject": "docs: multi-user decisions (sign-in, budgets list, who can do what)"
+        },
+        {
+          "sha": "bd0aaac",
+          "subject": "api tests: first Access sign-in, and two people across the whole catalog"
+        },
+        {
+          "sha": "2c94000",
+          "subject": "connections: app-wide sync window is admin-only; reads follow budget access"
+        },
+        {
+          "sha": "dc444c0",
+          "subject": "budget: owner or member only, no admin pass; list says owned vs shared"
+        },
+        {
+          "sha": "2a9deaa",
+          "subject": "api: Access sign-ins need no API allow-list; signed_in_at marks a first sign-in"
+        },
+        {
+          "sha": "46d537e",
+          "subject": "client: landing page for sign-in, explicit sign-out that stays signed out behind Access"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0101_multi_user.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/scripts/e2e-mcp.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/access-signin.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/auth-env.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ownership.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ownership.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/router.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-export.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/members.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/authorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/access-routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/auth.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/authz.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/authz.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/config.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/person.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/session-cookie.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/(budget)/overview.tsx",
+          "status": "R100"
+        },
+        {
+          "path": "client/src/app/_layout.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/index.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/rows.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/LandingPage.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/LoginGate.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/authSession.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/landing.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/landing.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/signIn.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/signIn.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/useSignIn.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/backup/ExportImportScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/home/BudgetCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/home/CreateBudgetForm.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/home/HomeScreen.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/home/PeopleSheet.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/home/home.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/home/home.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/home/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/home/useHome.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/people/PeoplePane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/ProfileScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/BudgetManageSection.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/DeleteBudgetModal.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/FreshStartPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/NewBudgetPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/PlanSettingsPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/SettingsRootPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/settings.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/settings.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/BudgetLayout.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetRail.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/state/refetchBudgets.ts",
+          "status": "R080"
+        },
+        {
+          "path": "client/src/state/thunks.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/state/thunks.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/BrandedPage.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/icon-symbol.tsx",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/evidence/home-page/01-web-desktop-home.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/02-web-phone-home.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/03-web-desktop-invite.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/03-web-phone-invite.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/04-web-desktop-inside-budget.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/04-web-phone-inside-budget.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/05-web-desktop-first-run.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/06-web-phone-first-run.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/07-web-desktop-non-owner-people.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/08-web-desktop-non-owner-settings.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/09-web-desktop-archived.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/10-ios-home.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/11-ios-invite.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/12-ios-inside-budget.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/13-ios-first-run.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/home-page/access-proxy.ts",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/01-web-desktop.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/02-web-phone.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/03-web-desktop-error.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/04-web-phone-error.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/05-web-desktop-unreachable.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/06-web-phone-unreachable.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/07-web-phone-two-providers.png",
+          "status": "A"
+        },
+        {
+          "path": "docs/evidence/landing-login/stub-api.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/budgets.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/connections.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 3011,
+        "deletions": 413
+      }
+    },
+    "agent_session": "943a273a-4901-48f2-b219-f5f445ef3c6a",
+    "finished_at": "2026-11-18T22:22:17.361Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 13,
+        "files": 107,
+        "additions": 3011,
+        "deletions": 413
+      },
+      "head": "f02bd6114bf0eb900ea780a3f73a1ab89fe11822",
+      "at": "2026-11-18T22:22:17.361Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-74d014",
+      "name": "01-web-desktop-home.png",
+      "mime": "image/png",
+      "size": 44681,
+      "sha256": "7758262ad74c1866e1048bb72c87c76d76d998114ebd0d235f05e0d782022747",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a6d52a",
+      "name": "02-web-phone-home.png",
+      "mime": "image/png",
+      "size": 31314,
+      "sha256": "09a24b8e193894ff32466b42a2cff29c5d137c327f4e2e66b2838e4004205ca2",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ffcbd1",
+      "name": "03-web-desktop-invite.png",
+      "mime": "image/png",
+      "size": 69790,
+      "sha256": "40478a96e57e460f3005ef7b2ebede6a1c583069f033f634e68ef49b376be8e5",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d73098",
+      "name": "03-web-phone-invite.png",
+      "mime": "image/png",
+      "size": 34418,
+      "sha256": "a5892868d96d95d8d6e5d58c59e828dd14c05871fc7f8ef529566a53a2f59214",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ce4199",
+      "name": "04-web-desktop-inside-budget.png",
+      "mime": "image/png",
+      "size": 157732,
+      "sha256": "b6529ee2467e2301deccaceeabcd036a68bcccb6642454b13021fd31976318b2",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-75e57f",
+      "name": "04-web-phone-inside-budget.png",
+      "mime": "image/png",
+      "size": 37659,
+      "sha256": "6cbeb3c4697b4e1e2ac469c0d98db3ce001d6ba616e35e64d9984be043fdb709",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-4da6b5",
+      "name": "05-web-desktop-first-run.png",
+      "mime": "image/png",
+      "size": 43514,
+      "sha256": "f962c1b49f1f759dd0e2ee16a5139c52cf175b9d21071930d81098408f351bd4",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ee81b1",
+      "name": "06-web-phone-first-run.png",
+      "mime": "image/png",
+      "size": 27661,
+      "sha256": "6302ac068afb0eeda3e0617b9c039b1dc591b6e67a79c2827f73119e9213d91c",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d3f4ee",
+      "name": "07-web-desktop-non-owner-people.png",
+      "mime": "image/png",
+      "size": 74655,
+      "sha256": "e0566ce32774966e04f45a7259070412ae264d5c72628028bb7adfafe997f67b",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-e06777",
+      "name": "08-web-desktop-non-owner-settings.png",
+      "mime": "image/png",
+      "size": 149033,
+      "sha256": "88d42bd633fdd2f053d4c82cd0292c59609733379527ba3b23821e180f67b78d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ee8d5f",
+      "name": "09-web-desktop-archived.png",
+      "mime": "image/png",
+      "size": 48738,
+      "sha256": "ecf30fdb98916972fd6d83ed2f42636b2625199aad0b167c313d126d3d83774d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-03cafa",
+      "name": "10-ios-home.png",
+      "mime": "image/png",
+      "size": 178104,
+      "sha256": "98a1ffe6f32cef4b5e4d362898732cc99406980faef654342849a5a3288c4c5b",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-455c8f",
+      "name": "11-ios-invite.png",
+      "mime": "image/png",
+      "size": 180849,
+      "sha256": "ff855f0c82ebd1c981c1a45539315d784755d2b2e691e74f9283325fa8c72a3f",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-62fa07",
+      "name": "12-ios-inside-budget.png",
+      "mime": "image/png",
+      "size": 234859,
+      "sha256": "170ab70b1b802e9a8dd8d7e827b76bab8f070d25d4246c995378491406b32a74",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-e36d75",
+      "name": "13-ios-first-run.png",
+      "mime": "image/png",
+      "size": 162489,
+      "sha256": "372a77777cd90bfe55ff983277e1250e5e17a093ed2d44a8493c061597381d13",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [
+    {
+      "issue_id": "budget-ygu",
+      "depends_on_id": "budget-s1n",
+      "type": "blocks",
+      "created_at": "2026-11-18T21:25:53.861Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 1,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}
