@@ -6,6 +6,8 @@ export type Me = {
   email: string;
   name: string | null;
   role: 'admin' | 'user';
+  /** Admin-managed account with a password: offer "Change password". */
+  has_password: boolean;
   avatar: PersonAvatar;
 };
 

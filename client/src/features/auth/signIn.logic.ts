@@ -19,12 +19,15 @@
  * the mark, as does any successful sign-in.
  */
 import { authProvidersSchema } from '@shared/contracts/user/providers';
-import type { z } from '@shared/zod';
+import { z } from '@shared/zod';
+
+/** An API that predates the `password` field answers without it: that means off. */
+const clientProvidersSchema = authProvidersSchema.extend({ password: z.boolean().default(false) });
 
 export type Providers = z.infer<typeof authProvidersSchema>;
 
 /** What an API that predates /auth/providers (or can't be asked) offers: Google, as before. */
-export const LEGACY_PROVIDERS: Providers = { access: false, google: true };
+export const LEGACY_PROVIDERS: Providers = { access: false, google: true, password: false };
 
 /** sessionStorage key holding the time (ms) of the last automatic Access redirect. */
 export const ACCESS_REDIRECT_KEY = 'budget.accessAutoRedirectAt';
@@ -61,8 +64,8 @@ export function parseSignedOutMark(raw: string | null | undefined): boolean {
 /** The providers answer, or LEGACY_PROVIDERS for anything unusable (404, bad JSON, none on). */
 export function parseProviders(status: number, body: unknown): Providers {
   if (status !== 200) return LEGACY_PROVIDERS;
-  const parsed = authProvidersSchema.safeParse(body);
-  if (!parsed.success || (!parsed.data.access && !parsed.data.google)) return LEGACY_PROVIDERS;
+  const parsed = clientProvidersSchema.safeParse(body);
+  if (!parsed.success || (!parsed.data.access && !parsed.data.google && !parsed.data.password)) return LEGACY_PROVIDERS;
   return parsed.data;
 }
 
