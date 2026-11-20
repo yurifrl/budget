@@ -14,9 +14,9 @@ describe('user_auth_providers contract', () => {
     expect(contracts.map((c) => c.name)).toContain('user_auth_providers');
   });
 
-  test('output is two booleans, nothing else', () => {
-    expect(authProvidersSchema.parse({ access: true, google: false })).toEqual({ access: true, google: false });
-    expect(() => authProvidersSchema.parse({ access: 'yes', google: false })).toThrow();
-    expect(() => authProvidersSchema.parse({ access: true })).toThrow();
+  test('output is three booleans, nothing else', () => {
+    expect(authProvidersSchema.parse({ access: true, google: false, password: true })).toEqual({ access: true, google: false, password: true });
+    expect(() => authProvidersSchema.parse({ access: 'yes', google: false, password: true })).toThrow();
+    expect(() => authProvidersSchema.parse({ access: true, google: false })).toThrow();
   });
 });

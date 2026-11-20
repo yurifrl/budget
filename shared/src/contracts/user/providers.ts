@@ -12,11 +12,13 @@ export const authProvidersSchema = z.object({
   access: z.boolean(),
   /** Google sign-in (/auth/google, /auth/google/native). */
   google: z.boolean(),
+  /** E-mail + password sign-in (/auth/password/login); off with AUTH_PASSWORD_LOGIN=0. */
+  password: z.boolean(),
 });
 
 export const authProviders = defineOperation({
   name: 'user_auth_providers',
-  description: 'Sign-in providers this API offers: { access, google } (Cloudflare Access and Google). Open; no session needed.',
+  description: 'Sign-in providers this API offers: { access, google, password } (Cloudflare Access, Google, e-mail + password). Open; no session needed.',
   input: z.object({}),
   output: authProvidersSchema,
   method: 'GET',
