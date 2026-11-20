@@ -1,22 +1,21 @@
 /**
- * Settings menu host — the pane-stack menu that holds the budget's settings.
+ * Settings menu host: the pane-stack menu behind the account row pinned to
+ * the bottom of the rail (budget, settings and account sections).
  *
- * Extracted from syscd's Apps switcher (`core/apps/AppsSwitcher.tsx`) with the
- * app list removed: in a single app the trigger pill
- * opens this menu directly on the settings root pane. Everything else is the
- * switcher's pane stack, unchanged:
- *
- * The menu is a React Native `Modal` — a portal painted above the entire
+ * The menu is a React Native `Modal` (a portal painted above the entire
  * tree, so drawer content, screens, or any sibling can never bleed through
- * or swallow its clicks. Escape and outside-taps close it.
+ * or swallow its clicks). It opens upward: anchored by its bottom edge just
+ * above the trigger and kept inside the window (menuPlacement.logic.ts).
+ * Escape and outside-taps close it.
  *
- * The host passes its panes (`panes`); the first one is the root. Pane content
- * pushes sibling panes through `useMenuNav()` (see features/settings).
+ * The host passes the trigger's content (`trigger`) and its panes (`panes`);
+ * the first pane is the root. Pane content pushes sibling panes through
+ * `useMenuNav()` (see features/settings).
  */
 import Constants from 'expo-constants';
-import { Image } from 'expo-image';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -27,33 +26,41 @@ import {
   type ViewInstance,
 } from 'react-native';
 
-import logo from '../../assets/images/logo.png';
 import { MenuNavContext, type MenuNav, type MenuPane } from './menuNav';
+import { menuPlacement } from './menuPlacement.logic';
 import { colors } from '@/ui/theme';
 
 export { useMenuNav, type MenuNav, type MenuPane } from './menuNav';
 
-/** The app's identity shown on the trigger (was the Budget entry of the Apps switcher). */
-const APP = { title: 'Budget' };
-
-/** The app logo as a rounded tile (assets/images/logo.png, from brand/). */
-function AppBadge({ size = 30 }: { size?: number }) {
-  return (
-    <Image
-      source={logo}
-      accessibilityLabel={APP.title}
-      style={{ width: size, height: size, borderRadius: size * 0.27 }}
-    />
-  );
+/** On-screen keyboard height (native), so a pane with a text field rides above it. */
+function useKeyboardHeight(): number {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    if (process.env.EXPO_OS === 'web') return undefined;
+    const ios = process.env.EXPO_OS === 'ios';
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', (e) =>
+      setHeight(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return height;
 }
 
 export function SettingsMenu({
-  compact = false,
+  trigger,
   panes,
   openRequest,
   onOpenRequestHandled,
+  topInset = 0,
 }: {
-  compact?: boolean;
+  /** The trigger's content (the rail's account row); `open` drives its pressed look. */
+  trigger: (open: boolean) => ReactNode;
+  /** Status bar height the open menu must stay below (drawer mode). */
+  topInset?: number;
   /** Host panes (budget settings); `panes[0]` is the root. */
   panes: MenuPane[];
   /** Ask the menu to open directly on a pane (e.g. a screen's "Add people" link). */
@@ -64,10 +71,12 @@ export function SettingsMenu({
   const [open, setOpen] = useState(false);
   /** Panes pushed above the root; [] = the root pane. */
   const [stack, setStack] = useState<string[]>([]);
-  const [origin, setOrigin] = useState({ x: 0, y: 0 });
+  /** Trigger's window position, measured when the menu opens. */
+  const [anchor, setAnchor] = useState({ x: 0, y: 0 });
   /** Target budget for the per-budget pane (openBudget nav). */
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
-  const { width: winW, height: winH } = useWindowDimensions();
+  const win = useWindowDimensions();
+  const keyboardHeight = useKeyboardHeight();
   const triggerRef = useRef<ViewInstance>(null);
 
   const root = panes[0] ?? null;
@@ -99,15 +108,10 @@ export function SettingsMenu({
 
   /** Open the menu, optionally landing directly on a pane above the root. */
   const openTo = (paneId?: string) => {
-    // Anchor the portal menu under the trigger's window position (the Modal
-    // renders into a portal, so parent layout offsets don't apply).
-    triggerRef.current?.measureInWindow((x, y, _w, h) => {
-      // Keep the whole menu on screen: never anchor it low enough that the
-      // body (up to paneMaxBody tall) plus the header would overflow winH.
-      setOrigin({
-        x: Math.max(8, Math.min(x, winW - MENU_W - 8)),
-        y: Math.max(8, Math.min(y + h + 6, winH - PANE_MAX_BODY - HEAD_EST)),
-      });
+    // The Modal renders into a portal, so parent layout offsets don't apply:
+    // anchor on the trigger's window position.
+    triggerRef.current?.measureInWindow((x, y) => {
+      setAnchor({ x, y });
       setStack(paneId && paneId !== root?.id ? [paneId] : []);
       setOpen(true);
     });
@@ -140,27 +144,32 @@ export function SettingsMenu({
 
   const version = Constants.expoConfig?.version;
 
+  // Recomputed every render, so a window resize, a rotation or the keyboard
+  // re-fit the open menu.
+  const place = menuPlacement({
+    trigger: anchor,
+    win,
+    menuWidth: MENU_W,
+    chromeHeight: MENU_CHROME,
+    bodyCap: PANE_MAX_BODY,
+    topInset,
+    keyboardHeight,
+  });
+
   return (
-    <View style={[styles.root, compact ? styles.rootCol : styles.rootRow]} ref={triggerRef}>
-      <Pressable onPress={toggle} accessibilityLabel="Open settings menu">
-        {compact ? (
-          <View style={styles.triggerCompact}>
-            <AppBadge />
-          </View>
-        ) : (
-          <View style={styles.trigger}>
-            <AppBadge />
-            <View>
-              <Text style={styles.kicker}>APP</Text>
-              <Text style={styles.name}>{APP.title}</Text>
-            </View>
-            <Text style={styles.caret}>{open ? '⌃' : '⌄'}</Text>
-          </View>
-        )}
+    <View style={styles.root} ref={triggerRef}>
+      <Pressable
+        onPress={toggle}
+        accessibilityRole="button"
+        accessibilityLabel="Open settings menu"
+        accessibilityState={{ expanded: open }}>
+        {trigger(open)}
       </Pressable>
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.scrim} onPress={() => setOpen(false)}>
-          <Pressable style={[styles.menu, { left: origin.x, top: origin.y }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable
+            style={[styles.menu, { left: place.left, bottom: place.bottom, width: place.width }]}
+            onPress={(e) => e.stopPropagation()}>
             <View style={styles.menuHead}>
               {atRoot ? (
                 <View style={styles.headBtn} />
@@ -179,7 +188,7 @@ export function SettingsMenu({
             </View>
             <MenuNavContext.Provider value={nav}>
               {pane ? (
-                <ScrollView style={styles.paneBody} contentContainerStyle={styles.paneContent}>
+                <ScrollView style={{ maxHeight: place.maxBody }} contentContainerStyle={styles.paneContent}>
                   {pane.content}
                 </ScrollView>
               ) : null}
@@ -192,41 +201,17 @@ export function SettingsMenu({
 }
 
 const MENU_W = 312;
-/** Cap on the pane ScrollView body height — tall panes (Plan Settings) scroll
- * instead of overflowing, and the origin clamp reserves room for this + head. */
-const PANE_MAX_BODY = 430;
-/** Menu head (title row) height + menu padding estimate for the origin clamp. */
-const HEAD_EST = 46;
+/** Cap on the pane ScrollView body height on a roomy window; shorter windows
+ * get less (menuPlacement) and the pane scrolls. */
+const PANE_MAX_BODY = 760;
+/** Menu chrome outside the scrolling body: padding 6+6, border 1+1, head 26 + 4. */
+const MENU_CHROME = 44;
 
 const styles = StyleSheet.create({
-  root: { position: 'relative', zIndex: 100 },
-  rootRow: { flexDirection: 'row', alignItems: 'center', width: '100%' },
-  rootCol: { flexDirection: 'column', alignItems: 'center' },
-  trigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: '#17132f',
-    borderWidth: 1,
-    borderColor: '#3a3470',
-  },
-  triggerCompact: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 2,
-    borderRadius: 10,
-  },
-  kicker: { fontSize: 9, color: colors.indigo2, letterSpacing: 1.2, fontWeight: '700' },
-  name: { fontSize: 14, color: colors.text, fontWeight: '700' },
-  caret: { color: colors.muted, marginLeft: 8 },
+  root: { width: '100%' },
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(4, 6, 12, 0.55)' },
   menu: {
     position: 'absolute',
-    width: MENU_W,
     borderRadius: 12,
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -256,6 +241,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   menuHeaderVersion: { color: colors.muted, fontSize: 8, letterSpacing: 0.8 },
-  paneBody: { maxHeight: PANE_MAX_BODY },
   paneContent: { gap: 2, paddingBottom: 4 },
 });

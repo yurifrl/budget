@@ -22,6 +22,8 @@ export interface BudgetShellState {
   openImportTransactions: () => void;
   /** Open the Manage Payees page (/payees route). */
   openPayees: () => void;
+  /** Leave the budget for the home page (all budgets). */
+  goHome: () => void;
   /** Collapse the chrome overlaying content: the drawer (tablet/phone). No-op on
    * desktop, where the rail sits beside content and must keep the user's
    * persisted collapse preference. */

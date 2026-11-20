@@ -11,8 +11,8 @@
  *                     drawer (with Settings) reachable from ☰.
  *
  * The shared shell tab bar never renders here (these routes live outside the
- * `(tabs)` group), so only one bottom bar is ever visible. The prominent
- * control at the top of the rail / drawer opens the settings menu
+ * `(tabs)` group), so only one bottom bar is ever visible. The account row
+ * pinned to the bottom of the rail / drawer opens the settings menu upward
  * (shell/SettingsMenu); the Budget settings are its panes
  * (features/settings) — one portal menu, nothing paints over it.
  */
@@ -168,6 +168,7 @@ function BudgetShell({ budgetId }: { budgetId: string }) {
       // /payees), not sheets.
       openImportTransactions: () => router.push('/import'),
       openPayees: () => router.push('/payees'),
+      goHome,
       closeSidebar: () => setDrawerOpen(false),
       numpadOpen,
       setNumpadOpen,
@@ -176,7 +177,7 @@ function BudgetShell({ budgetId }: { budgetId: string }) {
         setMenuRequest({ paneId: 'people' });
       },
     }),
-    [isPhone, isTablet, isDesktop, contentTopPad, router, numpadOpen],
+    [isPhone, isTablet, isDesktop, contentTopPad, router, goHome, numpadOpen],
   );
 
   return (
@@ -185,7 +186,6 @@ function BudgetShell({ budgetId }: { budgetId: string }) {
         {isDesktop ? (
           <BudgetRail
             onNavigate={() => {}}
-            onGoHome={goHome}
             secondary={panes}
             openRequest={menuRequest}
             onOpenRequestHandled={clearMenuRequest}
@@ -223,8 +223,7 @@ function BudgetShell({ budgetId }: { budgetId: string }) {
                 topInset={insets.top}
                 bottomInset={Math.max(13, insets.bottom)}
                 onNavigate={() => setDrawerOpen(false)}
-                onGoHome={goHome}
-                secondary={panes}
+                    secondary={panes}
                 openRequest={menuRequest}
                 onOpenRequestHandled={clearMenuRequest}
               />

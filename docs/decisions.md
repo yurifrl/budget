@@ -1488,3 +1488,29 @@ budgets got a shell with spinners in it.
 
 Evidence: `docs/evidence/home-page/` (screenshots; `access-proxy.ts` is the
 Access stub with `/__as?email=` to switch identity).
+
+## Rail layout (budget-vio, 2026-11-20)
+
+The rail follows the usual SaaS sidebar order (positions only; colors and
+content are ours): app title (logo + "Budget", no longer a trigger) with the
+collapse-sidebar button on its right (desktop), nav rows with icon + label,
+account groups, and pinned at the bottom the account row (my avatar, my name,
+the current budget, up/down chevron). Collapsed strip: logo, expand button
+under it, icon nav, avatar at the bottom.
+
+- **The account row is the settings-menu trigger** (label still "Open
+  settings menu"). The menu opens upward: anchored by its bottom edge 6px
+  above the row, body height capped by the room left in the window (status
+  bar inset and, on native, the keyboard included); under 200px of room it
+  covers the row instead. The math is `shell/menuPlacement.logic.ts`.
+- **Root pane in sections split by hairlines** (the BUDGET / MANAGE labels
+  are gone): budget name, "All budgets" (was a separate row in the rail
+  body; `goHome` is now on `useBudgetShell()`), the budget rows; the
+  settings rows; the email, "Profile"; "Log Out" last. Root rows are dense
+  (7px padding) so the whole root fits a 900px window without scrolling.
+  Every earlier row is still there, "Account Settings" included.
+- **One sign-out sequence**: `useSignOutAndLeave()` in `features/auth`
+  (native: `dismissTo('/')` first; web: the API redirect), used by the
+  Profile page and the menu's Log Out.
+- The rail no longer links the avatar to `/profile`; the menu's "Profile"
+  row does.

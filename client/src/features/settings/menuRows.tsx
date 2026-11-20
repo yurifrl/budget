@@ -39,6 +39,7 @@ export function MenuRow({
   emphasized,
   chevron,
   trailing,
+  dense,
 }: {
   label: string;
   onPress: () => void;
@@ -50,6 +51,8 @@ export function MenuRow({
   emphasized?: boolean;
   /** Right glyph override; default is the navigable chevron. */
   chevron?: string;
+  /** Shorter row: the root menu lists every section at once and must fit a laptop window. */
+  dense?: boolean;
 }) {
   return (
     <Pressable
@@ -58,6 +61,7 @@ export function MenuRow({
       accessibilityLabel={label}
       style={({ pressed }) => [
         s.row,
+        dense && s.rowDense,
         pressed && s.rowPressed,
         active && s.rowActive,
         emphasized && s.rowEmphasized,
