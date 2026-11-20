@@ -9,7 +9,7 @@ name: budget
 
 services:
   postgres:
-    image: postgres:18
+    image: postgres:19
     container_name: budget-postgres
     ports:
       - "55432:5432"
