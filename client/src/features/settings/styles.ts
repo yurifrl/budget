@@ -17,7 +17,14 @@ export const s = StyleSheet.create({
     marginBottom: 4,
     paddingHorizontal: 4,
   },
+  /** Hairline between the root menu's sections. */
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border2, marginVertical: 6 },
+  identity: { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 6 },
+  identityKicker: { color: colors.faint, fontSize: 10, fontWeight: '700', letterSpacing: 1.4 },
+  identityName: { color: colors.text, fontSize: 15, fontWeight: '700', marginTop: 2 },
+  sectionMeta: { color: colors.faint, fontSize: 12, paddingHorizontal: 4, paddingTop: 6, paddingBottom: 2 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4, borderRadius: 8 },
+  rowDense: { paddingVertical: 7 },
   rowStatic: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -45,6 +52,8 @@ export const s = StyleSheet.create({
   rowLabelStrong: { color: colors.text, fontSize: 14, fontWeight: '700', textAlign: 'center' },
   rowSub: { color: colors.faint, fontSize: 12, flexShrink: 1 },
   rowChevron: { color: colors.faint, fontSize: 16, marginLeft: 'auto' },
+  /** The Hide Amounts explanation, tucked under the root menu's settings rows. */
+  rootHint: { color: colors.faint, fontSize: 12, paddingHorizontal: 4, paddingTop: 2, paddingBottom: 2 },
   hint: { color: colors.faint, fontSize: 12, marginTop: 10, paddingHorizontal: 4 },
   input: {
     marginTop: 8,

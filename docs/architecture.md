@@ -125,8 +125,10 @@ Layout since phase 5e (`client/src/`):
 ```
 app/        routes only: thin stubs re-exporting a feature barrel; _layout.tsx
             is the composition root (providers, LoginGate, StoreMoneyFormatProvider)
-shell/      BudgetLayout (rail / drawer / tabs, sheets it hosts), rail/,
-            SettingsMenu (pane-stack host), runtime.ts (DI container + store),
+shell/      BudgetLayout (rail / drawer / tabs, sheets it hosts), rail/
+            (title + collapse button, nav, accounts, account row at the
+            bottom), SettingsMenu (pane-stack host opened upward from that
+            row; placement in menuPlacement.logic.ts), runtime.ts (DI container + store),
             context.ts (useBudgetShell) and menuNav.ts (useMenuNav): the only
             shell files features may import
 features/   home plan accounts banks payees import backup reflect spending
@@ -176,9 +178,9 @@ under `src/` and on a non-pure domain import.
   id; a reload or deep link inside `(budget)` restores the persisted id
   (`restoreActiveBudget`), and `shellGate` (`shell/rail/rail.logic.ts`)
   decides: render the shell, wait, or redirect to `/` (no id, stale id, zero
-  budgets, list failed). The shell never picks a budget. The way back is one
-  tap: the rail's "All budgets" row, and a house button beside the menu
-  button on tablet/phone. Owner-only controls (rename, archive, delete, Fresh
+  budgets, list failed). The shell never picks a budget. The way back: the
+  "All budgets" row at the top of the rail's account menu, and a house button
+  beside the menu button on tablet/phone (one tap). Owner-only controls (rename, archive, delete, Fresh
   Start, restoring a backup, removing a person) are not rendered for members
   (`is_owner` on the list row, `can_manage` on members).
 - **Wire boundary.** `budget/data`: `data/api.ts` re-exports one RTK Query

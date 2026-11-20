@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radius } from '@/ui/theme';
 
-import { useAuthSession } from '@/features/auth';
+import { useSignOutAndLeave } from '@/features/auth';
 import { useGetMeQuery } from '@/profile/api';
 import { AvatarEditor } from './AvatarEditor';
 import { displayName } from '@/profile/model';
@@ -19,15 +19,8 @@ export function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data: me, isLoading, isError, refetch } = useGetMeQuery();
-  const { signOut } = useAuthSession();
 
-  // The next sign-in starts on the home page, not here. Web: the API's logout
-  // redirect already lands on the app root (and a route change now would
-  // cancel that navigation). Native: the router keeps its place, so leave first.
-  const leave = () => {
-    if (process.env.EXPO_OS !== 'web') router.dismissTo('/');
-    void signOut();
-  };
+  const leave = useSignOutAndLeave();
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
   return (

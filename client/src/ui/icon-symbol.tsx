@@ -25,6 +25,8 @@ const MAPPING = {
   'creditcard.fill': 'credit-card',
   'building.columns.fill': 'account-balance',
   'chart.bar.fill': 'bar-chart',
+  'sidebar.left': 'view-sidebar',
+  'chevron.up.chevron.down': 'unfold-more',
 } as IconMapping;
 
 /**
