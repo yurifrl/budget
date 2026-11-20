@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-uns",
+  "title": "api: password login, Google linking and /admin/users (contracts + handlers + migration)",
+  "description": "Implement the API half of epic budget-bst (run 'tk show budget-bst' for the full design: identity model, password rules, endpoints, guards). Contracts in shared/src/contracts/user, handlers and store in api/src/user, a new additive migration (0102+, new tables only: the DB is shared with syscd-app) with its MIGRATION_SIGNATURES entry, config/env wiring in api/src/auth-env.ts, catalog registration, and a docs/decisions.md section.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-20T13:15:57.426Z",
+  "updated_at": "2026-11-20T14:58:46.718Z",
+  "started_at": null,
+  "closed_at": "2026-11-20T14:58:42.925Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-bst",
+  "sprint": null,
+  "labels": [],
+  "notes": "API + contracts done (commits 451aab9 shared, b049abb api+docs). Endpoints: POST /auth/password/{login,complete,change}, GET/POST /admin/users, PATCH/DELETE /admin/users/:id, POST /admin/users/:id/reset-password; /auth/providers.password, /me.has_password. Migration 0102_password_login.sql (new tables user_passwords, auth_login_throttle). Per-request rule in api/src/user/session-gate.ts, applied in currentUser, cookieSessionUser, accessPrincipal, oauth consent POST; password principals resolved by findSessionUser (never inserts). DEVIATIONS: (1) session_version integer + JWT claim pwv instead of sessions_valid_after vs iat (iat is 1s resolution and hono rejects future iat, so 'invalidate older + re-issue caller' cannot be exact). (2) Password change/reset also revokes OAuth grants approved from a password session. (3) AUTH_PASSWORD_LOGIN=0 also removes the Google exception for admin-managed e-mails; admin create/reset answer 409 password_login_disabled then (list/patch/delete keep working). (4) Delete refuses on ANY FK reference except user_passwords (incl. avatars and OAuth grants). (5) Origin guard on login/complete/change and all /admin/users; login/complete/change also require application/json (415). (6) http://localhost:5191 (admin dev server) added to CORS/trusted origins. (7) Per-IP limiter counts failures only (30/15min, in memory, per process). Checks: shared tsc/eslint/57 tests, api tsc/eslint/1088 tests (was 1049) with BUDGET_REQUIRE_TEST_DB=1 on a private Postgres container (:55442). e2e-api.sh not run (needs :5432).\nIndependent security review (reviewer agent): FAIL.\nB1 (blocker) Lockout bypass by concurrency: password-routes.ts:90-96 checks lockedUntil before verifying, but the failure is only counted after argon2 (password-store.ts:170). Probe: 25 parallel wrong-password logins for one e-mail -> 25x 401, 0x 429, 25 argon2 verifications; 10 parallel wrong + right password in the same burst -> right one signs in (200). Same for the per-IP limiter (throttle.ts, checked before, counted after). Each lock window admits a burst of unlimited guesses. Fix: reserve the attempt atomically before verifying (insert/update returning failures+1 and refuse if locked or >= threshold; reset on success), same for the IP bucket (count attempts, not failures).\nS1 (should-fix) Admin create accepts synthetic e-mails: admin-users-routes.ts:66-79 + admin-users-store.ts:75 insert without checking SYNTHETIC_EMAILS. Probe: POST /admin/users {email:'svc-budget-mcp@syscd.local', role:'admin'} (when the service row does not exist yet) commits the row with role admin + a password, then answers 404 (mustGet filters synthetic rows after the commit). The service token then resolves to that admin row: GET /jobs/runs with the service token 403 -> 200. Row is invisible/unmanageable in the admin UI. Fix: refuse SYNTHETIC_EMAILS (409/400) before insert.\nS2 (should-fix) Tests miss: concurrent lockout, expired temp at /complete, change token after an admin re-reset, refresh token after reset, last_admin at HTTP level and the concurrent mutual-demotion race, synthetic e-mail create, Google exception off with AUTH_PASSWORD_LOGIN=0 at HTTP level.\nM (minor) requireJsonBody uses includes(): 'text/plain; x=application/json' passes (probe: 200 + cookie); Origin guard still blocks browsers. Admin action TOCTOU: requireAdmin runs before lockAdminGuard, a just-demoted admin's in-flight request completes. Delete check ignores non-FK jobs.job_runs.requested_by and cascade-FK rows inserted between check and delete. Victim can be kept locked by 1 request / 15 min (bounded as designed; only unlock is a reset). Deleted-managed-user recreate race: reachable only for an in-flight request; recreated row is role user, no password, refused on the next request.\nVerified OK by probe: change token refused after re-reset, for a disabled user, and expired temp at /complete; refresh token refused after reset; Origin null/sibling 403; no-store on 429 and token responses; one argon2 on expired-temp path; concurrent mutual demotion leaves 1 admin (409 last_admin).\nChecks: shared tsc 0 / eslint 0 / 57 pass; api tsc 0 / eslint 0 / 1088 pass 0 fail (BUDGET_REQUIRE_TEST_DB=1, private PG :55452, removed).\nReview round 2 (commit 07f996b). (1) BLOCKER fixed: reserveAttempt (password-store.ts:172) row-locks and counts each attempt BEFORE argon2; 5th attempt starts the lock; refused = 429, no verify; success/admin reset clear. Per-IP reserveIpAttempt (throttle.ts:45) counts attempts, reserved first. Login + change use both; complete uses the IP budget only (token is the credential). Tests: 25 parallel wrong -> exactly 5 verifications + 20x429 (known and unknown e-mail); correct password in a burst after the lock -> all 429; mutation check (disable the lock) fails 8 tests. (2) admin create refuses svc/dev e-mails before insert (admin-users-routes.ts:77, 400 invalid_input); patch/reset/delete 404 them; tested incl. service token still 403 on /admin/users and /jobs/runs. (4) exact media type (request-guards.ts:34); admin writes re-check the caller inside the locked tx (admin-users-routes.ts:58); delete checks jobs.job_runs.requested_by under the row lock (admin-users-store.ts:136); 0102 signature probes both tables (migrate.ts list probes); localhost origins trusted only when appOrigin is localhost (app.ts); CORS exposes Retry-After. (5) Known limits in decisions.md. No contract name/path/input/output/error-code change. last_admin over HTTP is unreachable by construction (actor is an active admin; self guard first): covered by the pure test, the concurrent mutual demotion/disable test, and the demoted-actor 403 test. Checks: shared 57 pass; api 1100 pass 0 fail (BUDGET_REQUIRE_TEST_DB=1, private Postgres :55442); tsc/eslint clean.\nRe-review of 07f996b (reviewer agent): PASS.\nEarlier findings: B1 lockout bypass FIXED (probes: 25 parallel wrong -> 5x401/20x429, 5 argon2; unknown e-mail identical; 10 wrong + right in one burst -> right one 429; 100 parallel mixed with successes -> no 500/deadlock, 5 admitted; after lock expiry 10 parallel -> exactly 1 admitted, lock doubles to 120s; 4 wrong then right -> 200, 5 wrong then right -> 429; bogus /complete does not touch the e-mail counter; 5 parallel completes with one change token -> 1x200/4x401). S1 reserved e-mails FIXED (svc/dev, any case/spaces -> 400 invalid_input, no row, service token stays 403 on /jobs/runs). S2 test gaps FIXED (new tests for burst, burst+right password, expired temp at complete, re-reset, refresh token, mutual demotion, reserved e-mails, jobs ref, Google off). Minor: JSON media type exact (text/plain;x=application/json -> 415, charset ok) FIXED; admin TOCTOU FIXED (actorStillAdmin under the advisory lock); jobs.requested_by + row lock in delete FIXED; signature list stricter, string probes unchanged; dev origins trusted only for localhost app origin; Retry-After exposed. last_admin unreachable over HTTP: reasoning holds (actor rechecked active admin under the lock, actor != target, so otherActiveAdmins >= 1).\nRemaining minor: IP budget now counts successes and completes too (30/15 min per address, per process): shared NAT or a missing CF-Connecting-IP shares one bucket. The 'demoted admin' test demotes before the request, so it exercises requireAdmin, not the in-transaction recheck. shared/ diff empty.\nChecks: shared tsc 0, eslint 0, 57 pass; api tsc 0, eslint 0, 1100 pass 0 fail (BUDGET_REQUIRE_TEST_DB=1, private PG :55452, removed); password.test.ts 4 runs x 44 pass. Mutation run (disable lock) not done: source edits refused by permissions.\nApproved by Yuri (Plannotator Inbox, 2026-11-20): merge to local main, no push. Password login, forced new-password step, change password, Google linking for admin-managed users, /admin/users CRUD + reset, migration 0102 (new tables user_passwords, auth_login_throttle). First security review FAILED (parallel lockout bypass, reserved service e-mail), fixed in 07f996b, second review PASS. API 1100 tests pass. Landed on local main as merge b8f3488. Not run: scripts/e2e-api.sh; Google linking end to end. Follow-up budget-4hj.",
+  "design": null,
+  "acceptance_criteria": "1) Every endpoint and rule in the epic design works as described; deviations are recorded in a tk note with the reason. 2) Tests (DB-backed, BUDGET_REQUIRE_TEST_DB=1) cover: login success web vs native; identical 401 for unknown e-mail / wrong password / no password / disabled user; lockout after 5 failures incl. unknown e-mails, 429 before verification, cleared by success and by admin reset; temp password forces change, change token is single-purpose and rejected as session/OAuth token, expired temp password; change password re-verifies and invalidates other password sessions; a password session never creates a user row and dies when the user is disabled, deleted, loses the password row or AUTH_PASSWORD_LOGIN=0; Google sign-in of an admin-managed e-mail not on AUTH_ALLOWED_EMAILS lands on the same row (web and native) and its session passes the gate, while a non-managed e-mail off the list is still refused; every admin endpoint incl. 401/403 for non-admin, OAuth-token and service-token callers, self and last-admin guards, delete refused with data. 3) No password, temp password or hash is logged or returned outside the one-time temp_password field. 4) Existing Google and Cloudflare Access sign-in behaviour and tests unchanged. 5) In shared/ and api/: tsc --noEmit, eslint ., bun test all pass (api with the test DB).",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-uns",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-uns",
+    "changeset": {
+      "base": "9bf143e07f1f6c4f484f292acee601a65fe74068",
+      "head": "07f996b2588a4bb4063e5df1d3e9f5b5c294a5ca",
+      "commits": [
+        {
+          "sha": "07f996b",
+          "subject": "api: reserve password attempts before verifying, refuse reserved e-mails, review fixes"
+        },
+        {
+          "sha": "b049abb",
+          "subject": "api: e-mail + password sign-in, Google linking for admin-managed users, /admin/users"
+        },
+        {
+          "sha": "451aab9",
+          "subject": "shared: password sign-in and admin user contracts, password policy"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.schema",
+          "status": "M"
+        },
+        {
+          "path": "api/db/migrations/0102_password_login.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/auth-env.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/auth-env.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/authorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/admin-guards.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/admin-users-routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/admin-users-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/auth.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/authz.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/config.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/middleware.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/password-routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/password-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/password.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/password.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/profile-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/request-guards.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/session-cookie.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/session-gate.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/session-gate.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/throttle.ts",
+          "status": "A"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/admin-users.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/user/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/me.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/password.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/user/password.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/user/providers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/providers.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/password-policy.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/password-policy.ts",
+          "status": "A"
+        }
+      ],
+      "counts": {
+        "additions": 3050,
+        "deletions": 61
+      }
+    },
+    "agent_session": "3c0a624c-3904-4fe9-a160-d032f8e0f1af",
+    "finished_at": "2026-11-20T13:52:54.307Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 3,
+        "files": 38,
+        "additions": 3050,
+        "deletions": 61
+      },
+      "head": "07f996b2588a4bb4063e5df1d3e9f5b5c294a5ca",
+      "at": "2026-11-20T13:52:54.307Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-fd2f39",
+      "name": "checks.txt",
+      "mime": "text/plain",
+      "size": 555,
+      "sha256": "0201a5c4ff9cc77adbd21f42188f9b07cb2b2401e32d0545d4676c484e2f0309",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-953238",
+      "name": "checks-r2.txt",
+      "mime": "text/plain",
+      "size": 463,
+      "sha256": "7aab872cf131996b2e0ff9fa12f1fe66ba1c407676f6632d0ec53a542b5c6695",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 2,
+  "comments": [],
+  "comment_count": 0
+}

@@ -4,22 +4,22 @@
   "id": "budget-vio",
   "title": "client: rail layout — title + collapse icon at top, sectioned account menu with Log out at the bottom",
   "description": "",
-  "status": "ready-to-review",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-20T12:06:58.923Z",
-  "updated_at": "2026-11-20T12:17:23.432Z",
+  "updated_at": "2026-11-20T12:57:13.170Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-20T12:57:03.605Z",
   "due_at": null,
   "defer_until": null,
   "parent": null,
   "sprint": null,
   "labels": [],
-  "notes": "Implemented on tk/budget-vio: title + collapse button on top, icon+label nav, account row at the bottom opening the sectioned menu upward (budget / settings / account / Log Out). client: tsc, eslint clean, bun test 1117 pass. Verified on web at 1440x900 and 390x844 (sub-pane, back, Escape, People open request, Profile, All budgets, Log Out). Not run on iOS. Screenshots attached (01-04).",
+  "notes": "Implemented on tk/budget-vio: title + collapse button on top, icon+label nav, account row at the bottom opening the sectioned menu upward (budget / settings / account / Log Out). client: tsc, eslint clean, bun test 1117 pass. Verified on web at 1440x900 and 390x844 (sub-pane, back, Escape, People open request, Profile, All budgets, Log Out). Not run on iOS. Screenshots attached (01-04).\nApproved by Yuri in chat 2026-11-20. Merged tk/budget-vio into main. Web verified (desktop + phone widths), tsc/eslint/1117 tests pass; native untested.",
   "design": null,
   "acceptance_criteria": "Expanded rail: app title (logo + Budget) top-left, collapse-sidebar icon top-right. Bottom: account trigger (avatar, name, budget name) opening a sectioned menu upward (budget / settings / account) ending in Log Out that signs out. Collapsed rail and tablet/phone drawer still work. Settings panes and openPeople request still open. typecheck, eslint, bun test pass in client/. Screenshots attached: web desktop expanded, menu open, collapsed, phone drawer.",
   "estimated_minutes": null,
@@ -29,7 +29,84 @@
   "metadata": {
     "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-vio",
     "changeset": {
-      "base": "fee59ff3a2d16ab91345e5a8f5e5199bb4439bc0"
+      "base": "fee59ff3a2d16ab91345e5a8f5e5199bb4439bc0",
+      "head": "6cc39cab1000e8cc7a4e93ba9500b2bd5bb910a4",
+      "commits": [
+        {
+          "sha": "6cc39ca",
+          "subject": "client: rail layout with title + collapse button on top and a sectioned account menu at the bottom"
+        }
+      ],
+      "files": [
+        {
+          "path": "client/src/features/auth/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/useSignOutAndLeave.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/profile/ProfileScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/SettingsRootPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/menuRows.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/styles.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/BudgetLayout.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/SettingsMenu.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/context.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/menuPlacement.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/shell/menuPlacement.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetRail.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/RailAccounts.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/icon-symbol.tsx",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 590,
+        "deletions": 379
+      }
     },
     "agent_session": "6c5f0e6f-91a1-4c3c-af21-90fec13ac417",
     "finished_at": "2026-11-20T12:17:23.355Z",
@@ -43,6 +120,11 @@
       },
       "head": "6cc39cab1000e8cc7a4e93ba9500b2bd5bb910a4",
       "at": "2026-11-20T12:17:23.355Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
     }
   },
   "attachments": [

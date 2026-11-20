@@ -1,0 +1,442 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-yzd",
+  "title": "client: e-mail + password sign-in, forced password change, change password in profile",
+  "description": "Client half of epic budget-bst (tk show budget-bst). In client/src/features/auth: when GET /auth/providers says password is on, the sign-in page shows an e-mail + password form next to the existing Google / Cloudflare Access buttons; web signs in by cookie, native stores the returned token like the other native flows. A temp password leads to a 'choose a new password' step (change token flow) before the app opens. Profile gets 'Change password' for users whose /me has has_password. Depends on budget-uns: start your branch from its branch.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-20T13:15:57.633Z",
+  "updated_at": "2026-11-20T14:58:55.916Z",
+  "started_at": null,
+  "closed_at": "2026-11-20T14:58:46.895Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-bst",
+  "sprint": null,
+  "labels": [],
+  "notes": "CONTRACT/API PROBLEM: the API sends Retry-After on 429 but CORS exposeHeaders (api/src/app.ts) is only WWW-Authenticate, so a cross-origin browser client cannot read it (verified in a real run: header present via curl, access-control-expose-headers: WWW-Authenticate). Client reads Retry-After and shows the wait when it can; on web cross-origin it falls back to 'Wait a few minutes'. Fix: add 'Retry-After' to exposeHeaders. Native is unaffected.\nBuilt: features/auth password.logic/passwordApi/usePasswordSignIn/PasswordForms, profile ChangePasswordCard. Plain fetch (not RTK) so passwords never reach redux. tsc/eslint/bun test pass (1140). Real web run verified against local API+PG.\nVALIDATION (independent): PASS with one should-fix. (1) should-fix: client/src/features/auth/signIn.logic.ts parseProviders + shared authProvidersSchema (password: z.boolean() required): an older API answering {access:true,google:false} (no password field) fails safeParse -> LEGACY_PROVIDERS (google only), so an Access-only deployment shows a Google button instead of Access during version skew (verified by running parseProviders). Fix: make password optional/default false in the client parse (e.g. parse with .extend({password: z.boolean().default(false)}) or merge), add a test. (2) minor: password-routes 403 'forbidden' on /change and sign-in e-mail cleared after dead change token fall to generic text / empty field; saveSessionToken rejection in usePasswordSignIn.finish and passwordChange is unhandled (no message, rejection escapes void submit()). (3) minor: 429 without readable Retry-After says 'a few minutes' though real wait was 52s (known CORS issue). Real web run: forced step, reload, expired/rejected change token -> sign-in form with message, expired temp, lockout message, wrong current in profile, change success (stays signed in), profile card hidden for user without password, 375px width all verified. tsc/eslint clean, bun test 1140 pass. Native untested.\nFix pass: merged tk/budget-uns 07f996b; parseProviders defaults missing password to false; token-save failures caught (usePasswordSignIn, passwordChange); 403 forbidden message; e-mail kept after dead change token; web real <form> (FormWrap.web.tsx); lockout re-run shows 'Try again in 1 minute'.\nApproved by Yuri (Plannotator Inbox, 2026-11-20): merge to local main, no push. Sign-in form, forced new-password step, Change password in Profile. Validator PASS, fix pass 73bc76a (older-API providers answer, token save failures, real form on web). client 1143 tests pass; walked end to end on web in the integration run. Landed on local main as merge eb7d04f. Not verified: iOS/native.",
+  "design": null,
+  "acceptance_criteria": "1) Sign-in with e-mail + password works on web (cookie) and native (token), using the contracts from shared (contractRequest, types from the contract). 2) Errors are shown in plain words: wrong e-mail or password (one message for all invalid_credentials), too many attempts with the wait time, expired temp password (ask the admin for a new one), policy failures on a new password. 3) A temp password always goes through the new-password step; the app is not reachable until it succeeds. 4) Profile 'Change password' asks for the current and the new password and is hidden when has_password is false. 5) Password fields are secure inputs with correct autocomplete/textContentType hints (current-password / new-password, username on e-mail); passwords are never put in the store, logs or URLs. 6) Google and Access sign-in still work as before; the form is absent when providers.password is false. 7) Pure logic in *.logic.ts with tests; screenshots of the sign-in form, an error state and the new-password step (web) attached as evidence. 8) client/: tsc --noEmit, eslint ., bun test pass.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-yzd",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-yzd",
+    "changeset": {
+      "base": "9bf143e07f1f6c4f484f292acee601a65fe74068",
+      "head": "73bc76a7972f318196ba4a65875f413fe65942ed",
+      "commits": [
+        {
+          "sha": "73bc76a",
+          "subject": "client: password review fixes (older providers answer, token save failures, forbidden message, kept e-mail, real form on web)"
+        },
+        {
+          "sha": "96b9801",
+          "subject": "Merge branch 'tk/budget-uns' into tk/budget-yzd"
+        },
+        {
+          "sha": "07f996b",
+          "subject": "api: reserve password attempts before verifying, refuse reserved e-mails, review fixes"
+        },
+        {
+          "sha": "91a18be",
+          "subject": "client: e-mail + password sign-in, forced new-password step, change password in profile"
+        },
+        {
+          "sha": "b049abb",
+          "subject": "api: e-mail + password sign-in, Google linking for admin-managed users, /admin/users"
+        },
+        {
+          "sha": "451aab9",
+          "subject": "shared: password sign-in and admin user contracts, password policy"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.schema",
+          "status": "M"
+        },
+        {
+          "path": "api/db/migrations/0102_password_login.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/auth-env.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/auth-env.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/authorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/admin-guards.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/admin-users-routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/admin-users-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/auth.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/authz.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/config.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/middleware.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/password-routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/password-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/password.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/password.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/profile-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/request-guards.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/session-cookie.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/session-gate.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/session-gate.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/throttle.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/FormWrap.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/FormWrap.web.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/LandingPage.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/LoginGate.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/PasswordField.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/PasswordForms.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/landing.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/landing.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/password.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/password.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/passwordApi.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/passwordApi.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/signIn.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/signIn.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/usePasswordSignIn.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/profile/ChangePasswordCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/profile/ProfileScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/useChangePassword.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/profile/model.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/admin-users.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/user/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/me.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/password.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/user/password.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/user/providers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/providers.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/password-policy.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/password-policy.ts",
+          "status": "A"
+        }
+      ],
+      "counts": {
+        "additions": 4051,
+        "deletions": 77
+      }
+    },
+    "agent_session": "3c0a624c-3904-4fe9-a160-d032f8e0f1af",
+    "finished_at": "2026-11-20T13:57:21.746Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 6,
+        "files": 58,
+        "additions": 4051,
+        "deletions": 77
+      },
+      "head": "73bc76a7972f318196ba4a65875f413fe65942ed",
+      "at": "2026-11-20T13:57:21.746Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-9d20fc",
+      "name": "01-signin-form.png",
+      "mime": "image/png",
+      "size": 55595,
+      "sha256": "957d27cd4cb2e95511e682fdfd913a3b5baae2ddb562066bc49c4a6d6893e432",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-4b6ef2",
+      "name": "02-wrong-password.png",
+      "mime": "image/png",
+      "size": 56491,
+      "sha256": "825e480456b67919456191fd9b58df15613f7577ebbc49333c7593781673d325",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-6d7769",
+      "name": "03-new-password-policy-error.png",
+      "mime": "image/png",
+      "size": 58521,
+      "sha256": "9ea99316ce79ca861863416e287a9c37dcb608ba40e35545afee82ce0e64e290",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-73c92e",
+      "name": "04-new-password-unchanged.png",
+      "mime": "image/png",
+      "size": 58199,
+      "sha256": "4c8b5fe1a1677e9cecec4187dfcd831ee680b79241039b66e71241f70a285975",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-408e8b",
+      "name": "05-signed-in.png",
+      "mime": "image/png",
+      "size": 40471,
+      "sha256": "b7195f93a5a94384919f2533e41bc13bdc96e5670ea7261a484dc5c5f2ee18be",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-b3dacd",
+      "name": "06-profile-wrong-current.png",
+      "mime": "image/png",
+      "size": 32102,
+      "sha256": "258bac4f834feb31e4ae21ec3df3890776d48193b16828eed943e6a03861d6ba",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-fa9b5d",
+      "name": "07-profile-changed.png",
+      "mime": "image/png",
+      "size": 47920,
+      "sha256": "dff1efc4fe3729bed6e6c9a2c74d7ff8772a3f3fe535d8d263c8d11813c87058",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f43621",
+      "name": "08-temp-expired.png",
+      "mime": "image/png",
+      "size": 61057,
+      "sha256": "eb5a679de257eadbc90d87aefb3f982edbae73ff1c2d651f91c66f15748882e4",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-741dc5",
+      "name": "09-lockout.png",
+      "mime": "image/png",
+      "size": 58168,
+      "sha256": "cd5cf98a1616cf1872fc60de9d35c19d8bab99c9ce4d77a2dd456ea5523ae48d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c10a4f",
+      "name": "yzd-checks.txt",
+      "mime": "text/plain",
+      "size": 123,
+      "sha256": "931b976217df72c1c4bb62f1d5511c1dcea15895679794d332db2d0e7697f31b",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-98f1a3",
+      "name": "yzd-checks2.txt",
+      "mime": "text/plain",
+      "size": 122,
+      "sha256": "5dbe975e42e71ad0f0d0161b53b3e90a1696273a94204ff0b3aed35d1628b53a",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-2784ef",
+      "name": "10-lockout-real-wait.png",
+      "mime": "image/png",
+      "size": 57187,
+      "sha256": "a1b60dd72be471de5daa4028c5b748ba8055d985506fb3b2397adcbba0d7a7f1",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [
+    {
+      "issue_id": "budget-yzd",
+      "depends_on_id": "budget-uns",
+      "type": "blocks",
+      "created_at": "2026-11-20T13:16:20.303Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 1,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

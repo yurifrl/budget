@@ -1,0 +1,1 @@
+{"issue_id":"budget-4hj","action":"save","at":"2026-11-20T13:56:29.424Z","actor":null,"data":{"status":"open","title":"api: per-address login budget counts successful logins too (30 per 15 min per address, per process); count only failed attempts or raise the limit, and add an in-flight demoted-admin test (review notes on budget-uns)"}}

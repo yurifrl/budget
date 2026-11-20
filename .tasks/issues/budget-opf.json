@@ -1,0 +1,363 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-opf",
+  "title": "admin: Users page (list, create, edit, disable, delete, reset password)",
+  "description": "Admin SPA half of epic budget-bst (tk show budget-bst). Add a Users page to admin/ (today it only has the jobs ledger: admin/src/App.tsx, api.ts, pages/): navigation between Jobs and Users, a table of users, create user, edit name / role / status, delete, reset password. Create and reset show the server-generated temp password once, with a copy button and a note that it expires in 7 days and must be changed at first sign-in. Depends on budget-uns: start your branch from its branch.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-20T13:15:57.822Z",
+  "updated_at": "2026-11-20T14:58:59.688Z",
+  "started_at": null,
+  "closed_at": "2026-11-20T14:58:56.103Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-bst",
+  "sprint": null,
+  "labels": [],
+  "notes": "Users page built in admin/ (pages/Users.tsx, users.logic.ts + test, api.ts user contracts + error code, nav, 401 notice). Verified in a real run against the budget-uns API (auth on, throwaway DB, dropped): create, temp password dialog, edit, disable, reset, duplicate-email refusal, delete, self-row limits, 401 notice. No contract problems found.\nValidator (budget-opf): PASS. tsc/build/bun test (7) green; real run (auth on, throwaway PG, dropped) confirmed user_has_data, cannot_modify_self (API), Escape closes temp-password dialog and the password is gone from the DOM, nothing in URL/localStorage/sessionStorage. Minor findings: (1) Users.tsx:188 comment says backdrop closes the dialog but there is no backdrop handler (native <dialog> does not); (2) Users.tsx:114 Disable/Enable has no in-flight guard (double click sends two PATCHes) and its notice (line 66) is never cleared except by the next flip; (3) /me failure => isSelf false, no hint shown, server still refuses (Users.tsx:45); (4) network failures show the raw fetch message (users.logic.ts:90); (5) narrow window: table overflows to ~990px, row actions off screen (styles.css, no scroll wrapper).\nPolish pass (345f7c0): per-row busy guard + notice cleared on action/dialog open; table-wrap overflow-x; Modal backdropClose only for confirm dialogs; destructive actions locked while /me unresolved; network error message. tk/budget-uns has no new commits.\nMerged tk/budget-uns 07f996b; invalid_input (reserved e-mail) now has a readable message + test.\nApproved by Yuri (Plannotator Inbox, 2026-11-20): merge to local main, no push. Admin Users page (list, create, edit, disable, delete, reset password, one-time temp password dialog). Validator PASS, polish 345f7c0 and e2ef547. admin tsc, build, 7 tests pass; walked end to end in the integration run. Landed on local main as merge d58b239.",
+  "design": null,
+  "acceptance_criteria": "1) Users table shows e-mail, name, role, status, sign-in methods (password / Google), must-change and temp expiry, locked-until, last seen. 2) Create, edit (name, role, status), delete and reset password call the /admin/users contracts from shared (same call() helper pattern as jobs; types from the contracts). 3) The temp password is shown only in the result of create/reset, is not kept after the dialog closes, and is never written to the URL, localStorage or console. 4) Delete and reset ask for confirmation; API refusals (self, last admin, user_has_data, 409 existing e-mail) are shown as readable messages; the row for the signed-in admin has disable/demote/delete turned off. 5) The 401 notice still works and mentions that signing in at the app also works. 6) Logic that can be pure is tested; screenshots of the list, the create dialog and the temp-password result attached as evidence. 7) admin/: tsc --noEmit and the production build pass (plus tests if the package has a test setup).",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-opf",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-opf",
+    "changeset": {
+      "base": "9bf143e07f1f6c4f484f292acee601a65fe74068",
+      "head": "e2ef547e5e50044053a489cbdc74bfef76d883fd",
+      "commits": [
+        {
+          "sha": "e2ef547",
+          "subject": "admin: readable message for 400 invalid_input (reserved e-mail)"
+        },
+        {
+          "sha": "fe46ee0",
+          "subject": "Merge branch 'tk/budget-uns' into tk/budget-opf"
+        },
+        {
+          "sha": "07f996b",
+          "subject": "api: reserve password attempts before verifying, refuse reserved e-mails, review fixes"
+        },
+        {
+          "sha": "345f7c0",
+          "subject": "admin: users page polish (in-flight guard, stale notice, table scroll, /me-unresolved lock, network message)"
+        },
+        {
+          "sha": "2f61c8e",
+          "subject": "admin: Users page (list, create, edit, disable, delete, reset password) with one-time temp password dialog"
+        },
+        {
+          "sha": "b049abb",
+          "subject": "api: e-mail + password sign-in, Google linking for admin-managed users, /admin/users"
+        },
+        {
+          "sha": "451aab9",
+          "subject": "shared: password sign-in and admin user contracts, password policy"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.schema",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/App.tsx",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/pages/Users.tsx",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/styles.css",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/users.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/users.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0102_password_login.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/auth-env.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/auth-env.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/authorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/admin-guards.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/admin-users-routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/admin-users-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/auth.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/authz.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/config.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/middleware.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/password-routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/password-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/password.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/password.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/profile-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/request-guards.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/session-cookie.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/session-gate.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/session-gate.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/throttle.ts",
+          "status": "A"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/admin-users.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/user/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/me.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/password.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/user/password.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/user/providers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/user/providers.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/password-policy.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/password-policy.ts",
+          "status": "A"
+        }
+      ],
+      "counts": {
+        "additions": 3686,
+        "deletions": 73
+      }
+    },
+    "agent_session": "3c0a624c-3904-4fe9-a160-d032f8e0f1af",
+    "finished_at": "2026-11-20T13:56:51.228Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 7,
+        "files": 44,
+        "additions": 3686,
+        "deletions": 73
+      },
+      "head": "e2ef547e5e50044053a489cbdc74bfef76d883fd",
+      "at": "2026-11-20T13:56:51.228Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-e170b8",
+      "name": "checks.txt",
+      "mime": "text/plain",
+      "size": 283,
+      "sha256": "7fda80d379bfab6ed20abdcae8bd0c4e749bfe7df89124363af3f203773b0843",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-0127db",
+      "name": "list.png",
+      "mime": "image/png",
+      "size": 63059,
+      "sha256": "4eefb68bdd87210890a3f43682ec2396e86bff32bc413db10cd35b204c9bc31f",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-db3542",
+      "name": "create.png",
+      "mime": "image/png",
+      "size": 46201,
+      "sha256": "344ed75a3043ccfa2a3bbbef436033e8bb59b907f058fce4f9815615c9ae0034",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-933bcf",
+      "name": "secret.png",
+      "mime": "image/png",
+      "size": 68671,
+      "sha256": "20d3d8abdeea00ad88de540164ce9ea23d6528844d02fa05e39c46db847bea3f",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-1b9c23",
+      "name": "reset-confirm.png",
+      "mime": "image/png",
+      "size": 63908,
+      "sha256": "2264944499b388e3ecf84106d44633002cb4169a98a08ec6b46ce3fb08b9cf8d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d37f44",
+      "name": "refused.png",
+      "mime": "image/png",
+      "size": 58346,
+      "sha256": "ef3ae3447553bb41a196640b6d6798d93ca5152198b8f2769d03faa7455e2f48",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-458307",
+      "name": "401.png",
+      "mime": "image/png",
+      "size": 30219,
+      "sha256": "e2334ea74dea556062e681856cd8d47df6fe3ff8b22b5e507709070f656571b6",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-0fd1f8",
+      "name": "checks2.txt",
+      "mime": "text/plain",
+      "size": 222,
+      "sha256": "a710f197ca209d3c2c95b94eea973481a776309e24205c6fd17410bbbddf7811",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a6fa65",
+      "name": "checks3.txt",
+      "mime": "text/plain",
+      "size": 222,
+      "sha256": "7744d6518566075381e54c9c80234c06d020e1a428f17ed0f5fbd41fcd299a59",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [
+    {
+      "issue_id": "budget-opf",
+      "depends_on_id": "budget-uns",
+      "type": "blocks",
+      "created_at": "2026-11-20T13:16:20.498Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 1,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}
