@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-4ji",
+  "title": "Own Pluggy keys (client): add-your-keys screen and paused-connection state",
+  "description": "Client side of own Pluggy keys. Depends on the api task for contracts and on the features base for the evaluated-features hook. Follow AGENTS.md \"Adding a client screen or feature\". Existing analogues for a secret input: features/profile/ChangePasswordCard.tsx; bank area: client/src/features/banks/.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-20T15:33:10.454Z",
+  "updated_at": "2026-11-20T15:33:11.047Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-id4",
+  "sprint": null,
+  "labels": [],
+  "notes": null,
+  "design": null,
+  "acceptance_criteria": "1) A screen reachable from the bank area lets a user enter, replace and remove their Pluggy client id and secret (secret input masked, never shown back), with the API's validation error shown inline. 2) It explains in plain words how to get keys through MeuPluggy and its 5-connection limit. 3) Connect bank: with neither own keys nor the shared-key feature, the user is led to the keys screen instead of a failing widget. 4) A paused shared-key connection shows why and what to do. 5) Web and iOS screenshots attached as evidence; tsc, eslint, bun test pass in client/.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": null,
+  "metadata": {},
+  "attachments": [],
+  "dependencies": [
+    {
+      "issue_id": "budget-4ji",
+      "depends_on_id": "budget-lqi",
+      "type": "blocks",
+      "created_at": "2026-11-20T15:33:10.834Z",
+      "created_by": "yuri",
+      "metadata": {}
+    },
+    {
+      "issue_id": "budget-4ji",
+      "depends_on_id": "budget-wvm",
+      "type": "blocks",
+      "created_at": "2026-11-20T15:33:11.040Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 2,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

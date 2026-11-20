@@ -37,4 +37,4 @@ expo-env.d.ts
 .worktrees/
 
 #
-data/
+/data/

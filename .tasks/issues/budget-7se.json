@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-7se",
+  "title": "release: EAS iOS build fails at Bundle JavaScript for v2026.11.20",
+  "description": "Release run 44762217918 (v2026.11.20): job 'EAS build and submit (optional)' failed: 'iOS build failed: Unknown error. See logs of the Bundle JavaScript build phase'. EAS build https://expo.dev/accounts/yurifrl/projects/budget/builds/3bf996d7-b7fa-4211-be86-1dff17216dfa. The web, api and admin images built fine. Release v2026.11.18-05 succeeded as a whole, so the regression is between fee59ff and 295f390 on main: the password sign-in client work (budget-yzd, e.g. features/auth/FormWrap.tsx + FormWrap.web.tsx, PasswordForms.tsx), the rail layout merge (budget-vio) or the 'wip' commit ee2a8c5.",
+  "status": "ready-to-review",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-20T15:37:58.730Z",
+  "updated_at": "2026-11-20T15:41:23.790Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Root cause: commit 9b109c1 added an unanchored `data/` to the root .gitignore. EAS upload honours .gitignore, so client/src/budget/data/** (18 tracked files, incl. api.ts) was dropped. EAS log: iOS Bundling failed ... Unable to resolve \"@/budget/data/api\" from \"src/shell/BudgetLayout.tsx\". Reproduced locally by simulating the upload (tracked minus ignored). Fix: anchored /data/. iOS+web export, tsc, eslint, bun test pass.",
+  "design": null,
+  "acceptance_criteria": "1) Root cause found by reproducing the iOS JS bundle locally (expo export --platform ios or the same command EAS runs), with the failing module and error quoted in a tk note. 2) Fix committed; the iOS bundle builds locally; web export still builds. 3) client/: tsc --noEmit, eslint ., bun test pass. 4) If the cause is not in code from this repo (EAS infra, credentials), say so with evidence instead of changing code.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-7se",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-7se",
+    "changeset": {
+      "base": "875ab89609807b75ab315bd33fa4d08d4eb4ae6c"
+    },
+    "agent_session": "3c0a624c-3904-4fe9-a160-d032f8e0f1af",
+    "finished_at": "2026-11-20T15:41:23.711Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 1,
+        "additions": 3,
+        "deletions": 2
+      },
+      "head": "5a7afe12c46e157f7cea91ad1a12778481a47d9e",
+      "at": "2026-11-20T15:41:23.711Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-9bc049",
+      "name": "eas-error.txt",
+      "mime": "text/plain",
+      "size": 903,
+      "sha256": "74550ff38f7e724b828693a9fb363a665b7e722eff38a0007a1122b2088a4491",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ffbb8e",
+      "name": "before-ios.txt",
+      "mime": "text/plain",
+      "size": 413,
+      "sha256": "b9b9bf7eda16fc02e93ff9b8db5fbecf27239cc6b26108ff593a332e714a0d85",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ea13d6",
+      "name": "after-ios.txt",
+      "mime": "text/plain",
+      "size": 162,
+      "sha256": "b5930b7ad3a39a5fcef011080b2602a63fef368793b59a395deed9bcf95ba751",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-449388",
+      "name": "web.txt",
+      "mime": "text/plain",
+      "size": 98,
+      "sha256": "41ca7ddf7c3b57e0bb27cf259edbe4a8a3ec41508e342ff6ca6c8e48b9ca3e18",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-1d8934",
+      "name": "checks.txt",
+      "mime": "text/plain",
+      "size": 115,
+      "sha256": "cc62b53df42d99c897a7a982a13d6665d4438916e85463118757579a5d15d020",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

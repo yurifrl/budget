@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-wvm",
+  "title": "Features base: typed feature list, overrides table, evaluation, admin toggles",
+  "description": "Build the reusable base for feature toggles. Decisions below were made by the owner on 2026-11-20 (Plannotator thread \"Features base and own Pluggy keys\"); do not reopen them.\n\nNaming: call it \"features\" everywhere in code, tables and UI. Never \"flags\": in the client \"flag\" already means transaction colour flags (FlagsPane, domain/flagLabels).\n\nDecided:\n- A feature is defined in a typed list in code in shared/ (key, description, default boolean). Admin shows that list; nothing creates features at runtime. A key in the database that is no longer in the list is ignored.\n- Values are on/off only.\n- One table for all features: feature key, user (nullable = \"everyone\"), value, changed-by user, changed-at. Resolution order: user override, else everyone value, else the default in code.\n- The API enforces; the client only shows or hides. Evaluate in handlers and Temporal activities only (workflow files run in the Temporal sandbox and cannot import a DB-backed barrel). Read the database per check, no cache, like requireUser does for role.\n- The client gets its own evaluated values from a small endpoint, refetched when the app regains focus. No push, no polling loop.\n- Admin: BOTH views. A new Features page (pick a feature: an \"everyone\" switch plus the users list with a toggle each, showing inherited vs overridden) AND per-user feature toggles inside the existing Users page (admin/src/pages/Users.tsx).\n- No history table; who/when on each row is enough.\n- Out of scope: groups, percentages, attribute rules, variants, budgets as subjects, CLI/MCP exposure of admin operations beyond what ADMIN_EXPOSE already does for jobs.\n\nFirst feature to register: 'shared-pluggy-key', default off (\"may connect and sync banks with the installation's shared Pluggy keys\"). Only register it here; enforcing it belongs to the next task.\n\nFollow AGENTS.md \"Adding an endpoint\" and \"Adding a client screen or feature\" exactly (contracts in shared/src/contracts/features, new api feature dir api/src/features with index.ts barrel, catalog entry, access.test.ts and catalog-outputs.test.ts samples, migration numbering >= 0103 additive). Existing admin-only pattern to mirror: api/src/user/admin-users-routes.ts and shared/src/contracts/user/admin-users.ts.",
+  "status": "ready-to-review",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-20T15:33:10.064Z",
+  "updated_at": "2026-11-20T15:46:22.383Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-id4",
+  "sprint": null,
+  "labels": [],
+  "notes": "shared + api done on tk/budget-wvm: shared/src/features.ts (typed list, resolveFeature), contracts in shared/src/contracts/features, migration 0103_feature_overrides.sql + signature, api/src/features (isEnabled, GET /features, /admin/features set/clear everyone + user). api suite 1124 pass. Shared Postgres :5432 is down on this machine, so tests ran against this repo's compose Postgres :55432 via BUDGET_TEST_PG_BASE. Next: client hook, admin SPA views.\nAll done on tk/budget-wvm (2 commits). client: getMyFeatures in client/src/profile/api.ts + useFeatures() in client/src/state/useFeatures.ts (refetch on focus). admin: Features page (admin/src/pages/Features.tsx) and per-user toggles in Users page (admin/src/featureControls.tsx). task typecheck / lint / test / admin:build all exit 0 (shared 72, api 1124, client 1148 pass, 0 fail). Shared Postgres :5432 was down: DB tests and screenshots used this repo's compose Postgres :55432; it is stopped again, my test DBs dropped, leases released. Screenshots attached.",
+  "design": null,
+  "acceptance_criteria": "1) shared/ exports a typed feature list (key, description, default) with 'shared-pluggy-key' default off, with a test. 2) Migration >=0103 creates the overrides table + MIGRATION_SIGNATURES entry. 3) api/src/features exposes isEnabled(db, feature, userId) resolving user override > everyone value > code default, unit + DB tested. 4) Admin-only operations (requireAdmin, 403 for non-admin asserted in access.test.ts) list features with everyone value and per-user overrides, set/clear the everyone value, set/clear a user override; each write stores who and when. 5) A signed-in user can fetch their own evaluated features; the Expo client exposes them through a hook and refetches on focus. 6) Admin SPA: a Features page (per feature: everyone switch + users with toggles) and feature toggles on each user in the Users page. 7) task typecheck, task lint, task test pass; screenshots of both admin views attached as evidence.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-wvm",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-wvm",
+    "changeset": {
+      "base": "875ab89609807b75ab315bd33fa4d08d4eb4ae6c"
+    },
+    "agent_session": "d9a92018-be65-42df-83d8-3631e206fb8b",
+    "finished_at": "2026-11-20T15:46:22.308Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 2,
+        "files": 34,
+        "additions": 1745,
+        "deletions": 23
+      },
+      "head": "c07d16f1c85587295c72d8ca5264ddb2f4036b7e",
+      "at": "2026-11-20T15:46:22.308Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-3a5de4",
+      "name": "admin-features-page.png",
+      "mime": "image/png",
+      "size": 87783,
+      "sha256": "ac98266c2068405b89781e6b0127dc8b3107bd1278de0da214a8bba75d2e99d2",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-630949",
+      "name": "admin-users-feature-toggles.png",
+      "mime": "image/png",
+      "size": 113485,
+      "sha256": "78a7c901b367d26bd5e932e093c4b1dad6cad213ce0e66e72344c57c9b383c2d",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-6eeab5",
+      "name": "features-before.png",
+      "mime": "image/png",
+      "size": 84229,
+      "sha256": "872d5f2f3503786244c2d606a49bf1190d3779c07c58895d40c86ae15ca0c370",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-3ac0e3",
+      "name": "verification.txt",
+      "mime": "text/plain",
+      "size": 1645,
+      "sha256": "f5a5da964a8e30fe597da7d8da6dd59b8b3def9837d769d4a6b490ee8eb039f6",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 2,
+  "comments": [],
+  "comment_count": 0
+}

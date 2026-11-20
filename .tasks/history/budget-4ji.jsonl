@@ -1,0 +1,3 @@
+{"issue_id":"budget-4ji","action":"save","at":"2026-11-20T15:33:10.455Z","actor":null,"data":{"status":"open","title":"Own Pluggy keys (client): add-your-keys screen and paused-connection state"}}
+{"issue_id":"budget-4ji","action":"dependency_added","at":"2026-11-20T15:33:10.842Z","actor":"yuri","data":{"target":"budget-lqi","type":"blocks"}}
+{"issue_id":"budget-4ji","action":"dependency_added","at":"2026-11-20T15:33:11.048Z","actor":"yuri","data":{"target":"budget-wvm","type":"blocks"}}

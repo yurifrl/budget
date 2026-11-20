@@ -1,0 +1,2 @@
+{"issue_id":"budget-lqi","action":"save","at":"2026-11-20T15:33:10.261Z","actor":null,"data":{"status":"open","title":"Own Pluggy keys (api): encrypted per-user credentials, key choice per connection, shared-key gate"}}
+{"issue_id":"budget-lqi","action":"dependency_added","at":"2026-11-20T15:33:10.651Z","actor":"yuri","data":{"target":"budget-wvm","type":"blocks"}}
