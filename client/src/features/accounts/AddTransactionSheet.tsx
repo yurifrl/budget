@@ -12,6 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Transaction } from '@/domain/types';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors } from '@/ui/theme';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './i18n';
 import { Keypad } from './addTransaction/Keypad';
 import { SheetFields } from './addTransaction/SheetFields';
 import { SheetPicker } from './addTransaction/SheetPicker';
@@ -46,7 +48,7 @@ export function AddTransactionSheet({
       <View style={styles.backdrop}>
         <Animated.View style={[styles.sheet, { transform: [{ translateY: dragY }] }]}>
           <View style={[styles.top, { paddingTop: 14 + insets.top }]} {...panHandlers}>
-            <Pressable style={[styles.closeBtn, { top: 14 + insets.top }]} onPress={close} accessibilityLabel="Close">
+            <Pressable style={[styles.closeBtn, { top: 14 + insets.top }]} onPress={close} accessibilityLabel={tCommon('close')}>
               <Text style={{ color: colors.text, fontSize: 15 }}>✕</Text>
             </Pressable>
             <Text style={styles.amount}>
@@ -56,9 +58,9 @@ export function AddTransactionSheet({
             <Pressable
               style={styles.typeToggle}
               onPress={toggleKind}
-              accessibilityLabel="Toggle spending or income">
+              accessibilityLabel={t('sheet.toggleKind')}>
               <Text style={{ color: colors.text, fontWeight: '600', fontSize: 14 }}>
-                {isIncome ? '⊞ Income ⇅' : '⊟ Spending ⇅'}
+                {isIncome ? t('sheet.income') : t('sheet.spending')}
               </Text>
             </Pressable>
           </View>

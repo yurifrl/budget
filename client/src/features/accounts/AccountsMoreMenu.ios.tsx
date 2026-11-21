@@ -14,6 +14,7 @@ import { Button, Host, Menu } from '@expo/ui/swift-ui';
 import { foregroundStyle, font } from '@expo/ui/swift-ui/modifiers';
 
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 
 export function AccountsMoreMenu({
   onImport,
@@ -42,17 +43,17 @@ export function AccountsMoreMenu({
         systemImage="ellipsis"
         modifiers={[font({ size: 20, weight: 'bold' }), foregroundStyle(colors.indigo3)]}
       >
-        <Button label="File Import" systemImage="square.and.arrow.down" onPress={onImport} />
+        <Button label={t('action.import')} systemImage="square.and.arrow.down" onPress={onImport} />
         {onReconcile ? (
-          <Button label="Reconcile" systemImage="checkmark.seal" onPress={onReconcile} />
+          <Button label={t('action.reconcile')} systemImage="checkmark.seal" onPress={onReconcile} />
         ) : null}
         <Button
-          label={showReconciled ? 'Hide Reconciled' : 'Show Reconciled'}
+          label={showReconciled ? t('action.hideReconciled') : t('action.showReconciled')}
           systemImage={showReconciled ? 'eye.slash' : 'eye'}
           onPress={() => onToggleReconciled(!showReconciled)}
         />
         {onEditAccount ? (
-          <Button label="Edit Account" systemImage="pencil" onPress={onEditAccount} />
+          <Button label={t('action.editAccount')} systemImage="pencil" onPress={onEditAccount} />
         ) : null}
       </Menu>
     </Host>

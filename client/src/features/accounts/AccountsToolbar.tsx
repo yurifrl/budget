@@ -26,13 +26,27 @@ import {
   UndoIcon,
 } from '@/ui/icons';
 import { colors, radius } from '@/ui/theme';
+import { t } from './i18n';
 
 export type RegisterDensity = 'compact' | 'comfortable';
 
 const DENSITY_OPTIONS = [
-  { key: 'comfortable' as const, label: 'Comfortable rows' },
-  { key: 'compact' as const, label: 'Compact rows' },
+  {
+    key: 'comfortable' as const,
+    get label() {
+      return t('toolbar.comfortable');
+    },
+  },
+  {
+    key: 'compact' as const,
+    get label() {
+      return t('toolbar.compact');
+    },
+  },
 ];
+
+// ISO date format hint for the date-range inputs; not translated.
+const DATE_FORMAT_HINT = 'YYYY-MM-DD';
 
 const SYNC_TONE_COLOR = {
   ok: colors.greenPillFg,
@@ -114,7 +128,7 @@ export function AccountsToolbar({
   const syncChip = sync ? (
     <View
       style={styles.syncChip}
-      accessibilityLabel={`Bank sync status: ${sync.bank} ${sync.label}`}
+      accessibilityLabel={t('toolbar.syncStatus', { bank: sync.bank, label: sync.label })}
     >
       <View style={[styles.syncDot, { backgroundColor: SYNC_TONE_COLOR[sync.tone] }]} />
       <Text style={styles.syncText} numberOfLines={1}>
@@ -133,10 +147,10 @@ export function AccountsToolbar({
           <TextInput
             value={searchQuery}
             onChangeText={onSearchChange}
-            placeholder="Search All Accounts"
+            placeholder={t('toolbar.searchPlaceholder')}
             placeholderTextColor={colors.faint}
             style={styles.searchInput}
-            accessibilityLabel="Search transactions"
+            accessibilityLabel={t('toolbar.searchLabel')}
           />
         </View>
       </View>
@@ -151,9 +165,9 @@ export function AccountsToolbar({
           style={styles.action}
           hitSlop={4}
           accessibilityRole="button"
-          accessibilityLabel="Add Transaction">
+          accessibilityLabel={t('toolbar.addTransaction')}>
           <PlusCircleIcon color={colors.indigo3} />
-          <Text style={styles.actionText}>Add Transaction</Text>
+          <Text style={styles.actionText}>{t('toolbar.addTransaction')}</Text>
         </Pressable>
       ) : null}
       <Pressable
@@ -161,9 +175,9 @@ export function AccountsToolbar({
         style={styles.action}
         hitSlop={4}
         accessibilityRole="button"
-        accessibilityLabel="File Import">
+        accessibilityLabel={t('action.import')}>
         <FileImportIcon color={colors.indigo3} />
-        <Text style={styles.actionText}>File Import</Text>
+        <Text style={styles.actionText}>{t('action.import')}</Text>
       </Pressable>
 
       <View style={styles.sep} />
@@ -171,13 +185,13 @@ export function AccountsToolbar({
       {(
         [
           {
-            label: 'Undo',
+            label: t('toolbar.undo'),
             icon: <UndoIcon color={colors.indigo3} />,
             enabled: canUndo,
             press: () => void dispatch(undoPlanEdit()),
           },
           {
-            label: 'Redo',
+            label: t('toolbar.redo'),
             icon: <RedoIcon color={colors.indigo3} />,
             enabled: canRedo,
             press: () => void dispatch(redoPlanEdit()),
@@ -203,15 +217,15 @@ export function AccountsToolbar({
           style={styles.action}
           hitSlop={4}
           accessibilityRole="button"
-          accessibilityLabel="View options">
-          <Text style={styles.actionText}>View</Text>
+          accessibilityLabel={t('toolbar.viewOptions')}>
+          <Text style={styles.actionText}>{t('toolbar.view')}</Text>
           <ChevronDownIcon color={colors.indigo3} />
         </Pressable>
       </View>
       <Modal transparent visible={menuOpen} animationType="none" onRequestClose={() => setMenuOpen(false)}>
         <Pressable
           style={styles.scrim}
-          accessibilityLabel="Close view menu"
+          accessibilityLabel={t('toolbar.closeViewMenu')}
           onPress={() => setMenuOpen(false)}
         />
         {anchor ? (
@@ -237,7 +251,7 @@ export function AccountsToolbar({
               }}
               style={styles.menuItem}
               accessibilityRole="menuitem">
-              <Text style={styles.menuItemText}>Show Reconciled</Text>
+              <Text style={styles.menuItemText}>{t('action.showReconciled')}</Text>
               <Text style={styles.menuCheck}>{showReconciled ? '✓' : ''}</Text>
             </Pressable>
             <Pressable
@@ -247,7 +261,7 @@ export function AccountsToolbar({
               }}
               style={styles.menuItem}
               accessibilityRole="menuitem">
-              <Text style={styles.menuItemText}>Running Balance</Text>
+              <Text style={styles.menuItemText}>{t('toolbar.runningBalance')}</Text>
               <Text style={styles.menuCheck}>{showRunningBalance ? '✓' : ''}</Text>
             </Pressable>
             <Pressable
@@ -257,30 +271,30 @@ export function AccountsToolbar({
               }}
               style={styles.menuItem}
               accessibilityRole="menuitem">
-              <Text style={styles.menuItemText}>Show Closed-Account Transactions</Text>
+              <Text style={styles.menuItemText}>{t('toolbar.showClosedTxns')}</Text>
               <Text style={styles.menuCheck}>{showClosedTxns ? '✓' : ''}</Text>
             </Pressable>
             <View style={styles.menuSep} />
             <View style={styles.dateRow}>
-              <Text style={styles.dateLabel}>From</Text>
+              <Text style={styles.dateLabel}>{t('toolbar.from')}</Text>
               <TextInput
                 value={dateFrom}
                 onChangeText={onDateFromChange}
-                placeholder="YYYY-MM-DD"
+                placeholder={DATE_FORMAT_HINT}
                 placeholderTextColor={colors.faint}
                 style={styles.dateInput}
-                accessibilityLabel="Filter from date"
+                accessibilityLabel={t('toolbar.fromLabel')}
               />
             </View>
             <View style={styles.dateRow}>
-              <Text style={styles.dateLabel}>To</Text>
+              <Text style={styles.dateLabel}>{t('toolbar.to')}</Text>
               <TextInput
                 value={dateTo}
                 onChangeText={onDateToChange}
-                placeholder="YYYY-MM-DD"
+                placeholder={DATE_FORMAT_HINT}
                 placeholderTextColor={colors.faint}
                 style={styles.dateInput}
-                accessibilityLabel="Filter to date"
+                accessibilityLabel={t('toolbar.toLabel')}
               />
             </View>
           </View>
@@ -293,10 +307,10 @@ export function AccountsToolbar({
         <TextInput
           value={searchQuery}
           onChangeText={onSearchChange}
-          placeholder="Search All Accounts"
+          placeholder={t('toolbar.searchPlaceholder')}
           placeholderTextColor={colors.faint}
           style={styles.searchInput}
-          accessibilityLabel="Search transactions"
+          accessibilityLabel={t('toolbar.searchLabel')}
         />
       </View>
     </View>

@@ -31,6 +31,7 @@ import {
 } from '@/domain/registerSelection';
 import type { Budget, Transaction } from '@/domain/types';
 import { downloadCsv, matchCandidates, txnsCsv } from './register/txnRowMenuShared';
+import { t } from './i18n';
 
 export function useRegisterSelection({
   budget,
@@ -136,7 +137,7 @@ export function useRegisterSelection({
 
   const memoSelected = () => {
     if (process.env.EXPO_OS === 'web') {
-      const memo = window.prompt('Memo', selectedTxns.length === 1 ? (selectedTxns[0].memo ?? '') : '');
+      const memo = window.prompt(t('selection.memoPrompt'), selectedTxns.length === 1 ? (selectedTxns[0].memo ?? '') : '');
       if (memo === null) return;
       patchSelected({ memo });
       return;
@@ -155,7 +156,7 @@ export function useRegisterSelection({
 
   const deleteSelected = useCallback(() => {
     if (!budgetId) return;
-    if (process.env.EXPO_OS === 'web' && !window.confirm(`Delete ${selectedTxns.length} transaction(s)?`)) return;
+    if (process.env.EXPO_OS === 'web' && !window.confirm(t('selection.deleteConfirm', { count: selectedTxns.length }))) return;
     for (const t of selectedTxns) {
       void deleteTransaction({ budgetId, id: t.id });
     }

@@ -10,6 +10,8 @@ import type { Cents } from '@/domain/types';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { GhostButton, IndigoButton, MoneyInput } from '@/ui/bits';
 import { colors, radius } from '@/ui/theme';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './i18n';
 
 /**
  * Reconcile session banner (syscd-app-mbi): stated balance, live difference,
@@ -36,14 +38,14 @@ export function ReconcileBanner({
   return (
     <View style={styles.banner}>
       <View style={styles.bannerMain}>
-        <Text style={styles.kvLabel}>Bank balance</Text>
+        <Text style={styles.kvLabel}>{t('reconcile.bankBalance')}</Text>
         <MoneyInput cents={statedBalance} onCommit={onStatedBalanceChange} autoFocus />
         <Text style={[styles.kvLabel, diff !== 0 && styles.bannerDiff]}>
-          {diff === 0 ? '✓ balanced' : `Difference: ${formatMoney(diff)}`}
+          {diff === 0 ? t('reconcile.balanced') : t('reconcile.difference', { amount: formatMoney(diff) })}
         </Text>
         <View style={styles.bannerBtns}>
-          <GhostButton label="Cancel" onPress={onCancel} />
-          <IndigoButton label={diff === 0 ? 'Finish reconciling' : 'Reconcile anyway'} onPress={onConfirm} />
+          <GhostButton label={tCommon('cancel')} onPress={onCancel} />
+          <IndigoButton label={diff === 0 ? t('reconcile.finish') : t('reconcile.anyway')} onPress={onConfirm} />
         </View>
       </View>
       {error ? (
@@ -79,17 +81,16 @@ export function ReconcilePopover({
   return (
     <>
       {anchor ? (
-        <Pressable style={styles.scrimFill} onPress={onDismiss} accessibilityLabel="Close reconcile question" />
+        <Pressable style={styles.scrimFill} onPress={onDismiss} accessibilityLabel={t('reconcile.closeQuestion')} />
       ) : null}
       {anchor && workingBalance != null ? (
         <View style={[styles.popover, { left: anchor.x, top: anchor.y }]}>
           <Text style={styles.popoverText}>
-            Is your current balance{' '}
-            {formatMoney(workingBalance)}?
+            {t('reconcile.question', { amount: formatMoney(workingBalance) })}
           </Text>
           <View style={styles.popoverBtns}>
-            <GhostButton label="No" onPress={onNo} />
-            <IndigoButton label="Yes" onPress={onYes} />
+            <GhostButton label={t('reconcile.no')} onPress={onNo} />
+            <IndigoButton label={t('reconcile.yes')} onPress={onYes} />
           </View>
         </View>
       ) : null}

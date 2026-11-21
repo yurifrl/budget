@@ -17,6 +17,7 @@ import { TxnMenuKebab } from './register/TxnMenuKebab';
 import { TxnMenuTrigger } from './register/TxnMenuTrigger';
 import type { RegisterDensity } from './AccountsToolbar';
 import { SelectionCheckbox } from './SelectionBar';
+import { t } from './i18n';
 
 /** What every register row needs, whatever its layout. */
 interface RowBaseProps {
@@ -81,17 +82,17 @@ export function RegisterHeader({
 }) {
   return (
     <View style={styles.reghd}>
-      <SelectionCheckbox checked={allSelected} onToggle={onToggleAll} label="Select all transactions" />
-      <Text style={[styles.reghdText, { flex: 1.1 }, showOwnerSlot && { paddingLeft: 22 }]}>ACCOUNT</Text>
-      <Text style={[styles.reghdText, { flex: 0.7 }]}>DATE</Text>
-      <Text style={[styles.reghdText, { flex: 1.4 }]}>PAYEE</Text>
-      <Text style={[styles.reghdText, { flex: 1.4 }]}>CATEGORY</Text>
-      <Text style={[styles.reghdText, { flex: 1.2 }]}>MEMO</Text>
-      <Text style={[styles.reghdText, { flex: 1.1, textAlign: 'right' }]}>AMOUNT</Text>
+      <SelectionCheckbox checked={allSelected} onToggle={onToggleAll} label={t('register.selectAll')} />
+      <Text style={[styles.reghdText, { flex: 1.1 }, showOwnerSlot && { paddingLeft: 22 }]}>{t('register.colAccount')}</Text>
+      <Text style={[styles.reghdText, { flex: 0.7 }]}>{t('register.colDate')}</Text>
+      <Text style={[styles.reghdText, { flex: 1.4 }]}>{t('register.colPayee')}</Text>
+      <Text style={[styles.reghdText, { flex: 1.4 }]}>{t('register.colCategory')}</Text>
+      <Text style={[styles.reghdText, { flex: 1.2 }]}>{t('register.colMemo')}</Text>
+      <Text style={[styles.reghdText, { flex: 1.1, textAlign: 'right' }]}>{t('register.colAmount')}</Text>
       {showRunningBalance ? (
-        <Text style={[styles.reghdText, { width: 84, textAlign: 'right' }]}>RUN. BAL</Text>
+        <Text style={[styles.reghdText, { width: 84, textAlign: 'right' }]}>{t('register.colRunningBalance')}</Text>
       ) : null}
-      <Text style={[styles.reghdText, { width: 30, textAlign: 'center' }]}>C</Text>
+      <Text style={[styles.reghdText, { width: 30, textAlign: 'center' }]}>{t('register.colCleared')}</Text>
       <Text style={[styles.reghdText, { width: 24 }]} />
     </View>
   );
@@ -102,7 +103,7 @@ export function RegisterHeader({
  * (tk-boxi). Line 1 = payee + Repeat + amount, line 2 = category + account.
  */
 export function RegisterCard({
-  txn: t,
+  txn: tx,
   budget,
   budgetId,
   account: acct,
@@ -121,25 +122,25 @@ export function RegisterCard({
   onEdit: () => void;
 }) {
   return (
-    <TxnMenuTrigger txn={t} budget={budget} budgetId={budgetId} onEditMemo={onEditMemo}>
+    <TxnMenuTrigger txn={tx} budget={budget} budgetId={budgetId} onEditMemo={onEditMemo}>
       <Pressable
         style={[styles.txnCard, density === 'compact' && styles.txnCardCompact]}
-        onPress={t.cleared === 'reconciled' ? undefined : onEdit}
-        accessibilityLabel={`Edit transaction ${t.payee || '(no payee)'}`}
+        onPress={tx.cleared === 'reconciled' ? undefined : onEdit}
+        accessibilityLabel={t('register.editLabel', { payee: tx.payee || t('register.noPayee') })}
         accessibilityState={{
-          disabled: t.cleared === 'reconciled',
+          disabled: tx.cleared === 'reconciled',
         }}
       >
         <View style={styles.txnL1Phone}>
           <View style={styles.txnLeadPhone}>
             <Text style={styles.txnPayee} numberOfLines={1}>
-              {t.payee || '(no payee)'}
+              {tx.payee || t('register.noPayee')}
             </Text>
-            {t.upcoming ? <Text style={styles.upcomingPill}>Repeat</Text> : null}
+            {tx.upcoming ? <Text style={styles.upcomingPill}>{t('register.repeat')}</Text> : null}
           </View>
-          <RowAmount txn={t} />
-          <RowBadge compact txn={t} onApprove={onApprove} onToggleCleared={onToggleCleared} />
-          <TxnMenuKebab onOpen={(px, py) => onOpenMenu(t, px, py)} />
+          <RowAmount txn={tx} />
+          <RowBadge compact txn={tx} onApprove={onApprove} onToggleCleared={onToggleCleared} />
+          <TxnMenuKebab onOpen={(px, py) => onOpenMenu(tx, px, py)} />
         </View>
         <View style={styles.txnL2Phone}>
           <Text style={[styles.tagPill, cat.warn && styles.tagPillWarn]} numberOfLines={1}>
@@ -158,7 +159,7 @@ export function RegisterCard({
 
 /** Desktop table row: one line, columns aligned with `RegisterHeader`. */
 export function RegisterRow({
-  txn: t,
+  txn: tx,
   budget,
   budgetId,
   account: acct,
@@ -188,25 +189,25 @@ export function RegisterRow({
 }) {
   const { formatDate, formatMoney } = useMoneyFormat();
   return (
-    <TxnMenuTrigger txn={t} budget={budget} budgetId={budgetId} onEditMemo={onEditMemo}>
+    <TxnMenuTrigger txn={tx} budget={budget} budgetId={budgetId} onEditMemo={onEditMemo}>
       <Pressable
         style={[
           styles.regrow,
-          !t.approved && { backgroundColor: colors.indigoSoft },
-          t.upcoming && styles.regrowUpcoming,
+          !tx.approved && { backgroundColor: colors.indigoSoft },
+          tx.upcoming && styles.regrowUpcoming,
           density === 'compact' && styles.regrowCompact,
         ]}
-        onPress={(e) => onPress(t, e)}
+        onPress={(e) => onPress(tx, e)}
         onContextMenu={(e) => {
           e.preventDefault();
-          onOpenMenu(t, e.nativeEvent.pageX, e.nativeEvent.pageY);
+          onOpenMenu(tx, e.nativeEvent.pageX, e.nativeEvent.pageY);
         }}
-        accessibilityLabel={`Edit transaction ${t.payee || '(no payee)'}`}
+        accessibilityLabel={t('register.editLabel', { payee: tx.payee || t('register.noPayee') })}
       >
         <SelectionCheckbox
           checked={selected}
-          onToggle={() => onToggleSelected(t.id)}
-          label={`Select transaction ${t.payee || '(no payee)'}`}
+          onToggle={() => onToggleSelected(tx.id)}
+          label={t('register.selectLabel', { payee: tx.payee || t('register.noPayee') })}
         />
         <View style={[styles.regAcctCell, { flex: 1.1 }]}>
           {/* Fixed 16px slot so account names align whether or not the
@@ -220,7 +221,7 @@ export function RegisterRow({
             {acct?.name}
           </Text>
         </View>
-        <Text style={[styles.regText, { flex: 0.7, color: colors.muted }]}>{formatDate(t.date)}</Text>
+        <Text style={[styles.regText, { flex: 0.7, color: colors.muted }]}>{formatDate(tx.date)}</Text>
         <View
           style={{
             flex: 1.4,
@@ -230,9 +231,9 @@ export function RegisterRow({
           }}
         >
           <Text style={[styles.regText, { flexShrink: 1 }]} numberOfLines={1}>
-            {t.payee || '(no payee)'}
+            {tx.payee || t('register.noPayee')}
           </Text>
-          {t.upcoming ? <Text style={styles.upcomingPill}>Repeat</Text> : null}
+          {tx.upcoming ? <Text style={styles.upcomingPill}>{t('register.repeat')}</Text> : null}
         </View>
         <View style={{ flex: 1.4, flexDirection: 'row' }}>
           <Text style={[styles.tagPill, cat.warn && styles.tagPillWarn]} numberOfLines={1}>
@@ -240,7 +241,7 @@ export function RegisterRow({
           </Text>
         </View>
         <Text style={[styles.regText, { flex: 1.2, color: colors.faint }]} numberOfLines={1}>
-          {t.memo}
+          {tx.memo}
         </Text>
         <View
           style={{
@@ -249,15 +250,15 @@ export function RegisterRow({
             justifyContent: 'flex-end',
           }}
         >
-          <RowAmount txn={t} />
+          <RowAmount txn={tx} />
         </View>
         {showRunningBalance ? (
           <Text style={[styles.regText, styles.runBal]}>
             {runningBalance !== undefined ? formatMoney(runningBalance) : ''}
           </Text>
         ) : null}
-        <RowBadge txn={t} onApprove={onApprove} onToggleCleared={onToggleCleared} />
-        <TxnMenuKebab onOpen={(px, py) => onOpenMenu(t, px, py)} />
+        <RowBadge txn={tx} onApprove={onApprove} onToggleCleared={onToggleCleared} />
+        <TxnMenuKebab onOpen={(px, py) => onOpenMenu(tx, px, py)} />
       </Pressable>
     </TxnMenuTrigger>
   );
