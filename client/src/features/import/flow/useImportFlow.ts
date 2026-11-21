@@ -30,6 +30,7 @@ import {
   type ImportMappingStore,
 } from '../parsers';
 import { useBudgetModel } from '@/state/useBudgetModel';
+import { t } from '../i18n';
 import {
   headerColumnCount,
   importFlowReducer,
@@ -42,6 +43,7 @@ import {
   rowsToImport,
   visiblePayees as toVisiblePayees,
 } from './importFlow.logic';
+import { parserMessage } from './parserMessages';
 
 export type ImportFlow = ReturnType<typeof useImportFlow>;
 
@@ -104,7 +106,7 @@ export function useImportFlow() {
         // the note shows and the mapping is the base one.
         const saved = account ? mappingStore.load(account.id) : null;
         if (saved) {
-          dispatch({ type: 'mappingNeeded', mapping: { ...base, ...saved }, note: 'Using the mapping saved for this account.' });
+          dispatch({ type: 'mappingNeeded', mapping: { ...base, ...saved }, note: t('mapping.savedNote') });
         } else {
           dispatch({ type: 'mappingNeeded', mapping: base, note: null });
         }
@@ -114,13 +116,13 @@ export function useImportFlow() {
         // review table.
         dispatch({
           type: 'fileRejected',
-          error: apiErrorMessage(new Error(result.errors.join('; ')), 'failed to read the file'),
+          error: result.errors.map(parserMessage).join('; '),
         });
       } else {
         dispatch({ type: 'rowsReady', drafts: makeDraftRows(result.rows, visiblePayees) });
       }
     } catch (err) {
-      dispatch({ type: 'pickFailed', error: apiErrorMessage(err, 'failed to read the file') });
+      dispatch({ type: 'pickFailed', error: apiErrorMessage(err, t('error.readFailed')) });
     }
   };
 
@@ -169,7 +171,7 @@ export function useImportFlow() {
         } catch (err) {
           dispatch({
             type: 'rulesFailed',
-            error: apiErrorMessage(err, 'transactions imported, but saving the payee rules failed'),
+            error: apiErrorMessage(err, t('error.rulesFailed')),
           });
         }
       }
@@ -177,7 +179,7 @@ export function useImportFlow() {
       // came from. Rule-save failures stay visible after returning.
       router.back();
     } catch (err) {
-      dispatch({ type: 'importFailed', error: apiErrorMessage(err, 'import failed') });
+      dispatch({ type: 'importFailed', error: apiErrorMessage(err, t('error.importFailed')) });
     }
   };
 

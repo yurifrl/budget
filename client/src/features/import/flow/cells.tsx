@@ -6,6 +6,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { Combobox } from '@/ui/combobox';
 
 import { useMoneyFormat } from '@/ui/moneyFormat';
+import { t } from '../i18n';
 import { styles } from './styles';
 
 /** Small square toggle used for the mapper options and row inclusion. */
@@ -47,7 +48,7 @@ export function DateCell({ value, onCommit }: { value: string; onCommit: (iso: s
         if (parsed && parsed !== value) onCommit(parsed);
       }}
       style={styles.cellInput}
-      accessibilityLabel="Transaction date"
+      accessibilityLabel={t('cell.dateA11y')}
     />
   );
 }
@@ -67,7 +68,7 @@ export function MemoCell({ value, onCommit }: { value: string; onCommit: (next: 
         if (next !== value) onCommit(next);
       }}
       style={styles.cellInput}
-      accessibilityLabel="Transaction memo"
+      accessibilityLabel={t('cell.memoA11y')}
     />
   );
 }
@@ -98,7 +99,7 @@ export function PayeeCell({
   const reset = () => onChange({ payee: original, payeeId: null });
   const unbind = (
     <Pressable
-      accessibilityLabel="Return payee to original statement text"
+      accessibilityLabel={t('cell.payeeReset')}
       onPress={reset}
       style={styles.payeeUnbind}
     >
@@ -123,10 +124,10 @@ export function PayeeCell({
         onPick={(key) => onChange({ payeeId: key })}
         onCreate={(query) => onChange({ payee: query, payeeId: null })}
         options={options}
-        placeholder="Payee…"
+        placeholder={t('cell.payeePlaceholder')}
         style={styles.payeeInput}
         containerStyle={styles.payeeEditorField}
-        accessibilityLabel="Transaction payee"
+        accessibilityLabel={t('cell.payeeA11y')}
       />
       {unbind}
     </View>
