@@ -24,6 +24,7 @@ import {
 import type { PayeeAdminRow } from '@/budget/data/rows';
 import { useBudgetModel } from '@/state/useBudgetModel';
 import { selectActiveMonth } from '@/state/ui';
+import { t } from './i18n';
 import { filterPayees, mergeCandidatesFor, renameToCommit, ruleToSave, type RuleDraft } from './payees.logic';
 
 export type PayeeAdmin = ReturnType<typeof usePayeeAdmin>;
@@ -108,7 +109,7 @@ export function usePayeeAdmin() {
       await renamePayee({ budgetId, payeeId: selected.id, name }).unwrap();
     } catch (err) {
       // The draft was already cleared above, so the field reverts to the saved name.
-      const message = apiErrorMessage(err, 'failed to rename payee');
+      const message = apiErrorMessage(err, t('error.rename'));
       if ((err as { status?: unknown } | null)?.status === 409) setNameError(message);
       else setError(message);
     }
@@ -126,7 +127,7 @@ export function usePayeeAdmin() {
       await setRenameRule({ budgetId, payeeId: selected.id, matchType: next.matchType, condition: next.condition }).unwrap();
       setRuleDraft(null);
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to save renaming rule'));
+      setError(apiErrorMessage(err, t('error.saveRule')));
     }
   };
 
@@ -140,7 +141,7 @@ export function usePayeeAdmin() {
       setSearch('');
       selectById(row.id);
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to add payee'));
+      setError(apiErrorMessage(err, t('error.add')));
     }
   };
 
@@ -149,7 +150,7 @@ export function usePayeeAdmin() {
     try {
       await setHidden({ budgetId, payeeId: selected.id, hidden: !selected.hidden }).unwrap();
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to update payee'));
+      setError(apiErrorMessage(err, t('error.update')));
     }
   };
 
@@ -163,7 +164,7 @@ export function usePayeeAdmin() {
         defaultCategoryId: selected.default_category_id,
       }).unwrap();
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to update categorization'));
+      setError(apiErrorMessage(err, t('error.categorization')));
     }
   };
 
@@ -177,7 +178,7 @@ export function usePayeeAdmin() {
         defaultCategoryId,
       }).unwrap();
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to update categorization'));
+      setError(apiErrorMessage(err, t('error.categorization')));
     }
   };
 
@@ -187,7 +188,7 @@ export function usePayeeAdmin() {
       await deletePayee({ budgetId, payeeId: selected.id }).unwrap();
       setSelectedId(null);
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to delete payee'));
+      setError(apiErrorMessage(err, t('error.delete')));
     }
   };
 
@@ -222,7 +223,7 @@ export function usePayeeAdmin() {
       setMergeTargetId(null);
       setError(null);
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to merge payees'));
+      setError(apiErrorMessage(err, t('error.merge')));
     }
   };
 
