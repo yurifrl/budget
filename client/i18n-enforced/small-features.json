@@ -1,9 +1,0 @@
-{
-  "files": [
-    "src/features/home/**/*.{ts,tsx}",
-    "src/features/reflect/**/*.{ts,tsx}",
-    "src/features/spending/**/*.{ts,tsx}",
-    "src/features/settings/**/*.{ts,tsx}"
-  ],
-  "ignores": []
-}

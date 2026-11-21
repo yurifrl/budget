@@ -1,4 +1,0 @@
-{
-  "files": ["src/features/auth/**/*.{ts,tsx}", "src/features/profile/**/*.{ts,tsx}"],
-  "ignores": []
-}

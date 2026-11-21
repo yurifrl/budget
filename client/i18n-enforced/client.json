@@ -1,0 +1,10 @@
+{
+  "files": ["src/**/*.{ts,tsx}"],
+  "ignores": [
+    "src/features/import/parsers/**",
+    "src/features/backup/transfer/tsv.ts",
+    "src/features/backup/transfer/payload.ts",
+    "src/domain/revision.ts",
+    "src/ui/i18n/**"
+  ]
+}

@@ -1,7 +1,0 @@
-{
-  "files": [
-    "src/features/banks/bank/**/*.{ts,tsx}",
-    "src/features/banks/connect-bank/**/*.{ts,tsx}"
-  ],
-  "ignores": []
-}

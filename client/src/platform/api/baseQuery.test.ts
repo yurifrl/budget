@@ -137,7 +137,7 @@ describe('apiBaseQuery', () => {
     try {
       const result = await call({ url: '/x' }, makeApi());
       expect(result).toEqual({
-        error: { status: 'FETCH_ERROR', message: 'Network request failed' },
+        error: { status: 'FETCH_ERROR', message: 'Could not reach the server. Check your connection and try again.' },
       });
     } finally {
       restore();
@@ -253,8 +253,14 @@ describe('apiErrorMessage order', () => {
 
   test('4. an unknown code (or none) keeps the raw server message', () => {
     expect(apiErrorMessage({ status: 400, message: 'something new', code: 'brand_new_code' })).toBe('something new');
-    expect(apiErrorMessage({ status: 'FETCH_ERROR', message: 'Network request failed' })).toBe('Network request failed');
     expect(apiErrorMessage({ data: { message: 'wrapped' } })).toBe('wrapped');
+  });
+
+  test('a failed fetch gives the localized network message, even with a fallback', () => {
+    const err = { status: 'FETCH_ERROR', message: 'Failed to fetch' };
+    expect(apiErrorMessage(err)).toContain('Could not reach the server');
+    expect(apiErrorMessage(err, 'Could not rename')).toContain('Could not reach the server');
+    expect(apiErrorMessage({ status: 502, message: 'HTTP 502' })).toBe(tError('upstream_error'));
   });
 
   test('5. nothing usable gives the generic error', () => {
