@@ -523,14 +523,15 @@ accounts is in `docs/MORNING.md`.
   machineconfig. Making budget's public would expose the API image for no
   gain. GitHub has no REST endpoint to change package visibility anyway;
   MORNING.md has the clicks if pods ever show ImagePullBackOff.
-- **No ArgoCD credential yet, so image tags are inline.** ArgoCD reads
+- **ArgoCD reads image tags from this repo.** ArgoCD reads
   syscd-app through a per-repo deploy key (`argocd-syscd-app` in
-  argo-support.yaml); there is no credential template covering
-  `git@github.com:yurifrl/*`. `op` was not signed in, so the key could not be
-  stored. budget.yaml declares the `argocd-budget` repository ExternalSecret
-  itself (so its pending state shows only on this app), pins the four image
-  tags inline, and leaves the `$values` source commented until the secret
-  exists. The script creates the 1Password item and the read-only deploy key.
+  argo-support.yaml); there is no working credential template for
+  `git@github.com:yurifrl/*`. budget.yaml declares the `argocd-budget`
+  repository ExternalSecret itself (so its pending state shows only on this
+  app). The `$values` source was first left commented until the read-only
+  deploy key was on yurifrl/budget; since 2026-11-21 it is enabled and
+  `k8s/values.yaml` `imageTags` overrides the inline fallback tags, so a
+  release deploys with no home-systems commit.
 - **Role access via membership.** `budget_app` is a member of `syscd`
   (CNPG managed role `inRoles`, inherit by default), which gives it owner
   rights on syscd's objects in `budget` without any manual GRANT. Checked in

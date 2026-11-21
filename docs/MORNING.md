@@ -125,26 +125,21 @@ creates items, so the URL is the one set in the Pluggy dashboard. Leave the
 existing one (`https://api.syscd.live/connections/webhook/pluggy`) in place
 while syscd's budget runs; switch it in section 5.
 
-### 2.5 Turn on the `$values` source (release auto-deploy)
+### 2.5 The `$values` source (release auto-deploy): done
 
-After 2.1 the `argocd-budget` repository secret appears in `argocd`
-(check: `kubectl -n argocd get secret argocd-budget`). Then, in home-systems
-`k8s/applications/budget.yaml`, uncomment both blocks:
+Enabled 2026-11-21 (home-systems 6d6fe375). The budget Application's third
+source is `git@github.com:yurifrl/budget.git` (`main`, `ref: values`) and the
+support chart reads `$values/k8s/values.yaml`. ArgoCD fetches it through the
+`argocd-budget` repository secret (1Password item `budget` field
+`ARGOCD_SSH_PRIVATE_KEY`); its public half is the read-only deploy key
+`argocd@home-systems (read-only)` on yurifrl/budget. The chart prefers
+`imageTags[<deployment>]` over the inline `tag:` values in budget.yaml, which
+are only a fallback, so `task release` rolls the cluster by itself once CI
+passes: do not bump the tags in home-systems.
 
-```yaml
-        valueFiles:
-          - $values/k8s/values.yaml
-...
-    - repoURL: git@github.com:yurifrl/budget.git
-      targetRevision: main
-      ref: values
-```
-
-and commit to `main`. From then on `task release` in the budget repo rolls the
-cluster by itself. Do not enable it before the secret exists: a source ArgoCD
-cannot fetch breaks manifest generation for the whole Application. Until then
-the four image `tag:` values are inline in budget.yaml (now `2026.11.18-01`);
-to roll a release by hand, bump those four lines.
+If that key is removed or rotated without updating GitHub, manifest
+generation fails for the whole Application (pods keep the last synced tags).
+Check with `argocd repo list --core` (in namespace `argocd`).
 
 ### 2.6 Images: only if pods show ImagePullBackOff
 
