@@ -38,6 +38,7 @@ import {
 } from '@/domain/txnSheet';
 import type { Transaction } from '@/domain/types';
 import { selectActiveBudgetId } from '@/state/ui';
+import { t } from './i18n';
 
 export type PickerMode = 'none' | 'payee' | 'category' | 'account';
 
@@ -168,7 +169,7 @@ export function useAddTransaction({
       setCategoryId(created.id);
       closePicker();
     } catch (err) {
-      setSaveError(apiErrorMessage(err, 'failed to create category'));
+      setSaveError(apiErrorMessage(err, t('error.createCategory')));
     }
   };
 
@@ -185,7 +186,7 @@ export function useAddTransaction({
       await addTransaction({ budgetId, txn: sheetNewTransaction(form) }).unwrap();
       close();
     } catch (err) {
-      setSaveError(apiErrorMessage(err, 'failed to save transaction'));
+      setSaveError(apiErrorMessage(err, t('error.save')));
     }
   };
 

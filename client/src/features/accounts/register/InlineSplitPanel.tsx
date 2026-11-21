@@ -9,10 +9,13 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { emptySplit, removeSplitLeg, splitTotalLabel, updateSplitLeg } from '@/domain/inlineAdd';
 import type { Budget, TransactionSplit } from '@/domain/types';
 import type { BudgetMonth } from '@/domain/zeroSum';
+import { tCommon } from '@shared/i18n/common';
+
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { AmountCell } from '@/ui/bits';
 import { colors, radius } from '@/ui/theme';
 import { CategoryDropdown } from '@/ui/dropdown/CategoryDropdown';
+import { t } from './i18n';
 
 export function InlineSplitPanel({
   budget,
@@ -37,10 +40,10 @@ export function InlineSplitPanel({
   return (
     <View style={styles.splitPanel}>
       <View style={styles.splitHead}>
-        <Text style={styles.splitHeadText}>Split across categories</Text>
+        <Text style={styles.splitHeadText}>{t('split.title')}</Text>
         <Text style={[styles.splitTotal, total.zero && styles.splitTotalZero]}>{total.text}</Text>
-        <Pressable onPress={() => onDone()} style={styles.splitDone} accessibilityLabel="Done splitting">
-          <Text style={styles.splitDoneText}>Done</Text>
+        <Pressable onPress={() => onDone()} style={styles.splitDone} accessibilityLabel={t('split.doneLabel')}>
+          <Text style={styles.splitDoneText}>{tCommon('done')}</Text>
         </Pressable>
       </View>
       {splits.map((leg, i) => {
@@ -63,17 +66,17 @@ export function InlineSplitPanel({
                   onChange((prev) => updateSplitLeg(prev, i, { categoryId: id })),
                 )
               }
-              placeholder={legCat?.name ?? 'Category'}
+              placeholder={legCat?.name ?? t('field.category')}
               containerStyle={{ flex: 1.4 }}
-              accessibilityLabel={`Split ${i + 1} category`}
+              accessibilityLabel={t('split.categoryLabel', { number: i + 1 })}
             />
             <TextInput
               value={leg.memo}
-              onChangeText={(t) => onChange((prev) => updateSplitLeg(prev, i, { memo: t }))}
-              placeholder="Memo"
+              onChangeText={(text) => onChange((prev) => updateSplitLeg(prev, i, { memo: text }))}
+              placeholder={t('field.memo')}
               placeholderTextColor={colors.faint}
               style={[styles.input, { flex: 1.2 }]}
-              accessibilityLabel={`Split ${i + 1} memo`}
+              accessibilityLabel={t('split.memoLabel', { number: i + 1 })}
             />
             <AmountCell
               outflowCents={leg.outflow}
@@ -86,14 +89,14 @@ export function InlineSplitPanel({
             <Pressable
               onPress={() => onChange((prev) => removeSplitLeg(prev, i))}
               style={styles.splitRemove}
-              accessibilityLabel={`Remove split ${i + 1}`}>
+              accessibilityLabel={t('split.removeLabel', { number: i + 1 })}>
               <Text style={styles.splitRemoveText}>✕</Text>
             </Pressable>
           </View>
         );
       })}
       <Pressable onPress={() => onChange((prev) => [...prev, emptySplit()])} style={styles.splitAdd}>
-        <Text style={styles.splitAddText}>+ Add another split</Text>
+        <Text style={styles.splitAddText}>{t('split.add')}</Text>
       </Pressable>
     </View>
   );

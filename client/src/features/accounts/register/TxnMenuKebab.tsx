@@ -8,6 +8,7 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 
 import { colors } from "@/ui/theme";
+import { t } from "./i18n";
 
 export function TxnMenuKebab({
   onOpen,
@@ -24,7 +25,7 @@ export function TxnMenuKebab({
         e.stopPropagation();
         onOpen(e.nativeEvent.pageX, e.nativeEvent.pageY);
       }}
-      accessibilityLabel="Transaction menu"
+      accessibilityLabel={t('menu.kebabLabel')}
     >
       <Text style={styles.text}>⋯</Text>
     </Pressable>

@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 import type { PayeeItem, PayeeSection } from './payeeDropdown.logic';
 
 export function PayeeMenuBody({
@@ -73,7 +74,7 @@ export function PayeeMenuBody({
         <Text style={styles.checkPlaceholder} />
         <Text style={[styles.rowLabel, styles.createMark]}>＋</Text>
         <Text style={[styles.rowLabel, styles.createLabel]} numberOfLines={1}>
-          {`Use “${createLabel}” as payee`}
+          {t('payee.create', { name: createLabel })}
         </Text>
       </Pressable>,
     );
@@ -95,7 +96,7 @@ export function PayeeMenuBody({
         style={[styles.row, styles.manageRow, manageActive && styles.rowActive]}
         testID="manage-row-v2">
         <Text style={styles.checkPlaceholder} />
-        <Text style={[styles.rowLabel, styles.manageLabel]}>Manage Payees…</Text>
+        <Text style={[styles.rowLabel, styles.manageLabel]}>{t('payee.manage')}</Text>
       </Pressable>
     </>
   );

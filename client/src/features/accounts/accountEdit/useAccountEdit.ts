@@ -21,6 +21,7 @@ import { accountSavePatch, balanceEdit, closeAccountPatch } from '@/domain/accou
 import { connectionStatusView , upstreamOption , useAccountLink , useSyncRunner } from '@/features/banks';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { findLinkedUpstream, workingCents } from './accountEdit.logic';
+import { t } from './i18n';
 
 export type AccountEdit = NonNullable<ReturnType<typeof useAccountEdit>>;
 
@@ -99,7 +100,7 @@ export function useAccountEdit(account: AccountRow | null, budgetId: string, onC
       const outcome = await syncRunner.run(connection.id, 'sync');
       if (outcome.kind === 'error') setError(outcome.text);
     } catch (err) {
-      setError(apiErrorMessage(err, 'sync failed'));
+      setError(apiErrorMessage(err, t('error.sync')));
     } finally {
       setSyncing(false);
     }
@@ -139,7 +140,7 @@ export function useAccountEdit(account: AccountRow | null, budgetId: string, onC
       await updateAccount({ budgetId, accountId: account.id, ...result.patch }).unwrap();
       onClose();
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to update account'));
+      setError(apiErrorMessage(err, t('error.update')));
     }
   };
 
@@ -152,7 +153,7 @@ export function useAccountEdit(account: AccountRow | null, budgetId: string, onC
       await updateAccount({ budgetId, accountId: account.id, ...closeAccountPatch(working) }).unwrap();
       onClose();
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to close account'));
+      setError(apiErrorMessage(err, t('error.close')));
     }
   };
 
@@ -165,7 +166,7 @@ export function useAccountEdit(account: AccountRow | null, budgetId: string, onC
       await deleteAccount({ budgetId, accountId: account.id }).unwrap();
       onClose();
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to delete account'));
+      setError(apiErrorMessage(err, t('error.delete')));
     }
   };
 

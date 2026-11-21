@@ -10,6 +10,7 @@ import { REPEAT_FREQS, REPEAT_LABELS } from '@/domain/inlineAdd';
 import type { RepeatFrequency, Transaction } from '@/domain/types';
 import { colors, radius } from '@/ui/theme';
 import { pressNoBlur } from '@/ui/dropdown/dropdown';
+import { t } from './i18n';
 
 export function InlineRepeatFooter({
   transaction,
@@ -36,23 +37,25 @@ export function InlineRepeatFooter({
     transaction?.repeatRuleId ? (
       <View style={styles.repeatBar}>
         <Text style={styles.repeatLabel}>
-          Repeats {REPEAT_LABELS[transaction.repeat as RepeatFrequency] ?? transaction.repeat}
+          {t('repeat.repeats', {
+            frequency: REPEAT_LABELS[transaction.repeat as RepeatFrequency] ?? transaction.repeat,
+          })}
         </Text>
         <Pressable style={styles.repeatStop} onPress={() => onStop()}>
-          <Text style={styles.repeatStopText}>Stop Repeating</Text>
+          <Text style={styles.repeatStopText}>{t('repeat.stop')}</Text>
         </Pressable>
       </View>
     ) : (
       <View style={styles.repeatBar}>
-        <Text style={styles.repeatLabel}>Repeat</Text>
+        <Text style={styles.repeatLabel}>{t('repeat.label')}</Text>
         <View style={styles.repeatPicker}>
           <Pressable
             style={styles.repeatTrigger}
             onPress={() => onOpenChange(!open)}
             {...pressNoBlur}
-            accessibilityLabel="Repeat frequency">
+            accessibilityLabel={t('repeat.frequencyLabel')}>
             <Text style={styles.repeatTriggerText}>
-              {repeatFreq ? REPEAT_LABELS[repeatFreq] : 'Never'}
+              {repeatFreq ? REPEAT_LABELS[repeatFreq] : t('repeat.never')}
             </Text>
             <Text style={styles.repeatCaret}>▾</Text>
           </Pressable>
@@ -66,7 +69,7 @@ export function InlineRepeatFooter({
                 }}
                 {...pressNoBlur}>
                 <Text style={[styles.repeatItemText, repeatFreq === null && styles.repeatItemActive]}>
-                  Never
+                  {t('repeat.never')}
                 </Text>
               </Pressable>
               {REPEAT_FREQS.map((f) => (
@@ -88,7 +91,7 @@ export function InlineRepeatFooter({
         </View>
         {repeatFreq ? (
           <Pressable style={styles.repeatMake} onPress={() => onMake()} {...pressNoBlur}>
-            <Text style={styles.repeatMakeText}>Make Repeating</Text>
+            <Text style={styles.repeatMakeText}>{t('repeat.make')}</Text>
           </Pressable>
         ) : null}
       </View>

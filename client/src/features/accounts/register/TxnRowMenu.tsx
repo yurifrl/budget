@@ -21,6 +21,7 @@ import { useFlagLabels } from '@/state/useDisplayPrefs';
 import { colors, radius } from '@/ui/theme';
 import { mainMenuSections, menuCardPosition, menuSubLabel, type MainItemKey, type MenuPanel } from './txnRowMenu.logic';
 import { CategoryPanel, FlagPanel, MainPanel, MatchPanel, MovePanel, RepeatPanel } from './TxnRowMenuPanels';
+import { t } from './i18n';
 import { useTxnRowMenuActions } from './txnRowMenuShared';
 
 export function TxnRowMenu({
@@ -106,7 +107,7 @@ export function TxnRowMenu({
   const { left: cardLeft, top: cardTop } = menuCardPosition({ x: anchor.x, y: anchor.y }, { w: winW, h: winH }, cardSize);
 
   return (
-    <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close transaction menu">
+    <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t('menu.closeLabel')}>
       {/* Swallow clicks so item presses don't bubble to the backdrop. */}
       <Pressable
         onPress={(e) => e.stopPropagation()}
@@ -118,7 +119,7 @@ export function TxnRowMenu({
           <Pressable
             style={styles.titleRow}
             onPress={() => setPanel('main')}
-            accessibilityLabel="Back to menu">
+            accessibilityLabel={t('menu.backLabel')}>
             <Ionicons name="chevron-back" size={13} color={colors.muted} />
             <Text style={styles.title}>{subLabel}</Text>
           </Pressable>
