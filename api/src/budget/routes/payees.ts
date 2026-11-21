@@ -24,14 +24,16 @@ const PAYEE_NAME_UNIQUE = 'payees_budget_id_name_key';
 /** 409 naming the payee that already holds the name. Merge is only offered when it can work. */
 function payeeNameConflict(other: PayeeNameHolder): HttpError {
   if (other.transfer) {
-    return new HttpError(409, `The name "${other.name}" is reserved for a transfer payee. Choose a different name.`);
+    return new HttpError(409, `The name "${other.name}" is reserved for a transfer payee. Choose a different name.`, 'payee_name_reserved', { name: other.name });
   }
   if (other.deleted) {
-    return new HttpError(409, `A deleted payee is already named "${other.name}". Choose a different name.`);
+    return new HttpError(409, `A deleted payee is already named "${other.name}". Choose a different name.`, 'payee_name_deleted_exists', { name: other.name });
   }
   return new HttpError(
     409,
     `A payee named "${other.name}" already exists. Choose a different name, or use Merge to combine them.`,
+    'payee_name_exists',
+    { name: other.name },
   );
 }
 
@@ -44,7 +46,7 @@ export const operations = [
 
   implement(payeesCreate, async (_c, { budget_id, name, default_category_id, hidden, categorization_mode }) => {
     if (default_category_id) {
-      if (!(await categoryInBudget(pool, default_category_id, budget_id))) throw new HttpError(400, 'category not found in budget');
+      if (!(await categoryInBudget(pool, default_category_id, budget_id))) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
     }
     // Rule-aware create: a name matching a payee's rename condition lands as
     // that payee's name, mirroring what transaction creation would do.
@@ -97,7 +99,7 @@ export const operations = [
   implement(payeesSetCategorization, async (_c, { id, budget_id, categorization_mode, default_category_id }) => {
     await requirePayee(budget_id, id);
     if (default_category_id) {
-      if (!(await categoryInBudget(pool, default_category_id, budget_id))) throw new HttpError(400, 'category not found in budget');
+      if (!(await categoryInBudget(pool, default_category_id, budget_id))) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
     }
     await payeesStore.setPayeeCategorization(pool, id, budget_id, {
       categorizationMode: categorization_mode,
@@ -117,7 +119,7 @@ export const operations = [
    * spec ("source payee txns re-pointed to target, source soft-deleted").
    */
   implement(payeesMerge, async (_c, { id, budget_id, target_id }) => {
-    if (target_id === id) throw new HttpError(400, 'cannot merge a payee into itself');
+    if (target_id === id) throw new HttpError(400, 'cannot merge a payee into itself', 'cannot_merge_into_itself');
 
     return withTransaction(pool, async (client) => {
       const rows = await payeesStore.lockLivePayees(client, [id, target_id], budget_id);

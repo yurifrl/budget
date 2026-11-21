@@ -10,6 +10,7 @@ import type { Pool, PoolClient } from 'pg';
 import { getJobType } from './registry';
 import { closeRun, lockPending, markHandedOff, NOTIFY_CHANNEL } from './store';
 import type { WorkflowStarter } from './types';
+import { JOB_USER_MESSAGES } from './user-messages';
 
 export interface RelayDeps {
   pool: Pick<Pool, 'connect'>;
@@ -51,7 +52,7 @@ export async function relayOnce(deps: RelayDeps): Promise<RelayPassResult> {
         await closeRun(client, run.id, {
           status: 'failed',
           errorMessage: `unknown job type ${run.job_type}`,
-          userMessage: 'This background job is not available',
+          userMessage: JOB_USER_MESSAGES.unavailable,
         });
         await client.query('commit');
         continue;

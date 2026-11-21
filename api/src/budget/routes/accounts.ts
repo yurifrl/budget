@@ -32,7 +32,7 @@ async function assertMemberOrShared(
 ): Promise<void> {
   if (userId == null) return;
   if (!(await isBudgetMember(budgetId, userId, client))) {
-    throw new HttpError(400, 'user_id is not a member of this budget');
+    throw new HttpError(400, 'user_id is not a member of this budget', 'member_not_in_budget');
   }
 }
 
@@ -117,7 +117,7 @@ const updateAccount = implement(
         currency !== undefined ||
         link !== undefined;
       if (isClosed && closed !== false && mutatesFields) {
-        throw new HttpError(409, 'account is closed — reopen it to make changes');
+        throw new HttpError(409, 'account is closed — reopen it to make changes', 'account_closed_edit');
       }
 
       // Working-balance edit is an OVERRIDE, not a ledger operation (product
@@ -172,7 +172,7 @@ const updateAccount = implement(
           // Strict 1:1: an upstream account may back only one budget account
           // (0021 unique index is the backstop — this check gives the 409).
           if (await accountsStore.findOtherAccountLinkedTo(client, accountId, link.connectionId, link.externalAccountId)) {
-            throw new HttpError(409, `that bank account is already linked to another budget account`);
+            throw new HttpError(409, `that bank account is already linked to another budget account`, 'bank_account_already_linked');
           }
           await accountsStore.linkAccount(
             client,
@@ -203,7 +203,7 @@ const reconcileAccount = implement(
       }
       // Closed accounts are immutable — balances can no longer change.
       if (acc.closed) {
-        throw new HttpError(409, 'account is closed — reopen it to reconcile');
+        throw new HttpError(409, 'account is closed — reopen it to reconcile', 'account_closed_reconcile');
       }
 
       // YNAB's "Yes": the on-screen balance already matches the bank, so every
@@ -253,7 +253,7 @@ const deleteAccount = implement(accountsDelete, async (_c, { id: accountId, budg
   return withTransaction(pool, async (client) => {
     const acc = await accountsStore.lockLiveAccount(client, accountId);
     if (!acc || acc.budget_id !== budgetId) throw new HttpError(404, 'account not found');
-    if (!acc.closed) throw new HttpError(409, 'account must be closed before it can be deleted');
+    if (!acc.closed) throw new HttpError(409, 'account must be closed before it can be deleted', 'account_must_be_closed_first');
 
     // Splits ride on the parent's deleted flag on read; soft-deleting the
     // parents suffices. Upcoming rows are ordinary transactions (repeat-rule

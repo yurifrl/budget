@@ -172,7 +172,7 @@ export const passwordChangeOperations: readonly AnyOperation[] = [
       await revokePasswordGrants(tx, account.userId);
       return v;
     });
-    if (version === null) throw new HttpError(409, 'the password changed meanwhile, try again', 'conflict');
+    if (version === null) throw new HttpError(409, 'the password changed meanwhile, try again', 'password_changed_meanwhile');
 
     // Other password sessions die with the version bump; re-issue this one.
     if (principal.idp !== 'password') return { ok: true as const };

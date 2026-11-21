@@ -44,21 +44,21 @@ async function createTransaction(
     // Referenced account/category must belong to this budget; otherwise the
     // insert would silently create a cross-budget transaction.
     const acc = await findAccountInBudget(client, txn.account_id, budget_id);
-    if (!acc) throw new HttpError(400, 'account not found in budget');
+    if (!acc) throw new HttpError(400, 'account not found in budget', 'account_not_in_budget');
     // Closed accounts are immutable — no new transactions (YNAB parity).
-    if (acc.closed) throw new HttpError(409, 'account is closed');
+    if (acc.closed) throw new HttpError(409, 'account is closed', 'account_closed');
     if (txn.category_id) {
-      if (!(await categoryInBudget(client, txn.category_id, budget_id))) throw new HttpError(400, 'category not found in budget');
+      if (!(await categoryInBudget(client, txn.category_id, budget_id))) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
     }
     const payeeId = await resolvePayeeId(client, budget_id, txn.payee);
     // A split overrides the single category: the parent carries NULL ("Split")
     // and each leg owns its own category (syscd-app-rlt).
     const isSplit = (subtransactions?.length ?? 0) > 0;
-    if (isSplit && txn.category_id) throw new HttpError(400, 'split transactions cannot carry a category_id');
+    if (isSplit && txn.category_id) throw new HttpError(400, 'split transactions cannot carry a category_id', 'split_cannot_have_category');
     // A transfer payee makes this row one leg of a transfer (mirror created
     // below); money moving between two on-budget accounts carries no category.
     const peer = await resolveTransferPeer(client, budget_id, payeeId, txn.account_id);
-    if (peer && isSplit) throw new HttpError(400, 'a transfer cannot be split');
+    if (peer && isSplit) throw new HttpError(400, 'a transfer cannot be split', 'transfer_cannot_be_split');
     // Auto-categorization: an explicitly sent category always wins; otherwise
     // the payee's categorization mode decides what, if anything, is preselected.
     const categoryId = isSplit || peer?.internal
@@ -161,15 +161,15 @@ export const operations = [
       // Referenced account must belong to this budget; otherwise the insert
       // would silently create a cross-budget transaction.
       const acc = await findAccountInBudget(client, account_id, budget_id);
-      if (!acc) throw new HttpError(400, 'account not found in budget');
+      if (!acc) throw new HttpError(400, 'account not found in budget', 'account_not_in_budget');
       // Closed accounts are immutable — no new transactions (YNAB parity).
-      if (acc.closed) throw new HttpError(409, 'account is closed');
+      if (acc.closed) throw new HttpError(409, 'account is closed', 'account_closed');
       const categoryIds = new Set<string>();
       for (const txn of txns) {
         if (txn.category_id) categoryIds.add(txn.category_id);
       }
       for (const categoryId of categoryIds) {
-        if (!(await categoryInBudget(client, categoryId, budget_id))) throw new HttpError(400, 'category not found in budget');
+        if (!(await categoryInBudget(client, categoryId, budget_id))) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
       }
 
       const rules = (await loadRenameRules(client, budget_id)).rows;
@@ -278,14 +278,14 @@ export const operations = [
       const existingCategory = existing.category_id;
       if (patch.account_id !== undefined) {
         const acc = await findAccountInBudget(client, patch.account_id, budget_id);
-        if (!acc) throw new HttpError(400, 'account not found in budget');
+        if (!acc) throw new HttpError(400, 'account not found in budget', 'account_not_in_budget');
         // Closed accounts are immutable — no moving rows into them (YNAB parity).
-        if (acc.closed) throw new HttpError(409, 'account is closed');
+        if (acc.closed) throw new HttpError(409, 'account is closed', 'account_closed');
       }
       // A referenced category / matched counterpart must belong to this budget
       // (create and bulk already check the category; an edit must too).
       if (patch.category_id) {
-        if (!(await categoryInBudget(client, patch.category_id, budget_id))) throw new HttpError(400, 'category not found in budget');
+        if (!(await categoryInBudget(client, patch.category_id, budget_id))) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
       }
       if (patch.matched_transaction_id) {
         if (!(await txnStore.transactionInBudget(client, patch.matched_transaction_id, budget_id))) {
@@ -293,7 +293,7 @@ export const operations = [
         }
       }
       if (patch.category_id && (subtransactions?.length ?? 0) > 0) {
-        throw new HttpError(400, 'split transactions cannot carry a category_id');
+        throw new HttpError(400, 'split transactions cannot carry a category_id', 'split_cannot_have_category');
       }
 
       const set: txnStore.TxnSetEntry[] = [];
@@ -345,7 +345,7 @@ export const operations = [
         if (payeeId !== existingPayeeId) {
           payeeChanged = true;
           transferPeer = await resolveTransferPeer(client, budget_id, payeeId, patch.account_id ?? existing.account_id);
-          if (transferPeer && (subtransactions?.length ?? 0) > 0) throw new HttpError(400, 'a transfer cannot be split');
+          if (transferPeer && (subtransactions?.length ?? 0) > 0) throw new HttpError(400, 'a transfer cannot be split', 'transfer_cannot_be_split');
         }
         set.push({ col: 'payee_id', value: payeeId });
       }

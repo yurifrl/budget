@@ -72,7 +72,7 @@ export const operations = [
     if (body.email) {
       personId = (await provisionUserByEmail(body.email, body.name)).id;
     } else {
-      if (!body.name) throw new HttpError(400, 'name is required when no email is given');
+      if (!body.name) throw new HttpError(400, 'name is required when no email is given', 'member_name_required');
       personId = (await createPlaceholderUser(body.name)).id;
     }
     await membersStore.addMember(pool, body.budget_id, personId);
@@ -85,7 +85,7 @@ export const operations = [
     try {
       await linkEmailToPlaceholder(body.user_id, body.email);
     } catch (err) {
-      if (err instanceof EmailLinkError) throw new HttpError(400, err.message);
+      if (err instanceof EmailLinkError) throw new HttpError(400, err.message, 'person_already_has_email');
       throw err;
     }
     return { members: await listMembers(body.budget_id, user.id) };
@@ -95,14 +95,14 @@ export const operations = [
     const user = requireUser(c);
     if (!(await isBudgetMember(body.budget_id, body.user_id))) throw new HttpError(404, 'not found');
     if (!(await renameUnclaimedUser(body.user_id, body.name))) {
-      throw new HttpError(400, 'a signed-in person edits their own name in their profile');
+      throw new HttpError(400, 'a signed-in person edits their own name in their profile', 'person_edits_own_name');
     }
     return { members: await listMembers(body.budget_id, user.id) };
   }),
 
   implement(membersRemove, async (c, { budget_id: budgetId, user_id: userId }) => {
     const user = await requireManager(c, budgetId);
-    if (await isBudgetOwner(userId, budgetId)) throw new HttpError(400, 'the owner cannot be removed');
+    if (await isBudgetOwner(userId, budgetId)) throw new HttpError(400, 'the owner cannot be removed', 'owner_cannot_be_removed');
     // Their accounts and categories fall back to Shared in the same transaction as the removal.
     await withTransaction(pool, (client) => membersStore.removeMemberAndUnassign(client, budgetId, userId));
     return { members: await listMembers(budgetId, user.id) };

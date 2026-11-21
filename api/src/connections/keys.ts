@@ -183,6 +183,6 @@ export function keyAccessHttpError(problem: KeyAccessProblem, provider: string):
     case 'secret_unavailable':
       return new HttpError(503, 'Your saved Pluggy keys cannot be read on this server right now. Save them again, or try later.', CREDENTIALS_KEY_MISSING);
     case 'not_configured':
-      return new HttpError(503, `connections provider ${provider} is not configured`);
+      return new HttpError(503, `connections provider ${provider} is not configured`, 'provider_not_configured', { provider });
   }
 }

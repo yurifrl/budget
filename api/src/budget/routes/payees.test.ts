@@ -300,6 +300,7 @@ describe('PATCH /:id/name conflicts', () => {
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain('"Dup Target"');
     expect(body.error).toContain('Merge');
+    expect(body).toMatchObject({ code: 'payee_name_exists', params: { name: 'Dup Target' } });
     expect(await nameOf(id)).toBe('Dup Source');
   });
 
@@ -326,7 +327,8 @@ describe('PATCH /:id/name conflicts', () => {
     const id = await mk('Ghost Source');
     const res = await rename(id, 'Ghost Payee');
     expect(res.status).toBe(409);
-    expect(((await res.json()) as { error: string }).error).toContain('deleted payee');
+    expect(((await res.clone().json()) as { error: string }).error).toContain('deleted payee');
+    expect(await res.json()).toMatchObject({ code: 'payee_name_deleted_exists', params: { name: 'Ghost Payee' } });
     expect(await nameOf(id)).toBe('Ghost Source');
   });
 

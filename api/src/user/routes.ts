@@ -48,7 +48,7 @@ mountOperations(router, operations, { use: [forbidOAuthWrites] });
 router.put('/me/avatar', forbidOAuthWrites, async (c) => {
   const id = requireUserId(c);
   const declared = Number(c.req.header('content-length') ?? 0);
-  if (declared > MAX_UPLOAD_BYTES) throw new HttpError(413, 'image too large (max 5 MB)');
+  if (declared > MAX_UPLOAD_BYTES) throw new HttpError(413, 'image too large (max 5 MB)', 'image_too_large');
   const { contentType, bytes } = await normalizeAvatar(new Uint8Array(await c.req.arrayBuffer()));
   await setAvatarPhoto(id, contentType, bytes);
   return c.json(await meOr404(id));

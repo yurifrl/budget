@@ -51,8 +51,8 @@ describe('checkKeysInput', () => {
 });
 
 describe('saveErrorView', () => {
-  test('invalid_credentials sits under the secret field', () => {
-    const view = saveErrorView({ status: 400, message: 'Pluggy did not accept', code: 'invalid_credentials' });
+  test('pluggy_keys_rejected sits under the secret field', () => {
+    const view = saveErrorView({ status: 400, message: 'Pluggy did not accept', code: 'pluggy_keys_rejected' });
     expect(view.field).toBe('clientSecret');
     expect(view.message).toContain('Pluggy did not accept');
   });

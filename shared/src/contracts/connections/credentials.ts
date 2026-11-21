@@ -4,7 +4,7 @@
  * user's row only; there is no id to pass and no budget involved.
  *
  * Error codes (body `{ error, code }`):
- *   invalid_credentials       400  the provider refused the pair (save)
+ *   pluggy_keys_rejected      400  the provider refused the pair (save)
  *   credentials_key_missing   503  the installation has no encryption key configured
  * Related, on the connect flow (connections_connect_token / _items_register):
  *   own_keys_required         403  the caller has no own key set and may not
@@ -19,7 +19,7 @@ const API_ONLY = { api: true, cli: false, mcp: false } as const;
 
 /** Error codes of the own-keys feature, shared with clients. */
 export const OWN_KEYS_REQUIRED = 'own_keys_required';
-export const INVALID_CREDENTIALS = 'invalid_credentials';
+export const INVALID_CREDENTIALS = 'pluggy_keys_rejected';
 export const CREDENTIALS_KEY_MISSING = 'credentials_key_missing';
 export const CONNECTION_PAUSED = 'connection_paused';
 /** Register: none of the caller's key sets reaches the item (409). */

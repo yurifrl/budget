@@ -7,6 +7,7 @@
 import { CancellationScope, isCancellation, proxyActivities } from '@temporalio/workflow';
 
 import type { LedgerActivities } from '../activities';
+import { JOB_USER_MESSAGES } from '../user-messages';
 
 export type JobArgs = {
   runId: string;
@@ -47,7 +48,7 @@ export async function runTracked<T>(args: JobArgs, body: () => Promise<T>, opts:
         runId: args.runId,
         status: cancelled ? 'cancelled' : 'failed',
         errorMessage: failureMessage(e),
-        userMessage: cancelled ? 'Cancelled' : (opts.failureUserMessage?.(e) ?? 'The background job failed'),
+        userMessage: cancelled ? JOB_USER_MESSAGES.cancelled : (opts.failureUserMessage?.(e) ?? JOB_USER_MESSAGES.failed),
       }),
     );
     throw e;

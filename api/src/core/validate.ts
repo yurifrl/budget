@@ -12,7 +12,7 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from '@shared/zod';
-import { errorBody } from '@shared/errors';
+import { errorBody, type ErrorCode, type ErrorParams } from '@shared/errors';
 import { isUuid } from '@shared/validation';
 
 // Generic id validators (shared/); budget value schemas are imported from
@@ -26,20 +26,24 @@ export { defaultErrorCode, errorBody, type ApiErrorBody } from '@shared/errors';
  * machine-readable `code` (defaults from the status; see shared/src/errors.ts).
  */
 export class HttpError extends Error {
-  public readonly code: string | undefined;
+  public readonly code: ErrorCode | undefined;
+  /** Values for the `{placeholders}` of the code's catalog message; sent as the body's `params`. */
+  public readonly params: ErrorParams | undefined;
   constructor(
     public readonly status: ContentfulStatusCode,
     message: string,
-    code?: string,
+    code?: ErrorCode,
+    params?: ErrorParams,
   ) {
     super(message);
     this.code = code;
+    this.params = params;
   }
 }
 
 /** A JSON error response with the shared `{ error, code }` shape. */
-export function errorResponse(c: Context, status: ContentfulStatusCode, message: string, code?: string) {
-  return c.json(errorBody(status, message, code), status);
+export function errorResponse(c: Context, status: ContentfulStatusCode, message: string, code?: ErrorCode, params?: ErrorParams) {
+  return c.json(errorBody(status, message, code, params), status);
 }
 
 
@@ -93,7 +97,7 @@ export function requireUuidParam(value: string | undefined, name: string): strin
  */
 export function httpOnError(err: unknown, c: Context) {
   if (err instanceof HttpError) {
-    return errorResponse(c, err.status, err.message, err.code);
+    return errorResponse(c, err.status, err.message, err.code, err.params);
   }
   console.error('Unhandled API error:', err);
   return errorResponse(c, 500, 'internal server error');
