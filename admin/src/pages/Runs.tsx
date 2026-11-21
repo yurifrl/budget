@@ -4,6 +4,7 @@ import { listRuns } from '../api';
 import { duration, fmt, StatusBadge } from '../badge';
 import { usePolled } from '../hooks';
 import { STATUSES } from '../types';
+import { t } from './runs/i18n';
 
 const PAGE = 25;
 
@@ -34,28 +35,28 @@ export function RunsPage() {
   return (
     <>
       <div className="filters">
-        <input placeholder="instance_id" value={instance} onChange={onFilter(setInstance)} />
-        <input placeholder="tenant_id (user uuid)" value={tenant} onChange={onFilter(setTenant)} />
-        <input placeholder="job_type" value={jobType} onChange={onFilter(setJobType)} />
+        <input placeholder={t('filter.instance')} value={instance} onChange={onFilter(setInstance)} />
+        <input placeholder={t('filter.tenant')} value={tenant} onChange={onFilter(setTenant)} />
+        <input placeholder={t('filter.jobType')} value={jobType} onChange={onFilter(setJobType)} />
         <select value={status} onChange={onFilter(setStatus)}>
-          <option value="">any status</option>
+          <option value="">{t('filter.anyStatus')}</option>
           {STATUSES.map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>
-        <span className="muted">auto-refresh 5s</span>
+        <span className="muted">{t('filter.autoRefresh')}</span>
       </div>
       {error && <div className="banner error">{error.message}</div>}
       <table>
         <thead>
           <tr>
-            <th>Status</th>
-            <th>Job type</th>
-            <th>Subject</th>
-            <th>Instance</th>
-            <th>Attempts</th>
-            <th>Created</th>
-            <th>Duration</th>
+            <th>{t('col.status')}</th>
+            <th>{t('col.jobType')}</th>
+            <th>{t('col.subject')}</th>
+            <th>{t('col.instance')}</th>
+            <th>{t('col.attempts')}</th>
+            <th>{t('col.created')}</th>
+            <th>{t('col.duration')}</th>
           </tr>
         </thead>
         <tbody>
@@ -66,7 +67,7 @@ export function RunsPage() {
               </td>
               <td>
                 <a href={`#/runs/${r.id}`}>{r.job_type}</a>
-                {r.retry_of && <span className="muted"> (retry)</span>}
+                {r.retry_of && <span className="muted"> {t('list.retry')}</span>}
               </td>
               <td className="mono">{r.subject_key}</td>
               <td>{r.instance_id}</td>
@@ -78,7 +79,7 @@ export function RunsPage() {
           {data && data.runs.length === 0 && (
             <tr>
               <td colSpan={7} className="muted">
-                No runs match.
+                {t('list.empty')}
               </td>
             </tr>
           )}
@@ -87,13 +88,13 @@ export function RunsPage() {
       {data && (
         <div className="pager">
           <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>
-            Prev
+            {t('pager.prev')}
           </button>
           <span>
-            {data.total === 0 ? 0 : offset + 1}–{Math.min(offset + PAGE, data.total)} of {data.total}
+            {t('pager.range', { from: data.total === 0 ? 0 : offset + 1, to: Math.min(offset + PAGE, data.total), total: data.total })}
           </span>
           <button disabled={offset + PAGE >= data.total} onClick={() => setOffset(offset + PAGE)}>
-            Next
+            {t('pager.next')}
           </button>
         </div>
       )}

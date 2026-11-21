@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { tCommon } from '@shared/i18n/common';
+
 import {
   ApiError,
   createUser,
@@ -14,6 +16,8 @@ import {
 } from '../api';
 import { UserFeaturesDropdown } from '../featureControls';
 import { usePolled } from '../hooks';
+import { rich } from '../rich';
+import { t } from './users/i18n';
 import { fmt } from '../badge';
 import {
   errorMessage,
@@ -32,6 +36,11 @@ type Dialog =
   | { kind: 'delete'; user: AdminUser }
   | { kind: 'reset'; user: AdminUser }
   | { kind: 'secret'; result: AdminUserWithTempPassword; reason: 'created' | 'reset' };
+
+// eslint-disable-next-line budget-i18n/no-untranslated-string -- brand name (a single capitalised word), not translated
+const GOOGLE = 'Google';
+const ROLES = ['user', 'admin'] as const;
+const STATUS_VALUES = ['active', 'disabled'] as const;
 
 const msg = (e: unknown) => (e instanceof ApiError ? errorMessage(e.code, e.message, e.status) : String(e));
 
@@ -73,26 +82,26 @@ export function UsersPage() {
   return (
     <>
       <div className="toolbar">
-        <input className="grow" placeholder="Filter by e-mail or name" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="grow" placeholder={t('filter.placeholder')} value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="primary" onClick={() => open({ kind: 'create' })}>
-          Create user
+          {t('action.createUser')}
         </button>
       </div>
       {users.error && <div className="banner error">{msg(users.error)}</div>}
-      {features.error && <div className="banner error">Features: {msg(features.error)}</div>}
+      {features.error && <div className="banner error">{t('banner.features', { message: msg(features.error) })}</div>}
       {notice && <div className="banner error">{notice}</div>}
       <div className="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>E-mail</th>
-            <th>Name</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Sign-in</th>
-            <th>Password</th>
-            <th>Last seen</th>
-            <th>Features</th>
+            <th>{t('col.email')}</th>
+            <th>{t('col.name')}</th>
+            <th>{t('col.role')}</th>
+            <th>{t('col.status')}</th>
+            <th>{t('col.signIn')}</th>
+            <th>{t('col.password')}</th>
+            <th>{t('col.lastSeen')}</th>
+            <th>{t('col.features')}</th>
             <th />
           </tr>
         </thead>
@@ -106,7 +115,7 @@ export function UsersPage() {
               <tr key={u.id}>
                 <td>
                   {u.email}
-                  {isSelf && <span className="muted"> (you)</span>}
+                  {isSelf && <span className="muted"> {t('row.you')}</span>}
                 </td>
                 <td>{u.name ?? <span className="muted">—</span>}</td>
                 <td>
@@ -117,8 +126,8 @@ export function UsersPage() {
                 </td>
                 <td>
                   <div className="chips">
-                    {methods.password && <span className="badge">password</span>}
-                    {methods.google && <span className="badge google">Google</span>}
+                    {methods.password && <span className="badge">{t('row.methodPassword')}</span>}
+                    {methods.google && <span className="badge google">{GOOGLE}</span>}
                     {!methods.password && !methods.google && <span className="muted">—</span>}
                   </div>
                   <div className="muted sub">{signedInLabel(u, now)}</div>
@@ -132,13 +141,13 @@ export function UsersPage() {
                   <UserFeaturesDropdown user={u} features={features.data} reload={features.reload} />
                 </td>
                 <td className="row-actions" title={hint ?? undefined}>
-                  <button onClick={() => open({ kind: 'edit', user: u })}>Edit</button>
+                  <button onClick={() => open({ kind: 'edit', user: u })}>{tCommon('edit')}</button>
                   <button disabled={locked || busy.has(u.id)} onClick={() => void flip(u, { status: u.status === 'active' ? 'disabled' : 'active' })}>
-                    {u.status === 'active' ? 'Disable' : 'Enable'}
+                    {u.status === 'active' ? t('row.disable') : t('row.enable')}
                   </button>
-                  <button onClick={() => open({ kind: 'reset', user: u })}>Reset password</button>
+                  <button onClick={() => open({ kind: 'reset', user: u })}>{t('action.resetPassword')}</button>
                   <button className="danger" disabled={locked} onClick={() => open({ kind: 'delete', user: u })}>
-                    Delete
+                    {tCommon('delete')}
                   </button>
                   {hint && <div className="muted sub">{hint}</div>}
                 </td>
@@ -148,7 +157,7 @@ export function UsersPage() {
           {users.data && rows.length === 0 && (
             <tr>
               <td colSpan={9} className="muted">
-                {users.data.length === 0 ? 'No users.' : 'No user matches the filter.'}
+                {users.data.length === 0 ? t('row.noUsers') : t('row.noMatch')}
               </td>
             </tr>
           )}
@@ -177,9 +186,9 @@ export function UsersPage() {
       )}
       {dialog?.kind === 'delete' && (
         <ConfirmDialog
-          title="Delete user"
-          body={`Delete ${dialog.user.email}? This cannot be undone. Users with data cannot be deleted: disable them instead.`}
-          confirm="Delete"
+          title={t('delete.title')}
+          body={t('delete.body', { email: dialog.user.email })}
+          confirm={tCommon('delete')}
           danger
           run={() => deleteUser(dialog.user.id)}
           onClose={() => setDialog(null)}
@@ -191,9 +200,9 @@ export function UsersPage() {
       )}
       {dialog?.kind === 'reset' && (
         <ConfirmDialog
-          title="Reset password"
-          body={`Give ${dialog.user.email} a new temporary password? Their current password stops working and their password sessions end.`}
-          confirm="Reset password"
+          title={t('action.resetPassword')}
+          body={t('reset.body', { email: dialog.user.email })}
+          confirm={t('action.resetPassword')}
           run={async () => {
             const result = await resetUserPassword(dialog.user.id);
             setDialog({ kind: 'secret', result, reason: 'reset' });
@@ -248,7 +257,7 @@ function CreateDialog({ onClose, onDone }: { onClose: () => void; onDone: (r: Ad
     () => undefined,
   );
   return (
-    <Modal title="Create user" onClose={onClose}>
+    <Modal title={t('action.createUser')} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -256,27 +265,28 @@ function CreateDialog({ onClose, onDone }: { onClose: () => void; onDone: (r: Ad
         }}
       >
         <div className="field">
-          <label htmlFor="cu-email">E-mail</label>
+          <label htmlFor="cu-email">{t('col.email')}</label>
           <input id="cu-email" type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="cu-name">Name (optional)</label>
+          <label htmlFor="cu-name">{t('create.nameOptional')}</label>
           <input id="cu-name" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="cu-role">Role</label>
+          <label htmlFor="cu-role">{t('col.role')}</label>
           <select id="cu-role" value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'user')}>
-            <option value="user">user</option>
-            <option value="admin">admin</option>
+            {ROLES.map((r) => (
+              <option key={r}>{r}</option>
+            ))}
           </select>
         </div>
         {error && <div className="err">{error}</div>}
         <div className="dialog-actions">
           <button type="button" onClick={onClose}>
-            Cancel
+            {tCommon('cancel')}
           </button>
           <button type="submit" className="primary" disabled={busy || !email.trim()}>
-            Create
+            {t('create.submit')}
           </button>
         </div>
       </form>
@@ -297,7 +307,7 @@ function EditDialog({ user, locked, onClose, onDone }: { user: AdminUser; locked
     return updateUser(patch);
   }, onDone);
   return (
-    <Modal title={`Edit ${user.email}`} onClose={onClose}>
+    <Modal title={t('edit.title', { email: user.email })} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -305,31 +315,33 @@ function EditDialog({ user, locked, onClose, onDone }: { user: AdminUser; locked
         }}
       >
         <div className="field">
-          <label htmlFor="eu-name">Name</label>
+          <label htmlFor="eu-name">{t('col.name')}</label>
           <input id="eu-name" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="eu-role">Role</label>
+          <label htmlFor="eu-role">{t('col.role')}</label>
           <select id="eu-role" value={role} disabled={!!locked} onChange={(e) => setRole(e.target.value as 'admin' | 'user')}>
-            <option value="user">user</option>
-            <option value="admin">admin</option>
+            {ROLES.map((r) => (
+              <option key={r}>{r}</option>
+            ))}
           </select>
         </div>
         <div className="field">
-          <label htmlFor="eu-status">Status</label>
+          <label htmlFor="eu-status">{t('col.status')}</label>
           <select id="eu-status" value={status} disabled={!!locked} onChange={(e) => setStatus(e.target.value as 'active' | 'disabled')}>
-            <option value="active">active</option>
-            <option value="disabled">disabled</option>
+            {STATUS_VALUES.map((v) => (
+              <option key={v}>{v}</option>
+            ))}
           </select>
         </div>
-        {locked && <div className="muted sub">Role and status are locked. {locked}</div>}
+        {locked && <div className="muted sub">{t('edit.locked', { reason: locked })}</div>}
         {error && <div className="err">{error}</div>}
         <div className="dialog-actions">
           <button type="button" onClick={onClose}>
-            Cancel
+            {tCommon('cancel')}
           </button>
           <button type="submit" className="primary" disabled={busy}>
-            Save
+            {tCommon('save')}
           </button>
         </div>
       </form>
@@ -352,7 +364,7 @@ function ConfirmDialog(props: {
       <p>{props.body}</p>
       {error && <div className="err">{error}</div>}
       <div className="dialog-actions">
-        <button onClick={props.onClose}>Cancel</button>
+        <button onClick={props.onClose}>{tCommon('cancel')}</button>
         <button className={props.danger ? 'danger' : 'primary'} disabled={busy} onClick={() => void submit()}>
           {props.confirm}
         </button>
@@ -373,21 +385,17 @@ function SecretDialog({ result, reason, onClose }: { result: AdminUserWithTempPa
     }
   };
   return (
-    <Modal title={reason === 'created' ? 'User created' : 'Password reset'} onClose={onClose}>
-      <p>
-        Temporary password for <strong>{result.user.email}</strong>. It is shown only now: you cannot see it again.
-      </p>
+    <Modal title={reason === 'created' ? t('secret.createdTitle') : t('secret.resetTitle')} onClose={onClose}>
+      <p>{rich(t('secret.body', { email: result.user.email }), { b: (c) => <strong>{c}</strong> })}</p>
       <div className="secret">
         <code data-testid="temp-password">{result.temp_password}</code>
-        <button onClick={() => void copy()}>{copied === 'yes' ? 'Copied' : 'Copy'}</button>
+        <button onClick={() => void copy()}>{copied === 'yes' ? t('secret.copied') : t('secret.copy')}</button>
       </div>
-      {copied === 'failed' && <div className="err sub">Copy failed: select the password and copy it by hand.</div>}
-      <p className="muted">
-        Give it to the person yourself. It expires in 7 days, and they must choose a new password at first sign-in.
-      </p>
+      {copied === 'failed' && <div className="err sub">{t('secret.copyFailed')}</div>}
+      <p className="muted">{t('secret.note')}</p>
       <div className="dialog-actions">
         <button className="primary" onClick={onClose}>
-          Done
+          {tCommon('done')}
         </button>
       </div>
     </Modal>

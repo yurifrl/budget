@@ -11,8 +11,21 @@ import {
   type AdminUser,
 } from '../api';
 import { FeatureToggle, UserFeaturesDropdown, useFeatureActions } from '../featureControls';
-import { changedLabel, everyoneState, featureKeyFromPath, groupFeatures, onOff, overridesLabel, shownLabel, userState } from '../features.logic';
+import {
+  changedLabel,
+  everyoneState,
+  featureDescription,
+  featureKeyFromPath,
+  groupFeatures,
+  groupLabel,
+  onOff,
+  overridesLabel,
+  shownLabel,
+  userState,
+} from '../features.logic';
 import { usePolled } from '../hooks';
+import { rich } from '../rich';
+import { t } from './features/i18n';
 import { errorMessage, matchesFilter } from '../users.logic';
 
 const msg = (e: ApiError) => errorMessage(e.code, e.message, e.status);
@@ -34,10 +47,8 @@ export function FeaturesPage({ path }: { path: string }) {
       {key === null && features.data && <FeatureList features={features.data} reload={features.reload} />}
       {key !== null && features.data && !feature && (
         <div className="notice">
-          <p>
-            There is no feature <code>{key}</code>.
-          </p>
-          <a href="#/features">All features</a>
+          <p>{rich(t('page.notFound', { key }), { code: (c) => <code>{c}</code> })}</p>
+          <a href="#/features">{t('page.all')}</a>
         </div>
       )}
       {feature && features.data && <FeatureDetail feature={feature} features={features.data} reload={features.reload} />}
@@ -50,8 +61,8 @@ function EveryoneToggle({ feature, busy, run }: { feature: AdminFeature; busy: R
   return (
     <FeatureToggle
       state={everyoneState(feature)}
-      name={`${key} for everyone`}
-      clearLabel="Use default"
+      name={t('toggle.everyoneName', { key })}
+      clearLabel={t('action.useDefault')}
       busy={busy.has(key)}
       now={Date.now()}
       onSet={(value) => void run(key, () => setFeatureEveryone(key, value))}
@@ -66,15 +77,15 @@ function FeatureList({ features, reload }: { features: AdminFeature[]; reload: (
   const groups = useMemo(() => groupFeatures(features, q), [features, q]);
   const shown = groups.reduce((n, g) => n + g.features.length, 0);
 
-  if (features.length === 0) return <div className="notice">No features are defined in the code.</div>;
+  if (features.length === 0) return <div className="notice">{t('page.noneInCode')}</div>;
   return (
     <>
       <div className="toolbar">
         <input
           className="grow"
           type="search"
-          placeholder="Filter features by name, group or description"
-          aria-label="Filter features"
+          placeholder={t('popover.filterPlaceholder')}
+          aria-label={t('popover.filterLabel')}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -85,17 +96,17 @@ function FeatureList({ features, reload }: { features: AdminFeature[]; reload: (
         <table className="feature-list">
           <thead>
             <tr>
-              <th>Feature</th>
-              <th>Default</th>
-              <th>Everyone</th>
-              <th>Users</th>
+              <th>{t('col.feature')}</th>
+              <th>{t('col.default')}</th>
+              <th>{t('col.everyone')}</th>
+              <th>{t('col.users')}</th>
             </tr>
           </thead>
           {groups.map((g) => (
             <tbody key={g.group}>
               <tr className="group-row">
                 <th colSpan={4} scope="rowgroup">
-                  {g.group} <span className="muted">({g.features.length})</span>
+                  {groupLabel(g.group)} <span className="muted">({g.features.length})</span>
                 </th>
               </tr>
               {g.features.map((f) => (
@@ -104,7 +115,7 @@ function FeatureList({ features, reload }: { features: AdminFeature[]; reload: (
                     <a href={detailHref(f.key)}>
                       <code>{f.key}</code>
                     </a>
-                    <div className="muted sub">{f.description}</div>
+                    <div className="muted sub">{featureDescription(f)}</div>
                   </td>
                   <td>
                     <span className={`badge ${f.default ? 'active' : 'disabled'}`}>{onOff(f.default)}</span>
@@ -123,7 +134,7 @@ function FeatureList({ features, reload }: { features: AdminFeature[]; reload: (
             <tbody>
               <tr>
                 <td colSpan={4} className="muted">
-                  No feature matches the filter.
+                  {t('popover.noMatch')}
                 </td>
               </tr>
             </tbody>
@@ -156,27 +167,34 @@ function FeatureDetail({ feature, features, reload }: { feature: AdminFeature; f
   return (
     <>
       <p className="crumbs">
-        <a href="#/features">All features</a> / {feature.group}
+        <a href="#/features">{t('page.all')}</a> / {groupLabel(feature.group)}
       </p>
       <section className="feature-card">
         <h2>
-          <code>{key}</code> <span className="badge">{feature.group}</span>
+          <code>{key}</code> <span className="badge">{groupLabel(feature.group)}</span>
         </h2>
-        <p>{feature.description}</p>
+        <p>{featureDescription(feature)}</p>
         <p className="muted sub">
-          Default in code: <strong>{onOff(feature.default)}</strong>. Order: a user's own value, else the value for everyone, else the default.
+          {rich(t('detail.defaultInCode', { state: onOff(feature.default) }), { b: (c) => <strong>{c}</strong> })}
         </p>
         <div className="everyone-row" data-testid="everyone-row">
-          <strong>Everyone</strong>
+          <strong>{t('detail.everyone')}</strong>
           <EveryoneToggle feature={feature} busy={busy} run={run} />
         </div>
       </section>
       {users.error && <div className="banner error">{msg(users.error)}</div>}
       {notice && <div className="banner error">{notice}</div>}
       <div className="toolbar">
-        <input className="grow" type="search" placeholder="Filter users by e-mail or name" aria-label="Filter users" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input
+          className="grow"
+          type="search"
+          placeholder={t('detail.filterPlaceholder')}
+          aria-label={t('detail.filterLabel')}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
         <label className="check">
-          <input type="checkbox" checked={onlyOverridden} onChange={(e) => setOnlyOverridden(e.target.checked)} /> Overridden only
+          <input type="checkbox" checked={onlyOverridden} onChange={(e) => setOnlyOverridden(e.target.checked)} /> {t('detail.overriddenOnly')}
         </label>
         <span className="muted">{overridesLabel(feature)}</span>
       </div>
@@ -184,11 +202,11 @@ function FeatureDetail({ feature, features, reload }: { feature: AdminFeature; f
         <table>
           <thead>
             <tr>
-              <th>E-mail</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>This feature</th>
-              <th>Features</th>
+              <th>{t('userCol.email')}</th>
+              <th>{t('userCol.name')}</th>
+              <th>{t('userCol.status')}</th>
+              <th>{t('userCol.thisFeature')}</th>
+              <th>{t('userCol.features')}</th>
             </tr>
           </thead>
           <tbody>
@@ -219,7 +237,7 @@ function FeatureDetail({ feature, features, reload }: { feature: AdminFeature; f
                 return (
                   <tr key={o.user_id}>
                     <td colSpan={3} className="muted">
-                      A user not in the Users list (<code>{o.user_id}</code>)
+                      {rich(t('detail.unlisted', { id: o.user_id }), { code: (c) => <code>{c}</code> })}
                     </td>
                     <td>
                       <span className={`badge ${state.value ? 'active' : 'disabled'}`}>{onOff(state.value)}</span>{' '}
@@ -228,7 +246,7 @@ function FeatureDetail({ feature, features, reload }: { feature: AdminFeature; f
                     </td>
                     <td>
                       <button className="small" disabled={busy.has(id)} onClick={() => void run(id, () => clearFeatureUser(key, o.user_id))}>
-                        Inherit
+                        {t('action.inherit')}
                       </button>
                     </td>
                   </tr>
@@ -237,7 +255,7 @@ function FeatureDetail({ feature, features, reload }: { feature: AdminFeature; f
             {users.data && rows.length === 0 && (unlisted.length === 0 || !!q.trim()) && (
               <tr>
                 <td colSpan={5} className="muted">
-                  {users.data.length === 0 ? 'No users.' : onlyOverridden && !q.trim() ? 'No user has an override of this feature.' : 'No user matches.'}
+                  {users.data.length === 0 ? t('detail.noUsers') : onlyOverridden && !q.trim() ? t('detail.noOverrides') : t('detail.noUserMatch')}
                 </td>
               </tr>
             )}

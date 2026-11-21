@@ -1,6 +1,8 @@
+import { getLocale } from '@shared/i18n';
+
 export const StatusBadge = ({ status }: { status: string }) => <span className={`badge ${status}`}>{status}</span>;
 
-export const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—');
+export const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString(getLocale()) : '—');
 
 export function duration(a: string | null, b: string | null): string {
   if (!a) return '—';
