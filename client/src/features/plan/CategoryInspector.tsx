@@ -44,6 +44,8 @@ import { makeAssignEdit, newPlanEdit } from '@/state/planEdits';
 import { recordPlanEdit } from '@/state/ui';
 import { colors, radius } from '@/ui/theme';
 import type { MoveMoneyRequest } from './MoveMoneySheet';
+import { labels } from '@shared/i18n';
+import { t } from './inspector/i18n';
 
 /** Single-category quick-assign snapshot (xvu scope A): the full snapshot (so
  * the engine's figures stay whole-budget) narrowed to one category so
@@ -63,25 +65,25 @@ export const QUICK_ASSIGN_KEYS = [
   'averageSpent',
 ] as const;
 
-const QUICK_ASSIGN_LABELS = {
-  underfunded: 'Underfunded',
-  assignedLastMonth: 'Assigned Last Month',
-  spentLastMonth: 'Spent Last Month',
-  averageAssigned: 'Average Assigned',
-  averageSpent: 'Average Spent',
-} as const;
+const QUICK_ASSIGN_LABELS = labels(t, {
+  underfunded: 'quickAssign.underfunded',
+  assignedLastMonth: 'quickAssign.assignedLastMonth',
+  spentLastMonth: 'quickAssign.spentLastMonth',
+  averageAssigned: 'quickAssign.averageAssigned',
+  averageSpent: 'quickAssign.averageSpent',
+});
 
 /** YNAB's ⚡ Underfunded row shows the missing amount and applies the full
  * needed assignment — every other row shows the applied value itself. */
 const GAP_DISPLAY_KEYS: ReadonlySet<AutoAssignStrategyKey> = new Set(['underfunded']);
 
-const BREAKDOWN_LABELS: Record<BreakdownRow['key'], string> = {
-  carryover: 'Cash Left Over From Last Month',
-  assigned: 'Assigned This Month',
-  activity: 'Activity This Month',
-  funded: 'Funded Card Spending',
-  payments: 'Payments Made',
-};
+const BREAKDOWN_LABELS: Record<BreakdownRow['key'], string> = labels(t, {
+  carryover: 'breakdown.carryover',
+  assigned: 'breakdown.assigned',
+  activity: 'breakdown.activity',
+  funded: 'breakdown.funded',
+  payments: 'breakdown.payments',
+});
 
 /** Single-category quick assign (xvu scope A): one strategy row, applied. */
 export function buildQuickAssignStrategy(
@@ -141,8 +143,8 @@ export function InspectorTarget({
     return (
       <TargetEditor
         target={null}
-        onSave={(t) =>
-          setTarget({ budgetId, categoryId: category.id, target: { ...t, config: { ...t.config } } })
+        onSave={(draft) =>
+          setTarget({ budgetId, categoryId: category.id, target: { ...draft, config: { ...draft.config } } })
             .unwrap()
             .then(() => setEditing(false))
         }
@@ -173,8 +175,8 @@ export function InspectorTarget({
   return (
     <TargetEditor
       target={target}
-      onSave={(t) =>
-        setTarget({ budgetId, categoryId: category.id, target: { ...t, config: { ...t.config } } })
+      onSave={(draft) =>
+        setTarget({ budgetId, categoryId: category.id, target: { ...draft, config: { ...draft.config } } })
           .unwrap()
           .then(() => setEditing(false))
       }
@@ -231,20 +233,19 @@ export function QuickAssignRow({
         if (draft) dispatch(recordPlanEdit(newPlanEdit(draft)));
         onApplied();
       })
-      .catch((err) => setError(apiErrorMessage(err, 'failed to assign')));
+      .catch((err) => setError(apiErrorMessage(err, t('quickAssign.failed'))));
   };
 
-  const suffix = averageMonths > 0 ? ` (${averageMonths}mo avg)` : '';
+  const shownLabel = averageMonths > 0 ? t('quickAssign.withAverage', { label, count: averageMonths }) : label;
   return (
     <>
       <Pressable
         style={styles.qaRow}
         accessibilityRole="button"
-        accessibilityLabel={`Assign ${formatMoney(applyCents)}`}
+        accessibilityLabel={t('quickAssign.assignLabel', { amount: formatMoney(applyCents) })}
         onPress={apply}>
         <Text style={styles.qaLabel}>
-          {label}
-          {suffix}
+          {shownLabel}
         </Text>
         <Text style={styles.qaValue}>{formatMoney(value)}</Text>
       </Pressable>
@@ -333,11 +334,13 @@ export function CategoryInspector({
     if (!editingNotes) setNotesText(storedNote);
   }, [category.id, month, storedNote, editingNotes]);
 
-  const error = [
-    notesQuery.error,
-    noteMeta.error,
-    assignedMeta.error,
-  ].map((e) => (e ? apiErrorMessage(e) : null))
+  const errorSources: [unknown, string][] = [
+    [notesQuery.error, t('notes.loadFailed')],
+    [noteMeta.error, t('notes.saveFailed')],
+    [assignedMeta.error, t('inspector.assignFailed')],
+  ];
+  const error = errorSources
+    .map(([e, fallback]) => (e ? apiErrorMessage(e, fallback) : null))
     .find((msg): msg is string => msg !== null);
 
   const bm = useBudgetMonth(budget, month);
@@ -362,7 +365,7 @@ export function CategoryInspector({
       {!overlay ? (
         <View style={styles.header}>
           <Text style={styles.title}>{category.name}</Text>
-          <Pressable onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close inspector">
+          <Pressable onPress={onClose} style={styles.closeBtn} accessibilityLabel={t('inspector.close')}>
             <Text style={{ color: colors.muted, fontSize: 13 }}>✕</Text>
           </Pressable>
         </View>
@@ -373,9 +376,9 @@ export function CategoryInspector({
         <Pressable
           style={styles.sectionHead}
           accessibilityRole="button"
-          accessibilityLabel="Toggle available balance section"
+          accessibilityLabel={t('section.availableToggle')}
           onPress={() => setOpenAvail((v) => !v)}>
-          <Text style={styles.sectionTitle}>AVAILABLE BALANCE</Text>
+          <Text style={styles.sectionTitle}>{t('section.availableTitle')}</Text>
           <Pill state={funding.state} cents={available.available} />
         </Pressable>
         {openAvail
@@ -404,19 +407,19 @@ export function CategoryInspector({
           // Outside the breakdown on purpose: the rows above (and Available)
           // stay household values and still sum; this is the filtered slice.
           <View style={styles.kvRow}>
-            <Text style={styles.kvLabel}>Activity · {personName}</Text>
+            <Text style={styles.kvLabel}>{t('breakdown.personActivity', { name: personName })}</Text>
             <Text style={styles.kvValue}>{formatMoney(activityFor(bm, category.id, activityMap))}</Text>
           </View>
         ) : null}
         {openAvail && available.kind === 'payment' ? (
           <>
             <View style={styles.kvRow}>
-              <Text style={styles.kvLabel}>Card Debt</Text>
+              <Text style={styles.kvLabel}>{t('breakdown.cardDebt')}</Text>
               <Text style={styles.kvValue}>{formatMoney(available.debt ?? 0)}</Text>
             </View>
             {(available.underfunded ?? 0) > 0 ? (
               <View style={styles.kvRow}>
-                <Text style={[styles.kvLabel, { color: colors.yellowPillFg }]}>Underfunded</Text>
+                <Text style={[styles.kvLabel, { color: colors.yellowPillFg }]}>{t('breakdown.underfunded')}</Text>
                 <Text style={[styles.kvValue, { color: colors.yellowPillFg }]}>{formatMoney(available.underfunded ?? 0)}</Text>
               </View>
             ) : null}
@@ -428,14 +431,14 @@ export function CategoryInspector({
         {openAvail ? (
           <Text style={styles.helpLine}>
             {available.kind === 'payment'
-              ? 'Leftover + Assigned + Funded Spending − Payments = Available Balance'
-              : 'Leftover + Assigned − Spending = Available Balance'}
+              ? t('breakdown.formulaPayment')
+              : t('breakdown.formulaCategory')}
           </Text>
         ) : null}
       </View>
 
       <View style={styles.card}>
-        <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>PERSON</Text>
+        <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>{t('section.personTitle')}</Text>
         <CategoryPersonField budgetId={budgetId} category={category} />
       </View>
 
@@ -444,9 +447,9 @@ export function CategoryInspector({
         <Pressable
           style={styles.sectionHead}
           accessibilityRole="button"
-          accessibilityLabel="Toggle target section"
+          accessibilityLabel={t('section.targetToggle')}
           onPress={() => setOpenTarget((v) => !v)}>
-          <Text style={styles.sectionTitle}>TARGET</Text>
+          <Text style={styles.sectionTitle}>{t('section.targetTitle')}</Text>
           {category.target ? <Text style={styles.kvValue}>{formatMoney(neededBy(category.target, month))}</Text> : null}
         </Pressable>
         {openTarget ? <InspectorTarget category={category} budgetId={budgetId} month={month} assigned={assigned} available={available.available} /> : null}
@@ -457,9 +460,9 @@ export function CategoryInspector({
         <Pressable
           style={styles.sectionHead}
           accessibilityRole="button"
-          accessibilityLabel="Toggle auto-assign section"
+          accessibilityLabel={t('section.autoToggle')}
           onPress={() => setOpenAuto((v) => !v)}>
-          <Text style={styles.sectionTitle}>AUTO-ASSIGN</Text>
+          <Text style={styles.sectionTitle}>{t('auto.title')}</Text>
         </Pressable>
         {openAuto ? (
           <View style={{ gap: 2 }}>
@@ -476,7 +479,7 @@ export function CategoryInspector({
       </View>
 
       <View style={styles.card}>
-        <Text style={[styles.kvValue, { fontWeight: '700', marginBottom: 6 }]}>Notes</Text>
+        <Text style={[styles.kvValue, { fontWeight: '700', marginBottom: 6 }]}>{t('notes.title')}</Text>
         <TextInput
           value={notes}
           onChangeText={setNotesText}
@@ -488,10 +491,10 @@ export function CategoryInspector({
             }
           }}
           multiline
-          placeholder="Add a note about this category for this month…"
+          placeholder={t('notes.placeholder')}
           placeholderTextColor={colors.faint}
           style={styles.notesInput}
-          accessibilityLabel="Category notes"
+          accessibilityLabel={t('notes.label')}
         />
       </View>
 
@@ -502,22 +505,24 @@ export function CategoryInspector({
               styles.targetText,
               { color: funding.state === 'red' ? colors.redFg : colors.yellowPillFg, marginBottom: 8 },
             ]}>
-            {funding.state === 'red' ? 'Overspent' : 'Overspent with credit'} by {formatMoney(-available.available)}.
+            {funding.state === 'red'
+              ? t('overspent.red', { amount: formatMoney(-available.available) })
+              : t('overspent.credit', { amount: formatMoney(-available.available) })}
           </Text>
           <IndigoButton
-            label="Cover Overspending"
+            label={t('action.cover')}
             onPress={() => onMoveMoney({ from: null, to: category.id, pickFrom: true })}
           />
         </View>
       ) : null}
       {available.available > 0 ? (
         <View style={styles.card}>
-          <GhostButton label="Move Money" onPress={() => onMoveMoney({ from: category.id })} />
+          <GhostButton label={t('action.move')} onPress={() => onMoveMoney({ from: category.id })} />
         </View>
       ) : null}
 
       <View style={styles.card}>
-        <GhostButton label="Auto-Assign" onPress={onAutoAssign} />
+        <GhostButton label={t('action.autoAssign')} onPress={onAutoAssign} />
       </View>
 
       {error ? (

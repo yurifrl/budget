@@ -26,27 +26,28 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import type { Budget, Cents, MonthKey } from '@/domain/types';
 import { OverlaySheet, SheetItem } from '@/ui/bits';
 import { colors } from '@/ui/theme';
+import { labels } from '@shared/i18n';
+import { t } from './inspector/i18n';
 
-const STRATEGY_LABELS: Record<AutoAssignStrategyKey, string> = {
-  underfunded: 'Underfunded',
-  assignedLastMonth: 'Assigned Last Month',
-  spentLastMonth: 'Spent Last Month',
-  averageAssigned: 'Average Assigned (6mo)',
-  averageSpent: 'Average Spent (6mo)',
-  reduceOverfunding: 'Reduce Overfunding',
-  resetAvailable: 'Reset Available to $0',
-  resetAssigned: 'Reset Assigned to $0',
-};
+const STRATEGY_LABELS: Record<AutoAssignStrategyKey, string> = labels(t, {
+  underfunded: 'strategy.underfunded',
+  assignedLastMonth: 'strategy.assignedLastMonth',
+  spentLastMonth: 'strategy.spentLastMonth',
+  averageAssigned: 'strategy.averageAssigned',
+  averageSpent: 'strategy.averageSpent',
+  reduceOverfunding: 'strategy.reduceOverfunding',
+  resetAvailable: 'strategy.resetAvailable',
+  resetAssigned: 'strategy.resetAssigned',
+});
 
 /** One-line effect summary under the strategy label. */
 function strategySub(s: AutoAssignStrategy, formatMoney: (cents: Cents) => string): string {
-  if (s.rows.length === 0) return 'nothing to change';
+  if (s.rows.length === 0) return t('auto.nothing');
   const total = s.totalCents > 0 ? `+${formatMoney(s.totalCents)}` : formatMoney(s.totalCents);
-  const avg =
-    AVERAGE_STRATEGIES.includes(s.key) && s.monthsUsed.length > 0
-      ? ` · ${s.monthsUsed.length}-mo avg`
-      : '';
-  return `${s.rows.length} ${s.rows.length === 1 ? 'category' : 'categories'} · ${total}${avg}`;
+  const count = s.rows.length;
+  return AVERAGE_STRATEGIES.includes(s.key) && s.monthsUsed.length > 0
+    ? t('auto.summaryAvg', { count, total, months: s.monthsUsed.length })
+    : t('auto.summary', { count, total });
 }
 
 export function AutoAssignPanel({
@@ -65,7 +66,7 @@ export function AutoAssignPanel({
   rtaCents: Cents;
 }) {
   return (
-    <OverlaySheet visible={visible} onClose={onClose} title="AUTO-ASSIGN">
+    <OverlaySheet visible={visible} onClose={onClose} title={t('auto.title')}>
       <AutoAssignList
         budget={budget}
         budgetId={budgetId}
@@ -117,7 +118,7 @@ export function AutoAssignList({
       if (draft) dispatch(recordPlanEdit(newPlanEdit(draft)));
       onDone();
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to apply auto-assign'));
+      setError(apiErrorMessage(err, t('auto.failed')));
       setApplyingKey(null);
     }
   }
@@ -125,7 +126,7 @@ export function AutoAssignList({
   return (
     <>
       <View style={styles.rtaLine}>
-        <Text style={styles.rtaSub}>Ready to Assign</Text>
+        <Text style={styles.rtaSub}>{t('auto.rta')}</Text>
         <Text style={styles.rtaAmount}>{formatMoney(rtaCents)}</Text>
       </View>
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>

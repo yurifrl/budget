@@ -13,6 +13,7 @@ import type { Category } from '@/domain/types';
 import { PersonPicker } from '@/features/people';
 import { colors } from '@/ui/theme';
 import { useState } from 'react';
+import { t } from './inspector/i18n';
 
 export function CategoryPersonField({ budgetId, category }: { budgetId: string; category: Category }) {
   const [setPerson] = useSetCategoryPersonMutation();
@@ -21,13 +22,13 @@ export function CategoryPersonField({ budgetId, category }: { budgetId: string; 
     <View>
       <PersonPicker
         budgetId={budgetId}
-        label="Category person"
+        label={t('person.fieldLabel')}
         value={categoryOwnerId(category)}
         onChange={(userId) => {
           setError(null);
           setPerson({ budgetId, categoryId: category.id, userId })
             .unwrap()
-            .catch((err) => setError(apiErrorMessage(err, 'Could not change the person')));
+            .catch((err) => setError(apiErrorMessage(err, t('person.changeFailed'))));
         }}
       />
       {error ? <Text style={{ color: colors.redFg, fontSize: 12 }}>{error}</Text> : null}

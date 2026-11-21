@@ -14,6 +14,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { setActiveMonth } from '@/state/ui';
 import { colors } from '@/ui/theme';
 import { styles } from './styles';
+import { t } from './inspector/i18n';
 
 /** Month summary card (task 5.7) — the inspector's no-selection state. */
 export function MonthSummary({
@@ -57,37 +58,37 @@ export function MonthSummary({
       {scopeLabel ? <Text style={styles.summaryScope}>{scopeLabel}</Text> : null}
       <View style={styles.summaryCard}>
         <View style={styles.kvRow}>
-          <Text style={styles.kvLabel}>Cost to Be Me</Text>
+          <Text style={styles.kvLabel}>{t('month.cost')}</Text>
           <Text style={[styles.kvValue, { fontWeight: '700' }]}>{formatMoney(costToBeMe(budget, month))}</Text>
         </View>
         <View style={styles.kvRow}>
-          <Text style={styles.kvLabel}>Assigned</Text>
+          <Text style={styles.kvLabel}>{t('month.assigned')}</Text>
           <Text style={styles.kvValue}>{formatMoney(totals.assigned)}</Text>
         </View>
         <View style={styles.kvRow}>
-          <Text style={styles.kvLabel}>Activity</Text>
+          <Text style={styles.kvLabel}>{t('month.activity')}</Text>
           <Text style={styles.kvValue}>{formatMoney(activity)}</Text>
         </View>
         <View style={styles.kvRow}>
-          <Text style={styles.kvLabel}>Available</Text>
+          <Text style={styles.kvLabel}>{t('month.available')}</Text>
           <Text style={styles.kvValue}>{formatMoney(totals.available)}</Text>
         </View>
       </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Assigned in Future Months"
+        accessibilityLabel={t('month.future')}
         onPress={() => dispatch(setActiveMonth(nextMonth(month)))}
         style={styles.summaryCard}
       >
         <View style={styles.kvRow}>
-          <Text style={styles.kvLabel}>Assigned in Future Months</Text>
+          <Text style={styles.kvLabel}>{t('month.future')}</Text>
           <Text style={[styles.kvValue, { color: colors.indigo }]}>
             {formatMoney(assignedInFutureMonths(budget, month))}
           </Text>
         </View>
       </Pressable>
       <View style={styles.summaryCard}>
-        <Text style={[styles.kvValue, { fontWeight: '700', marginBottom: 6 }]}>Month note</Text>
+        <Text style={[styles.kvValue, { fontWeight: '700', marginBottom: 6 }]}>{t('month.noteTitle')}</Text>
         <TextInput
           value={note}
           onChangeText={setNote}
@@ -97,10 +98,10 @@ export function MonthSummary({
             }
           }}
           multiline
-          placeholder="Add a note for this month…"
+          placeholder={t('month.notePlaceholder')}
           placeholderTextColor={colors.faint}
           style={styles.noteInput}
-          accessibilityLabel="Month note"
+          accessibilityLabel={t('month.noteTitle')}
         />
       </View>
     </ScrollView>
