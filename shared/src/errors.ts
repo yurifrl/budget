@@ -10,7 +10,7 @@
  * code follows the HTTP status.
  */
 
-export const ERROR_CODE_BY_STATUS: Readonly<Record<number, string>> = {
+export const ERROR_CODE_BY_STATUS = {
   400: 'bad_request',
   401: 'unauthorized',
   403: 'forbidden',
@@ -23,7 +23,10 @@ export const ERROR_CODE_BY_STATUS: Readonly<Record<number, string>> = {
   502: 'upstream_error',
   503: 'unavailable',
   504: 'upstream_timeout',
-};
+} as const satisfies Readonly<Record<number, string>>;
+
+/** The per-status default codes (the values of {@link ERROR_CODE_BY_STATUS}). */
+export type StatusErrorCode = (typeof ERROR_CODE_BY_STATUS)[keyof typeof ERROR_CODE_BY_STATUS];
 
 /** Codes thrown explicitly somewhere in the API, beyond the per-status defaults. */
 export const SPECIFIC_ERROR_CODES = [
@@ -51,8 +54,17 @@ export const SPECIFIC_ERROR_CODES = [
   'user_has_data',
 ] as const;
 
+export type SpecificErrorCode = (typeof SPECIFIC_ERROR_CODES)[number];
+
+/**
+ * Every code a client build can know: the per-status defaults, the specific
+ * ones, and `error` (the default for an unmapped 4xx). `shared/src/i18n/errors`
+ * must have a message for each (a missing one is a tsc error).
+ */
+export type ErrorCode = StatusErrorCode | SpecificErrorCode | 'error';
+
 export function defaultErrorCode(status: number): string {
-  return ERROR_CODE_BY_STATUS[status] ?? (status >= 500 ? 'internal' : 'error');
+  return (ERROR_CODE_BY_STATUS as Readonly<Record<number, string | undefined>>)[status] ?? (status >= 500 ? 'internal' : 'error');
 }
 
 export interface ApiErrorBody {
