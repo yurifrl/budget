@@ -41,6 +41,8 @@ import { GhostButton, IndigoButton, MoneyInput, OverlaySheet, SheetItem } from '
 import { colors } from '@/ui/theme';
 import { buildCategoryPickItems, type CategoryPickItem } from '@/ui/categoryPick';
 import { amountStyle, DropdownShell, dropdownStyles, useDropdownPortal, type DropdownKeyEvent } from '@/ui/dropdown/dropdown';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './mobile/i18n';
 
 export interface MoveMoneyRequest {
   /** Source category id, or null to assign out of Ready-to-Assign. */
@@ -97,7 +99,7 @@ export function ToDropdown({
 
   const current = selectedTo ? categories.find((c) => c.id === selectedTo) ?? null : null;
   const query = draft.trim().toLowerCase();
-  const inputValue = open && draft !== '' ? draft : (current ? categoryLabel(current, bundles) : undefined) ?? (selectedTo === null ? 'Ready to Assign' : '');
+  const inputValue = open && draft !== '' ? draft : (current ? categoryLabel(current, bundles) : undefined) ?? (selectedTo === null ? t('label.readyToAssign') : '');
 
   const items = useMemo<CategoryPickItem[]>(
     () =>
@@ -152,7 +154,7 @@ export function ToDropdown({
     if (item.key === '__selected__') {
       rows.push(
         <Text key="selected-hd" style={dropdownStyles.sectionTitle}>
-          Selected
+          {t('dropdown.selected')}
         </Text>,
       );
     }
@@ -176,7 +178,7 @@ export function ToDropdown({
         onPointerDown={() => commit(item)}
         onHoverIn={() => setHighlight(i)}
         accessibilityRole="button"
-        accessibilityLabel={`Pick ${item.label} as destination`}
+        accessibilityLabel={t('dropdown.pick', { name: item.label })}
         style={[dropdownStyles.row, (pinned || i === highlight) && dropdownStyles.rowActive]}>
         {item.checked ? <Text style={dropdownStyles.check}>✓</Text> : <Text style={dropdownStyles.checkPlaceholder} />}
         <Text style={dropdownStyles.rowLabel} numberOfLines={1}>
@@ -195,7 +197,7 @@ export function ToDropdown({
   if (query && items.length === 0) {
     rows.push(
       <Text key="empty" style={dropdownStyles.emptyRow}>
-        No categories match “{draft.trim()}”
+        {t('dropdown.noMatch', { query: draft.trim() })}
       </Text>,
     );
   }
@@ -206,8 +208,8 @@ export function ToDropdown({
         open={open}
         anchor={anchor}
         value={inputValue}
-        onChangeText={(t) => {
-          setDraft(t);
+        onChangeText={(text) => {
+          setDraft(text);
           setHighlight(0);
           setOpen(true);
         }}
@@ -218,8 +220,8 @@ export function ToDropdown({
         }}
         onBlur={blurClose}
         onKeyPress={onKeyPress}
-        accessibilityLabel="Move money destination"
-        placeholder={selectedTo === undefined ? placeholder ?? 'Pick a destination…' : undefined}
+        accessibilityLabel={t('dropdown.label')}
+        placeholder={selectedTo === undefined ? placeholder ?? t('dropdown.placeholder') : undefined}
         chevron
         portalMinWidth={240}
         portalMaxHeight={280}
@@ -314,7 +316,7 @@ export function useMoveMoney({
       if (draft) dispatch(recordPlanEdit(newPlanEdit(draft)));
       onClose();
     } catch (err) {
-      setConfirmError(apiErrorMessage(err, 'failed to move money'));
+      setConfirmError(apiErrorMessage(err, t('sheet.moveFailed')));
     }
   };
 
@@ -375,20 +377,20 @@ export function MoveMoneyBody({
   const { formatMoney } = useMoneyFormat();
   const m = useMoveMoney({ budget, budgetId, month, request, onClose });
 
-  const fromLabel = m.fromCat ? categoryLabel(m.fromCat, budget.bundles) : 'Ready to Assign';
+  const fromLabel = m.fromCat ? categoryLabel(m.fromCat, budget.bundles) : t('label.readyToAssign');
   const fromAvailable = m.fromCat ? categoryFigures(m.bm, m.fromCat.id).available : m.readyToAssign;
   const title = m.unassign
-    ? 'UN-ASSIGN MONEY · TO READY TO ASSIGN'
+    ? t('sheet.unassignTitle')
     : m.cover && m.toCat
-      ? `COVER OVERSPENDING · ${categoryLabel(m.toCat, budget.bundles).toUpperCase()}`
-      : `MOVE MONEY · FROM ${fromLabel.toUpperCase()}`;
+      ? t('sheet.coverTitle', { category: categoryLabel(m.toCat, budget.bundles).toUpperCase() })
+      : t('sheet.moveTitle', { category: fromLabel.toUpperCase() });
 
   return (
     <>
       <Text style={styles.bodyTitle}>{title}</Text>
       {m.unassign ? null : (
         <View style={styles.amountRow}>
-          <Text style={styles.amountLabel}>Amount</Text>
+          <Text style={styles.amountLabel}>{t('sheet.amount')}</Text>
           <MoneyInput cents={m.amount} onCommit={m.setAmount} />
         </View>
       )}
@@ -408,9 +410,9 @@ export function MoveMoneyBody({
         </View>
       ) : m.cover && m.toCat ? (
         <>
-          <SheetItem icon="↘" label="Cover" sub={`${categoryLabel(m.toCat, budget.bundles)} · ${formatMoney(categoryFigures(m.bm, m.toCat.id).available)}`} />
+          <SheetItem icon="↘" label={t('sheet.cover')} sub={`${categoryLabel(m.toCat, budget.bundles)} · ${formatMoney(categoryFigures(m.bm, m.toCat.id).available)}`} />
           <View style={styles.toRow}>
-            <Text style={styles.amountLabel}>From</Text>
+            <Text style={styles.amountLabel}>{t('dir.from')}</Text>
             <ToDropdown
               categories={budget.categories}
               groups={budget.groups}
@@ -424,15 +426,15 @@ export function MoveMoneyBody({
           </View>
           {categoryFigures(m.bm, m.toCat.id).kind === 'payment' && categoryFigures(m.bm, m.toCat.id).available < 0 ? (
             <Text style={styles.coverWarning} accessibilityRole="alert">
-              Your credit card payment was greater than what you had available in your category. Why?
+              {t('sheet.coverWarning')}
             </Text>
           ) : null}
         </>
       ) : (
         <>
-          <SheetItem icon="↗" label="From" sub={`${fromLabel} · ${formatMoney(fromAvailable)}`} />
+          <SheetItem icon="↗" label={t('dir.from')} sub={`${fromLabel} · ${formatMoney(fromAvailable)}`} />
           <View style={styles.toRow}>
-            <Text style={styles.amountLabel}>To</Text>
+            <Text style={styles.amountLabel}>{t('dir.to')}</Text>
             <ToDropdown
               categories={budget.categories}
               groups={budget.groups}
@@ -448,11 +450,11 @@ export function MoveMoneyBody({
       )}
       <View style={styles.footer}>
         <View style={styles.footerBtn}>
-          <GhostButton label="Cancel" onPress={onClose} />
+          <GhostButton label={tCommon('cancel')} onPress={onClose} />
         </View>
         <View style={styles.footerBtn}>
           <IndigoButton
-            label="OK"
+            label={tCommon('ok')}
             onPress={m.valid ? () => void m.confirm(m.smartAmount() ?? undefined) : undefined}
             style={m.valid ? undefined : styles.btnDimmed}
           />
@@ -496,7 +498,7 @@ export function MoveMoneyPopover({
   return (
     <>
       <Text style={styles.popTitle}>
-        {m.cover ? 'Cover overspending from' : m.unassign ? 'Un-assign money from' : 'Move'}
+        {m.cover ? t('popover.cover') : m.unassign ? t('popover.unassign') : t('popover.move')}
       </Text>
       {!m.cover && !m.unassign ? (
         <View style={styles.popAmount}>
@@ -519,7 +521,7 @@ export function MoveMoneyPopover({
         </View>
       ) : (
         <View style={styles.popToRow}>
-          <Text style={styles.amountLabel}>To</Text>
+          <Text style={styles.amountLabel}>{t('dir.to')}</Text>
           <ToDropdown
             categories={budget.categories}
             groups={budget.groups}
@@ -535,10 +537,10 @@ export function MoveMoneyPopover({
       )}
       <View style={styles.footer}>
         <View style={styles.footerBtn}>
-          <GhostButton label="Cancel" onPress={onClose} />
+          <GhostButton label={tCommon('cancel')} onPress={onClose} />
         </View>
         <View style={styles.footerBtn}>
-          <IndigoButton label="OK" onPress={m.valid ? onOk : undefined} style={m.valid ? undefined : styles.btnDimmed} />
+          <IndigoButton label={tCommon('ok')} onPress={m.valid ? onOk : undefined} style={m.valid ? undefined : styles.btnDimmed} />
         </View>
       </View>
       {m.confirmError ? (

@@ -1,0 +1,10 @@
+{
+  "files": [
+    "src/features/plan/MobileCategoryDetail.tsx",
+    "src/features/plan/MoveMoneySheet.tsx",
+    "src/features/plan/MobileMoveMoney.tsx",
+    "src/features/plan/MobileAssignNumpad.tsx",
+    "src/features/plan/HomeScreen.tsx"
+  ],
+  "ignores": []
+}
