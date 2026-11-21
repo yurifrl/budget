@@ -2,6 +2,7 @@
 import { ACTIVE_STATUSES } from './types';
 import type { JobAttempt, JobLog, JobRun, JobStatus, LogLevel, Queryable } from './types';
 import { jobsRuntime } from './runtime';
+import { JOB_USER_MESSAGES } from './user-messages';
 
 export const NOTIFY_CHANNEL = 'jobs_enqueued';
 /** Max job_logs rows kept per attempt (extra lines are still mirrored to stdout). */
@@ -147,9 +148,9 @@ export async function countQueued(db: Queryable): Promise<number> {
 export async function cancelQueued(db: Queryable, id: string): Promise<JobRun | null> {
   const { rows } = await db.query<JobRun>(
     `update jobs.job_runs
-        set status = 'cancelled', finished_at = now(), user_message = coalesce(user_message, 'Cancelled before it started')
+        set status = 'cancelled', finished_at = now(), user_message = coalesce(user_message, $2)
       where id = $1 and status = 'queued' returning *`,
-    [id],
+    [id, JOB_USER_MESSAGES.cancelledBeforeStart],
   );
   return rows[0] ?? null;
 }

@@ -42,7 +42,7 @@ export const operations = [
       // Referenced account must belong to this budget; otherwise the rule
       // would generate cross-budget transactions.
       if (!(await rulesStore.accountInBudget(client, body.account_id, body.budget_id))) {
-        throw new HttpError(400, 'account not found in budget');
+        throw new HttpError(400, 'account not found in budget', 'account_not_in_budget');
       }
 
       let ruleId: string;
@@ -55,7 +55,7 @@ export const operations = [
           throw new HttpError(400, 'attach transaction not found in budget');
         }
         if (t.repeat_rule_id) {
-          throw new HttpError(409, 'transaction is already repeating');
+          throw new HttpError(409, 'transaction is already repeating', 'transaction_already_repeating');
         }
         const anchorDate = isoDate(t.date);
         const nextDue = advanceOccurrence(anchorDate, body.frequency, body.month_last_day);
@@ -87,7 +87,7 @@ export const operations = [
         }
         if (body.category_id) {
           if (!(await categoryInBudget(client, body.category_id, body.budget_id))) {
-            throw new HttpError(400, 'category not found in budget');
+            throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
           }
         }
         const payeeId = await resolvePayeeId(client, body.budget_id, body.payee);

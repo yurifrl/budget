@@ -24,6 +24,7 @@ export { startRelay, relayOnce } from './relay';
 export { createTemporalClient } from './temporal';
 export { hasOtherActiveRun, runsForSubjects } from './store';
 export type { JobRun, Queryable } from './types';
+export { JOB_USER_MESSAGES } from './user-messages';
 /** Cached scheduler (Temporal) health ping — never throws. */
 export async function schedulerHealth(): Promise<{ up: boolean; reason?: string }> {
   return jobsRuntime().temporal.health();

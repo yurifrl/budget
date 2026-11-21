@@ -25,6 +25,7 @@
  */
 import type { Context, Hono } from 'hono';
 import { sign, verify } from 'hono/jwt';
+import type { ErrorCode } from '@shared/errors';
 
 import { errorResponse } from '../core/validate';
 import { createAccessVerifier, type AccessIdentity, type AccessVerifier } from './access';
@@ -56,7 +57,7 @@ function verifier(): AccessVerifier {
   return cached.verifier;
 }
 
-type Verified = { ok: true; identity: AccessIdentity } | { ok: false; status: 401 | 403; message: string; code: string };
+type Verified = { ok: true; identity: AccessIdentity } | { ok: false; status: 401 | 403; message: string; code: ErrorCode };
 
 /**
  * Header-only assertion -> provisioned identity. No API-side allow-list: the

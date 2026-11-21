@@ -93,7 +93,7 @@ export async function resolveTransferPeer(
       peerId,
     ]);
   }
-  if (peerId === ownAccountId) throw new HttpError(400, 'cannot transfer to the same account');
+  if (peerId === ownAccountId) throw new HttpError(400, 'cannot transfer to the same account', 'cannot_transfer_to_same_account');
   const accounts = await client.query<{
     id: string;
     on_budget: boolean;
@@ -104,8 +104,8 @@ export async function resolveTransferPeer(
   ]);
   const peer = accounts.rows.find((a) => a.id === peerId);
   const own = accounts.rows.find((a) => a.id === ownAccountId);
-  if (!peer || !own) throw new HttpError(400, 'transfer account not found in budget');
-  if (peer.closed) throw new HttpError(409, 'account is closed');
+  if (!peer || !own) throw new HttpError(400, 'transfer account not found in budget', 'transfer_account_not_in_budget');
+  if (peer.closed) throw new HttpError(409, 'account is closed', 'account_closed');
   return {
     accountId: peerId,
     onBudget: peer.on_budget,
@@ -211,7 +211,7 @@ export async function syncMirror(
     : null;
   const mirror = mirrorRes?.rows[0] ?? null;
   const peerAccountId = requestedPeerId === undefined ? (mirror?.account_id ?? null) : requestedPeerId;
-  if (peerAccountId === row.account_id) throw new HttpError(400, 'cannot transfer to the same account');
+  if (peerAccountId === row.account_id) throw new HttpError(400, 'cannot transfer to the same account', 'cannot_transfer_to_same_account');
   if (peerAccountId) {
     // On-budget <-> on-budget transfers carry no category, whatever the edit sent.
     await client.query(

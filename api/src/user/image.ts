@@ -36,12 +36,12 @@ export type NormalizedAvatar = { contentType: 'image/webp'; bytes: Uint8Array };
 
 /** Validate + normalize an uploaded photo. Throws HttpError(400/413). */
 export async function normalizeAvatar(input: Uint8Array): Promise<NormalizedAvatar> {
-  if (input.length === 0) throw new HttpError(400, 'empty image');
-  if (input.length > MAX_UPLOAD_BYTES) throw new HttpError(413, 'image too large (max 5 MB)');
-  if (!sniffImageFormat(input)) throw new HttpError(400, 'unsupported image type (use jpeg, png or webp)');
+  if (input.length === 0) throw new HttpError(400, 'empty image', 'image_empty');
+  if (input.length > MAX_UPLOAD_BYTES) throw new HttpError(413, 'image too large (max 5 MB)', 'image_too_large');
+  if (!sniffImageFormat(input)) throw new HttpError(400, 'unsupported image type (use jpeg, png or webp)', 'unsupported_image_type');
   try {
     const meta = await new Bun.Image(input).metadata();
-    if (meta.width * meta.height > MAX_PIXELS) throw new HttpError(413, 'image dimensions too large');
+    if (meta.width * meta.height > MAX_PIXELS) throw new HttpError(413, 'image dimensions too large', 'image_dimensions_too_large');
     const bytes = await new Bun.Image(input)
       .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 84 })
@@ -49,6 +49,6 @@ export async function normalizeAvatar(input: Uint8Array): Promise<NormalizedAvat
     return { contentType: 'image/webp', bytes };
   } catch (err) {
     if (err instanceof HttpError) throw err;
-    throw new HttpError(400, 'could not decode image');
+    throw new HttpError(400, 'could not decode image', 'image_undecodable');
   }
 }

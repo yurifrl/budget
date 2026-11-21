@@ -74,7 +74,7 @@ export const operations: readonly AnyOperation[] = [
     requirePasswordLogin();
     // The service and dev rows are the app's own: an admin can never create
     // them (the service token resolves to the service row by e-mail).
-    if (isReservedEmail(email)) throw new HttpError(400, 'this e-mail is reserved', 'invalid_input');
+    if (isReservedEmail(email)) throw new HttpError(400, 'this e-mail is reserved', 'email_reserved');
     const me = actor(c);
     const temp = generateTempPassword();
     const hash = await hashPassword(temp);

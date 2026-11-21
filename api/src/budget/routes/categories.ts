@@ -23,7 +23,7 @@ import * as categoriesStore from '../store/categories';
 async function assertMemberOrShared(budgetId: string, userId: string | null | undefined): Promise<void> {
   if (userId == null) return;
   if (!(await isBudgetMember(budgetId, userId))) {
-    throw new HttpError(400, 'user_id is not a member of this budget');
+    throw new HttpError(400, 'user_id is not a member of this budget', 'member_not_in_budget');
   }
 }
 

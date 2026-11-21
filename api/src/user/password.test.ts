@@ -897,7 +897,8 @@ describe('admin guards over HTTP', () => {
     for (const email of ['svc-budget-mcp@syscd.local', 'SVC-Budget-MCP@syscd.local', 'dev@localhost']) {
       const r = await post('/admin/users', { email, role: 'admin' }, c);
       expect(r.status, email).toBe(400);
-      expect(r.json.code).toBe('invalid_input');
+      // `dev@localhost` is stopped earlier, by the e-mail format check (generic invalid_input).
+      expect(r.json.code).toBe(email === 'dev@localhost' ? 'invalid_input' : 'email_reserved');
     }
     expect((await pool.query(`select 1 from public.users where email = any($1)`, [['svc-budget-mcp@syscd.local', 'dev@localhost']])).rowCount).toBe(0);
     // The service token still resolves to the plain (non-admin) service row.

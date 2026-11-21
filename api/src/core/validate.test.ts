@@ -47,3 +47,33 @@ describe('parseValue messages', () => {
     );
   });
 });
+
+describe('error body', () => {
+  test('params ride next to the code, and only when given', async () => {
+    const { errorBody } = await import('./validate');
+    expect(errorBody(409, 'x', 'payee_name_reserved', { name: 'Transfer : A' })).toEqual({
+      error: 'x',
+      code: 'payee_name_reserved',
+      params: { name: 'Transfer : A' },
+    });
+    expect(errorBody(409, 'x', 'account_closed')).toEqual({ error: 'x', code: 'account_closed' });
+    expect(errorBody(404, 'not found')).toEqual({ error: 'not found', code: 'not_found' });
+  });
+
+  test('httpOnError sends the HttpError code and params', async () => {
+    const { Hono } = await import('hono');
+    const { httpOnError } = await import('./validate');
+    const app = new Hono();
+    app.onError(httpOnError);
+    app.get('/a', () => {
+      throw new HttpError(409, 'closed', 'account_closed');
+    });
+    app.get('/b', () => {
+      throw new HttpError(409, 'named', 'payee_name_exists', { name: 'Café' });
+    });
+    const a = await app.request('/a');
+    expect(a.status).toBe(409);
+    expect(await a.json()).toEqual({ error: 'closed', code: 'account_closed' });
+    expect(await (await app.request('/b')).json()).toEqual({ error: 'named', code: 'payee_name_exists', params: { name: 'Café' } });
+  });
+});

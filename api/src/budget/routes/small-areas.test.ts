@@ -148,7 +148,7 @@ describe.skipIf(!dbReady)('small budget areas (characterisation)', () => {
       rows: [{ category_id: c2, assigned: 50 }, { category_id: otherCat, assigned: 50 }],
     });
     expect(bad.status).toBe(400);
-    expect(bad.json).toEqual({ error: 'category not found in budget', code: 'bad_request' });
+    expect(bad.json).toEqual({ error: 'category not found in budget', code: 'category_not_in_budget' });
     const none = await pool.query(`SELECT 1 FROM assignments WHERE budget_id = $1 AND month = '2026-04-01'`, [B]);
     expect(none.rowCount).toBe(0);
   });

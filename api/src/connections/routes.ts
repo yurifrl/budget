@@ -36,6 +36,7 @@ import {
   type KeyAccess,
 } from './keys';
 import { getAggregator, hasProvider } from './registry';
+import { serverMessageCode } from './server-messages';
 import { SecretBoxUnavailable, secretBoxConfigured } from '../core/secret-box';
 import { getSyncWindowDays, setSyncWindowDays } from './settings';
 import { withPostConnectSettle } from './settle';
@@ -87,13 +88,13 @@ function throwProviderMapped(err: unknown): never {
     // Provider payload didn't match our schema: keep the raw issues in the
     // server log only, return a short human message.
     console.error('connections: provider response failed validation', JSON.stringify(err.issues));
-    throw new HttpError(502, PROVIDER_UNREADABLE);
+    throw new HttpError(502, PROVIDER_UNREADABLE, 'provider_unreadable');
   }
   const detail =
     err instanceof Error
       ? err.message.replaceAll(/[\r\n\t]+/g, ' ').replaceAll(/\s+/g, ' ').trim().slice(0, 200)
       : '';
-  throw new HttpError(502, detail ? `provider request failed: ${detail}` : 'provider request failed');
+  throw new HttpError(502, detail ? `provider request failed: ${detail}` : 'provider request failed', 'provider_request_failed');
 }
 
 const connectionJson = (row: ConnectionWithLinker) => ({
@@ -104,6 +105,7 @@ const connectionJson = (row: ConnectionWithLinker) => ({
   status: row.status,
   /** Sanitized user-facing reason for a non-connected status. */
   status_message: row.status_message,
+  status_message_code: serverMessageCode(row.status_message),
   environment: row.environment,
   key_source: row.key_source,
   institution: row.institution,
@@ -168,7 +170,7 @@ export const operations = [
     // any upstream call is made, so registration never leaks a foreign item.
     const existing = await store.getConnectionByExternal(body.provider, body.itemId);
     if (existing && existing.user_id !== user.id) {
-      throw new HttpError(409, 'conflict — connection already registered by another user');
+      throw new HttpError(409, 'conflict — connection already registered by another user', 'connection_already_registered');
     }
     // A known item keeps the key set that created it. A new one is PROBED:
     // connect-token chose a key set earlier, and the caller may have saved or
@@ -400,10 +402,8 @@ export const operations = [
       [row.id],
     );
     if (linked.rows.length > 0) {
-      throw new HttpError(
-        409,
-        `still linked to ${linked.rows.map((r) => r.name).join(', ')} — unlink in the account editor first`,
-      );
+      const accounts = linked.rows.map((r) => r.name).join(', ');
+      throw new HttpError(409, `still linked to ${accounts} — unlink in the account editor first`, 'connection_still_linked', { accounts });
     }
     requireProvider(row.provider);
     // The item is removed with the key set that created it. A paused
@@ -596,6 +596,7 @@ const runJson = (run: JobRun) => ({
   created_at: run.created_at,
   finished_at: run.finished_at,
   user_message: run.user_message,
+  user_message_code: serverMessageCode(run.user_message),
   /** Sync counts (added/updated/deleted/…) on success; user-safe by construction. */
   result: run.result ?? null,
 });
@@ -609,7 +610,7 @@ async function requestSync(userId: string, id: string, mode: SyncMode) {
   await reconcileKeyAccess(pool, userId);
   const row = await store.getConnectionByUser(userId, id);
   if (!row) throw new HttpError(404, 'not found');
-  if (row.status === 'disconnected') throw new HttpError(409, 'connection is disconnected');
+  if (row.status === 'disconnected') throw new HttpError(409, 'connection is disconnected', 'connection_disconnected');
   if (row.status === 'paused') throw new HttpError(409, row.status_message ?? 'connection is paused', CONNECTION_PAUSED);
   requireProvider(row.provider);
   usable(await keyAccessForConnection(pool, row), row.provider); // fail fast (403/503) when its key set cannot be used
@@ -637,6 +638,7 @@ async function syncStatus(userId: string) {
       institution: row.institution,
       status: row.status,
       status_message: row.status_message,
+      status_message_code: serverMessageCode(row.status_message),
       last_synced_at: row.last_synced_at,
       state: deriveSyncState({
         status: row.status,

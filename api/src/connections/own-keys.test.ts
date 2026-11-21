@@ -169,7 +169,7 @@ describe.skipIf(!dbReady)('1. own key set: save, replace, read status, delete', 
 
     const wrong = await saveKeys(call, 'own-client-1', 'not-the-secret');
     expect(wrong.status).toBe(400);
-    expect(wrong.json.code).toBe('invalid_credentials');
+    expect(wrong.json.code).toBe('pluggy_keys_rejected');
     // The pair was checked with the provider, through the port, with exactly the submitted pair.
     expect(callsOf('verifyCredentials')).toEqual([{ op: 'verifyCredentials', keys: 'own-client-1', secretOk: false, arg: undefined }]);
     expect(await store.getCredentials(pool, user.id, PROVIDER)).toBeNull();
@@ -500,6 +500,9 @@ describe.skipIf(!dbReady)('6. feature off pauses shared-key connections; on resu
 
     const status = (await call('GET', '/sync-status')).json as { connections: Array<{ id: string; state: string; status: string }> };
     expect(status.connections).toEqual([expect.objectContaining({ id: shared.id, state: 'paused', status: 'paused' })]);
+    // The stored English sentence is unchanged; its code rides next to it.
+    expect(listed[0]).toMatchObject({ status_message: PAUSE_MESSAGES.shared, status_message_code: 'server_paused_shared_keys' });
+    expect(status.connections[0]).toMatchObject({ status_message: PAUSE_MESSAGES.shared, status_message_code: 'server_paused_shared_keys' });
 
     const sync = await call('POST', `/${shared.id}/sync`);
     expect(sync.status).toBe(409);

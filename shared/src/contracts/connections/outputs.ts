@@ -37,6 +37,8 @@ export const connectionSchema = z.object({
   status: connectionStatusSchema,
   /** Sanitized, user-facing reason for a non-connected status. */
   status_message: nullableString,
+  /** Code of the stored server sentence in `status_message` (`server_*`, see shared/src/errors.ts); null when the text is not one of them. Additive (always sent by the API; optional in the type so older fixtures still compile). */
+  status_message_code: nullableString.optional(),
   /** 'sandbox' | 'production' as the adapter reports it; nullable text in the table. */
   environment: nullableString,
   /** Key set the connection was created with; it can only ever be reached with that one. */
@@ -108,6 +110,8 @@ export const syncRunSchema = z.object({
   finished_at: nullableString,
   /** Sanitized failure/notice text; null on a plain success. */
   user_message: nullableString,
+  /** Code of the stored server sentence in `user_message` (`server_*`, see shared/src/errors.ts); null when the text is not one of them. Additive (always sent by the API; optional in the type so older fixtures still compile). */
+  user_message_code: nullableString.optional(),
   result: syncCountsSchema.partial().extend({ skipped: z.string().optional() }).nullable(),
 });
 
@@ -137,6 +141,8 @@ export const connectionSyncStatusSchema = z.object({
   institution: nullableString,
   status: connectionStatusSchema,
   status_message: nullableString,
+  /** Code of the stored server sentence in `status_message` (`server_*`); null when unknown. Additive. */
+  status_message_code: nullableString.optional(),
   last_synced_at: nullableString,
   state: syncStateSchema,
   active_run: syncRunSchema.nullable(),

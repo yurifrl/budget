@@ -17,7 +17,7 @@ export const operations = [
     return withTransaction(pool, async (client) => {
       for (const row of rows) {
         if (!(await liveCategoryInBudget(client, row.category_id, budget_id))) {
-          throw new HttpError(400, 'category not found in budget');
+          throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
         }
         // Milliunits in, milliunits stored (same as /assignments/batch).
         await upsertAssignment(client, budget_id, month, row.category_id, row.assigned);

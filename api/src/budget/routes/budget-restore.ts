@@ -111,7 +111,7 @@ export const operations = [
       const bundleIds = bundles.map(() => crypto.randomUUID());
       for (let i = 0; i < bundles.length; i++) {
         if (bundles[i].groupIndex >= payload.groups.length) {
-          throw new HttpError(400, `bundle ${i}: groupIndex ${bundles[i].groupIndex} out of range`);
+          throw new HttpError(400, `bundle ${i}: groupIndex ${bundles[i].groupIndex} out of range`, 'invalid_backup');
         }
         await insertRestoredBundle(client, bundleIds[i], budgetId, groupIds[bundles[i].groupIndex], bundles[i].name);
       }
@@ -121,11 +121,11 @@ export const operations = [
       for (let i = 0; scope.plan && i < payload.categories.length; i++) {
         const cat = payload.categories[i];
         if (cat.groupIndex >= payload.groups.length) {
-          throw new HttpError(400, `category ${i}: groupIndex ${cat.groupIndex} out of range`);
+          throw new HttpError(400, `category ${i}: groupIndex ${cat.groupIndex} out of range`, 'invalid_backup');
         }
         const bundleIndex = cat.bundleIndex ?? null;
         if (bundleIndex !== null && (bundleIndex >= bundles.length || bundles[bundleIndex].groupIndex !== cat.groupIndex)) {
-          throw new HttpError(400, `category ${i}: bundleIndex ${bundleIndex} is out of range or in another group`);
+          throw new HttpError(400, `category ${i}: bundleIndex ${bundleIndex} is out of range or in another group`, 'invalid_backup');
         }
         await insertRestoredCategory(client, {
           id: categoryIds[i],
@@ -176,13 +176,13 @@ export const operations = [
       for (let i = 0; i < transactions.length; i++) {
         const txn = transactions[i];
         if (txn.accountIndex >= payload.accounts.length) {
-          throw new HttpError(400, `transaction ${i}: accountIndex ${txn.accountIndex} out of range`);
+          throw new HttpError(400, `transaction ${i}: accountIndex ${txn.accountIndex} out of range`, 'invalid_backup');
         }
         if (txn.categoryIndex !== null && txn.categoryIndex >= payload.categories.length) {
-          throw new HttpError(400, `transaction ${i}: categoryIndex ${txn.categoryIndex} out of range`);
+          throw new HttpError(400, `transaction ${i}: categoryIndex ${txn.categoryIndex} out of range`, 'invalid_backup');
         }
         if (txn.transferPeerIndex !== null && txn.transferPeerIndex >= payload.transactions.length) {
-          throw new HttpError(400, `transaction ${i}: transferPeerIndex ${txn.transferPeerIndex} out of range`);
+          throw new HttpError(400, `transaction ${i}: transferPeerIndex ${txn.transferPeerIndex} out of range`, 'invalid_backup');
         }
 
         const peerAccountName =
@@ -219,7 +219,7 @@ export const operations = [
         const peer = transactions[i].transferPeerIndex;
         if (peer === null) continue;
         if (transactions[peer].transferPeerIndex !== i) {
-          throw new HttpError(400, `transaction ${i}: transferPeerIndex ${peer} is not mutual`);
+          throw new HttpError(400, `transaction ${i}: transferPeerIndex ${peer} is not mutual`, 'invalid_backup');
         }
         await linkRestoredTransferPeer(client, txnIds[i], txnIds[peer]);
       }
@@ -232,7 +232,7 @@ export const operations = [
       const assignments = scope.plan ? payload.assignments : [];
       for (const assignment of assignments) {
         if (assignment.categoryIndex >= payload.categories.length) {
-          throw new HttpError(400, `assignment: categoryIndex ${assignment.categoryIndex} out of range`);
+          throw new HttpError(400, `assignment: categoryIndex ${assignment.categoryIndex} out of range`, 'invalid_backup');
         }
         await insertRestoredAssignment(
           client,

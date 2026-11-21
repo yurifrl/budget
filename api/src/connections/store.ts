@@ -82,7 +82,7 @@ export async function upsertConnection(input: {
   if (existing.rowCount != null && existing.rowCount > 0) {
     const row = existing.rows[0]!;
     if (row.user_id !== input.userId) {
-      throw new HttpError(409, 'conflict — connection already registered by another user');
+      throw new HttpError(409, 'conflict — connection already registered by another user', 'connection_already_registered');
     }
     const updated = await pool.query<ConnectionRow>(
       `update public.connections

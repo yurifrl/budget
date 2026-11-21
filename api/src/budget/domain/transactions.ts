@@ -23,7 +23,7 @@ export async function insertSubTxns(
         'SELECT 1 FROM categories WHERE id = $1 AND budget_id = $2',
         [sub.category_id, budgetId],
       );
-      if (catCheck.rowCount === 0) throw new HttpError(400, 'category not found in budget');
+      if (catCheck.rowCount === 0) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
     }
     await client.query(
       `INSERT INTO subtransactions (budget_id, transaction_id, amount, memo, category_id)
@@ -94,7 +94,7 @@ export async function applyBalanceDeltas(
     // An unknown or foreign-budget account id is a client bug — fail loudly
     // instead of silently skipping the delta.
     if (!row || row.budget_id !== budgetId) {
-      throw new HttpError(400, 'delta account not found in budget');
+      throw new HttpError(400, 'delta account not found in budget', 'account_not_in_budget');
     }
     const cleared = Number(row.cleared_balance);
     const uncleared = Number(row.uncleared_balance);

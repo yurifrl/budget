@@ -1,9 +1,12 @@
 import { Hono, type Context } from 'hono';
 
+import type { Locale } from '@shared/i18n';
+
 import { accessConfigured, admitGrant, authDisabled, cookieSessionUser, resolveOrCreateSessionUser, resolvePrincipalUser, safeReturnTo } from '../user';
 import { CHALLENGE_RE, hmacBase64Url, safeEqual } from './crypto';
 import { DEFAULT_SCOPE, SCOPES, type OAuthConfig } from './config';
-import { renderConsent, renderError } from './consent-page';
+import { renderConsent, renderError, type ErrorPageKey } from './consent-page';
+import { requestLocale } from './i18n';
 import { readParams, BodyError } from './http';
 import { createGrantAndCode, getClient, type OAuthClient } from './store';
 
@@ -21,11 +24,13 @@ interface AuthRequest {
 type Parsed =
   | { ok: true; req: AuthRequest; client: OAuthClient }
   /** Cannot trust redirect_uri: show an error page, never redirect. */
-  | { ok: false; page: string }
+  | { ok: false; page: ErrorPageKey }
   /** redirect_uri is trusted: report the error to it. */
   | { ok: false; redirect: { uri: string; state: string; error: string; description: string } };
 
-function pageHeaders(c: Context) {
+/** Security headers for the HTML pages; returns the page language from `Accept-Language` (never a process-wide locale). */
+function pageHeaders(c: Context): Locale {
+  c.header('Vary', 'Accept-Language');
   c.header('Cache-Control', 'no-store');
   c.header('X-Frame-Options', 'DENY');
   c.header('Referrer-Policy', 'same-origin');
@@ -33,7 +38,14 @@ function pageHeaders(c: Context) {
     'Content-Security-Policy',
     "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
   );
+  return requestLocale(c.req.header('Accept-Language'));
 }
+
+const BODY_ERROR_KEYS: Readonly<Record<string, ErrorPageKey>> = {
+  'body too large': 'error.bodyTooLarge',
+  'invalid JSON': 'error.invalidJson',
+};
+const bodyErrorKey = (err: BodyError): ErrorPageKey => BODY_ERROR_KEYS[err.message] ?? 'error.badRequest';
 
 function redirectWith(uri: string, issuer: string, params: Record<string, string>): string {
   const u = new URL(uri);
@@ -45,10 +57,10 @@ function redirectWith(uri: string, issuer: string, params: Record<string, string
 /** Validate an authorization request (query on GET, form on POST) against the registry. */
 async function parseRequest(p: Record<string, string>, cfg: OAuthConfig): Promise<Parsed> {
   const client = await getClient(p.client_id ?? '');
-  if (!client) return { ok: false, page: 'Unknown client.' };
+  if (!client) return { ok: false, page: 'error.unknownClient' };
   const redirectUri = p.redirect_uri ?? '';
   // Exact string match against the registered list; never prefix/host/normalized.
-  if (!client.redirectUris.includes(redirectUri)) return { ok: false, page: 'redirect_uri is not registered for this client.' };
+  if (!client.redirectUris.includes(redirectUri)) return { ok: false, page: 'error.redirectNotRegistered' };
 
   const state = (p.state ?? '').slice(0, 512);
   const fail = (error: string, description: string): Parsed => ({
@@ -94,10 +106,10 @@ export function authorizeRoutes(cfg: OAuthConfig): Hono {
   const app = new Hono();
 
   app.get('/oauth/authorize', async (c) => {
-    pageHeaders(c);
+    const locale = pageHeaders(c);
     const parsed = await parseRequest(c.req.query(), cfg);
     if (!parsed.ok) {
-      if ('page' in parsed) return c.html(renderError(parsed.page), 400);
+      if ('page' in parsed) return c.html(renderError(locale, parsed.page), 400);
       const r = parsed.redirect;
       return c.redirect(redirectWith(r.uri, cfg.issuer, { error: r.error, error_description: r.description, state: r.state }));
     }
@@ -107,7 +119,7 @@ export function authorizeRoutes(cfg: OAuthConfig): Hono {
       // Google); both return here via a validated same-origin relative return_to.
       const url = new URL(c.req.url);
       const returnTo = safeReturnTo(`${url.pathname}${url.search}`);
-      if (!returnTo) return c.html(renderError('Request too large to resume after login.'), 400);
+      if (!returnTo) return c.html(renderError(locale, 'error.tooLargeToResume'), 400);
       const login = accessConfigured() ? '/auth/access' : '/auth/google';
       return c.redirect(`${login}?return_to=${encodeURIComponent(returnTo)}`);
     }
@@ -120,6 +132,7 @@ export function authorizeRoutes(cfg: OAuthConfig): Hono {
         scopes: q.scope.split(' '),
         email,
         action: '/oauth/authorize',
+        locale,
         fields: {
           client_id: q.clientId,
           redirect_uri: q.redirectUri,
@@ -135,27 +148,27 @@ export function authorizeRoutes(cfg: OAuthConfig): Hono {
   });
 
   app.post('/oauth/authorize', async (c) => {
-    pageHeaders(c);
+    const locale = pageHeaders(c);
     // CSRF layer 1: a browser always sends Origin on cross-site POST.
     const origin = c.req.header('Origin');
-    if (origin !== undefined && origin !== new URL(cfg.issuer).origin) return c.html(renderError('Cross-origin request refused.'), 403);
+    if (origin !== undefined && origin !== new URL(cfg.issuer).origin) return c.html(renderError(locale, 'error.crossOrigin'), 403);
     let form: Record<string, string>;
     try {
       form = await readParams(c);
     } catch (err) {
-      return c.html(renderError(err instanceof BodyError ? err.message : 'bad request'), 400);
+      return c.html(renderError(locale, err instanceof BodyError ? bodyErrorKey(err) : 'error.badRequest'), 400);
     }
     const parsed = await parseRequest(form, cfg);
     if (!parsed.ok) {
-      if ('page' in parsed) return c.html(renderError(parsed.page), 400);
+      if ('page' in parsed) return c.html(renderError(locale, parsed.page), 400);
       const r = parsed.redirect;
       return c.redirect(redirectWith(r.uri, cfg.issuer, { error: r.error, error_description: r.description, state: r.state }), 303);
     }
     const who = await approver(c, cfg);
     const email = who?.email;
-    if (!who || !email) return c.html(renderError('Your session expired. Start again.'), 401);
+    if (!who || !email) return c.html(renderError(locale, 'error.sessionExpired'), 401);
     // CSRF layer 2: token bound to this user and this exact request.
-    if (!csrfValid(cfg, email, parsed.req, form.csrf ?? '')) return c.html(renderError('Invalid or expired form. Start again.'), 403);
+    if (!csrfValid(cfg, email, parsed.req, form.csrf ?? '')) return c.html(renderError(locale, 'error.invalidForm'), 403);
 
     const q = parsed.req;
     if (form.decision !== 'approve') {
@@ -163,11 +176,11 @@ export function authorizeRoutes(cfg: OAuthConfig): Hono {
     }
     const devBypass = !!cfg.devEmail && authDisabled();
     // Same per-request rule as every session (user/session-gate.ts).
-    if (!devBypass && !(await admitGrant(email, who.idp))) return c.html(renderError('Not authorized.'), 403);
+    if (!devBypass && !(await admitGrant(email, who.idp))) return c.html(renderError(locale, 'error.notAuthorized'), 403);
     // A password approver never creates a row (null = deleted meanwhile).
     const user = devBypass ? await resolveOrCreateSessionUser(email) : await resolvePrincipalUser({ email, idp: who.idp });
-    if (!user) return c.html(renderError('Your session expired. Start again.'), 401);
-    if (user.status !== 'active') return c.html(renderError('Account disabled.'), 403);
+    if (!user) return c.html(renderError(locale, 'error.sessionExpired'), 401);
+    if (user.status !== 'active') return c.html(renderError(locale, 'error.accountDisabled'), 403);
     const code = await createGrantAndCode({
       userId: user.id,
       idp: who.idp ?? null,

@@ -31,7 +31,7 @@ export const operations = [
 
   implement(bundlesCreate, async (_c, { budget_id, group_id, name, category_ids }) => {
     const ids = [...new Set(category_ids)];
-    if (ids.length < 2) throw new HttpError(400, 'a bundle needs at least 2 distinct categories');
+    if (ids.length < 2) throw new HttpError(400, 'a bundle needs at least 2 distinct categories', 'bundle_needs_two_categories');
     return withTransaction(pool, async (client) => {
       if (!(await bundlesStore.liveGroupInBudget(client, group_id, budget_id))) {
         throw new HttpError(404, 'category group not found in budget');
