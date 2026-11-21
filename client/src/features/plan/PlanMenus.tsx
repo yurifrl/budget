@@ -6,7 +6,9 @@ import { Pressable, Text, View } from 'react-native';
 
 import { categoryOwnerId } from '@/domain/people';
 import { isBatchTarget, menuTargetIds } from '@/domain/planSelection';
+import { tCommon } from '@shared/i18n/common';
 import { BundleNamePopover, BundleRowMenu, CategoryBundleItems } from './BundleMenus';
+import { t } from './i18n';
 import { RowMenu } from './RowMenu';
 import { styles } from './styles';
 import type { PlanGrid } from './types';
@@ -21,20 +23,20 @@ export function PlanMenus({ grid }: { grid: PlanGrid }) {
         <Pressable style={styles.menuBackdrop} onPress={() => menus.setConfirmDelete(null)}>
           <Pressable style={[styles.rowMenuCard, { top: 44, right: 16 }]} onPress={() => undefined}>
             <Text style={styles.menuItemText}>
-              This category has activity this month. Delete it? Its transactions keep their history.
+              {t('menu.deleteBody')}
             </Text>
             <View style={styles.sheetRow}>
               <Pressable
                 style={styles.menuItem}
-                accessibilityLabel="Confirm delete"
+                accessibilityLabel={t('menu.confirmDeleteLabel')}
                 onPress={menus.confirmDeleteNow}>
-                <Text style={styles.menuItemTextDanger}>Delete</Text>
+                <Text style={styles.menuItemTextDanger}>{tCommon('delete')}</Text>
               </Pressable>
               <Pressable
                 style={styles.menuItem}
-                accessibilityLabel="Cancel delete"
+                accessibilityLabel={t('menu.cancelDeleteLabel')}
                 onPress={() => menus.setConfirmDelete(null)}>
-                <Text style={styles.menuItemText}>Cancel</Text>
+                <Text style={styles.menuItemText}>{tCommon('cancel')}</Text>
               </Pressable>
             </View>
           </Pressable>

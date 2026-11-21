@@ -19,6 +19,7 @@ import { FundingBar } from '@/ui/bits';
 import { PersonFace } from '@/ui/PersonFace';
 import { colors } from '@/ui/theme';
 import { AssignedCell, AvailableCell } from './PlanRowCells';
+import { t } from './i18n';
 import { styles } from './styles';
 import type { PlanGrid } from './types';
 
@@ -113,7 +114,7 @@ export function PlanCategoryRow({ grid, category: c }: { grid: PlanGrid; categor
           }}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: isChecked }}
-          accessibilityLabel={`Select ${c.name}`}>
+          accessibilityLabel={t('row.selectLabel', { name: c.name })}>
           <View
             style={[
               styles.checkbox,
@@ -131,7 +132,7 @@ export function PlanCategoryRow({ grid, category: c }: { grid: PlanGrid; categor
             onBlur={menus.commitRename}
             autoFocus
             style={styles.renameInput}
-            accessibilityLabel="Rename category"
+            accessibilityLabel={t('row.renameLabel')}
           />
         ) : (
           <View style={{ flex: 1 }} pointerEvents="none">
@@ -145,7 +146,7 @@ export function PlanCategoryRow({ grid, category: c }: { grid: PlanGrid; categor
                 {c.name}
               </Text>
               {owner ? (
-                <View accessible accessibilityLabel={`Category of ${personLabel(owner)}`}>
+                <View accessible accessibilityLabel={t('row.ownerLabel', { name: personLabel(owner) })}>
                   <PersonFace person={owner} size={16} />
                 </View>
               ) : null}

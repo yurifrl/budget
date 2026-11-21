@@ -1,0 +1,16 @@
+{
+  "files": ["src/features/plan/*.{ts,tsx}"],
+  "ignores": [
+    "src/features/plan/TargetEditor.tsx",
+    "src/features/plan/CategoryInspector.tsx",
+    "src/features/plan/AutoAssignPanel.tsx",
+    "src/features/plan/AssignDropdown.tsx",
+    "src/features/plan/MonthSummary.tsx",
+    "src/features/plan/CategoryPersonField.tsx",
+    "src/features/plan/MobileCategoryDetail.tsx",
+    "src/features/plan/MoveMoneySheet.tsx",
+    "src/features/plan/MobileMoveMoney.tsx",
+    "src/features/plan/MobileAssignNumpad.tsx",
+    "src/features/plan/HomeScreen.tsx"
+  ]
+}

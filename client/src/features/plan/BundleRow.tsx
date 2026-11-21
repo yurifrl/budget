@@ -12,6 +12,7 @@ import type { BundleFigures } from '@/domain/bundles';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { Pill } from '@/ui/bits';
 import { centsPillState, colors, radius } from '@/ui/theme';
+import { t } from './i18n';
 
 /** Column widths shared with the category rows in PlanScreen. */
 export const PLAN_COLS = {
@@ -92,7 +93,11 @@ export function BundleRow({
         },
       } as object)}
       accessibilityRole="button"
-      accessibilityLabel={`${bundle.name} bundle, ${children.length} categories, ${expanded ? 'expanded' : 'collapsed'}`}
+      accessibilityLabel={
+        expanded
+          ? t('bundle.rowExpanded', { name: bundle.name, count: children.length })
+          : t('bundle.rowCollapsed', { name: bundle.name, count: children.length })
+      }
       accessibilityState={{ expanded }}
       style={[styles.frame, dropLabel ? styles.frameDrop : null]}
     >
@@ -109,7 +114,7 @@ export function BundleRow({
               autoFocus
               selectTextOnFocus
               style={styles.nameInput}
-              accessibilityLabel="Rename bundle"
+              accessibilityLabel={t('bundle.renameLabel')}
             />
           ) : (
             <Text style={styles.name} numberOfLines={1}>
@@ -117,7 +122,7 @@ export function BundleRow({
             </Text>
           )}
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{isPhone ? children.length : `${children.length} items`}</Text>
+            <Text style={styles.badgeText}>{isPhone ? children.length : t('bundle.itemCount', { count: children.length })}</Text>
           </View>
           {dropLabel ? (
             <View style={styles.dropChip}>
@@ -129,7 +134,7 @@ export function BundleRow({
           {isPhone ? null : (
             <Pressable
               style={styles.menuBtn}
-              accessibilityLabel={`${bundle.name} bundle options`}
+              accessibilityLabel={t('bundle.optionsLabel', { name: bundle.name })}
               onPress={(e) => {
                 e.stopPropagation();
                 onMenu(e.nativeEvent.pageX, e.nativeEvent.pageY);

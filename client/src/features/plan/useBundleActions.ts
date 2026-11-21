@@ -19,12 +19,10 @@ import {
 } from '@/budget/data/api';
 import { planCreate, planDrop, planJoin, type DropPlan, type DropTarget } from '@/domain/bundleDrop';
 import type { Budget } from '@/domain/types';
+import { t } from './i18n';
 
 /** KVStore key: map of bundle id → expanded (collapsed by default, per device). */
 export const EXPANDED_BUNDLES_KEY = 'budget.plan.expandedBundles';
-/** Name given to a bundle created by dropping rows; its name field opens focused. */
-export const DEFAULT_BUNDLE_NAME = 'New bundle';
-
 export function useBundleActions(budget: Budget | undefined, budgetId: string | null | undefined) {
   const storage = useService(Tokens.Storage);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -81,7 +79,7 @@ export function useBundleActions(budget: Budget | undefined, budgetId: string | 
         const made = await createBundle({
           budgetId,
           groupId: op.groupId,
-          name: name ?? DEFAULT_BUNDLE_NAME,
+          name: name ?? t('bundle.defaultName'),
           categoryIds: op.categoryIds,
         }).unwrap();
         setOpen(made.id, true);

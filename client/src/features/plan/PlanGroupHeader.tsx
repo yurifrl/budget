@@ -17,6 +17,7 @@ import {
 } from '@/domain/people';
 import type { CategoryGroup } from '@/domain/types';
 import { useMoneyFormat } from '@/ui/moneyFormat';
+import { t } from './i18n';
 import { colors } from '@/ui/theme';
 import { styles } from './styles';
 import type { PlanGrid } from './types';
@@ -43,13 +44,13 @@ export function PlanGroupHeader({ grid, group }: { grid: PlanGrid; group: Catego
           onBlur={menus.commitRename}
           autoFocus
           style={styles.renameInput}
-          accessibilityLabel="Rename group"
+          accessibilityLabel={t('group.renameLabel')}
         />
       ) : (
         <Pressable
           style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
           onPress={() => groups.toggleGroupCollapsed(group.id)}
-          accessibilityLabel={`Toggle ${group.name} group`}>
+          accessibilityLabel={t('group.toggleLabel', { name: group.name })}>
           <Text style={styles.groupName}>
             {isCollapsed ? '▸' : '⌄'} {group.name}
           </Text>
@@ -57,7 +58,7 @@ export function PlanGroupHeader({ grid, group }: { grid: PlanGrid; group: Catego
             <View
               style={{ marginLeft: 8 }}
               accessible
-              accessibilityLabel={`Categories of ${groupOwners.map(personLabel).join(', ')}`}>
+              accessibilityLabel={t('group.ownersLabel', { names: groupOwners.map(personLabel).join(', ') })}>
               <AvatarStack people={groupOwners.map(toAvatarPerson)} max={3} size={16} ring={colors.bg} />
             </View>
           ) : null}
@@ -66,13 +67,13 @@ export function PlanGroupHeader({ grid, group }: { grid: PlanGrid; group: Catego
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Pressable
           style={styles.rowMenuBtn}
-          accessibilityLabel={`Add category to ${group.name}`}
+          accessibilityLabel={t('group.addCategoryLabel', { name: group.name })}
           onPress={() => add.openAddCategory(group.id)}>
           <Text style={styles.rowMenuText}>＋</Text>
         </Pressable>
         <Pressable
           style={styles.rowMenuBtn}
-          accessibilityLabel={`${group.name} group options`}
+          accessibilityLabel={t('group.optionsLabel', { name: group.name })}
           onPress={(e) => {
             const px = e.nativeEvent.pageX;
             const py = e.nativeEvent.pageY;

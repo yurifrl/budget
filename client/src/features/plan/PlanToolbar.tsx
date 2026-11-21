@@ -7,6 +7,7 @@ import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-na
 import { useAppDispatch, useAppSelector } from '@/state/hooks';
 
 import { formatMonth } from '@/domain/format';
+import { labels } from '@shared/i18n';
 import { formatPlanEditAge } from '@/state/planEdits';
 import {
   selectPlanFilter,
@@ -19,18 +20,21 @@ import {
 } from '@/state/ui';
 import { ChevronDownIcon, PlusCircleIcon, RedoIcon, UndoIcon } from '@/ui/icons';
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 import { InlineAddRow } from './InlineAddRow';
 import { recentCardPosition } from './planGeometry.logic';
 import { styles } from './styles';
 import type { PlanGrid } from './types';
 
-const FILTERS: { key: PlanFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'underfunded', label: 'Underfunded' },
-  { key: 'overfunded', label: 'Overfunded' },
-  { key: 'money-available', label: 'Money Available' },
-  { key: 'snoozed', label: 'Snoozed' },
-];
+const FILTERS: PlanFilter[] = ['all', 'underfunded', 'overfunded', 'money-available', 'snoozed'];
+/** Chip labels, resolved when read so they follow the active language. */
+const FILTER_LABELS: Record<PlanFilter, string> = labels(t, {
+  all: 'filter.all',
+  underfunded: 'filter.underfunded',
+  overfunded: 'filter.overfunded',
+  'money-available': 'filter.moneyAvailable',
+  snoozed: 'filter.snoozed',
+});
 
 type ToolbarGrid = Pick<PlanGrid, 'month' | 'add' | 'undo' | 'overlays' | 'anchorAt'>;
 
@@ -51,42 +55,42 @@ export function PlanToolbar({ grid }: { grid: ToolbarGrid }) {
         <Pressable
           style={styles.toolbarAdd}
           accessibilityRole="button"
-          accessibilityLabel="Add category group"
+          accessibilityLabel={t('group.addLabel')}
           onPress={() => add.setAddingGroup('toolbar')}>
           <PlusCircleIcon color={colors.white} />
-          <Text style={styles.toolbarAddText}>Category Group</Text>
+          <Text style={styles.toolbarAddText}>{t('toolbar.addGroup')}</Text>
         </Pressable>
         {add.addingGroup === 'toolbar' ? (
           <InlineAddRow
-            placeholder="Group name"
-            accessibilityLabel="New group name"
+            placeholder={t('group.newPlaceholder')}
+            accessibilityLabel={t('group.newLabel')}
             onCommit={add.commitAddGroup}
             onCancel={() => add.setAddingGroup(null)}
           />
         ) : null}
         <Pressable
           style={styles.toolbarLink}
-          accessibilityLabel="Undo last plan edit"
+          accessibilityLabel={t('toolbar.undoLabel')}
           disabled={!undo.canUndo}
           onPress={undoLastEdit}>
           <UndoIcon color={undo.canUndo ? colors.indigo2 : colors.muted} />
           <Text style={[styles.toolbarLinkText, !undo.canUndo && styles.viewsBtnDisabled]}>
-            Undo
+            {t('toolbar.undo')}
           </Text>
         </Pressable>
         <Pressable
           style={styles.toolbarLink}
-          accessibilityLabel="Redo last plan edit"
+          accessibilityLabel={t('toolbar.redoLabel')}
           disabled={!undo.canRedo}
           onPress={redoLastEdit}>
           <RedoIcon color={undo.canRedo ? colors.indigo2 : colors.muted} />
           <Text style={[styles.toolbarLinkText, !undo.canRedo && styles.viewsBtnDisabled]}>
-            Redo
+            {t('toolbar.redo')}
           </Text>
         </Pressable>
         <Pressable
           style={styles.toolbarLink}
-          accessibilityLabel="Recent moves"
+          accessibilityLabel={t('toolbar.recentLabel')}
           onPress={(e) => {
             if (recentOpen) setRecentOpen(null);
             else {
@@ -95,14 +99,14 @@ export function PlanToolbar({ grid }: { grid: ToolbarGrid }) {
               anchorAt(px, py, (x, y) => setRecentOpen({ x, y }));
             }
           }}>
-          <Text style={styles.toolbarLinkText}>🕐 Recent Moves</Text>
+          <Text style={styles.toolbarLinkText}>{t('toolbar.recent')}</Text>
         </Pressable>
         <View style={{ flex: 1 }} />
         <Pressable
           style={styles.viewsBtn}
-          accessibilityLabel="Views menu"
+          accessibilityLabel={t('toolbar.viewsLabel')}
           onPress={() => overlays.setViewsOpen((v) => !v)}>
-          <Text style={styles.viewsBtnText}>Views</Text>
+          <Text style={styles.viewsBtnText}>{t('toolbar.views')}</Text>
           <ChevronDownIcon color={colors.text} />
         </Pressable>
       </View>
@@ -123,18 +127,18 @@ function ViewsMenu({ onClose }: { onClose: () => void }) {
       <Pressable style={styles.viewsCard} onPress={() => undefined}>
         <Pressable
           style={styles.menuItem}
-          accessibilityLabel="Toggle progress bars"
+          accessibilityLabel={t('views.progressLabel')}
           onPress={() => dispatch(toggleProgressBars())}>
           <Text style={styles.menuItemText}>
-            {showProgressBars ? '✓ ' : '   '}Barras de progresso
+            {showProgressBars ? '✓ ' : '   '}{t('views.progress')}
           </Text>
         </Pressable>
         <Pressable
           style={styles.menuItem}
-          accessibilityLabel="Toggle hidden categories row"
+          accessibilityLabel={t('views.hiddenLabel')}
           onPress={() => dispatch(toggleHiddenCategories())}>
           <Text style={styles.menuItemText}>
-            {showHiddenRow ? '✓ ' : '   '}Categorias ocultas
+            {showHiddenRow ? '✓ ' : '   '}{t('views.hidden')}
           </Text>
         </Pressable>
       </Pressable>
@@ -150,15 +154,15 @@ function RecentMovesCard({ grid, anchor }: { grid: ToolbarGrid; anchor: { x: num
       <Pressable
         onPress={() => undefined}
         style={[styles.viewsCard, styles.recentCard, recentCardPosition(anchor, dims.width)]}>
-        <Text style={styles.menuTitle}>RECENT MOVES</Text>
+        <Text style={styles.menuTitle}>{t('recent.title')}</Text>
         {undo.recentMoves.length === 0 ? (
-          <Text style={[styles.menuItemText, styles.recentAge]}>No moves yet</Text>
+          <Text style={[styles.menuItemText, styles.recentAge]}>{t('recent.empty')}</Text>
         ) : (
           undo.recentMoves.map((e) => (
             <Pressable
               key={e.id}
               style={styles.menuItem}
-              accessibilityLabel={`Revert ${e.label}`}
+              accessibilityLabel={t('recent.revert', { label: e.label })}
               onPress={() => undo.revert(e.id)}>
               <View style={styles.recentRow}>
                 <Text style={styles.menuItemText} numberOfLines={1}>
@@ -180,12 +184,12 @@ function PlanFilterChips() {
   const filter = useAppSelector((s) => selectPlanFilter(s));
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} contentContainerStyle={{ gap: 8 }}>
-      {FILTERS.map((f) => (
+      {FILTERS.map((key) => (
         <Pressable
-          key={f.key}
-          onPress={() => dispatch(setPlanFilter(f.key))}
-          style={[styles.chip, filter === f.key && styles.chipActive]}>
-          <Text style={[styles.chipText, filter === f.key && { color: colors.white }]}>{f.label}</Text>
+          key={key}
+          onPress={() => dispatch(setPlanFilter(key))}
+          style={[styles.chip, filter === key && styles.chipActive]}>
+          <Text style={[styles.chipText, filter === key && { color: colors.white }]}>{FILTER_LABELS[key]}</Text>
         </Pressable>
       ))}
     </ScrollView>

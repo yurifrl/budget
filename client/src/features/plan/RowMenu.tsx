@@ -3,7 +3,9 @@ import { Pressable, Text, TextInput, type TextInputInstance, View } from 'react-
 
 import { personLabel, SHARED_LABEL, type Person } from '@/domain/people';
 import { PersonFace } from '@/ui/PersonFace';
+import { tCommon } from '@shared/i18n/common';
 import { useClampedMenuTop } from './BundleMenus';
+import { t } from './i18n';
 import { styles } from './styles';
 
 /**
@@ -65,8 +67,8 @@ export function RowMenu({
 
   useEffect(() => {
     if (desktop && renaming) {
-      const t = window.setTimeout(() => renameRef.current?.focus(), 0);
-      return () => window.clearTimeout(t);
+      const timer = window.setTimeout(() => renameRef.current?.focus(), 0);
+      return () => window.clearTimeout(timer);
     }
     return undefined;
   }, [desktop, renaming]);
@@ -89,8 +91,8 @@ export function RowMenu({
   const isGroup = menu.kind === 'group';
   const assignBlock =
     people.length > 0 ? (
-        <View accessibilityRole="menu" accessibilityLabel="Assign to">
-          <Text style={styles.menuSubhead}>{isGroup ? 'Assign group to…' : 'Assign to…'}</Text>
+        <View accessibilityRole="menu" accessibilityLabel={t('menu.assignLabel')}>
+          <Text style={styles.menuSubhead}>{isGroup ? t('menu.assignGroupHeading') : t('menu.assignHeading')}</Text>
           {[null, ...people].map((p) => {
             const label = p ? personLabel(p) : SHARED_LABEL;
             const on = currentOwnerId !== undefined && (p?.user_id ?? null) === currentOwnerId;
@@ -99,7 +101,7 @@ export function RowMenu({
                 key={p?.user_id ?? 'shared'}
                 style={[styles.menuItem, styles.menuPersonRow]}
                 accessibilityRole="menuitem"
-                accessibilityLabel={`Assign to ${label}`}
+                accessibilityLabel={t('menu.assignPersonLabel', { name: label })}
                 onPress={() => onAssign(p?.user_id ?? null)}>
                 <PersonFace person={p} size={18} />
                 <Text style={[styles.menuItemText, { flex: 1 }]} numberOfLines={1}>
@@ -127,22 +129,22 @@ export function RowMenu({
               onSubmitEditing={commitRename}
               onEndEditing={commitRename}
               style={styles.menuRenameInput}
-              accessibilityLabel="Rename category"
+              accessibilityLabel={t('row.renameLabel')}
             />
             <View style={styles.renameRow}>
               {isGroup ? null : (
                 <Pressable style={styles.menuItem} onPress={onHide ?? undefined} disabled={!onHide}>
-                  <Text style={styles.menuItemText}>Hide</Text>
+                  <Text style={styles.menuItemText}>{t('menu.hide')}</Text>
                 </Pressable>
               )}
               <Pressable style={styles.menuItem} onPress={onDelete}>
-                <Text style={styles.menuItemTextDanger}>Delete</Text>
+                <Text style={styles.menuItemTextDanger}>{tCommon('delete')}</Text>
               </Pressable>
               <Pressable style={styles.menuItem} onPress={() => setRenaming(false)}>
-                <Text style={styles.menuItemText}>Cancel</Text>
+                <Text style={styles.menuItemText}>{tCommon('cancel')}</Text>
               </Pressable>
               <Pressable style={styles.menuItem} onPress={commitRename}>
-                <Text style={styles.menuOk}>OK</Text>
+                <Text style={styles.menuOk}>{tCommon('ok')}</Text>
               </Pressable>
             </View>
             {bundleItems}
@@ -153,18 +155,18 @@ export function RowMenu({
             <Text style={styles.menuRowName}>{name}</Text>
             <Pressable style={styles.menuItem} onPress={onRename && !batch ? startRename : undefined} disabled={!onRename || batch}>
               <Text style={[styles.menuItemText, (!onRename || batch) && styles.viewsBtnDisabled]}>
-                Rename
+                {t('menu.rename')}
               </Text>
             </Pressable>
             {onHide ? (
               <Pressable style={styles.menuItem} onPress={onHide}>
-                <Text style={styles.menuItemText}>Hide</Text>
+                <Text style={styles.menuItemText}>{t('menu.hide')}</Text>
               </Pressable>
             ) : null}
             {bundleItems}
             {assignBlock}
             <Pressable style={styles.menuItem} onPress={onDelete}>
-              <Text style={styles.menuItemTextDanger}>Delete</Text>
+              <Text style={styles.menuItemTextDanger}>{tCommon('delete')}</Text>
             </Pressable>
           </View>
         )}
