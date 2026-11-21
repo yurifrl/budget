@@ -11,7 +11,7 @@ const { parseManifest } = require('./i18n-manifest.cjs') as { parseManifest: (te
 
 RuleTester.describe = describe;
 RuleTester.it = it;
-RuleTester.itOnly = it.only;
+// No RuleTester.itOnly: reading `it.only` throws under CI=true in bun ("`.only` is disabled in CI").
 
 const tester = new RuleTester({
   languageOptions: {
