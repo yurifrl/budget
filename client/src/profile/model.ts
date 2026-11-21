@@ -1,6 +1,8 @@
 /** Pure profile logic (no React, no network) — unit tested in model.test.ts. */
 import type { PersonAvatar } from '@/domain/avatar';
 
+import { t } from './i18n';
+
 export type Me = {
   id: string;
   email: string;
@@ -18,8 +20,8 @@ export type NameCheck = { ok: true; value: string } | { ok: false; error: string
 /** Mirror of the server rule (trimmed, 1..80) so the form can explain before sending. */
 export function checkDisplayName(raw: string): NameCheck {
   const value = raw.trim();
-  if (value.length === 0) return { ok: false, error: 'Name can’t be empty' };
-  if (value.length > NAME_MAX) return { ok: false, error: `Name must be ${NAME_MAX} characters or fewer` };
+  if (value.length === 0) return { ok: false, error: t('name.empty') };
+  if (value.length > NAME_MAX) return { ok: false, error: t('name.tooLong', { max: NAME_MAX }) };
   return { ok: true, value };
 }
 
@@ -73,10 +75,10 @@ export function displayName(me: Pick<Me, 'name' | 'email'>): string {
 
 /** Friendly text for an upload failure (server messages pass through when useful). */
 export function uploadErrorMessage(status: number | string | undefined, message: string | undefined): string {
-  if (status === 413) return 'That photo is too large (max 5 MB). Try a smaller one.';
-  if (status === 400) return message?.includes('type') ? 'Use a JPEG, PNG or WebP photo.' : 'We couldn’t read that image. Try another one.';
-  if (status === 'FETCH_ERROR') return 'Couldn’t reach the server. Check your connection and try again.';
-  return message || 'Upload failed. Please try again.';
+  if (status === 413) return t('upload.tooLarge');
+  if (status === 400) return message?.includes('type') ? t('upload.badType') : t('upload.unreadable');
+  if (status === 'FETCH_ERROR') return t('upload.offline');
+  return message || t('upload.failed');
 }
 
 /** A connected app (OAuth grant) as returned by GET /oauth/grants. */

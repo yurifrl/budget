@@ -6,6 +6,7 @@
 
 import type { MoneyFormat } from './format';
 import type { Cents } from './types';
+import { t } from './i18n';
 
 export interface BalanceEdit {
   /** What the balance field shows: the draft, else the formatted working balance. */
@@ -52,7 +53,7 @@ export interface AccountSavePatch {
  * when they changed.
  */
 export function accountSavePatch(form: AccountForm): { error: string } | { patch: AccountSavePatch } {
-  if (!form.name.trim()) return { error: 'nickname is required' };
+  if (!form.name.trim()) return { error: t('account.nicknameRequired') };
   return {
     patch: {
       name: form.name.trim(),

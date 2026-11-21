@@ -6,6 +6,7 @@
  */
 
 import { DEFAULT_MONEY_FORMAT, type MoneyFormat } from "./format";
+import { t } from "./i18n";
 import type { BudgetMonth } from "./zeroSum";
 
 export interface OverspendHint {
@@ -25,8 +26,8 @@ export function underfundedHint(
   if (underfunded <= 0) return null;
   const amount = fmt.formatMoney(underfunded);
   return {
-    label: `Underfunded ${amount}`,
-    detail: `${amount} more is needed to cover this card's debt`,
+    label: t('overspend.underfundedLabel', { amount }),
+    detail: t('overspend.underfundedDetail', { amount }),
   };
 }
 
@@ -40,8 +41,8 @@ export function creditOverspendHint(
   if (credit <= 0) return null;
   const amount = fmt.formatMoney(credit);
   return {
-    label: `${amount} on credit`,
-    detail: `${amount} spent on credit with no money assigned: added to card debt`,
+    label: t('overspend.creditLabel', { amount }),
+    detail: t('overspend.creditDetail', { amount }),
   };
 }
 

@@ -21,6 +21,7 @@ import { assignedInMonth } from '@/domain/engine';
 import { DEFAULT_MONEY_FORMAT, type MoneyFormat } from '@/domain/format';
 import { multiMoveMoneyUpdates, type MovePair } from '@/budget/data/ledger';
 import type { Budget, Cents, MonthKey } from '@/domain/types';
+import { t } from './i18n';
 import { BUDGET_UI_KEY } from './keys';
 import type { BudgetUiRootState } from './ui';
 
@@ -29,8 +30,6 @@ export const PLAN_EDIT_HISTORY_LIMIT = 50;
 
 /** How many entries the Recent Moves panel lists (most recent first). */
 export const RECENT_MOVES_LIMIT = 10;
-
-const RTA_LABEL = 'Ready to Assign';
 
 export type PlanEditKind = 'assign' | 'move' | 'auto-assign';
 
@@ -135,7 +134,7 @@ export function makeAssignEdit(
     kind: 'assign',
     budgetId,
     month,
-    label: `Assign ${delta > 0 ? `+${formatMoney(delta)}` : formatMoney(delta)} · ${cat.name}`,
+    label: t('edit.assign', { delta: delta > 0 ? `+${formatMoney(delta)}` : formatMoney(delta), category: cat.name }),
     updates: [{ categoryId, categoryName: cat.name, before, after: nextCents }],
   };
 }
@@ -158,14 +157,14 @@ export function makeMultiMoveEdit(
   const updates = multiMoveMoneyUpdates(budget, month, clean);
   if (updates.length === 0) return null;
   const nameOf = (id: string | null) =>
-    id === null ? RTA_LABEL : (budget.categories.find((c) => c.id === id)?.name ?? id);
+    id === null ? t('edit.readyToAssign') : (budget.categories.find((c) => c.id === id)?.name ?? id);
   const total = clean.reduce((sum, p) => sum + p.amount, 0);
   const side = (end: 'from' | 'to') =>
     [...new Set(clean.map((p) => nameOf(p[end])))].join(', ');
   const label =
     clean.length === 1
-      ? `Move ${formatMoney(total)} · ${nameOf(clean[0].from)} → ${nameOf(clean[0].to)}`
-      : `Move ${formatMoney(total)} · ${side('from')} → ${side('to')}`;
+      ? t('edit.move', { amount: formatMoney(total), from: nameOf(clean[0].from), to: nameOf(clean[0].to) })
+      : t('edit.move', { amount: formatMoney(total), from: side('from'), to: side('to') });
   return {
     kind: 'move',
     budgetId,
@@ -216,7 +215,7 @@ export function makeAutoAssignEdit(
     kind: 'auto-assign',
     budgetId,
     month,
-    label: `${strategyLabel} · ${updates.length} ${updates.length === 1 ? 'category' : 'categories'}`,
+    label: t('edit.autoAssign', { strategy: strategyLabel, count: updates.length }),
     updates,
   };
 }
@@ -224,12 +223,12 @@ export function makeAutoAssignEdit(
 /** Relative age for the Recent Moves list ("agora", "3m", "2h", "5d"). */
 export function formatPlanEditAge(at: number, now = Date.now()): string {
   const secs = Math.max(0, Math.round((now - at) / 1000));
-  if (secs < 60) return 'agora';
+  if (secs < 60) return t('edit.ageNow');
   const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m`;
+  if (mins < 60) return t('edit.ageMinutes', { count: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
+  if (hours < 24) return t('edit.ageHours', { count: hours });
+  return t('edit.ageDays', { count: Math.floor(hours / 24) });
 }
 
 export const selectPlanEdits = (s: BudgetUiRootState): PlanEditsState => s[BUDGET_UI_KEY].planEdits;

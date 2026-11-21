@@ -60,5 +60,6 @@ export async function loadAuthHeaders(
   secret: SecretStore | null = platformSecretStore,
 ): Promise<Record<string, string>> {
   const token = await loadSessionToken(storage, secret);
+  // eslint-disable-next-line budget-i18n/no-untranslated-string -- HTTP auth scheme, not UI text
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
