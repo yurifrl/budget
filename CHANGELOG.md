@@ -1,5 +1,21 @@
 # Changelog
 
+## v2026.11.21 2026-11-21 release
+
+### Changed
+
+- release: v2026.11.21
+- tasks: close budget-4ji, budget-id4, budget-7se, budget-fxc, budget-0dq, budget-hg2
+- save
+- fix(banks): paused shared-key notice no longer repeats the server's advice
+- feat(banks): Your Pluggy keys screen, connect gate and paused-bank guidance
+- fix(connections): review fixes for own Pluggy keys
+- docs: own Pluggy keys (key sets, paused connections, CREDENTIALS_ENCRYPTION_KEY)
+- feat(connections): own Pluggy keys, key set per connection, shared-key gate
+- fix(repo): anchor data/ in .gitignore so EAS uploads client/src/budget/data
+- backup: restore only the plan or only the register (sections)
+
+
 ## v2026.11.20-01 2026-11-20 release
 
 ### Changed
