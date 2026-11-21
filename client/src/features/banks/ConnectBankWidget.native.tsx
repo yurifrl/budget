@@ -12,7 +12,10 @@
 import { WebView } from 'react-native-webview';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 
-/** Bridges the widget's OAuth popup channel into the WebView message bus. */
+import { pluggyLanguage } from './model/connections';
+
+/** Bridges the widget's OAuth popup channel into the WebView message bus (code, not text). */
+// eslint-disable-next-line budget-i18n/no-untranslated-string -- JavaScript injected into the webview, not UI text
 const OAUTH_BRIDGE = `(function(){
   if (window.__syscdOauthBridge) return;
   window.__syscdOauthBridge = true;
@@ -31,13 +34,19 @@ export type ConnectBankWidgetProps = {
   onError: (message: string) => void;
 };
 
+/** The hosted widget page in the app's language (`language` query param, same 2-letter code as the web SDK). */
+function withLanguage(url: string): string {
+  if (/[?&]language=/.test(url)) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}language=${pluggyLanguage()}`;
+}
+
 export function ConnectBankWidget({ style, widgetUrl, onEvent }: ConnectBankWidgetProps) {
   return (
     <View style={style}>
       {widgetUrl ? (
         <WebView
           style={{ flex: 1 }}
-          source={{ uri: widgetUrl }}
+          source={{ uri: withLanguage(widgetUrl) }}
           injectedJavaScript={OAUTH_BRIDGE}
           onMessage={(event) => onEvent(event.nativeEvent.data)}
         />

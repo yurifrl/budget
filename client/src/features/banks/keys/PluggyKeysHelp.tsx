@@ -2,42 +2,39 @@
 
 import { Linking, StyleSheet, Text, View } from 'react-native';
 
+import { rich } from '@/ui/i18n/rich';
 import { colors, radius } from '@/ui/theme';
+import { t } from './i18n';
 import { MEUPLUGGY_CONNECTION_LIMIT } from './pluggyKeys.logic';
 
 const DASHBOARD_URL = 'https://dashboard.pluggy.ai';
 
-/** Steps 2 onwards; step 1 carries the dashboard link. */
-const STEPS: readonly string[] = [
-  'Create an application in the dashboard.',
-  'Copy its client id and client secret and paste them here. Pluggy shows the secret only once, so paste it straight away (lost it? create a new one there).',
-  'Then connect your bank here: in the connect window, pick MeuPluggy and sign in to it.',
-];
-
 export function PluggyKeysHelp() {
+  // Steps 2 onwards; step 1 carries the dashboard link. Built per render so the language is read live.
+  const steps = [t('help.step2'), t('help.step3'), t('help.step4')];
   return (
     <View style={styles.card}>
-      <Text style={styles.section}>HOW TO GET YOUR KEYS</Text>
-      <Text style={styles.body}>
-        The app reaches your bank through Pluggy, using keys that belong to you. Getting them takes a few minutes:
-      </Text>
+      <Text style={styles.section}>{t('help.title')}</Text>
+      <Text style={styles.body}>{t('help.intro')}</Text>
       <View style={styles.step}>
         <Text style={styles.num}>1.</Text>
         <Text style={styles.body}>
-          {'Sign up for free at '}
-          <Text style={styles.link} accessibilityRole="link" onPress={() => void Linking.openURL(DASHBOARD_URL)}>
-            dashboard.pluggy.ai
-          </Text>
-          {'. This is MeuPluggy, Pluggy’s free route for personal use.'}
+          {rich(t('help.step1'), {
+            link: (children) => (
+              <Text style={styles.link} accessibilityRole="link" onPress={() => void Linking.openURL(DASHBOARD_URL)}>
+                {children}
+              </Text>
+            ),
+          })}
         </Text>
       </View>
-      {STEPS.map((step, i) => (
+      {steps.map((step, i) => (
         <View key={step} style={styles.step}>
           <Text style={styles.num}>{`${i + 2}.`}</Text>
           <Text style={styles.body}>{step}</Text>
         </View>
       ))}
-      <Text style={styles.limit}>{`MeuPluggy allows up to ${MEUPLUGGY_CONNECTION_LIMIT} bank connections.`}</Text>
+      <Text style={styles.limit}>{t('help.limit', { limit: MEUPLUGGY_CONNECTION_LIMIT })}</Text>
     </View>
   );
 }

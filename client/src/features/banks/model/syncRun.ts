@@ -8,6 +8,8 @@
 
 import type { ConnectionJson, SyncCountsJson, SyncRunJson, SyncState, SyncStatusJson } from '@/budget/data/connections';
 
+import { t } from '../i18n';
+
 export type SyncRunOutcome =
   | { kind: 'done'; run: SyncRunJson | null }
   | { kind: 'offline' }
@@ -45,29 +47,36 @@ export async function awaitSyncRun(
   }
 }
 
-const countsLine = (c: Partial<SyncCountsJson>): string => {
-  const { added = 0, updated = 0, deleted = 0 } = c;
-  return added + updated + deleted === 0 ? 'nothing new' : `${added} added · ${updated} updated · ${deleted} removed`;
-};
-
 /** Report (green) or error (red) text for a finished request. `label` is "Sync" or "Re-import". */
 export function describeSyncOutcome(
   outcome: SyncRunOutcome,
   label: 'Sync' | 'Re-import',
 ): { kind: 'report' | 'error'; text: string } {
+  // One whole sentence per label: word order and verbs differ between languages.
+  const sync = label === 'Sync';
   if (outcome.kind === 'offline') {
-    return { kind: 'report', text: `Background sync is offline — ${label.toLowerCase()} queued, it will run when the scheduler recovers.` };
+    return { kind: 'report', text: sync ? t('syncRun.sync.offline') : t('syncRun.reimport.offline') };
   }
   if (outcome.kind === 'timeout') {
-    return { kind: 'report', text: `${label} is still running in the background.` };
+    return { kind: 'report', text: sync ? t('syncRun.sync.timeout') : t('syncRun.reimport.timeout') };
   }
   const run = outcome.run;
-  if (!run) return { kind: 'report', text: `${label} finished.` };
-  if (run.status === 'failed') return { kind: 'error', text: run.user_message ?? `${label} failed. Try again later.` };
-  if (run.status === 'cancelled') return { kind: 'report', text: `${label} was cancelled.` };
+  if (!run) return { kind: 'report', text: sync ? t('syncRun.sync.finished') : t('syncRun.reimport.finished') };
+  // `user_message` is the server's own sentence (stored in English); shown as is until it is mapped by code.
+  if (run.status === 'failed') {
+    return { kind: 'error', text: run.user_message ?? (sync ? t('syncRun.sync.failed') : t('syncRun.reimport.failed')) };
+  }
+  if (run.status === 'cancelled') {
+    return { kind: 'report', text: sync ? t('syncRun.sync.cancelled') : t('syncRun.reimport.cancelled') };
+  }
   // Succeeded: a notice (e.g. quota paused) wins over counts.
   if (run.user_message) return { kind: 'report', text: run.user_message };
-  return { kind: 'report', text: `${label} complete — ${countsLine(run.result ?? {})}` };
+  const { added = 0, updated = 0, deleted = 0 }: Partial<SyncCountsJson> = run.result ?? {};
+  const counts = { added, updated, deleted };
+  if (added + updated + deleted === 0) {
+    return { kind: 'report', text: sync ? t('syncRun.sync.completeNothing') : t('syncRun.reimport.completeNothing') };
+  }
+  return { kind: 'report', text: sync ? t('syncRun.sync.completeCounts', counts) : t('syncRun.reimport.completeCounts', counts) };
 }
 
 export type StatusTone = 'ok' | 'warn' | 'bad' | 'off';
@@ -76,30 +85,30 @@ export type StatusTone = 'ok' | 'warn' | 'bad' | 'off';
 export function syncStateView(state: SyncState): { label: string; tone: StatusTone } {
   switch (state) {
     case 'connected':
-      return { label: 'Synced', tone: 'ok' };
+      return { label: t('status.synced'), tone: 'ok' };
     case 'syncing':
-      return { label: 'Syncing…', tone: 'ok' };
+      return { label: t('status.syncing'), tone: 'ok' };
     case 'queued':
-      return { label: 'Queued', tone: 'warn' };
+      return { label: t('status.queued'), tone: 'warn' };
     case 'queued_offline':
-      return { label: 'Queued · scheduler offline', tone: 'warn' };
+      return { label: t('status.queuedOffline'), tone: 'warn' };
     case 'reconnect':
-      return { label: 'Reconnect', tone: 'warn' };
+      return { label: t('status.reconnect'), tone: 'warn' };
     case 'quota':
-      return { label: 'Bank limit reached', tone: 'warn' };
+      return { label: t('status.limitReached'), tone: 'warn' };
     case 'paused':
-      return { label: 'Paused · needs your keys', tone: 'warn' };
+      return { label: t('status.paused'), tone: 'warn' };
     case 'error':
-      return { label: 'Sync error', tone: 'bad' };
+      return { label: t('status.error'), tone: 'bad' };
     default:
-      return { label: 'Disconnected', tone: 'off' };
+      return { label: t('status.disconnected'), tone: 'off' };
   }
 }
 
 /** Banner text when the background scheduler is unreachable; null when healthy. */
 export function schedulerBanner(status: Pick<SyncStatusJson, 'scheduler_degraded'> | undefined): string | null {
   return status?.scheduler_degraded
-    ? 'Background sync is offline. Syncs are queued and will run when it recovers — nothing is lost.'
+    ? t('syncRun.schedulerBanner')
     : null;
 }
 

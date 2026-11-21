@@ -14,6 +14,8 @@ import {
 
 import type { ConnectionCredentialsJson, ConnectionJson } from '@/budget/data/connections';
 
+import { t } from './i18n';
+
 /** The keys screen route. `?reason=connect` = the user came from a blocked connect. */
 export const PLUGGY_KEYS_ROUTE = '/pluggy-keys';
 export const PLUGGY_KEYS_FROM_CONNECT = `${PLUGGY_KEYS_ROUTE}?reason=connect`;
@@ -83,8 +85,8 @@ export function apiErrorCode(error: unknown): string | undefined {
 
 /** Check before sending: both fields are required (the server trims too). */
 export function checkKeysInput(clientId: string, clientSecret: string): KeysFormError | null {
-  if (clientId.trim() === '') return { field: 'clientId', message: 'Enter the client id from your Pluggy application.' };
-  if (clientSecret.trim() === '') return { field: 'clientSecret', message: 'Enter the client secret from your Pluggy application.' };
+  if (clientId.trim() === '') return { field: 'clientId', message: t('form.clientIdRequired') };
+  if (clientSecret.trim() === '') return { field: 'clientSecret', message: t('form.clientSecretRequired') };
   return null;
 }
 
@@ -96,30 +98,30 @@ export function saveErrorView(error: unknown): KeysFormError {
     case INVALID_CREDENTIALS:
       return {
         field: 'clientSecret',
-        message: 'Pluggy did not accept this client id and secret. Check both (copy them again from your application) and try again.',
+        message: t('form.invalidCredentials'),
       };
     case CREDENTIALS_KEY_MISSING:
       return {
         field: 'form',
-        message: 'This server cannot store keys yet (its encryption key is not set up). Ask the admin, then try again.',
+        message: t('form.keyMissing'),
       };
     case 'invalid_input': {
       // The validator names the field first: "clientId is invalid (...)".
-      const message = serverMessage ?? 'Check the client id and secret.';
-      if (/^clientSecret\b/.test(message)) return { field: 'clientSecret', message: 'The client secret is too long or empty.' };
-      if (/^clientId\b/.test(message)) return { field: 'clientId', message: 'The client id is too long or empty.' };
+      const message = serverMessage ?? t('form.inputFallback');
+      if (/^clientSecret\b/.test(message)) return { field: 'clientSecret', message: t('form.secretInvalid') };
+      if (/^clientId\b/.test(message)) return { field: 'clientId', message: t('form.clientIdInvalid') };
       return { field: 'form', message };
     }
     default:
-      if (e.status === 'FETCH_ERROR') return { field: 'form', message: 'Could not reach the server. Check your connection and try again.' };
-      return { field: 'form', message: serverMessage ?? 'Could not save your keys. Try again.' };
+      if (e.status === 'FETCH_ERROR') return { field: 'form', message: t('form.unreachable') };
+      return { field: 'form', message: serverMessage ?? t('form.saveFailed') };
   }
 }
 
 /** What a failed remove means (always a form-level message). */
 export function deleteErrorMessage(error: unknown): string {
   const message = asApiError(error).message;
-  return typeof message === 'string' && message !== '' ? message : 'Could not remove your keys. Try again.';
+  return typeof message === 'string' && message !== '' ? message : t('form.removeFailed');
 }
 
 /**
@@ -166,16 +168,15 @@ export function pausedGuidance(
   if (row.status !== 'paused') return null;
   if (row.key_source === 'own') {
     return {
-      why: row.status_message ?? 'Paused: the Pluggy keys this bank was connected with are no longer saved.',
-      todo: 'Save the same client id and secret again on Your Pluggy keys and it resumes by itself.',
-      actionLabel: 'Your Pluggy keys',
+      // `status_message` is the server's sentence (stored in English): shown as is until it is mapped by code.
+      why: row.status_message ?? t('paused.ownWhy'),
+      todo: t('paused.ownTodo'),
+      actionLabel: t('paused.ownAction'),
     };
   }
   return {
-    why:
-      row.status_message ??
-      "Paused: this bank uses the app's shared Pluggy keys, which are not available for your account. Add your own Pluggy keys and connect the bank again.",
-    todo: 'Or ask the admin to turn the shared keys back on for you: the bank then resumes by itself.',
-    actionLabel: 'Add your Pluggy keys',
+    why: row.status_message ?? t('paused.sharedWhy'),
+    todo: t('paused.sharedTodo'),
+    actionLabel: t('paused.sharedAction'),
   };
 }

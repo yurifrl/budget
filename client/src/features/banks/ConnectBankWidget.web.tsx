@@ -13,6 +13,8 @@ import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { PluggyConnect } from 'pluggy-connect-sdk';
 import type { Item } from 'pluggy-js';
 
+import { pluggyLanguage } from './model/connections';
+
 export type ConnectBankWidgetProps = {
   style?: StyleProp<ViewStyle>;
   widgetUrl: string | null;
@@ -43,6 +45,8 @@ export function ConnectBankWidget({ style, widgetUrl, connectToken, onEvent, onE
       // institution list — the only way to exercise real login flows without
       // live credentials.
       includeSandbox: true,
+      // The widget's own language follows the app's (the SDK takes a 2-letter ISO code).
+      language: pluggyLanguage(),
       onEvent: (payload: { event?: string; item?: Item }) => {
         // The SDK never emits `SUCCESS` through onEvent — events are progress
         // signals (SUBMITTED_*, LOGIN_SUCCESS, ITEM_RESPONSE, …), and the

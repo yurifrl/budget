@@ -8,10 +8,13 @@
  * are classified.
  */
 
+import { getLocale } from '@shared/i18n';
+
 import type { AvatarPerson } from '@/domain/avatar';
 
 import type { CreditDetailsJson, LinkedByJson } from '@/budget/data/connections';
 import { personLabel, toAvatarPerson } from '@/domain/people';
+import { t } from '../i18n';
 
 /**
  * Generic connection lifecycle statuses (server/connections/types.ts) that
@@ -28,17 +31,17 @@ export function requiresReauth(status: string): boolean {
 export function connectionStatusView(status: string): { label: string; tone: 'ok' | 'warn' | 'bad' | 'off' } {
   switch (status) {
     case 'connected':
-      return { label: 'Synced', tone: 'ok' };
+      return { label: t('status.synced'), tone: 'ok' };
     case 'unauthorized':
-      return { label: 'Action needed', tone: 'warn' };
+      return { label: t('status.actionNeeded'), tone: 'warn' };
     case 'quota_exhausted':
-      return { label: 'Bank limit reached', tone: 'warn' };
+      return { label: t('status.limitReached'), tone: 'warn' };
     case 'paused':
-      return { label: 'Paused · needs your keys', tone: 'warn' };
+      return { label: t('status.paused'), tone: 'warn' };
     case 'error':
-      return { label: 'Sync error', tone: 'bad' };
+      return { label: t('status.error'), tone: 'bad' };
     default:
-      return { label: 'Disconnected', tone: 'off' };
+      return { label: t('status.disconnected'), tone: 'off' };
   }
 }
 
@@ -100,12 +103,12 @@ export function classifyWidgetMessage(data: unknown): WidgetOutcome | null {
   }
   const text = widgetMessageText(data);
   if (!text) return null;
-  const t = text.toLowerCase();
+  const lower = text.toLowerCase();
   // AUTH/OAUTH statuses are flow stages, not outcomes (the OAuth window
   // posts back over the same channel once it finishes).
-  if (/\b(auth|oauth)\b/.test(t)) return null;
-  if (t.includes('connected') || t.includes('success')) return 'connected';
-  if (t.includes('cancel') || t.includes('close')) return 'closed';
+  if (/\b(auth|oauth)\b/.test(lower)) return null;
+  if (lower.includes('connected') || lower.includes('success')) return 'connected';
+  if (lower.includes('cancel') || lower.includes('close')) return 'closed';
   return null;
 }
 
@@ -153,13 +156,19 @@ function parseWidgetData(data: unknown): unknown {
 
 /** Short label for a sync window in days (0 = all history). */
 export function syncWindowLabel(days: number): string {
-  if (days === 0) return 'All history';
-  if (days === 365) return '1 year';
-  return `${days}d`;
+  if (days === 0) return t('syncWindow.all');
+  if (days === 365) return t('syncWindow.year');
+  return t('syncWindow.days', { days });
 }
 
-const PROVIDER_UNREADABLE =
-  "Couldn't sync with the bank — the provider returned data we couldn't read. We'll retry on the next sync.";
+/**
+ * Language code the Pluggy Connect widget (SDK `language` option, hosted
+ * widget `language` query param) expects for the active locale: a 2-letter
+ * ISO code, `pt` for pt-BR.
+ */
+export function pluggyLanguage(): 'pt' | 'en' {
+  return getLocale() === 'pt-BR' ? 'pt' : 'en';
+}
 
 /**
  * Human message for a connection error banner. Raw provider validation dumps
@@ -168,7 +177,7 @@ const PROVIDER_UNREADABLE =
  */
 export function humanizeConnectionError(message: string): string {
   if (/^provider request failed:\s*\[\s*\{/.test(message) || /"code"\s*:\s*"invalid_type"/.test(message)) {
-    return PROVIDER_UNREADABLE;
+    return t('error.providerUnreadable');
   }
   return message;
 }
@@ -224,10 +233,12 @@ export function creditSummary(
   const v = creditView(credit);
   if (!v) return null;
   const parts: string[] = [];
-  if (v.billCents != null) parts.push(`Bill ${fmt(v.billCents)}${v.due ? ` · due ${v.due}` : ''}`);
-  else if (v.due) parts.push(`due ${v.due}`);
-  if (v.usedCents != null && v.limitCents != null) parts.push(`limit used ${fmt(v.usedCents)} / ${fmt(v.limitCents)}`);
-  else if (v.limitCents != null) parts.push(`limit ${fmt(v.limitCents)}`);
+  if (v.billCents != null) {
+    parts.push(v.due ? t('credit.billDue', { bill: fmt(v.billCents), due: v.due }) : t('credit.bill', { bill: fmt(v.billCents) }));
+  } else if (v.due) parts.push(t('credit.due', { due: v.due }));
+  if (v.usedCents != null && v.limitCents != null) {
+    parts.push(t('credit.limitUsed', { used: fmt(v.usedCents), limit: fmt(v.limitCents) }));
+  } else if (v.limitCents != null) parts.push(t('credit.limit', { limit: fmt(v.limitCents) }));
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 

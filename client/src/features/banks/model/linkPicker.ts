@@ -10,6 +10,8 @@ import type { ConnectionAccountSummaryJson, ConnectionUpstreamJson, UpstreamAcco
 import type { AccountRow } from '@/budget/data/rows';
 import { milliToCents } from '@/budget/data/mapping';
 import { CASH_ACCOUNT_TYPES } from '@/domain/types';
+import { labels } from '@shared/i18n';
+import { t } from '../i18n';
 import { creditView, type CreditView } from './connections';
 
 /** Budget-side working balance (cleared + uncleared) in cents. */
@@ -53,32 +55,32 @@ const CREDIT_TYPES: ReadonlySet<string> = new Set(['creditCard']);
  * assets…) are ambiguous, so they never warn. Never blocks the link.
  */
 export function typeMismatchWarning(budgetType: string, upstreamType: 'BANK' | 'CREDIT'): string | null {
-  if (upstreamType === 'CREDIT' && CASH_ACCOUNT_TYPES.has(budgetType)) return 'This is a credit card, but the budget account is a cash account';
-  if (upstreamType === 'BANK' && CREDIT_TYPES.has(budgetType)) return 'This is a bank account, but the budget account is a credit card';
+  if (upstreamType === 'CREDIT' && CASH_ACCOUNT_TYPES.has(budgetType)) return t('picker.creditToCash');
+  if (upstreamType === 'BANK' && CREDIT_TYPES.has(budgetType)) return t('picker.bankToCredit');
   return null;
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  checking: 'Checking',
-  savings: 'Savings',
-  cash: 'Cash',
-  creditCard: 'Credit card',
-  lineOfCredit: 'Line of credit',
-  otherAsset: 'Other asset',
-  otherLiability: 'Other liability',
-  mortgage: 'Mortgage',
-  autoLoan: 'Auto loan',
-  studentLoan: 'Student loan',
-  personalLoan: 'Personal loan',
-  medicalDebt: 'Medical debt',
-};
+const TYPE_LABELS: Record<string, string> = labels(t, {
+  checking: 'linkType.checking',
+  savings: 'linkType.savings',
+  cash: 'linkType.cash',
+  creditCard: 'linkType.creditCard',
+  lineOfCredit: 'linkType.lineOfCredit',
+  otherAsset: 'linkType.otherAsset',
+  otherLiability: 'linkType.otherLiability',
+  mortgage: 'linkType.mortgage',
+  autoLoan: 'linkType.autoLoan',
+  studentLoan: 'linkType.studentLoan',
+  personalLoan: 'linkType.personalLoan',
+  medicalDebt: 'linkType.medicalDebt',
+});
 
 export function accountTypeLabel(type: string): string {
-  return TYPE_LABELS[type] ?? 'Account';
+  return TYPE_LABELS[type] ?? t('linkType.account');
 }
 
 export function upstreamTypeLabel(type: 'BANK' | 'CREDIT'): string {
-  return type === 'CREDIT' ? 'Credit card' : 'Bank account';
+  return type === 'CREDIT' ? t('linkType.creditCard') : t('picker.bankAccount');
 }
 
 /** One selectable (or disabled) row of the picker. */
@@ -130,7 +132,7 @@ export function upstreamOption(
     balanceCents: credit ? null : up.balanceCents,
     credit,
     hint: target ? matchHint(workingBalanceCents(target), comparableBankCents(up)) : null,
-    linkedTo: up.linkedAccountId != null && up.linkedAccountId !== target?.id ? (linkedAccount?.name ?? 'another account') : null,
+    linkedTo: up.linkedAccountId != null && up.linkedAccountId !== target?.id ? (linkedAccount?.name ?? t('picker.anotherAccount')) : null,
     warning: target ? typeMismatchWarning(target.type, up.type) : null,
   };
 }
@@ -146,7 +148,7 @@ export function upstreamOptionGroups(
     return {
       key: entry.connection.id,
       label,
-      unavailable: entry.accounts == null ? `Could not load accounts from ${label} — sync or reconnect` : null,
+      unavailable: entry.accounts == null ? t('picker.unavailable', { label }) : null,
       // Order is the bank's own: re-sorting by match would make rows jump as balances change.
       options: (entry.accounts ?? []).map((a) => upstreamOption(entry.connection.id, label, a, target, budgetAccounts)),
     };
@@ -168,7 +170,7 @@ export function accountOptionGroups(
       const hit = (entry.accounts ?? []).find((u) => u.linkedAccountId === acct.id);
       if (hit) return hit.name;
     }
-    return acct.institution ?? 'a bank account';
+    return acct.institution ?? t('picker.aBankAccount');
   };
   const options = budgetAccounts
     .filter((a) => !a.closed && !a.deleted)
@@ -183,7 +185,7 @@ export function accountOptionGroups(
       linkedTo: a.connection_id != null ? bankNameFor(a) : null,
       warning: typeMismatchWarning(a.type, bank.type),
     }));
-  return [{ key: 'budget', label: 'Budget accounts', unavailable: null, options }];
+  return [{ key: 'budget', label: t('picker.budgetAccounts'), unavailable: null, options }];
 }
 
 /**

@@ -1,0 +1,7 @@
+{
+  "files": [
+    "src/features/banks/*.{ts,tsx}",
+    "src/features/banks/model/**/*.{ts,tsx}",
+    "src/features/banks/keys/**/*.{ts,tsx}"
+  ]
+}

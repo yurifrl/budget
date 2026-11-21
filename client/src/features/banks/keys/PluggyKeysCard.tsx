@@ -6,9 +6,12 @@
 
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { PasswordField } from '@/features/auth';
 import { colors, radius } from '@/ui/theme';
 import { formatSyncStamp } from '../model/connections';
+import { t } from './i18n';
 import type { PluggyKeysState } from './usePluggyKeys';
 
 export function PluggyKeysCard({ keys }: { keys: PluggyKeysState }) {
@@ -22,8 +25,8 @@ export function PluggyKeysCard({ keys }: { keys: PluggyKeysState }) {
   if (keys.mode === 'failed') {
     return (
       <View style={styles.card}>
-        <Text style={styles.errorText}>Could not load your keys.</Text>
-        <Button label="Retry" onPress={() => void keys.retry()} />
+        <Text style={styles.errorText}>{t('card.loadFailed')}</Text>
+        <Button label={tCommon('retry')} onPress={() => void keys.retry()} />
       </View>
     );
   }
@@ -34,26 +37,24 @@ function SavedKeys({ keys }: { keys: PluggyKeysState }) {
   const { credentials } = keys;
   return (
     <View style={styles.card}>
-      <Text style={styles.section}>YOUR KEYS</Text>
-      <Row label="Client id" value={credentials?.clientId ?? ''} />
-      <Row label="Client secret" value="Saved (hidden)" />
-      {credentials?.updatedAt ? <Text style={styles.muted}>{`Saved ${formatSyncStamp(credentials.updatedAt)}`}</Text> : null}
+      <Text style={styles.section}>{t('card.yourKeys')}</Text>
+      <Row label={t('card.clientId')} value={credentials?.clientId ?? ''} />
+      <Row label={t('card.clientSecret')} value={t('card.secretSaved')} />
+      {credentials?.updatedAt ? <Text style={styles.muted}>{t('card.savedAt', { stamp: formatSyncStamp(credentials.updatedAt) })}</Text> : null}
       {keys.notice ? <Text style={styles.okText}>{keys.notice}</Text> : null}
       {keys.error?.field === 'form' ? <Text style={styles.errorText}>{keys.error.message}</Text> : null}
       {keys.confirmingRemove ? (
         <View style={styles.confirm}>
-          <Text style={styles.body}>
-            Remove your keys? Banks connected with them stop syncing (paused, not deleted) until you save the same keys again.
-          </Text>
+          <Text style={styles.body}>{t('card.removeConfirm')}</Text>
           <View style={styles.row}>
-            <Button label="Cancel" onPress={() => keys.setConfirmingRemove(false)} grow />
-            <Button label={keys.removing ? 'Removing…' : 'Remove keys'} danger busy={keys.removing} onPress={() => void keys.remove()} grow />
+            <Button label={tCommon('cancel')} onPress={() => keys.setConfirmingRemove(false)} grow />
+            <Button label={keys.removing ? t('card.removing') : t('card.removeKeys')} danger busy={keys.removing} onPress={() => void keys.remove()} grow />
           </View>
         </View>
       ) : (
         <View style={styles.row}>
-          <Button label="Replace keys" onPress={keys.startReplace} grow />
-          <Button label="Remove" danger onPress={() => keys.setConfirmingRemove(true)} grow />
+          <Button label={t('card.replaceKeys')} onPress={keys.startReplace} grow />
+          <Button label={tCommon('remove')} danger onPress={() => keys.setConfirmingRemove(true)} grow />
         </View>
       )}
     </View>
@@ -64,22 +65,22 @@ function KeysForm({ keys }: { keys: PluggyKeysState }) {
   const { error } = keys;
   return (
     <View style={styles.card}>
-      <Text style={styles.section}>{keys.mode === 'replacing' ? 'REPLACE YOUR KEYS' : 'ADD YOUR KEYS'}</Text>
+      <Text style={styles.section}>{keys.mode === 'replacing' ? t('card.replaceTitle') : t('card.addTitle')}</Text>
       {keys.notice ? <Text style={styles.okText}>{keys.notice}</Text> : null}
       <PasswordField
-        label="Client id"
+        label={t('card.clientId')}
         value={keys.clientId}
         onChangeText={keys.setClientId}
         autoCapitalize="none"
         autoCorrect={false}
         autoComplete="off"
         spellCheck={false}
-        placeholder="e.g. 3f2a…"
+        placeholder={t('card.clientIdPlaceholder')}
         invalid={error?.field === 'clientId'}
       />
       {error?.field === 'clientId' ? <Text style={styles.errorText}>{error.message}</Text> : null}
       <PasswordField
-        label="Client secret"
+        label={t('card.clientSecret')}
         value={keys.clientSecret}
         onChangeText={keys.setClientSecret}
         secureTextEntry
@@ -88,17 +89,17 @@ function KeysForm({ keys }: { keys: PluggyKeysState }) {
         autoComplete="off"
         textContentType="none"
         spellCheck={false}
-        placeholder={keys.mode === 'replacing' ? 'Paste the new secret' : 'Paste the secret'}
+        placeholder={keys.mode === 'replacing' ? t('card.secretPlaceholderNew') : t('card.secretPlaceholder')}
         returnKeyType="go"
         onSubmitEditing={() => void keys.save()}
         invalid={error?.field === 'clientSecret'}
       />
       {error?.field === 'clientSecret' ? <Text style={styles.errorText}>{error.message}</Text> : null}
-      <Text style={styles.muted}>Pluggy checks the pair before it is saved. The secret is stored encrypted and never shown again.</Text>
+      <Text style={styles.muted}>{t('card.secretHint')}</Text>
       {error?.field === 'form' ? <Text style={styles.errorText}>{error.message}</Text> : null}
       <View style={styles.row}>
-        {keys.mode === 'replacing' ? <Button label="Cancel" onPress={keys.cancelReplace} grow /> : null}
-        <Button label={keys.saving ? 'Checking with Pluggy…' : 'Save keys'} primary busy={keys.saving} onPress={() => void keys.save()} grow />
+        {keys.mode === 'replacing' ? <Button label={tCommon('cancel')} onPress={keys.cancelReplace} grow /> : null}
+        <Button label={keys.saving ? t('card.checking') : t('card.saveKeys')} primary busy={keys.saving} onPress={() => void keys.save()} grow />
       </View>
     </View>
   );
