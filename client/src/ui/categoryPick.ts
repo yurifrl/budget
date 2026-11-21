@@ -8,6 +8,8 @@
 import { categoryLabel } from '@/domain/bundles';
 import type { Bundle, Category, CategoryGroup } from '@/domain/types';
 
+import { t } from './text/i18n';
+
 /** Picker search: matches the category name or its bundle name (case-insensitive). */
 export function matchesCategoryQuery(
   category: Pick<Category, 'name' | 'bundleId'>,
@@ -63,7 +65,7 @@ export function buildCategoryPickItems({
     rows.push({ key: '__selected__', categoryId: current.id, label: categoryLabel(current, bundles), checked: true });
   }
   if (rta) {
-    rows.push({ key: '__rta__', categoryId: null, label: 'Ready to Assign', checked: selectedId === null });
+    rows.push({ key: '__rta__', categoryId: null, label: t('category.readyToAssign'), checked: selectedId === null });
   }
   for (const g of groups) {
     for (const cat of categories) {

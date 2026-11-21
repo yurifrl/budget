@@ -12,16 +12,20 @@ import { IconSymbol } from '@/ui/icon-symbol';
 import { colors, radius } from '@/ui/theme';
 
 import logo from '../../../assets/images/logo.png';
+import { t } from '../i18n';
 import { SettingsMenu, type MenuPane } from '../SettingsMenu';
 import { RailAccounts } from './RailAccounts';
 
+// eslint-disable-next-line budget-i18n/no-untranslated-string -- brand name, not translated
 const APP_TITLE = 'Budget';
 
-const NAV_LINKS = [
-  { route: '/plan', label: 'Plan', icon: 'list.bullet' },
-  { route: '/reflect', label: 'Reflect', icon: 'chart.bar.fill' },
-  { route: '/accounts', label: 'All Accounts', icon: 'building.columns.fill' },
-] as const;
+/** Built per render: the labels follow the active language. */
+const navLinks = () =>
+  [
+    { route: '/plan', label: t('rail.plan'), icon: 'list.bullet' },
+    { route: '/reflect', label: t('rail.reflect'), icon: 'chart.bar.fill' },
+    { route: '/accounts', label: t('rail.allAccounts'), icon: 'building.columns.fill' },
+  ] as const;
 
 /**
  * Left rail (desktop) / drawer content (tablet & phone), top to bottom:
@@ -75,13 +79,13 @@ export function BudgetRail({
             style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
             onPress={() => onSetCollapsed?.(!collapsed)}
             accessibilityRole="button"
-            accessibilityLabel={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            accessibilityLabel={collapsed ? t('rail.expand') : t('rail.collapse')}>
             <IconSymbol size={18} name="sidebar.left" color={colors.muted} style={SIDEBAR_ICON_FLIP} />
           </Pressable>
         ) : null}
       </View>
       <View style={styles.nav}>
-        {NAV_LINKS.map((l) => {
+        {navLinks().map((l) => {
           const active = pathname.startsWith(l.route);
           return (
             <Link key={l.route} href={l.route} onPress={() => onNavigate()} accessibilityLabel={l.label} asChild>

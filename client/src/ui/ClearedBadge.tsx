@@ -18,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ClearedStatus } from '@/domain/types';
 import { colors } from '@/ui/theme';
 
+import { t } from './text/i18n';
+
 const GLYPH: Record<ClearedStatus, keyof typeof Ionicons.glyphMap> = {
   uncleared: 'ellipse-outline',
   cleared: 'checkmark-circle',
@@ -29,6 +31,11 @@ const TINT: Record<ClearedStatus, string> = {
   cleared: colors.green,
   reconciled: colors.indigo2,
 };
+
+function statusLabel(status: ClearedStatus): string {
+  if (status === 'reconciled') return t('cleared.statusReconciled');
+  return status === 'cleared' ? t('cleared.statusCleared') : t('cleared.statusUncleared');
+}
 
 /** Press event shape both RN-web SyntheticEvent and the native responder event satisfy. */
 interface BadgePressEvent {
@@ -60,9 +67,9 @@ export function ClearedBadge({
         style={styles.slot}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel="Approve transaction">
+        accessibilityLabel={t('cleared.approve')}>
         {compact ? (
-          <Text style={[styles.compactC, { color: colors.indigo2 }]}>C</Text>
+          <Text style={[styles.compactC, { color: colors.indigo2 }]}>{t('cleared.mark')}</Text>
         ) : (
           <Ionicons name="checkmark-done" size={15} color={colors.indigo2} />
         )}
@@ -78,9 +85,9 @@ export function ClearedBadge({
         hitSlop={6}
         accessibilityRole="button"
         accessibilityState={{ checked: cleared }}
-        accessibilityLabel={cleared ? 'Mark transaction uncleared' : 'Clear transaction'}>
+        accessibilityLabel={cleared ? t('cleared.markUncleared') : t('cleared.clear')}>
         {compact ? (
-          <Text style={[styles.compactC, cleared ? { color: colors.green } : { color: colors.faint }]}>C</Text>
+          <Text style={[styles.compactC, cleared ? { color: colors.green } : { color: colors.faint }]}>{t('cleared.mark')}</Text>
         ) : (
           <Ionicons name={GLYPH[status]} size={15} color={TINT[status]} />
         )}
@@ -88,7 +95,7 @@ export function ClearedBadge({
     );
   }
   return (
-    <View style={styles.slot} accessibilityLabel={`Transaction ${status}`}>
+    <View style={styles.slot} accessibilityLabel={statusLabel(status)}>
       {compact ? (
         <Text
           style={[
@@ -99,7 +106,7 @@ export function ClearedBadge({
                 ? { color: colors.green }
                 : { color: colors.faint },
           ]}>
-          C
+          {t('cleared.mark')}
         </Text>
       ) : (
         <Ionicons name={GLYPH[status]} size={15} color={TINT[status]} />

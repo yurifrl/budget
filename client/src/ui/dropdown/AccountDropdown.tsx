@@ -11,6 +11,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
+import { t } from '../text/i18n';
 import { DropdownShell, dropdownStyles, useDropdownPortal, type DropdownKeyEvent } from './dropdown';
 
 import type { Account, AccountGroup } from '@/domain/types';
@@ -22,9 +23,10 @@ interface Item {
   checked: boolean;
 }
 
-const SECTIONS: { title: string; group: AccountGroup }[] = [
-  { title: 'Cash Accounts', group: 'CASH' },
-  { title: 'Credit Accounts', group: 'CREDIT' },
+/** Built per render: the titles follow the active language. */
+const sections = (): { title: string; group: AccountGroup }[] => [
+  { title: t('dropdown.cashAccounts'), group: 'CASH' },
+  { title: t('dropdown.creditAccounts'), group: 'CREDIT' },
 ];
 
 export function AccountDropdown({
@@ -65,7 +67,7 @@ export function AccountDropdown({
   );
   const visible = useMemo(
     () =>
-      SECTIONS.map(({ title, group }) => ({
+      sections().map(({ title, group }) => ({
         title,
         rows: accounts
           .filter((a) => a.group === group && (!query || a.name.toLowerCase().includes(query)))
@@ -116,7 +118,7 @@ export function AccountDropdown({
     const i = flatIndex++;
     rows.push(
       <Text key="selected-hd" style={dropdownStyles.sectionTitle}>
-        Selected
+        {t('dropdown.selected')}
       </Text>,
       <Pressable
         key={selected.key}
@@ -158,7 +160,7 @@ export function AccountDropdown({
     }
   }
   if (query && rows.length === (selected ? 2 : 0)) {
-    rows.push(<Text key="empty" style={dropdownStyles.emptyRow}>No accounts match “{draft.trim()}”</Text>);
+    rows.push(<Text key="empty" style={dropdownStyles.emptyRow}>{t('dropdown.noAccountsMatch', { query: draft.trim() })}</Text>);
   }
 
   return (
@@ -167,8 +169,8 @@ export function AccountDropdown({
         open={open}
         anchor={anchor}
         value={inputValue}
-        onChangeText={(t) => {
-          setDraft(t);
+        onChangeText={(text) => {
+          setDraft(text);
           setHighlight(0);
           setOpen(true);
         }}

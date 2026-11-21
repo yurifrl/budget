@@ -11,6 +11,8 @@ import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { t } from './text/i18n';
+
 export function KeyboardModalFrame({
   onBackdropPress,
   cardStyle,
@@ -24,7 +26,7 @@ export function KeyboardModalFrame({
   const { top } = useSafeAreaInsets();
   return (
     <KeyboardAvoidingView style={[styles.scrim, { paddingTop: top + 8 }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onBackdropPress} accessibilityLabel="Dismiss" />
+      <Pressable style={StyleSheet.absoluteFill} onPress={onBackdropPress} accessibilityLabel={t('modal.dismiss')} />
       <View style={[cardStyle, styles.card]}>{children}</View>
     </KeyboardAvoidingView>
   );

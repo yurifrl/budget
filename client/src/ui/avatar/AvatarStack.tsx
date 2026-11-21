@@ -1,6 +1,7 @@
 /** Overlapping avatars with a "+N" overflow chip — for lists of people. */
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { t } from '../text/i18n';
 import { Avatar } from './Avatar';
 import type { AvatarPerson } from './types';
 
@@ -19,7 +20,7 @@ export function AvatarStack({ people, max = 3, size = 24, ring = '#0c0f16', styl
   const extra = people.length - shown.length;
   const overlap = Math.round(size * 0.3);
   return (
-    <View style={[styles.row, style]} accessibilityLabel={`${people.length} people`}>
+    <View style={[styles.row, style]} accessibilityLabel={t('avatarStack.label', { count: people.length })}>
       {shown.map((p, i) => (
         <Avatar key={p.id} person={p} size={size} ring={ring} style={i > 0 ? { marginLeft: -overlap } : undefined} />
       ))}

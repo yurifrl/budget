@@ -9,15 +9,22 @@ import { milliToCents } from '@/budget/data/mapping';
 import type { AccountRow, BudgetListRow } from '@/budget/data/rows';
 import { workingBalance } from '@/domain/engine';
 
+import { t } from '../i18n';
+
 /** Rail section order: CLOSED always last. */
 const GROUP_ORDER: Record<string, number> = { CASH: 0, CREDIT: 1, CLOSED: 2 };
 
 /** Display label per cash-family account type (the rail splits CASH by type). */
-const TYPE_LABEL: Partial<Record<AccountRow['type'], string>> = {
-  checking: 'Checking',
-  savings: 'Savings',
-  cash: 'Cash',
-};
+function typeLabel(type: AccountRow['type']): string {
+  switch (type) {
+    case 'checking':
+      return t('rail.section.checking');
+    case 'savings':
+      return t('rail.section.savings');
+    default:
+      return t('rail.section.cash');
+  }
+}
 
 export interface RailSection<A> {
   /** Collapse-state key: `CASH:<type>`, `CREDIT` or `CLOSED`. */
@@ -44,9 +51,9 @@ export function railSections<A extends SectionAccount>(accounts: readonly A[], s
   };
   for (const a of all) {
     if (a.account_group === 'CASH') {
-      push(`CASH:${a.type}`, TYPE_LABEL[a.type] ?? 'Cash', a);
+      push(`CASH:${a.type}`, typeLabel(a.type), a);
     } else {
-      push(a.account_group, a.account_group === 'CREDIT' ? 'Credit Cards' : 'Closed', a);
+      push(a.account_group, a.account_group === 'CREDIT' ? t('rail.section.creditCards') : t('rail.section.closed'), a);
     }
   }
   // YNAB order: cash-family sections, CREDIT, then CLOSED always last.

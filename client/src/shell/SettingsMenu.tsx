@@ -26,6 +26,9 @@ import {
   type ViewInstance,
 } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
+import { t } from './i18n';
 import { MenuNavContext, type MenuNav, type MenuPane } from './menuNav';
 import { menuPlacement } from './menuPlacement.logic';
 import { colors } from '@/ui/theme';
@@ -161,7 +164,7 @@ export function SettingsMenu({
       <Pressable
         onPress={toggle}
         accessibilityRole="button"
-        accessibilityLabel="Open settings menu"
+        accessibilityLabel={t('menu.open')}
         accessibilityState={{ expanded: open }}>
         {trigger(open)}
       </Pressable>
@@ -174,7 +177,7 @@ export function SettingsMenu({
               {atRoot ? (
                 <View style={styles.headBtn} />
               ) : (
-                <Pressable onPress={nav.back} accessibilityLabel="Back" style={styles.headBtn}>
+                <Pressable onPress={nav.back} accessibilityLabel={tCommon('back')} style={styles.headBtn}>
                   <Text style={styles.headBtnText}>{'‹'}</Text>
                 </Pressable>
               )}
@@ -182,7 +185,7 @@ export function SettingsMenu({
                 {pane?.title ?? ''}
                 {atRoot && version ? <Text style={styles.menuHeaderVersion}>{`  v${version}`}</Text> : null}
               </Text>
-              <Pressable onPress={() => setOpen(false)} accessibilityLabel="Close menu" style={styles.headBtn}>
+              <Pressable onPress={() => setOpen(false)} accessibilityLabel={t('menu.close')} style={styles.headBtn}>
                 <Text style={styles.headBtnText}>{'✕'}</Text>
               </Pressable>
             </View>

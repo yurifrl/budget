@@ -17,6 +17,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useMoneyFormat } from './moneyFormat';
+import { t } from './text/i18n';
+
 import type { Cents } from '@/domain/types';
 import { colors } from '@/ui/theme';
 
@@ -59,7 +61,7 @@ export function BalanceFormulaRow({
             hitSlop={8}
             onPress={() => setExpanded((v) => !v)}
             accessibilityRole="button"
-            accessibilityLabel={expanded ? 'Hide balance details' : 'Show balance details'}
+            accessibilityLabel={expanded ? t('balance.hide') : t('balance.show')}
           >
             <Ionicons
               name={expanded ? 'chevron-up' : 'chevron-down'}
@@ -70,9 +72,9 @@ export function BalanceFormulaRow({
         </View>
         {expanded ? (
           <View style={styles.heroDetail}>
-            <Term label="Cleared" cents={cleared} />
+            <Term label={t('balance.cleared')} cents={cleared} />
             <Text style={styles.op}>+</Text>
-            <Term label="Uncleared" cents={uncleared} />
+            <Term label={t('balance.uncleared')} cents={uncleared} />
           </View>
         ) : null}
       </View>
@@ -81,11 +83,11 @@ export function BalanceFormulaRow({
 
   return (
     <View style={styles.row}>
-      <Term label={compact ? 'Cleared' : 'Cleared Balance'} cents={cleared} />
+      <Term label={compact ? t('balance.cleared') : t('balance.clearedFull')} cents={cleared} />
       <Text style={styles.op}>+</Text>
-      <Term label={compact ? 'Uncleared' : 'Uncleared Balance'} cents={uncleared} />
+      <Term label={compact ? t('balance.uncleared') : t('balance.unclearedFull')} cents={uncleared} />
       <Text style={styles.op}>=</Text>
-      <Term label={compact ? 'Working' : 'Working Balance'} cents={working} />
+      <Term label={compact ? t('balance.working') : t('balance.workingFull')} cents={working} />
     </View>
   );
 }

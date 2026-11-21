@@ -6,6 +6,8 @@
 import { evalQuickMath } from '@/domain/quickmath';
 import type { Cents } from '@/domain/types';
 
+import { t } from '../text/i18n';
+
 export type QuickMathOp = '+' | '−' | '×' | '÷';
 
 /**
@@ -71,7 +73,9 @@ export function appendQuickMathOp(text: string, op: QuickMathOp): string {
 
 /** Accessibility label of an operator cell in the quick-math popover. */
 export function quickMathOpLabel(op: QuickMathOp): string {
-  return `${op === '+' ? 'Add' : op === '−' ? 'Subtract' : op === '×' ? 'Multiply' : 'Divide'} operator`;
+  if (op === '+') return t('money.opAdd');
+  if (op === '−') return t('money.opSubtract');
+  return op === '×' ? t('money.opMultiply') : t('money.opDivide');
 }
 
 /**

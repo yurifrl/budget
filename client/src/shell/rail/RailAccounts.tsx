@@ -14,6 +14,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { AccountOwnerFace } from '@/ui/PersonFace';
 import { colors } from '@/ui/theme';
 
+import { t } from '../i18n';
 import { railAccountBalance, railSections, railSectionTotal } from './rail.logic';
 
 /** Per-account-group chevron collapse (CASH/CREDIT/...), shared with the osb spec. */
@@ -85,7 +86,7 @@ export function RailAccounts({ budgetId, onNavigate }: { budgetId: string | null
                         setEditAccount(a);
                       }}
                       onLongPress={() => setEditAccount(a)}
-                      accessibilityLabel={`Open account ${a.name}`}
+                      accessibilityLabel={t('rail.openAccount', { name: a.name })}
                       style={[styles.row, accountParam === a.id && styles.rowSelected]}>
                       <View style={styles.nameCol}>
                         <Text style={styles.name} numberOfLines={1}>
@@ -101,8 +102,8 @@ export function RailAccounts({ budgetId, onNavigate }: { budgetId: string | null
           </View>
         );
       })}
-      <Pressable style={styles.addBtn} onPress={() => setAddAccountOpen(true)} accessibilityLabel="Add Account">
-        <Text style={styles.addText}>＋ Add Account</Text>
+      <Pressable style={styles.addBtn} onPress={() => setAddAccountOpen(true)} accessibilityLabel={t('rail.addAccount')}>
+        <Text style={styles.addText}>{t('rail.addAccountButton')}</Text>
       </Pressable>
       {editAccount && budgetId ? (
         <AccountEditModal account={editAccount} budgetId={budgetId} onClose={() => setEditAccount(null)} />

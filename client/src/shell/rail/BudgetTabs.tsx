@@ -4,6 +4,8 @@ import { IconSymbol } from '@/ui/icon-symbol';
 
 import { colors } from '@/ui/theme';
 
+import { t } from '../i18n';
+
 /**
  * The budget routes as tabs. The bar itself shows on the phone only (desktop
  * and tablet navigate through the rail / drawer).
@@ -26,28 +28,28 @@ export function BudgetTabs({ isPhone }: { isPhone: boolean }) {
       <Tabs.Screen
         name="overview"
         options={{
-          title: 'Overview',
+          title: t('tabs.overview'),
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="square.grid.2x2.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="plan"
         options={{
-          title: 'Plan',
+          title: t('tabs.plan'),
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="list.bullet" color={color} />,
         }}
       />
       <Tabs.Screen
         name="spending"
         options={{
-          title: 'Spending',
+          title: t('tabs.spending'),
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="creditcard.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="accounts"
         options={{
-          title: 'Accounts',
+          title: t('tabs.accounts'),
           tabBarIcon: ({ color }) => (
             <IconSymbol size={22} name="building.columns.fill" color={color} />
           ),
@@ -56,7 +58,7 @@ export function BudgetTabs({ isPhone }: { isPhone: boolean }) {
       <Tabs.Screen
         name="reflect"
         options={{
-          title: 'Reflect',
+          title: t('tabs.reflect'),
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="chart.bar.fill" color={color} />,
         }}
       />
