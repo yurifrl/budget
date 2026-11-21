@@ -31,6 +31,7 @@ export function parseAuthCallback(url: string): ParsedCallback {
   try {
     u = new URL(url);
   } catch {
+    // eslint-disable-next-line budget-i18n/no-untranslated-string -- developer error text; useSignIn shows a translated notice instead
     return { kind: 'error', error: 'invalid redirect' };
   }
   const params = new URLSearchParams(u.search);
@@ -42,6 +43,7 @@ export function parseAuthCallback(url: string): ParsedCallback {
   const code = params.get('code');
   const state = params.get('state');
   if (code && state) return { kind: 'success', code, state };
+  // eslint-disable-next-line budget-i18n/no-untranslated-string -- developer error text; useSignIn shows a translated notice instead
   return { kind: 'error', error: 'missing code or state in redirect' };
 }
 
@@ -71,6 +73,7 @@ export async function fetchSessionToken(
     }
     return { token: payload.token };
   } catch (e) {
+    // eslint-disable-next-line budget-i18n/no-untranslated-string -- developer error text; useSignIn shows a translated notice instead
     return { error: e instanceof Error ? e.message : 'network error' };
   }
 }
@@ -94,6 +97,7 @@ export async function exchangeAccessCode(
     if (!res.ok || !payload?.token) return { error: payload?.error ?? `HTTP ${res.status}` };
     return { token: payload.token };
   } catch (e) {
+    // eslint-disable-next-line budget-i18n/no-untranslated-string -- developer error text; useSignIn shows a translated notice instead
     return { error: e instanceof Error ? e.message : 'network error' };
   }
 }

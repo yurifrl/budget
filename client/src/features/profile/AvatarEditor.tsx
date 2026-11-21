@@ -10,6 +10,7 @@ import { colors } from '@/ui/theme';
 
 import { useRemoveAvatarMutation, useUpdateMeMutation, useUploadAvatarMutation } from '@/profile/api';
 import { candidateSeeds, displayName, uploadErrorMessage, type Me } from '@/profile/model';
+import { t } from './i18n';
 import { pickAvatarImage } from './pickAvatarImage';
 import { ui } from './ui';
 
@@ -68,14 +69,14 @@ export function AvatarEditor({ me }: { me: Me }) {
     setError(null);
     await remove()
       .unwrap()
-      .catch((e) => setError(asApiError(e).message ?? 'Couldn’t remove the photo.'));
+      .catch((e) => setError(asApiError(e).message ?? t('avatar.removeFailed')));
   }
 
   async function pickLook(seed: string) {
     setError(null);
     await update({ avatar_seed: seed })
       .unwrap()
-      .catch((e) => setError(asApiError(e).message ?? 'Couldn’t save that look.'));
+      .catch((e) => setError(asApiError(e).message ?? t('avatar.lookFailed')));
   }
 
   return (
@@ -84,7 +85,7 @@ export function AvatarEditor({ me }: { me: Me }) {
         onPress={changePhoto}
         disabled={busy}
         accessibilityRole="button"
-        accessibilityLabel="Change photo"
+        accessibilityLabel={t('avatar.changePhoto')}
         style={styles.heroWrap}>
         <Avatar person={me} label={displayName(me)} size={HERO} ring={colors.indigo} />
         {busy ? (
@@ -98,19 +99,19 @@ export function AvatarEditor({ me }: { me: Me }) {
       </Pressable>
 
       <View style={styles.actions}>
-        <Button primary label={uploading ? 'Uploading…' : 'Change photo'} onPress={changePhoto} disabled={busy} />
-        {hasPhoto ? <Button label="Remove photo" onPress={removePhoto} disabled={busy} /> : null}
+        <Button primary label={uploading ? t('avatar.uploading') : t('avatar.changePhoto')} onPress={changePhoto} disabled={busy} />
+        {hasPhoto ? <Button label={t('avatar.removePhoto')} onPress={removePhoto} disabled={busy} /> : null}
       </View>
       {error ? <Text style={ui.error}>{error}</Text> : null}
 
       <View style={styles.looksHead}>
-        <Text style={ui.sectionTitle}>PICK A LOOK</Text>
+        <Text style={ui.sectionTitle}>{t('avatar.pickTitle')}</Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="More looks"
+          accessibilityLabel={t('avatar.moreLooksLabel')}
           disabled={busy}
           onPress={() => setCandidates(candidateSeeds(me.avatar.seed))}>
-          <Text style={styles.more}>{'↻  More looks'}</Text>
+          <Text style={styles.more}>{t('avatar.moreLooks')}</Text>
         </Pressable>
       </View>
       <View style={styles.grid}>
@@ -122,7 +123,7 @@ export function AvatarEditor({ me }: { me: Me }) {
               disabled={busy}
               onPress={() => pickLook(seed)}
               accessibilityRole="button"
-              accessibilityLabel="Use this look"
+              accessibilityLabel={t('avatar.useLook')}
               accessibilityState={{ selected }}
               style={[styles.tile, selected && styles.tileSelected]}>
               <Avatar avatar={{ seed, image_version: null }} id={me.id} size={TILE} />

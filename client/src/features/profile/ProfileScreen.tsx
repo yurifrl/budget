@@ -8,11 +8,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radius } from '@/ui/theme';
 
+import { tCommon } from '@shared/i18n/common';
 import { useSignOutAndLeave } from '@/features/auth';
 import { useGetMeQuery } from '@/profile/api';
 import { AvatarEditor } from './AvatarEditor';
 import { ChangePasswordCard } from './ChangePasswordCard';
 import { displayName } from '@/profile/model';
+import { t } from './i18n';
 import { NameField } from './NameField';
 import { ui } from './ui';
 
@@ -27,10 +29,10 @@ export function ProfileScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.bar}>
-        <Pressable onPress={back} accessibilityRole="button" accessibilityLabel="Back" style={styles.back}>
+        <Pressable onPress={back} accessibilityRole="button" accessibilityLabel={tCommon('back')} style={styles.back}>
           <Text style={styles.backGlyph}>{'‹'}</Text>
         </Pressable>
-        <Text style={styles.title}>Profile</Text>
+        <Text style={styles.title}>{t('screen.title')}</Text>
         <View style={styles.back} />
       </View>
 
@@ -40,9 +42,9 @@ export function ProfileScreen() {
             <ActivityIndicator style={styles.loading} />
           ) : isError || !me ? (
             <View style={[ui.card, styles.errorCard]}>
-              <Text style={ui.error}>Couldn’t load your profile.</Text>
+              <Text style={ui.error}>{t('screen.loadError')}</Text>
               <Pressable accessibilityRole="button" onPress={refetch} style={ui.button}>
-                <Text style={ui.buttonText}>Try again</Text>
+                <Text style={ui.buttonText}>{t('screen.retry')}</Text>
               </Pressable>
             </View>
           ) : (
@@ -51,7 +53,7 @@ export function ProfileScreen() {
                 <Text style={styles.name}>{displayName(me)}</Text>
                 {me.role === 'admin' ? (
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>ADMIN</Text>
+                    <Text style={styles.badgeText}>{t('screen.adminBadge')}</Text>
                   </View>
                 ) : null}
               </View>
@@ -63,10 +65,10 @@ export function ProfileScreen() {
                 onPress={() => router.push('/connected-apps' as Href)}
                 style={ui.button}
               >
-                <Text style={ui.buttonText}>Connected apps</Text>
+                <Text style={ui.buttonText}>{t('screen.connectedApps')}</Text>
               </Pressable>
               <Pressable accessibilityRole="button" onPress={leave} style={ui.button}>
-                <Text style={ui.buttonText}>Sign out</Text>
+                <Text style={ui.buttonText}>{t('screen.signOut')}</Text>
               </Pressable>
             </>
           )}

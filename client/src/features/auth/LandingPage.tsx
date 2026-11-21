@@ -10,11 +10,12 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PASSWORD_MIN_LENGTH } from '@shared/password-policy';
 import { BrandedPage } from '@/ui/BrandedPage';
 import { useMedia } from '@/ui/media';
 import { colors, radius, spacing } from '@/ui/theme';
 import { landingLayout, PRODUCT_NAME, type LandingView } from './landing.logic';
-import { CHANGE_BODY, CHANGE_HEADLINE, OR_EMAIL_LABEL } from './password.logic';
+import { t } from './i18n';
 import { NewPasswordForm, PasswordSignInForm } from './PasswordForms';
 import type { PasswordSignIn } from './usePasswordSignIn';
 import type { LoginButton } from './signIn.logic';
@@ -49,9 +50,9 @@ export function LandingPage({ view, onSignIn, onRetry, password = null }: Props)
   const content = (
     <View style={[styles.content, split ? styles.contentSplit : styles.contentStacked]}>
       <Text accessibilityRole="header" style={[styles.headline, split && styles.headlineSplit]}>
-        {changing ? CHANGE_HEADLINE : view.headline}
+        {changing ? t('landing.changeHeadline') : view.headline}
       </Text>
-      <Text style={styles.body}>{changing ? CHANGE_BODY : view.body}</Text>
+      <Text style={styles.body}>{changing ? t('landing.changeBody', { min: PASSWORD_MIN_LENGTH }) : view.body}</Text>
 
       {changing && password ? (
         <NewPasswordForm flow={password} email={changing.email} />
@@ -76,7 +77,7 @@ export function LandingPage({ view, onSignIn, onRetry, password = null }: Props)
           </View>
           {view.passwordForm && password ? (
             <>
-              {view.buttons.length > 0 ? <Text style={styles.divider}>{OR_EMAIL_LABEL}</Text> : null}
+              {view.buttons.length > 0 ? <Text style={styles.divider}>{t('landing.orEmail')}</Text> : null}
               <PasswordSignInForm flow={password} primary={view.buttons.length === 0} />
             </>
           ) : null}
@@ -86,7 +87,7 @@ export function LandingPage({ view, onSignIn, onRetry, password = null }: Props)
         <>
           {view.hint ? <Text style={styles.footnote}>{view.hint}</Text> : null}
           <View style={[styles.actions, split && styles.actionsSplit]}>
-            <ActionButton label="Retry now" primary onPress={onRetry} />
+            <ActionButton label={t('landing.retry')} primary onPress={onRetry} />
             <ActivityIndicator size="small" color={colors.muted} />
           </View>
         </>

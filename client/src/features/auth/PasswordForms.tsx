@@ -8,6 +8,7 @@ import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing } from '@/ui/theme';
+import { t } from './i18n';
 import { checkLogin, checkNewPassword, FIELD_HINTS, newPasswordHint } from './password.logic';
 import { FormWrap } from './FormWrap';
 import { PasswordField, type InputRef } from './PasswordField';
@@ -32,7 +33,7 @@ export function PasswordSignInForm({ flow, primary }: { flow: PasswordSignIn; pr
   return (
     <FormWrap>
       <PasswordField
-        label="E-mail"
+        label={t('form.email')}
         value={email}
         onChangeText={setEmail}
         returnKeyType="next"
@@ -41,7 +42,7 @@ export function PasswordSignInForm({ flow, primary }: { flow: PasswordSignIn; pr
       />
       <PasswordField
         inputRef={passwordRef}
-        label="Password"
+        label={t('form.password')}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -51,7 +52,7 @@ export function PasswordSignInForm({ flow, primary }: { flow: PasswordSignIn; pr
         {...FIELD_HINTS.current}
       />
       {error ? <ErrorNotice text={error} /> : null}
-      <SubmitButton label="Sign in with e-mail" primary={primary} busy={flow.busy} onPress={() => void submit()} />
+      <SubmitButton label={t('form.signIn')} primary={primary} busy={flow.busy} onPress={() => void submit()} />
     </FormWrap>
   );
 }
@@ -76,7 +77,7 @@ export function NewPasswordForm({ flow, email }: { flow: PasswordSignIn; email: 
     <FormWrap>
       <Text style={styles.account}>{email}</Text>
       <PasswordField
-        label="New password"
+        label={t('form.newPassword')}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -87,7 +88,7 @@ export function NewPasswordForm({ flow, email }: { flow: PasswordSignIn; email: 
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       <PasswordField
         inputRef={confirmRef}
-        label="Repeat the new password"
+        label={t('form.repeatPassword')}
         value={confirm}
         onChangeText={setConfirm}
         secureTextEntry
@@ -96,9 +97,9 @@ export function NewPasswordForm({ flow, email }: { flow: PasswordSignIn; email: 
         {...FIELD_HINTS.new}
       />
       {error ? <ErrorNotice text={error} /> : null}
-      <SubmitButton label="Set password and sign in" primary busy={flow.busy} onPress={() => void submit()} />
+      <SubmitButton label={t('form.setPassword')} primary busy={flow.busy} onPress={() => void submit()} />
       <Pressable accessibilityRole="button" onPress={flow.cancel} style={styles.link}>
-        <Text style={styles.linkText}>Back to sign in</Text>
+        <Text style={styles.linkText}>{t('form.backToSignIn')}</Text>
       </Pressable>
     </FormWrap>
   );

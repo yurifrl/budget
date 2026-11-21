@@ -8,7 +8,11 @@
  * body: not in redux (the requests bypass RTK Query on purpose, which would
  * cache mutation arguments), not in logs, not in URLs.
  */
+import { tError } from '@shared/i18n/errors';
 import { passwordRejection, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, type PasswordRejection } from '@shared/password-policy';
+
+import en from './i18n/en';
+import { t } from './i18n';
 
 /** A failed password request, reduced to what the screens need. */
 export interface PasswordFailure {
@@ -24,10 +28,12 @@ export const SESSION_NOT_SAVED: PasswordFailure = { status: 200, code: 'session_
 
 export type PasswordFormKind = 'login' | 'complete' | 'change';
 
-export const GENERIC_FAILURE = 'Something went wrong. Please try again.';
-export const NETWORK_FAILURE = 'Can’t reach the server. Check your connection and try again.';
-export const CHANGE_LINK_EXPIRED =
-  'The time to choose a new password ran out. Sign in again with your temporary password. If it has expired, ask the administrator for a new one.';
+/**
+ * The generic failure in the English source text (what tests compare with).
+ * Code that shows it to a person calls `t('failure.generic')` instead: a
+ * module-level constant would freeze the language the app booted with.
+ */
+export const GENERIC_FAILURE: string = en['failure.generic'];
 
 /** `Retry-After` header (delay in seconds, or an HTTP date) -> whole seconds, or null. */
 export function parseRetryAfter(raw: string | null | undefined, now: number = Date.now()): number | null {
@@ -41,56 +47,74 @@ export function parseRetryAfter(raw: string | null | undefined, now: number = Da
 /** 90 -> "2 minutes", 45 -> "45 seconds", 3600 -> "1 hour". Rounds up so the wait is never understated. */
 export function formatWait(seconds: number): string {
   const s = Math.max(1, Math.ceil(seconds));
-  if (s < 60) return `${s} second${s === 1 ? '' : 's'}`;
+  if (s < 60) return t('wait.seconds', { count: s });
   const m = Math.ceil(s / 60);
-  if (m < 60) return `${m} minute${m === 1 ? '' : 's'}`;
+  if (m < 60) return t('wait.minutes', { count: m });
   const h = Math.ceil(m / 60);
-  return `${h} hour${h === 1 ? '' : 's'}`;
+  return t('wait.hours', { count: h });
 }
 
-/** Plain-language wording of each password rejection (what to do, not what the API said). */
+/**
+ * Plain-language wording of each password rejection (what to do, not what the
+ * API said). Getters, so the text follows the active language at read time.
+ */
 export const POLICY_MESSAGES: Readonly<Record<PasswordRejection, string>> = {
-  password_too_short: `Use at least ${PASSWORD_MIN_LENGTH} characters.`,
-  password_too_long: `Use at most ${PASSWORD_MAX_LENGTH} characters.`,
-  password_is_email: 'The password can’t be your e-mail address.',
-  password_too_common: 'That password is too common. Choose another one.',
-  password_unchanged: 'Choose a password different from the current one.',
+  get password_too_short() {
+    return tError('password_too_short');
+  },
+  get password_too_long() {
+    return tError('password_too_long');
+  },
+  get password_is_email() {
+    return tError('password_is_email');
+  },
+  get password_too_common() {
+    return tError('password_too_common');
+  },
+  get password_unchanged() {
+    return tError('password_unchanged');
+  },
 };
 
 export function isPolicyCode(code: string | null): code is PasswordRejection {
   return code !== null && Object.prototype.hasOwnProperty.call(POLICY_MESSAGES, code);
 }
 
+/** The dead-change-token explanation (also shown when the new-password step has no token left). */
+export function changeLinkExpiredMessage(): string {
+  return t('failure.changeLinkExpired');
+}
+
 /** What to tell the person about a failed request of the given form. */
 export function failureMessage(kind: PasswordFormKind, f: PasswordFailure): string {
-  if (f.status === 0) return NETWORK_FAILURE;
+  if (f.status === 0) return t('failure.network');
   if (f.status === 429 || f.code === 'too_many_attempts') {
     return f.retryAfter === null
-      ? 'Too many attempts. Wait a few minutes and try again.'
-      : `Too many attempts. Try again in ${formatWait(f.retryAfter)}.`;
+      ? t('failure.tooManyAttempts')
+      : t('failure.tooManyAttemptsWait', { wait: formatWait(f.retryAfter) });
   }
   if (isPolicyCode(f.code)) return POLICY_MESSAGES[f.code];
   switch (f.code) {
     case 'invalid_credentials':
-      return kind === 'change' ? 'The current password is not right.' : 'Wrong e-mail or password.';
+      return kind === 'change' ? t('failure.wrongPassword') : t('failure.wrongCredentials');
     case 'temp_password_expired':
       return kind === 'complete'
-        ? CHANGE_LINK_EXPIRED
-        : 'Your temporary password has expired. Ask the administrator for a new one.';
+        ? changeLinkExpiredMessage()
+        : t('failure.tempExpired');
     case 'invalid_change_token':
-      return CHANGE_LINK_EXPIRED;
+      return changeLinkExpiredMessage();
     case 'no_password':
-      return 'This account has no password to change. It signs in another way.';
+      return tError('no_password');
     case 'forbidden':
-      return 'Your password can’t be changed from this kind of session. Sign out, sign in with your e-mail and password, and try again.';
+      return t('failure.forbidden');
     case 'origin_not_allowed':
-      return 'Signing in is not allowed from this address.';
+      return t('failure.originNotAllowed');
     case 'invalid_input':
-      return kind === 'login' ? 'Enter your e-mail and password.' : 'Check the form and try again.';
+      return kind === 'login' ? t('failure.enterCredentials') : t('failure.checkForm');
   }
-  if (f.status === 404) return 'Password sign-in is turned off.';
-  if (f.status === 401 && kind === 'login') return 'Wrong e-mail or password.';
-  return GENERIC_FAILURE;
+  if (f.status === 404) return tError('password_login_disabled');
+  if (f.status === 401 && kind === 'login') return t('failure.wrongCredentials');
+  return t('failure.generic');
 }
 
 /** The new-password step must restart from the sign-in form when its token is dead. */
@@ -102,7 +126,7 @@ export type FormCheck<T> = { ok: true; value: T } | { ok: false; error: string }
 
 export function checkLogin(email: string, password: string): FormCheck<{ email: string; password: string }> {
   const e = email.trim();
-  if (!e || !password) return { ok: false, error: 'Enter your e-mail and password.' };
+  if (!e || !password) return { ok: false, error: t('failure.enterCredentials') };
   return { ok: true, value: { email: e, password } };
 }
 
@@ -110,7 +134,7 @@ export function checkLogin(email: string, password: string): FormCheck<{ email: 
 export function checkNewPassword(password: string, confirm: string, email: string): FormCheck<string> {
   const rejection = passwordRejection(password, email);
   if (rejection) return { ok: false, error: POLICY_MESSAGES[rejection] };
-  if (password !== confirm) return { ok: false, error: 'The two passwords don’t match.' };
+  if (password !== confirm) return { ok: false, error: t('form.passwordMismatch') };
   return { ok: true, value: password };
 }
 
@@ -120,7 +144,7 @@ export function checkChange(
   confirm: string,
   email: string,
 ): FormCheck<{ current: string; next: string }> {
-  if (!current) return { ok: false, error: 'Enter your current password.' };
+  if (!current) return { ok: false, error: t('form.enterCurrent') };
   const next = checkNewPassword(password, confirm, email);
   if (!next.ok) return next;
   if (next.value === current) return { ok: false, error: POLICY_MESSAGES.password_unchanged };
@@ -149,7 +173,3 @@ export const FIELD_HINTS = {
     passwordRules: `minlength: ${PASSWORD_MIN_LENGTH}; maxlength: ${PASSWORD_MAX_LENGTH};`,
   },
 } as const;
-
-export const CHANGE_HEADLINE = 'Choose a new password.';
-export const CHANGE_BODY = 'You signed in with a temporary password. Choose your own to continue. Use at least 12 characters; a few ordinary words strung together work well.';
-export const OR_EMAIL_LABEL = 'or sign in with e-mail';
