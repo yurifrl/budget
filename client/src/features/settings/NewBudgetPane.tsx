@@ -9,6 +9,7 @@ import { useCreateBudgetMutation } from '@/budget/data/api';
 import { switchBudget } from '@/state/thunks';
 import { MenuRow } from './menuRows';
 import { refetchBudgets } from '@/state/refetchBudgets';
+import { t } from './i18n';
 import { s } from './styles';
 import { colors } from '@/ui/theme';
 
@@ -33,23 +34,23 @@ export function NewBudgetPane() {
         await dispatch(switchBudget(created.id));
       })
       .then(() => nav.close())
-      .catch((err) => setError(apiErrorMessage(err)));
+      .catch((err) => setError(apiErrorMessage(err, t('new.failed'))));
   };
   return (
     <>
-      <Text style={s.hint}>Creates a fresh Budget instance with a starter group.</Text>
+      <Text style={s.hint}>{t('new.hint')}</Text>
       <TextInput
         value={name}
         onChangeText={setName}
-        placeholder="Budget name"
+        placeholder={t('new.placeholder')}
         placeholderTextColor={colors.faint}
         onSubmitEditing={create}
         style={s.input}
-        accessibilityLabel="New budget name"
+        accessibilityLabel={t('new.nameLabel')}
         autoFocus
       />
       {error ? <Text style={s.errorText}>{error}</Text> : null}
-      <MenuRow label="Create Budget" emphasized onPress={create} />
+      <MenuRow label={t('new.create')} emphasized onPress={create} />
     </>
   );
 }

@@ -9,10 +9,12 @@ import { ScrollView, StyleSheet } from 'react-native';
 import { PeoplePane } from '@/features/people';
 import { OverlaySheet } from '@/ui/bits';
 
+import { t } from './i18n';
+
 export function PeopleSheet({ budget, onClose }: { budget: { id: string; name: string } | null; onClose: () => void }) {
   const router = useRouter();
   return (
-    <OverlaySheet visible={budget !== null} onClose={onClose} title={budget ? `People on ${budget.name}` : undefined}>
+    <OverlaySheet visible={budget !== null} onClose={onClose} title={budget ? t('people.title', { name: budget.name }) : undefined}>
       {budget ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <PeoplePane

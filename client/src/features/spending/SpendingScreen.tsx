@@ -17,6 +17,8 @@ import { useBudgetModel } from '@/state/useBudgetModel';
 import { usePersonFilter , PersonFilterBar } from '@/features/people';
 import { useBudgetShell } from '@/shell/context';
 
+import { t } from './i18n';
+
 export function SpendingScreen() {
   const { formatMoney, formatDateLong } = useMoneyFormat();
   const shell = useBudgetShell();
@@ -46,24 +48,24 @@ export function SpendingScreen() {
 
   return (
     <View style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
-      <Text style={styles.title}>Spending</Text>
+      <Text style={styles.title}>{t('screen.title')}</Text>
       <PersonFilterBar
         byPerson={byPerson}
         budgetId={budgetId}
-        caption={byPerson.accountsLabel ? `Spending on ${byPerson.accountsLabel}` : null}
+        caption={byPerson.accountsLabel ? t('caption.accounts', { accounts: byPerson.accountsLabel }) : null}
       />
       {unapproved > 0 ? (
         <View style={styles.reviewStrip}>
           <Text style={styles.reviewBadge}>{unapproved}</Text>
-          <Text style={styles.reviewText}>New transactions</Text>
-          <Text style={styles.reviewAction}>Review below</Text>
+          <Text style={styles.reviewText}>{t('review.title')}</Text>
+          <Text style={styles.reviewAction}>{t('review.action')}</Text>
         </View>
       ) : null}
       <SectionList
         sections={sections}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            {byPerson.accountsLabel ? `No transactions on ${byPerson.accountsLabel}.` : 'No transactions yet.'}
+            {byPerson.accountsLabel ? t('empty.accounts', { accounts: byPerson.accountsLabel }) : t('empty.none')}
           </Text>
         }
         keyExtractor={(t) => t.id}
@@ -71,43 +73,43 @@ export function SpendingScreen() {
         renderSectionHeader={({ section }) => (
           <Text style={styles.dateHeader}>{formatDateLong(section.date)}</Text>
         )}
-        renderItem={({ item: t }) => {
+        renderItem={({ item: txn }) => {
           const categoryNameFor = (id: string) => {
             const c = budget.categories.find((x) => x.id === id);
             return c ? categoryLabel(c, budget.bundles) : '?';
           };
-          const cat = t.categoryId
-            ? categoryNameFor(t.categoryId)
-            : t.inflow > 0 || t.payee === 'Reconciliation Adjustment'
-              ? '⚖ Ready to Assign'
-              : '🙋 What is this?';
-          const warn = !t.categoryId && t.inflow === 0 && t.payee !== 'Reconciliation Adjustment';
-          const acct = budget.accounts.find((a) => a.id === t.accountId);
+          const cat = txn.categoryId
+            ? categoryNameFor(txn.categoryId)
+            : txn.inflow > 0 || txn.payee === 'Reconciliation Adjustment'
+              ? t('row.readyToAssign')
+              : t('row.unknown');
+          const warn = !txn.categoryId && txn.inflow === 0 && txn.payee !== 'Reconciliation Adjustment';
+          const acct = budget.accounts.find((a) => a.id === txn.accountId);
           return (
             <View style={styles.txn}>
               <View style={styles.l1}>
                 <Text style={styles.payee} numberOfLines={1}>
-                  {t.payee || '(no payee)'}
+                  {txn.payee === 'Reconciliation Adjustment' ? t('row.reconciliation') : txn.payee || t('row.noPayee')}
                 </Text>
-                <Text style={[styles.amt, t.inflow > 0 && { color: colors.greenPillFg }]}>
-                  {t.inflow > 0 ? formatMoney(t.inflow) : `−${formatMoney(t.outflow)}`}
-                  {t.cleared === 'reconciled' ? ' 🔒' : ''}
+                <Text style={[styles.amt, txn.inflow > 0 && { color: colors.greenPillFg }]}>
+                  {txn.inflow > 0 ? formatMoney(txn.inflow) : `−${formatMoney(txn.outflow)}`}
+                  {txn.cleared === 'reconciled' ? ' 🔒' : ''}
                 </Text>
               </View>
               <View style={styles.l2}>
                 <Text style={[styles.tagPill, warn && styles.tagPillWarn]}>{cat}</Text>
                 <Text style={styles.acct}>{acct?.name}</Text>
               </View>
-              {!t.approved ? (
+              {!txn.approved ? (
                 <Pressable
                   onPress={() =>
-                    void updateTransaction({ budgetId, id: t.id, patch: { approved: true } })
+                    void updateTransaction({ budgetId, id: txn.id, patch: { approved: true } })
                   }
                   style={styles.approveBtn}>
-                  <Text style={styles.approveBtnText}>Approve</Text>
+                  <Text style={styles.approveBtnText}>{t('row.approve')}</Text>
                 </Pressable>
               ) : null}
-              {t.memo ? <Text style={styles.memo}>{t.memo}</Text> : null}
+              {txn.memo ? <Text style={styles.memo}>{txn.memo}</Text> : null}
             </View>
           );
         }}

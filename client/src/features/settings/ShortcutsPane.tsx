@@ -1,12 +1,15 @@
+import { t } from './i18n';
 import { ShortcutRow } from './menuRows';
 
 /** Keyboard Shortcuts (web only; only real shortcuts listed). */
 export function ShortcutsPane() {
   return (
     <>
-      <ShortcutRow keys="Esc" desc="Close menus, sheets and this panel" />
-      <ShortcutRow keys="Enter" desc="Commit the money field being edited" />
-      <ShortcutRow keys="+ − × ÷" desc="Quick-math operators in money fields" />
+      {/* eslint-disable-next-line budget-i18n/no-untranslated-string -- key name, not text */}
+      <ShortcutRow keys="Esc" desc={t('shortcuts.close')} />
+      {/* eslint-disable-next-line budget-i18n/no-untranslated-string -- key name, not text */}
+      <ShortcutRow keys="Enter" desc={t('shortcuts.enter')} />
+      <ShortcutRow keys="+ − × ÷" desc={t('shortcuts.math')} />
     </>
   );
 }

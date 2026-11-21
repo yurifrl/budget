@@ -9,6 +9,7 @@ import { useArchiveBudgetMutation, useGetBudgetsQuery, useUnarchiveBudgetMutatio
 import { clearActiveBudget } from '@/state/thunks';
 import { selectActiveBudgetId } from '@/state/ui';
 import { DeleteBudgetModal } from './DeleteBudgetModal';
+import { t } from './i18n';
 import { MenuRow } from './menuRows';
 import { refetchBudgets } from '@/state/refetchBudgets';
 import { manageBudgetHint } from './settings.logic';
@@ -29,7 +30,7 @@ export function BudgetManageSection({ budgetId }: { budgetId: string }) {
   const target = budgets.data?.find((b) => b.id === budgetId) ?? null;
 
   if (!target) {
-    return <Text style={s.hint}>Switch to a budget first.</Text>;
+    return <Text style={s.hint}>{t('hint.switchFirst')}</Text>;
   }
 
   const archived = !!target.archived_at;
@@ -46,7 +47,9 @@ export function BudgetManageSection({ budgetId }: { budgetId: string }) {
         }
         nav.back();
       })
-      .catch((err) => setError(apiErrorMessage(err)));
+      .catch((err) =>
+        setError(apiErrorMessage(err, archive ? t('manage.archiveFailed') : t('manage.unarchiveFailed'))),
+      );
   };
 
   return (
@@ -55,10 +58,10 @@ export function BudgetManageSection({ budgetId }: { budgetId: string }) {
         {manageBudgetHint(target.name, archived)}
       </Text>
       <MenuRow
-        label={archived ? 'Unarchive Budget' : 'Archive Budget'}
+        label={archived ? t('manage.unarchive') : t('manage.archive')}
         onPress={() => setArchived(!archived)}
       />
-      <MenuRow label="Delete Budget…" chevron="✕" onPress={() => setDeleting(true)} />
+      <MenuRow label={t('manage.delete')} chevron="✕" onPress={() => setDeleting(true)} />
       {error ? <Text style={s.errorText}>{error}</Text> : null}
       {deleting ? <DeleteBudgetModal target={target} onClose={() => setDeleting(false)} /> : null}
     </>

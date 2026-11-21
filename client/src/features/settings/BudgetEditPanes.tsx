@@ -1,11 +1,14 @@
 import { Text } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { useMenuNav } from '@/shell/menuNav';
 import { useAppDispatch, useAppSelector } from '@/state/hooks';
 
 import { useGetBudgetsQuery } from '@/budget/data/api';
 import { switchBudget } from '@/state/thunks';
 import { selectActiveBudgetId } from '@/state/ui';
+import { t } from './i18n';
 import { MenuRow } from './menuRows';
 import { PlanSettingsPane } from './PlanSettingsPane';
 import { s } from './styles';
@@ -19,7 +22,7 @@ export function BudgetEditMenuPane() {
   );
   const budgets = useGetBudgetsQuery();
   const target = budgets.data?.find((b) => b.id === nav.editingBudgetId) ?? null;
-  if (!target) return <Text style={s.hint}>Budget unavailable.</Text>;
+  if (!target) return <Text style={s.hint}>{t('edit.unavailable')}</Text>;
   const open = () => {
     void dispatch(switchBudget(target.id));
     nav.close();
@@ -28,11 +31,11 @@ export function BudgetEditMenuPane() {
     <>
       <Text style={s.sectionLabel}>{target.name}</Text>
       {target.id === activeBudgetId ? (
-        <MenuRow label="Current Budget" active onPress={open} />
+        <MenuRow label={t('edit.current')} active onPress={open} />
       ) : (
-        <MenuRow label="Open" emphasized onPress={open} />
+        <MenuRow label={t('edit.open')} emphasized onPress={open} />
       )}
-      <MenuRow label="Edit" onPress={() => nav.open('budget-settings')} />
+      <MenuRow label={tCommon('edit')} onPress={() => nav.open('budget-settings')} />
     </>
   );
 }
@@ -46,6 +49,6 @@ export function BudgetEditSettingsPane() {
   const nav = useMenuNav();
   const budgets = useGetBudgetsQuery();
   const target = budgets.data?.find((b) => b.id === nav.editingBudgetId) ?? null;
-  if (!target) return <Text style={s.hint}>Budget unavailable.</Text>;
+  if (!target) return <Text style={s.hint}>{t('edit.unavailable')}</Text>;
   return <PlanSettingsPane budgetId={target.id} key={target.id} />;
 }

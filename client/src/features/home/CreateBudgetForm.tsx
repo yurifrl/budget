@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { colors, radius } from '@/ui/theme';
 
 import { NAME_MAX } from './home.logic';
+import { t } from './i18n';
 
 interface Props {
   onCreate: (name: string) => Promise<boolean>;
@@ -28,21 +29,21 @@ export function CreateBudgetForm({ onCreate, creating, error, onEdit, autoFocus 
             setName(v);
             onEdit();
           }}
-          placeholder="Budget name, for example Home"
+          placeholder={t('create.placeholder')}
           placeholderTextColor={colors.faint}
           onSubmitEditing={submit}
           editable={!creating}
           autoFocus={autoFocus}
           maxLength={NAME_MAX}
           returnKeyType="done"
-          accessibilityLabel="New budget name"
+          accessibilityLabel={t('create.nameLabel')}
           style={[styles.input, inline && styles.inputInline, error ? styles.inputError : null]}
         />
         <Pressable
           onPress={submit}
           disabled={creating}
           accessibilityRole="button"
-          accessibilityLabel="Create budget"
+          accessibilityLabel={t('create.button')}
           accessibilityState={{ disabled: creating, busy: creating }}
           style={(state) => [
             styles.button,
@@ -51,7 +52,7 @@ export function CreateBudgetForm({ onCreate, creating, error, onEdit, autoFocus 
           {creating ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Text style={styles.buttonText}>Create budget</Text>
+            <Text style={styles.buttonText}>{t('create.button')}</Text>
           )}
         </Pressable>
       </View>

@@ -6,6 +6,8 @@
  */
 import type { BudgetListRow } from '@/budget/data/rows';
 
+import { t } from './i18n';
+
 type Row = Pick<BudgetListRow, 'id' | 'name' | 'archived_at' | 'is_owner' | 'owner' | 'member_count'>;
 
 export interface HomeSections<T> {
@@ -46,23 +48,23 @@ export function homeView(q: { data: readonly unknown[] | undefined; isError: boo
 
 /** "Only you" for a budget nobody else is on, else the head count (owner included). */
 export function peopleLabel(memberCount: number): string {
-  return memberCount <= 1 ? 'Only you' : `${memberCount} people`;
+  return memberCount <= 1 ? t('caption.onlyYou') : t('caption.people', { count: memberCount });
 }
 
 /** Who shared a budget: the owner's name, else their email; a legacy budget nobody claimed has no owner. */
 export function sharedByLabel(owner: Row['owner']): string {
   const who = owner?.name?.trim() || owner?.email || null;
-  return who ? `Shared by ${who}` : 'Shared with you';
+  return who ? t('caption.sharedBy', { name: who }) : t('caption.sharedWithYou');
 }
 
 /** The lines under a card's name: the people on it, preceded on a shared budget by who shared it. */
 export function budgetCardCaption(b: Pick<Row, 'is_owner' | 'owner' | 'member_count'>): string[] {
-  return b.is_owner ? [peopleLabel(b.member_count)] : [sharedByLabel(b.owner), `${b.member_count} people`];
+  return b.is_owner ? [peopleLabel(b.member_count)] : [sharedByLabel(b.owner), t('caption.people', { count: b.member_count })];
 }
 
 /** Extra caption line of an archived budget (`archived_at` is a timestamp; the formatter takes a date). */
 export function archivedNote(archivedAt: string | null | undefined, formatDate: (iso: string) => string): string | undefined {
-  return archivedAt ? `Archived ${formatDate(archivedAt.slice(0, 10))}` : undefined;
+  return archivedAt ? t('card.archivedOn', { date: formatDate(archivedAt.slice(0, 10)) }) : undefined;
 }
 
 export interface BudgetCardActions {
@@ -76,6 +78,7 @@ export interface BudgetCardActions {
 
 export function budgetCardActions(b: Pick<Row, 'archived_at' | 'is_owner'>): BudgetCardActions {
   if (b.archived_at) return { people: null };
+  // eslint-disable-next-line budget-i18n/no-untranslated-string -- discriminator compared in BudgetCard, which renders it through t()
   return { people: b.is_owner ? 'Invite' : 'People' };
 }
 
@@ -86,21 +89,22 @@ export type NameCheck = { ok: true; name: string } | { ok: false; error: string 
 /** The new budget's name, checked before sending. */
 export function checkBudgetName(raw: string): NameCheck {
   const name = raw.trim();
-  if (!name) return { ok: false, error: 'Give the budget a name' };
-  if (name.length > NAME_MAX) return { ok: false, error: `Use ${NAME_MAX} characters or fewer` };
+  if (!name) return { ok: false, error: t('create.nameRequired') };
+  if (name.length > NAME_MAX) return { ok: false, error: t('create.nameTooLong', { max: NAME_MAX }) };
   return { ok: true, name };
 }
 
 /** Headline: the first name when the profile has one. */
 export function homeGreeting(me: { name: string | null } | undefined, view: HomeView): string {
   const first = me?.name?.trim().split(/\s+/)[0];
-  if (view === 'empty') return first ? `Welcome, ${first}.` : 'Welcome.';
-  return 'Your budgets';
+  if (view === 'empty') return first ? t('greeting.welcomeName', { name: first }) : t('greeting.welcome');
+  return t('greeting.budgets');
 }
 
 /** First run: what there is to do, in two sentences that are true today. */
-export const EMPTY_BODY =
-  'You have no budgets yet. Create one to start planning, or ask someone to add your email to theirs and it will show up here.';
+export function emptyBody(): string {
+  return t('empty.body');
+}
 
 /**
  * Where a budget opens. The phone lands on its Overview tab; wider windows

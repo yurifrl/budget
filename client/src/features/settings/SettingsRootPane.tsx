@@ -12,6 +12,7 @@ import { useSignOutAndLeave } from '@/features/auth';
 import { usePeople } from '@/features/people';
 import { selectActiveBudgetId } from '@/state/ui';
 import { useBudgetShell } from '@/shell/context';
+import { t } from './i18n';
 import { MenuRow } from './menuRows';
 import { canManageBudget } from './settings.logic';
 import { MENU_BG, s } from './styles';
@@ -43,53 +44,51 @@ export function SettingsRootPane() {
   return (
     <>
       <View style={s.identity}>
-        <Text style={s.identityKicker}>BUDGET</Text>
+        <Text style={s.identityKicker}>{t('root.kicker')}</Text>
         <Text style={s.identityName} numberOfLines={1}>
-          {budget?.name ?? 'Budget'}
+          {budget?.name ?? t('root.budgetFallback')}
         </Text>
       </View>
-      <MenuRow dense label="All budgets" onPress={() => leaveForPage(goHome)} />
-      <MenuRow dense label="Open Budget" onPress={() => nav.open('open')} />
-      <MenuRow dense label="New Budget" onPress={() => nav.open('new')} />
-      <MenuRow dense label="Plan Settings" onPress={() => nav.open('settings')} />
+      <MenuRow dense label={t('root.allBudgets')} onPress={() => leaveForPage(goHome)} />
+      <MenuRow dense label={t('root.open')} onPress={() => nav.open('open')} />
+      <MenuRow dense label={t('root.new')} onPress={() => nav.open('new')} />
+      <MenuRow dense label={t('root.planSettings')} onPress={() => nav.open('settings')} />
       <PeopleMenuRow onPress={() => nav.open('people')} />
-      {isOwner ? <MenuRow dense label="Make a Fresh Start" onPress={() => nav.open('fresh-start')} /> : null}
+      {isOwner ? <MenuRow dense label={t('root.freshStart')} onPress={() => nav.open('fresh-start')} /> : null}
       <View style={s.divider} />
-      <MenuRow dense label="Manage Payees" onPress={() => leaveForPage(openPayees)} />
+      <MenuRow dense label={t('root.payees')} onPress={() => leaveForPage(openPayees)} />
       <MenuRow
         dense
-        label="Linked banks"
+        label={t('root.banks')}
         onPress={() => leaveForPage(() => router.push('/connect-bank'))}
       />
       <MenuRow
         dense
-        label="Export / Import"
+        label={t('root.backup')}
         onPress={() => leaveForPage(() => router.push('/backup'))}
       />
-      <MenuRow dense label="Edit Flags" onPress={() => nav.open('flags')} />
-      <MenuRow dense label="Display Options" onPress={() => nav.open('display')} />
+      <MenuRow dense label={t('root.flags')} onPress={() => nav.open('flags')} />
+      <MenuRow dense label={t('root.display')} onPress={() => nav.open('display')} />
       <MenuRow
         dense
-        label="Hide Amounts"
+        label={t('root.hideAmounts')}
         onPress={() => setMasked(!masked)}
         chevron={masked ? '🔒' : undefined}
       />
       <Text style={s.rootHint}>
-        {masked
-          ? 'Amounts are hidden — tap again to unhide.'
-          : 'Tap to mask every money value until reopened.'}
+        {masked ? t('root.hiddenHint') : t('root.maskHint')}
       </Text>
-      {web ? <MenuRow dense label="Keyboard Shortcuts" onPress={() => nav.open('shortcuts')} /> : null}
-      <MenuRow dense label="Account Settings" onPress={() => nav.open('account')} />
+      {web ? <MenuRow dense label={t('root.shortcuts')} onPress={() => nav.open('shortcuts')} /> : null}
+      <MenuRow dense label={t('root.account')} onPress={() => nav.open('account')} />
       <View style={s.divider} />
       {email ? (
         <Text style={s.sectionMeta} numberOfLines={1}>
           {email}
         </Text>
       ) : null}
-      <MenuRow dense label="Profile" onPress={() => leaveForPage(() => router.push('/profile'))} />
+      <MenuRow dense label={t('root.profile')} onPress={() => leaveForPage(() => router.push('/profile'))} />
       <View style={s.divider} />
-      <MenuRow dense label="Log Out" chevron="" onPress={() => leaveForPage(signOutAndLeave)} />
+      <MenuRow dense label={t('root.logOut')} chevron="" onPress={() => leaveForPage(signOutAndLeave)} />
     </>
   );
 }
@@ -101,7 +100,7 @@ function PeopleMenuRow({ onPress }: { onPress: () => void }) {
   return (
     <MenuRow
       dense
-      label="People"
+      label={t('root.people')}
       onPress={onPress}
       trailing={
         people.length > 0 ? (

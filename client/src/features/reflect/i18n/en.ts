@@ -1,0 +1,15 @@
+export default {
+  'screen.title': 'Reflect',
+  'caption.accounts': 'Net worth and spending from {accounts}',
+  'report.breakdown': 'Spending Breakdown',
+  'report.trends': 'Spending Trends',
+  'report.networth': 'Net Worth',
+  'range.all': 'All time',
+  'range.last': 'Last {count} months',
+  'networth.assets': 'Assets {amount}',
+  'networth.debts': 'Debts {amount}',
+  'networth.change': 'Change {percent}',
+  'trends.total': 'Total Spending',
+  'breakdown.bundleLabel': '{name} bundle',
+  'breakdown.empty': 'No categorized spending in this range.',
+} as const;

@@ -6,6 +6,8 @@
 import { formatDateWith, formatMoneyWith } from '@/domain/format';
 import type { FmtPrefs } from '@/domain/fmtPrefs';
 
+import { t } from './i18n';
+
 interface Archivable {
   name: string;
   archived_at?: string | null;
@@ -29,9 +31,7 @@ export function canManageBudget(b: { is_owner: boolean } | null | undefined): bo
 /** What a member reads where the owner has the rename and archive/delete controls. */
 export function ownerOnlyHint(owner: { name: string | null; email: string | null } | null | undefined): string {
   const who = owner?.name?.trim() || owner?.email || null;
-  return who
-    ? `Only the owner (${who}) can rename, archive or delete this budget.`
-    : 'Only the owner can rename, archive or delete this budget.';
+  return who ? t('hint.ownerOnlyNamed', { name: who }) : t('hint.ownerOnly');
 }
 
 /** Row label of an archived budget: its name plus the archive date (`archived_at` is a timestamp; the formatter takes a date). */
@@ -41,21 +41,17 @@ export function archivedBudgetLabel(b: Archivable, formatDate: (iso: string) => 
 
 /** Fresh Start explainer for the active budget (or the prompt to pick one). */
 export function freshStartHint(current: { name: string } | null | undefined): string {
-  return current
-    ? `Archives "${current.name}" — renamed with the archive timestamp, every row kept — and starts a new "${current.name}". Kept: accounts, linked-account balances and history through today, scheduled transactions, targets, category and payee setup. Reset: budgeted amounts, month notes, category activity. Archived budgets stay in Open Budget.`
-    : 'Switch to a budget first.';
+  return current ? t('hint.freshStart', { name: current.name }) : t('hint.switchFirst');
 }
 
 /** Explainer above the archive/unarchive row of Plan Settings. */
 export function manageBudgetHint(name: string, archived: boolean): string {
-  return archived
-    ? `"${name}" is archived. Unarchive to bring it back, or delete it permanently.`
-    : `Archives "${name}" — every row is kept. Archived budgets stay in Open Budget.`;
+  return archived ? t('hint.manageArchived', { name }) : t('hint.manage', { name });
 }
 
 /** Warning inside the permanent-delete modal. */
 export function deleteBudgetNote(name: string): string {
-  return `Deletes "${name}" and every transaction, account, category and setting in it. This cannot be undone.`;
+  return t('delete.note', { name });
 }
 
 /** The delete only fires once "delete" is typed (any case, surrounding spaces ignored). */

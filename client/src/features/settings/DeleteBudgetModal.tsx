@@ -10,6 +10,7 @@ import type { BudgetRow } from '@/budget/data/rows';
 import { clearActiveBudget } from '@/state/thunks';
 import { selectActiveBudgetId } from '@/state/ui';
 import { OverlaySheet } from '@/ui/primitives/OverlaySheet';
+import { t } from './i18n';
 import { MenuRow } from './menuRows';
 import { refetchBudgets } from '@/state/refetchBudgets';
 import { deleteBudgetNote, isDeleteArmed } from './settings.logic';
@@ -46,28 +47,28 @@ export function DeleteBudgetModal({ target, onClose }: { target: BudgetRow; onCl
       })
       .catch((err) => {
         setBusy(false);
-        setError(apiErrorMessage(err));
+        setError(apiErrorMessage(err, t('delete.failed')));
       });
   };
 
   return (
-    <OverlaySheet visible onClose={onClose} title="Delete Permanently">
+    <OverlaySheet visible onClose={onClose} title={t('delete.title')}>
       <Text style={s.dangerNote}>
         {deleteBudgetNote(target.name)}
       </Text>
       <TextInput
         value={confirmText}
         onChangeText={setConfirmText}
-        placeholder='Type "delete" to confirm'
+        placeholder={t('delete.placeholder')}
         placeholderTextColor={colors.faint}
         autoCapitalize="none"
         autoCorrect={false}
         style={s.input}
-        accessibilityLabel="Type delete to confirm permanent deletion"
+        accessibilityLabel={t('delete.inputLabel')}
         autoFocus
         onSubmitEditing={del}
       />
-      <MenuRow label="Delete Forever" chevron="✕" onPress={del} emphasized={armed} />
+      <MenuRow label={t('delete.confirm')} chevron="✕" onPress={del} emphasized={armed} />
       {error ? <Text style={s.errorText}>{error}</Text> : null}
     </OverlaySheet>
   );

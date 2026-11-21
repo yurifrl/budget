@@ -6,6 +6,7 @@ import { useAppSelector } from '@/state/hooks';
 import { useGetBudgetsQuery } from '@/budget/data/api';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { selectActiveBudgetId } from '@/state/ui';
+import { t } from './i18n';
 import { MenuRow } from './menuRows';
 import { archivedBudgetLabel, splitBudgets } from './settings.logic';
 import { s } from './styles';
@@ -29,10 +30,10 @@ export function OpenBudgetPane() {
           onPress={() => nav.openBudget(b.id)}
         />
       ))}
-      {!active.length ? <Text style={s.hint}>No budgets yet.</Text> : null}
+      {!active.length ? <Text style={s.hint}>{t('open.empty')}</Text> : null}
       {archived.length ? (
         <>
-          <Text style={s.sectionLabel}>ARCHIVED</Text>
+          <Text style={s.sectionLabel}>{t('open.archived')}</Text>
           {archived.map((b) => (
             <MenuRow
               key={b.id}

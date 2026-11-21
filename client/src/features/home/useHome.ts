@@ -20,6 +20,7 @@ import { refetchBudgets } from '@/state/refetchBudgets';
 import { switchBudget } from '@/state/thunks';
 import { useMedia } from '@/ui/media';
 
+import { t } from './i18n';
 import { budgetEntryRoute, checkBudgetName, homeGreeting, homeSections, homeView } from './home.logic';
 
 export function useHome() {
@@ -61,7 +62,7 @@ export function useHome() {
         await open(created.id);
         return true;
       } catch (err) {
-        setCreateError(apiErrorMessage(err, 'Could not create the budget. Try again.'));
+        setCreateError(apiErrorMessage(err, t('create.failed')));
         return false;
       } finally {
         setCreating(false);

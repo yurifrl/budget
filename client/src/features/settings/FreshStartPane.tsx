@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Text } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { useMenuNav } from '@/shell/menuNav';
 import { useAppDispatch, useAppSelector } from '@/state/hooks';
@@ -10,6 +12,7 @@ import { switchBudget } from '@/state/thunks';
 import { selectActiveBudgetId } from '@/state/ui';
 import { MenuRow } from './menuRows';
 import { refetchBudgets } from '@/state/refetchBudgets';
+import { t } from './i18n';
 import { freshStartHint } from './settings.logic';
 import { s } from './styles';
 
@@ -35,7 +38,7 @@ export function FreshStartPane() {
         dispatch(switchBudget(created.id));
         nav.close();
       })
-      .catch((err) => setError(apiErrorMessage(err)));
+      .catch((err) => setError(apiErrorMessage(err, t('fresh.failed'))));
   };
   return (
     <>
@@ -43,9 +46,9 @@ export function FreshStartPane() {
         {freshStartHint(current)}
       </Text>
       {confirm ? (
-        <MenuRow label="Yes — start fresh" emphasized onPress={start} />
+        <MenuRow label={t('fresh.confirm')} emphasized onPress={start} />
       ) : null}
-      <MenuRow label={confirm ? 'Cancel' : 'Make a Fresh Start'} emphasized={!confirm} onPress={() => setConfirm(!confirm)} />
+      <MenuRow label={confirm ? tCommon('cancel') : t('fresh.start')} emphasized={!confirm} onPress={() => setConfirm(!confirm)} />
       {error ? <Text style={s.errorText}>{error}</Text> : null}
     </>
   );
