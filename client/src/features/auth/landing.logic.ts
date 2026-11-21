@@ -5,17 +5,20 @@
  * sign-in is still possible") are tested without a renderer; LoginGate.tsx
  * and LandingPage.tsx only draw the result.
  */
+import en from './i18n/en';
+import { t } from './i18n';
 import { loginButtons, type LoginButton, type Providers, type SignInAction } from './signIn.logic';
 
+// eslint-disable-next-line budget-i18n/no-untranslated-string -- brand name, not translated
 export const PRODUCT_NAME = 'Budget';
-/** The one line about the product. Only what the app does today: plan, accounts, spending, shared budgets. */
-export const LANDING_HEADLINE = 'One budget for the whole household.';
-export const LANDING_BODY =
-  'Plan each month, keep your accounts up to date and see where the money goes, together with the people you share a budget with.';
-/** There is no sign-up flow anywhere; say so instead of leaving people looking for one. */
-export const LANDING_FOOTNOTE = 'There is no sign-up. Use the login you already have.';
+/**
+ * The one line about the product (only what the app does today: plan,
+ * accounts, spending, shared budgets), in the English source text that tests
+ * compare with. `gateView` puts the translated line on screen.
+ */
+export const LANDING_HEADLINE: string = en['landing.headline'];
 
-export const UNREACHABLE_HEADLINE = 'Can’t reach the API';
+// eslint-disable-next-line budget-i18n/no-untranslated-string -- developer-only hint (commands), shown in dev builds only
 export const UNREACHABLE_DEV_HINT = 'Start it with `task api`. If the URL looks wrong, restart Expo with `bun start --clear`.';
 
 export type LandingView =
@@ -41,8 +44,8 @@ export function gateView(s: GateState): GateView {
       kind: 'landing',
       view: {
         kind: 'unreachable',
-        headline: UNREACHABLE_HEADLINE,
-        body: `No answer from ${s.apiUrl}. Retrying automatically.`,
+        headline: t('landing.unreachableHeadline'),
+        body: t('landing.unreachableBody', { url: s.apiUrl }),
         hint: s.dev ? UNREACHABLE_DEV_HINT : null,
       },
     };
@@ -54,9 +57,9 @@ export function gateView(s: GateState): GateView {
     kind: 'landing',
     view: {
       kind: 'sign-in',
-      headline: LANDING_HEADLINE,
-      body: LANDING_BODY,
-      footnote: LANDING_FOOTNOTE,
+      headline: t('landing.headline'),
+      body: t('landing.body'),
+      footnote: t('landing.footnote'),
       buttons: loginButtons(s.providers),
       passwordForm: s.providers.password,
       notice: s.notice,

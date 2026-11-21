@@ -21,6 +21,7 @@ import {
   type Providers,
   type SignInAction,
 } from './signIn.logic';
+import { t } from './i18n';
 import type { AuthStatus } from './useAuth';
 
 /** sessionStorage, when this is a browser that has one (null on native or when blocked). */
@@ -133,12 +134,13 @@ export function useSignIn(apiUrl: string, status: AuthStatus, storage: KVStore, 
       try {
         const result = await WebBrowser.openAuthSessionAsync(startUrl, redirectUrl);
         if (result.type !== 'success' || !result.url) {
-          setNotice('Sign-in cancelled.');
+          setNotice(t('notice.cancelled'));
           return;
         }
         const parsed = parseAuthCallback(result.url);
         if (parsed.kind !== 'success') {
-          setNotice(parsed.error);
+          // The provider's own error text is for developers; the person gets a plain sentence.
+          setNotice(parsed.error === 'cancelled' ? t('notice.cancelled') : t('notice.failed'));
           return;
         }
         const outcome =
@@ -146,13 +148,13 @@ export function useSignIn(apiUrl: string, status: AuthStatus, storage: KVStore, 
             ? await exchangeAccessCode(apiUrl, parsed.code)
             : await fetchSessionToken(apiUrl, parsed.code, parsed.state);
         if ('error' in outcome) {
-          setNotice(outcome.error);
+          setNotice(t('notice.failed'));
           return;
         }
         await saveSessionToken(storage, outcome.token);
         refresh();
       } catch {
-        setNotice('Sign-in failed. Please try again.');
+        setNotice(t('notice.failed'));
       }
     },
     [apiUrl, goAccessWeb, refresh, storage],

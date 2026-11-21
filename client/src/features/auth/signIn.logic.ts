@@ -21,6 +21,9 @@
 import { authProvidersSchema } from '@shared/contracts/user/providers';
 import { z } from '@shared/zod';
 
+import en from './i18n/en';
+import { t } from './i18n';
+
 /** An API that predates the `password` field answers without it: that means off. */
 const clientProvidersSchema = authProvidersSchema.extend({ password: z.boolean().default(false) });
 
@@ -37,7 +40,8 @@ export const ACCESS_REDIRECT_WINDOW_MS = 2 * 60_000;
 /** localStorage key set by an explicit sign-out (web); present = no automatic redirect. */
 export const SIGNED_OUT_KEY = 'budget.signedOutOnPurpose';
 
-export const ACCESS_RETRY_ERROR = 'Automatic sign-in with Cloudflare Access did not complete. Try again.';
+/** The failed-round-trip notice in the English source text (what tests compare with); `decideSignIn` returns the translated one. */
+export const ACCESS_RETRY_ERROR: string = en['notice.accessRetry'];
 
 const base = (apiUrl: string) => apiUrl.replace(/\/+$/, '');
 
@@ -109,7 +113,7 @@ export function decideSignIn(s: SignInState): SignInAction {
   if (s.platform !== 'web' || !s.providers.access) return { kind: 'show-login', error: null };
   // An explicit sign-out outranks everything automatic, the loop-guard error included.
   if (s.signedOut) return { kind: 'show-login', error: null };
-  if (redirectedRecently(s.lastRedirectAt, s.now)) return { kind: 'show-login', error: ACCESS_RETRY_ERROR };
+  if (redirectedRecently(s.lastRedirectAt, s.now)) return { kind: 'show-login', error: t('notice.accessRetry') };
   return { kind: 'auto-redirect' };
 }
 
@@ -121,7 +125,7 @@ export interface LoginButton {
 /** Buttons on the login screen: Access first (the default), Google when it is on too. */
 export function loginButtons(p: Providers): LoginButton[] {
   const out: LoginButton[] = [];
-  if (p.access) out.push({ provider: 'access', label: 'Sign in' });
-  if (p.google) out.push({ provider: 'google', label: 'Sign in with Google' });
+  if (p.access) out.push({ provider: 'access', label: t('button.signIn') });
+  if (p.google) out.push({ provider: 'google', label: t('button.signInGoogle') });
   return out;
 }

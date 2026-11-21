@@ -6,6 +6,7 @@ import { colors, radius } from '@/ui/theme';
 
 import { useUpdateMeMutation } from '@/profile/api';
 import { checkDisplayName, NAME_MAX, type Me } from '@/profile/model';
+import { t } from './i18n';
 import { ui } from './ui';
 
 export function NameField({ me }: { me: Me }) {
@@ -28,35 +29,35 @@ export function NameField({ me }: { me: Me }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
     } catch (e) {
-      setError((e as { message?: string }).message ?? 'Couldn’t save your name.');
+      setError((e as { message?: string }).message ?? t('name.saveFailed'));
       setDraft(me.name ?? '');
     }
   }
 
   return (
     <View style={ui.card}>
-      <Text style={ui.sectionTitle}>DISPLAY NAME</Text>
+      <Text style={ui.sectionTitle}>{t('name.title')}</Text>
       <TextInput
         value={draft}
-        onChangeText={(t) => {
-          setDraft(t);
+        onChangeText={(text) => {
+          setDraft(text);
           setSaved(false);
           if (error) setError(null);
         }}
         onBlur={commit}
         onSubmitEditing={commit}
         maxLength={NAME_MAX + 20}
-        placeholder="Your name"
+        placeholder={t('name.placeholder')}
         placeholderTextColor={colors.faint}
         returnKeyType="done"
-        accessibilityLabel="Display name"
+        accessibilityLabel={t('name.label')}
         style={[styles.input, error ? styles.inputError : null]}
       />
       <View style={styles.footer}>
-        {error ? <Text style={ui.error}>{error}</Text> : <Text style={ui.muted}>{isLoading ? 'Saving…' : saved ? 'Saved ✓' : 'Shown next to your picture to everyone you share a budget with.'}</Text>}
+        {error ? <Text style={ui.error}>{error}</Text> : <Text style={ui.muted}>{isLoading ? t('name.saving') : saved ? t('name.saved') : t('name.help')}</Text>}
       </View>
       <View style={styles.readonly}>
-        <Text style={ui.sectionTitle}>EMAIL</Text>
+        <Text style={ui.sectionTitle}>{t('name.emailTitle')}</Text>
         <Text style={styles.email} selectable>
           {me.email}
         </Text>

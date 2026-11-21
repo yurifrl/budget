@@ -3,7 +3,8 @@ import { Platform } from 'react-native';
 
 import type { KVStore } from '@/platform/storage/types';
 import { saveSessionToken } from '@/platform/storage/sessionToken';
-import { changeTokenDead, CHANGE_LINK_EXPIRED, failureMessage, GENERIC_FAILURE, type PasswordFailure } from './password.logic';
+import { t } from './i18n';
+import { changeLinkExpiredMessage, changeTokenDead, failureMessage, type PasswordFailure } from './password.logic';
 import { passwordComplete, passwordLogin } from './passwordApi';
 
 /** Where the e-mail + password flow is: the sign-in form, or the forced "choose a new password" step. */
@@ -47,11 +48,11 @@ export function usePasswordSignIn(apiUrl: string, storage: KVStore, refresh: () 
   const finish = useCallback(
     async (data: { token?: string | undefined }) => {
       if (native) {
-        if (!data.token) return setError(GENERIC_FAILURE);
+        if (!data.token) return setError(t('failure.generic'));
         try {
           await saveSessionToken(storage, data.token);
         } catch {
-          return setError(GENERIC_FAILURE);
+          return setError(t('failure.generic'));
         }
       }
       changeToken.current = null;
@@ -84,7 +85,7 @@ export function usePasswordSignIn(apiUrl: string, storage: KVStore, refresh: () 
   const choose = useCallback(
     async (newPassword: string) => {
       const token = changeToken.current;
-      if (!token) return backToForm(CHANGE_LINK_EXPIRED);
+      if (!token) return backToForm(changeLinkExpiredMessage());
       setError(null);
       setBusy(true);
       try {

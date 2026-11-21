@@ -4,6 +4,7 @@ import { Pressable } from 'react-native';
 
 import { Avatar } from '@/ui/avatar/Avatar';
 
+import { t } from './i18n';
 import { useMe } from './useMe';
 
 export function MeAvatarButton({ size = 32 }: { size?: number }) {
@@ -13,7 +14,7 @@ export function MeAvatarButton({ size = 32 }: { size?: number }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Open profile"
+      accessibilityLabel={t('avatarButton.label')}
       hitSlop={6}
       onPress={() => router.push('/profile')}>
       <Avatar person={me} size={size} />
