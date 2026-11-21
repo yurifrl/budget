@@ -49,10 +49,10 @@ export function matchCandidates(
 export function txnsCsv(txns: readonly Transaction[], budget: Budget): string {
   const esc = (v: string) =>
     /[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v;
+  // eslint-disable-next-line budget-i18n/no-untranslated-string -- CSV column headers of the export file (YNAB-style data format), not UI text
+  const header = ["Date", "Payee", "Category", "Memo", "Outflow", "Inflow", "Cleared"];
   return [
-    ["Date", "Payee", "Category", "Memo", "Outflow", "Inflow", "Cleared"].join(
-      ",",
-    ),
+    header.join(","),
     ...txns.map((txn) => {
       const cat =
         budget.categories.find((c) => c.id === txn.categoryId)?.name ?? "";

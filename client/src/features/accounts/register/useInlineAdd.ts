@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { apiErrorMessage } from '@/platform/api/baseQuery';
 import {
   useAddCategoryMutation,
   useAddRepeatRuleMutation,
@@ -32,6 +33,7 @@ import {
 import { editDirty, newDraftDirty } from '@/domain/rowEdit';
 import type { Budget, Cents, RepeatFrequency, Transaction, TransactionSplit } from '@/domain/types';
 import { useMoneyFormat } from '@/ui/moneyFormat';
+import { t } from './i18n';
 
 export function useInlineAdd({
   budget,
@@ -249,7 +251,7 @@ export function useInlineAdd({
       if (keepOpen) resetForNext();
       else onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed to save transaction');
+      setError(apiErrorMessage(err, t('error.save')));
     }
   };
 
@@ -261,7 +263,7 @@ export function useInlineAdd({
       await deleteRepeatRule({ budgetId, ruleId: transaction.repeatRuleId }).unwrap();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed to stop repeat');
+      setError(apiErrorMessage(err, t('error.stopRepeat')));
     }
   };
 
@@ -279,7 +281,7 @@ export function useInlineAdd({
       if (assign) assign(created.id);
       else setCategoryId(created.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed to create category');
+      setError(apiErrorMessage(err, t('error.createCategory')));
     }
   };
 

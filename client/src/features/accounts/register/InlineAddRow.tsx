@@ -11,6 +11,7 @@
 import { StyleSheet, Text, TextInput, View, Pressable } from 'react-native';
 
 import { transferPayeeName } from '@shared/domain/transfers';
+import { tCommon } from '@shared/i18n/common';
 
 import { useGetPayeesQuery } from '@/budget/data/api';
 import { todayIso } from '@/domain/format';
@@ -22,6 +23,7 @@ import { colors, radius } from '@/ui/theme';
 import { AccountDropdown } from '@/ui/dropdown/AccountDropdown';
 import { CategoryDropdown } from '@/ui/dropdown/CategoryDropdown';
 import { DatePickerPopover } from '@/ui/dropdown/DatePickerPopover';
+import { t } from './i18n';
 import { InlineConvPanel } from './InlineConvPanel';
 import { InlineRepeatFooter } from './InlineRepeatFooter';
 import { InlineSplitPanel } from './InlineSplitPanel';
@@ -60,10 +62,10 @@ export function InlineAddRow({
           accounts={budget.accounts}
           currentAccountId={account?.id ?? null}
           onPick={row.setAccountId}
-          placeholder="Account"
+          placeholder={t('field.account')}
           chevron
           containerStyle={{ flex: 1.1 }}
-          accessibilityLabel="Account"
+          accessibilityLabel={t('field.account')}
         />
         <DatePickerPopover
           value={dateText}
@@ -72,7 +74,7 @@ export function InlineAddRow({
           onEnter={() => void save(true)}
           style={[styles.input, !dateIso && dateText.trim() ? styles.inputInvalid : null]}
           containerStyle={{ flex: 0.7 }}
-          accessibilityLabel="Date"
+          accessibilityLabel={t('field.date')}
           footer={
             <InlineRepeatFooter
               transaction={transaction}
@@ -91,10 +93,10 @@ export function InlineAddRow({
           payees={payees.data ?? []}
           accounts={budget.accounts}
           currentAccountId={account?.id ?? null}
-          placeholder="Payee"
+          placeholder={t('field.payee')}
           chevron
           containerStyle={{ flex: 1.4 }}
-          accessibilityLabel="Payee"
+          accessibilityLabel={t('field.payee')}
         />
         <CategoryDropdown
           categories={budget.categories}
@@ -119,18 +121,18 @@ export function InlineAddRow({
             row.setCategoryId(null);
           }}
           onSplitPick={row.openSplitEditor}
-          placeholder="Category"
+          placeholder={t('field.category')}
           chevron
           containerStyle={{ flex: 1.4 }}
-          accessibilityLabel="Category"
+          accessibilityLabel={t('field.category')}
         />
         <TextInput
           value={memo}
           onChangeText={row.setMemo}
-          placeholder="Memo"
+          placeholder={t('field.memo')}
           placeholderTextColor={colors.faint}
           style={[styles.input, { flex: 1.2 }]}
-          accessibilityLabel="Memo"
+          accessibilityLabel={t('field.memo')}
           onKeyPress={(e) => {
             if (e.nativeEvent.key === 'Enter') void save(true);
             if (e.nativeEvent.key === 'Escape') onClose();
@@ -171,19 +173,19 @@ export function InlineAddRow({
         <Pressable
           onPress={onClose}
           style={styles.btnGhost}
-          accessibilityLabel={editing ? 'Cancel editing transaction' : 'Cancel new transaction'}>
-          <Text style={styles.btnGhostText}>Cancel</Text>
+          accessibilityLabel={editing ? t('row.cancelEditing') : t('row.cancelNew')}>
+          <Text style={styles.btnGhostText}>{tCommon('cancel')}</Text>
         </Pressable>
         {!editing ? (
           <Pressable
             onPress={() => void save(true)}
             style={styles.btnGhost}
-            accessibilityLabel="Save transaction and add another">
-            <Text style={styles.btnGhostText}>Save and add another</Text>
+            accessibilityLabel={t('row.saveAndAddLabel')}>
+            <Text style={styles.btnGhostText}>{t('row.saveAndAdd')}</Text>
           </Pressable>
         ) : (
           row.saving && (
-            <Text style={styles.btnGhostText}>Saving…</Text>
+            <Text style={styles.btnGhostText}>{t('row.saving')}</Text>
           )
         )}
         {error ? (

@@ -1,0 +1,81 @@
+export default {
+  // Shared field names (placeholders and accessibility labels of the inline row)
+  'field.account': 'Account',
+  'field.date': 'Date',
+  'field.payee': 'Payee',
+  'field.category': 'Category',
+  'field.memo': 'Memo',
+
+  // Inline add / edit row
+  'row.cancelEditing': 'Cancel editing transaction',
+  'row.cancelNew': 'Cancel new transaction',
+  'row.saveAndAdd': 'Save and add another',
+  'row.saveAndAddLabel': 'Save transaction and add another',
+  'row.saving': 'Saving…',
+  'error.save': 'Could not save the transaction',
+  'error.stopRepeat': 'Could not stop the repeat',
+  'error.createCategory': 'Could not create the category',
+
+  // Split editor
+  'split.title': 'Split across categories',
+  'split.doneLabel': 'Done splitting',
+  'split.categoryLabel': 'Split {number} category',
+  'split.memoLabel': 'Split {number} memo',
+  'split.removeLabel': 'Remove split {number}',
+  'split.add': '+ Add another split',
+
+  // Scheduled USD to BRL conversion panel
+  'conv.fetching': 'Fetching USD→BRL rate…',
+  'conv.outflow': 'Outflow {amount} ≈',
+  'conv.inflow': 'Inflow {amount} ≈',
+  'conv.rateLabel': 'USD to BRL rate',
+  'conv.rate': '1 USD = {rate} BRL',
+  'conv.retry': 'rate unavailable — retry',
+
+  // Calendar-footer repeat control
+  'repeat.repeats': 'Repeats {frequency}',
+  'repeat.stop': 'Stop Repeating',
+  'repeat.label': 'Repeat',
+  'repeat.never': 'Never',
+  'repeat.frequencyLabel': 'Repeat frequency',
+  'repeat.make': 'Make Repeating',
+
+  // Row context menu
+  'menu.closeLabel': 'Close transaction menu',
+  'menu.kebabLabel': 'Transaction menu',
+  'menu.backLabel': 'Back to menu',
+  'menu.approve': 'Approve',
+  'menu.reject': 'Reject',
+  'menu.markCleared': 'Mark as Cleared',
+  'menu.markUncleared': 'Mark as Uncleared',
+  'menu.match': 'Match',
+  'menu.unmatch': 'Unmatch',
+  'menu.duplicate': 'Duplicate',
+  'menu.makeRepeating': 'Make Repeating',
+  'menu.flag': 'Flag',
+  'menu.memo': 'Memo…',
+  'menu.memoShort': 'Memo',
+  'menu.categorize': 'Categorize',
+  'menu.moveToAccount': 'Move to Account',
+  'menu.export': 'Export 1 Transaction',
+  'menu.noFlag': 'No flag',
+  'menu.noFlagTitleCase': 'No Flag',
+  'menu.uncategorized': 'Uncategorized',
+  'menu.readyToAssign': 'Ready to Assign',
+  'menu.noMatches': 'No matching transactions',
+  'menu.noPayee': '(no payee)',
+  'menu.matchWith': 'Match with {payee}',
+  'menu.matchedWith': 'Matched with {payee}',
+  'menu.moveTo': 'Move to {name}',
+  'menu.matchOption': '{payee} — {date} · {amount}',
+
+  // Payee dropdown
+  'payee.section.selected': 'Selected',
+  'payee.section.transfers': 'Payments and Transfers',
+  'payee.section.saved': 'Saved Payees',
+  'payee.sub.cash': 'Cash account',
+  'payee.sub.credit': 'Credit account',
+  'payee.sub.account': 'Account',
+  'payee.create': 'Use “{name}” as payee',
+  'payee.manage': 'Manage Payees…',
+} as const;

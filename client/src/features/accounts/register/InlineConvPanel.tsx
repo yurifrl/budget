@@ -10,6 +10,7 @@ import type { UsdDraft } from '@/domain/inlineAdd';
 import type { Cents } from '@/domain/types';
 import { MoneyInput } from '@/ui/bits';
 import { colors, radius } from '@/ui/theme';
+import { t } from './i18n';
 
 export function InlineConvPanel({
   usd,
@@ -34,12 +35,14 @@ export function InlineConvPanel({
       {rateFetching && !rateData ? (
         <View style={styles.convRow}>
           <ActivityIndicator size="small" color={colors.indigo} />
-          <Text style={styles.convLabel}>Fetching USD→BRL rate…</Text>
+          <Text style={styles.convLabel}>{t('conv.fetching')}</Text>
         </View>
       ) : (
         <View style={styles.convRow}>
           <Text style={styles.convLabel}>
-            {usd.field === 'outflow' ? 'Outflow' : 'Inflow'} {formatUsd(usd.cents)} ≈
+            {usd.field === 'outflow'
+              ? t('conv.outflow', { amount: formatUsd(usd.cents) })
+              : t('conv.inflow', { amount: formatUsd(usd.cents) })}
           </Text>
           <MoneyInput
             cents={cents}
@@ -47,13 +50,13 @@ export function InlineConvPanel({
             style={styles.convInput}
           />
           {rateData ? (
-            <Text style={styles.convRate} accessibilityLabel="USD to BRL rate">
-              1 USD = {rateData.rate.toFixed(4)} BRL
+            <Text style={styles.convRate} accessibilityLabel={t('conv.rateLabel')}>
+              {t('conv.rate', { rate: rateData.rate.toFixed(4) })}
             </Text>
           ) : null}
           {rateError ? (
             <Pressable onPress={() => onRetry()} style={styles.convRetry}>
-              <Text style={styles.convErrorText}>rate unavailable — retry</Text>
+              <Text style={styles.convErrorText}>{t('conv.retry')}</Text>
             </Pressable>
           ) : null}
         </View>

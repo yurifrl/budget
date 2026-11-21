@@ -1,6 +1,9 @@
 import { Pressable, Text, TextInput, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 import { styles } from './styles';
 import type { AddTransaction } from './useAddTransaction';
 
@@ -30,7 +33,7 @@ export function SheetPicker({ sheet }: { sheet: AddTransaction }) {
     <>
       <Pressable style={styles.row} onPress={closePicker}>
         <Text style={styles.rowIcon}>‹</Text>
-        <Text style={styles.rowV}>Back</Text>
+        <Text style={styles.rowV}>{tCommon('back')}</Text>
       </Pressable>
       {picker !== 'account' ? (
         <View style={styles.row}>
@@ -38,11 +41,11 @@ export function SheetPicker({ sheet }: { sheet: AddTransaction }) {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder={picker === 'payee' ? 'Find or add a payee' : 'Search Categories'}
+            placeholder={picker === 'payee' ? t('picker.payeeSearch') : t('picker.categorySearch')}
             placeholderTextColor={colors.muted}
             autoFocus
             style={styles.payeeInput}
-            accessibilityLabel={picker === 'payee' ? 'Find or add a payee' : 'Search categories'}
+            accessibilityLabel={picker === 'payee' ? t('picker.payeeSearch') : t('picker.categorySearchLabel')}
           />
         </View>
       ) : null}
@@ -52,7 +55,7 @@ export function SheetPicker({ sheet }: { sheet: AddTransaction }) {
             <Pressable style={styles.row} onPress={() => pickPayee(query)}>
               <Text style={[styles.rowIcon, { color: colors.indigo2 }]}>＋</Text>
               <Text style={[styles.rowV, { color: colors.indigo2 }]}>
-                Create “{query}” Payee
+                {t('picker.createPayee', { query })}
               </Text>
             </Pressable>
           ) : null}
@@ -70,7 +73,7 @@ export function SheetPicker({ sheet }: { sheet: AddTransaction }) {
             <Pressable style={styles.row} onPress={() => void createCategory()}>
               <Text style={[styles.rowIcon, { color: colors.indigo2 }]}>＋</Text>
               <Text style={[styles.rowV, { color: colors.indigo2 }]}>
-                New “{query}” Category
+                {t('picker.createCategory', { query })}
               </Text>
             </Pressable>
           ) : null}

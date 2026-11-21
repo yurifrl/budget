@@ -12,6 +12,7 @@ import { REPEAT_FREQS, REPEAT_LABELS } from '@/domain/inlineAdd';
 import type { Budget, FlagColor, RepeatFrequency, Transaction } from '@/domain/types';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { FLAG_COLORS, colors } from '@/ui/theme';
+import { t } from './i18n';
 import { menuCategoryGroups, type MainItem, type MainItemKey } from './txnRowMenu.logic';
 
 /** The main list: icon, label, shortcut chips and ▸ per item, hairline dividers between sections. */
@@ -75,25 +76,25 @@ export function MatchPanel({
   return (
     <View>
       {candidates.length === 0 ? (
-        <Text style={styles.empty}>No matching transactions</Text>
+        <Text style={styles.empty}>{t('menu.noMatches')}</Text>
       ) : (
-        candidates.map((t) => (
+        candidates.map((c) => (
           <Pressable
-            key={t.id}
+            key={c.id}
             style={styles.item}
-            onPress={() => onMatch(t)}
-            accessibilityLabel={`Match with ${t.payee}`}>
+            onPress={() => onMatch(c)}
+            accessibilityLabel={t('menu.matchWith', { payee: c.payee })}>
             <Text style={styles.itemText} numberOfLines={1}>
-              {t.payee || '(no payee)'}
+              {c.payee || t('menu.noPayee')}
             </Text>
             <Text style={styles.itemHint}>
-              {formatDate(t.date)} · {formatMoney(t.inflow - t.outflow)}
+              {formatDate(c.date)} · {formatMoney(c.inflow - c.outflow)}
             </Text>
           </Pressable>
         ))
       )}
       {matched ? (
-        <Text style={styles.empty}>Matched with {matched.payee || '(no payee)'}</Text>
+        <Text style={styles.empty}>{t('menu.matchedWith', { payee: matched.payee || t('menu.noPayee') })}</Text>
       ) : null}
     </View>
   );
@@ -117,11 +118,11 @@ export function FlagPanel({ flagLabels, onPick }: { flagLabels: FlagLabels; onPi
       <Pressable
         style={styles.item}
         onPress={() => onPick(null)}
-        accessibilityLabel="No flag">
+        accessibilityLabel={t('menu.noFlag')}>
         <View style={styles.itemIcon}>
           <Ionicons name="flag" size={15} color={colors.faint} />
         </View>
-        <Text style={styles.itemText}>No flag</Text>
+        <Text style={styles.itemText}>{t('menu.noFlag')}</Text>
       </Pressable>
       {FLAG_COLORS.map((f) => (
         <Pressable
@@ -153,7 +154,7 @@ export function CategoryPanel({
         <View style={styles.itemIcon}>
           <Ionicons name="pricetag-outline" size={15} color={colors.faint} />
         </View>
-        <Text style={styles.itemText}>Ready to Assign</Text>
+        <Text style={styles.itemText}>{t('menu.readyToAssign')}</Text>
       </Pressable>
       {menuCategoryGroups(budget).map((g) => (
         <View key={g.id}>
@@ -182,7 +183,7 @@ export function MovePanel({ targets, onPick }: { targets: { id: string; name: st
           key={a.id}
           style={styles.item}
           onPress={() => onPick(a.id)}
-          accessibilityLabel={`Move to ${a.name}`}>
+          accessibilityLabel={t('menu.moveTo', { name: a.name })}>
           <Text style={styles.itemText} numberOfLines={1}>
             {a.name}
           </Text>

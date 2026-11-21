@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { requiresReauth , LinkedBy , LinkOptionCard } from '@/features/banks';
 import { colors } from '@/ui/theme';
 import { connectedToLabel, unmatchedLinkHint } from './accountEdit.logic';
+import { t } from './i18n';
 import { styles } from './styles';
 import type { AccountEdit } from './useAccountEdit';
 
@@ -49,7 +50,7 @@ export function BankConnectionSection({ edit }: { edit: AccountEdit }) {
           <ActivityIndicator size="small" color={colors.indigo2} />
         ) : linkedOption ? (
           <>
-            <Text style={styles.followLabel}>FOLLOWING</Text>
+            <Text style={styles.followLabel}>{t('connection.following')}</Text>
             <LinkOptionCard option={linkedOption} />
           </>
         ) : (
@@ -60,42 +61,42 @@ export function BankConnectionSection({ edit }: { edit: AccountEdit }) {
       </View>
       <View style={styles.connActions}>
         <Pressable style={styles.connBtn} disabled={syncing} onPress={() => void syncNow()}>
-          <Text style={styles.ghostText}>{syncing ? 'Syncing…' : 'Sync now'}</Text>
+          <Text style={styles.ghostText}>{syncing ? t('connection.syncing') : t('connection.syncNow')}</Text>
         </Pressable>
         {requiresReauth(connection.status) ? (
           <Pressable style={styles.warnBtn} onPress={reconnect}>
-            <Text style={styles.warnText}>Reconnect</Text>
+            <Text style={styles.warnText}>{t('connection.reconnect')}</Text>
           </Pressable>
         ) : null}
         <Pressable style={styles.connBtn} accessibilityRole="button" onPress={manageOnBankPage}>
-          <Text style={styles.ghostText}>Manage on bank page</Text>
+          <Text style={styles.ghostText}>{t('connection.manage')}</Text>
         </Pressable>
         <Pressable style={styles.connBtn} onPress={() => setPickerOpen(true)}>
-          <Text style={styles.ghostText}>Change link</Text>
+          <Text style={styles.ghostText}>{t('connection.changeLink')}</Text>
         </Pressable>
         <Pressable style={styles.connBtn} disabled={linkBusy} onPress={() => setUnlinkAsk(true)}>
-          <Text style={styles.unlinkText}>Unlink</Text>
+          <Text style={styles.unlinkText}>{t('connection.unlink')}</Text>
         </Pressable>
       </View>
     </View>
   ) : (
     <View style={styles.linkBox}>
       <Text style={styles.hint}>
-        Not linked to a bank. Connect one to import transactions and update the balance automatically.
+        {t('connection.notLinked')}
       </Text>
       <Pressable
         style={styles.chooseBtn}
         accessibilityRole="button"
-        accessibilityLabel="Choose bank account"
+        accessibilityLabel={t('connection.chooseAccount')}
         onPress={() => setPickerOpen(true)}>
-        <Text style={styles.chooseBtnText}>Choose bank account</Text>
+        <Text style={styles.chooseBtnText}>{t('connection.chooseAccount')}</Text>
       </Pressable>
       <Pressable
         style={styles.linkBtn}
         accessibilityRole="button"
-        accessibilityLabel="Connect a new bank"
+        accessibilityLabel={t('connection.connectNew')}
         onPress={connectNewBank}>
-        <Text style={styles.linkBtnText}>Connect a new bank</Text>
+        <Text style={styles.linkBtnText}>{t('connection.connectNew')}</Text>
       </Pressable>
     </View>
   );

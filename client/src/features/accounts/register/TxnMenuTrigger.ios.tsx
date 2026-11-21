@@ -24,6 +24,7 @@
 import type { ReactElement } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { tCommon } from "@shared/i18n/common";
 import { Button, ContextMenu, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
 import { disabled } from "@expo/ui/swift-ui/modifiers";
 
@@ -33,6 +34,7 @@ import { useFlagLabels } from "@/state/useDisplayPrefs";
 import { useMoneyFormat } from "@/ui/moneyFormat";
 import { REPEAT_FREQS, REPEAT_LABELS } from "./InlineAddRow";
 import { FLAG_COLORS, colors } from "@/ui/theme";
+import { t } from "./i18n";
 import { useTxnRowMenuActions } from "./txnRowMenuShared";
 
 export function TxnMenuTrigger({
@@ -105,31 +107,31 @@ export function TxnMenuTrigger({
         </ContextMenu.Preview>
         <ContextMenu.Items>
           <Button
-            label="Approve"
+            label={t('menu.approve')}
             systemImage="checkmark"
             modifiers={[disabled(txn.approved)]}
             onPress={approve}
           />
           <Button
-            label="Reject"
+            label={t('menu.reject')}
             systemImage="xmark"
             modifiers={[disabled(txn.approved || txn.importId == null)]}
             onPress={reject}
           />
           <Button
-            label="Mark as Cleared"
+            label={t('menu.markCleared')}
             systemImage="checkmark.circle"
             modifiers={[disabled(txn.cleared !== "uncleared")]}
             onPress={() => setClear("cleared")}
           />
           <Button
-            label="Mark as Uncleared"
+            label={t('menu.markUncleared')}
             systemImage="circle"
             modifiers={[disabled(txn.cleared !== "cleared")]}
             onPress={() => setClear("uncleared")}
           />
           <Menu
-            label="Match"
+            label={t('menu.match')}
             systemImage="arrow.left.arrow.right"
             modifiers={[disabled(!hasCandidates || busy)]}
           >
@@ -137,31 +139,35 @@ export function TxnMenuTrigger({
               ? candidates.map((c) => (
                   <Button
                     key={c.id}
-                    label={`${c.payee} — ${formatDate(c.date)} · ${formatMoney(Math.abs(c.inflow - c.outflow))}`}
+                    label={t('menu.matchOption', {
+                      payee: c.payee,
+                      date: formatDate(c.date),
+                      amount: formatMoney(Math.abs(c.inflow - c.outflow)),
+                    })}
                     onPress={() => match(c)}
                   />
                 ))
               : null}
           </Menu>
           <Button
-            label="Unmatch"
+            label={t('menu.unmatch')}
             systemImage="link.badge.plus"
             modifiers={[disabled(!txn.matchedTransactionId || busy)]}
             onPress={unmatch}
           />
           <Button
-            label="Duplicate"
+            label={t('menu.duplicate')}
             systemImage="plus.square.on.square"
             modifiers={[disabled(busy)]}
             onPress={duplicate}
           />
           <Button
-            label="Memo"
+            label={t('menu.memoShort')}
             systemImage="square.and.pencil"
             onPress={() => onEditMemo(txn)}
           />
           <Menu
-            label="Make Repeating"
+            label={t('menu.makeRepeating')}
             systemImage="arrow.triangle.2.circlepath"
             modifiers={[
               disabled(txn.repeatRuleId != null || txn.upcoming || busy),
@@ -175,7 +181,7 @@ export function TxnMenuTrigger({
               />
             ))}
           </Menu>
-          <Menu label="Flag" systemImage="flag">
+          <Menu label={t('menu.flag')} systemImage="flag">
             {FLAG_COLORS.map(({ key }) => (
               <Button
                 key={key}
@@ -183,10 +189,10 @@ export function TxnMenuTrigger({
                 onPress={() => setFlag(key)}
               />
             ))}
-            <Button label="No Flag" onPress={() => setFlag(null)} />
+            <Button label={t('menu.noFlagTitleCase')} onPress={() => setFlag(null)} />
           </Menu>
-          <Menu label="Categorize" systemImage="tag">
-            <Button label="Uncategorized" onPress={() => categorize(null)} />
+          <Menu label={t('menu.categorize')} systemImage="tag">
+            <Button label={t('menu.uncategorized')} onPress={() => categorize(null)} />
             {budget.categories.map((cat) => (
               <Button
                 key={cat.id}
@@ -196,7 +202,7 @@ export function TxnMenuTrigger({
             ))}
           </Menu>
           <Menu
-            label="Move to Account"
+            label={t('menu.moveToAccount')}
             systemImage="arrowshape.turn.up.right"
             modifiers={[disabled(!canMove || busy)]}
           >
@@ -211,12 +217,12 @@ export function TxnMenuTrigger({
               : null}
           </Menu>
           <Button
-            label="Export 1 Transaction"
+            label={t('menu.export')}
             systemImage="square.and.arrow.up"
             onPress={() => void exportCsv()}
           />
           <Button
-            label="Delete"
+            label={tCommon('delete')}
             systemImage="trash"
             role="destructive"
             onPress={doDelete}

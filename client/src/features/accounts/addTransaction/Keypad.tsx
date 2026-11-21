@@ -2,6 +2,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { isKeypadOpKey, KEYPAD_KEYS, type KeypadKey } from '@/domain/txnKeypad';
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 import { styles } from './styles';
 
 /** Calculator keypad: digits, ÷ × − ＋, backspace and the save key. */
@@ -25,7 +26,7 @@ export function Keypad({
             if (k === 'done') onDone();
             else onKey(k);
           }}
-          accessibilityLabel={k === 'done' ? 'Save transaction' : `Key ${k}`}>
+          accessibilityLabel={k === 'done' ? t('keypad.save') : t('keypad.key', { key: k })}>
           <Text
             style={[
               styles.keyText,

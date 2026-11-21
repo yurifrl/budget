@@ -8,6 +8,8 @@ import { transferPayeeName } from '@shared/domain/transfers';
 import type { PayeeAdminRow } from '@/budget/data/rows';
 import type { Account } from '@/domain/types';
 
+import { t } from './i18n';
+
 type ItemKind = 'selected' | 'transfer' | 'payee';
 
 export interface PayeeItem {
@@ -51,7 +53,7 @@ export function payeeSections({
       kind: 'transfer' as const,
       key: `transfer:${a.id}`,
       label: transferPayeeName(a.name),
-      sub: a.group === 'CASH' ? 'Cash account' : a.group === 'CREDIT' ? 'Credit account' : 'Account',
+      sub: a.group === 'CASH' ? t('payee.sub.cash') : a.group === 'CREDIT' ? t('payee.sub.credit') : t('payee.sub.account'),
       commit: transferPayeeName(a.name),
     }));
   const payeeItems: PayeeItem[] = payees
@@ -83,14 +85,14 @@ export function payeeSections({
           checked: true,
         }
       : null;
-  const selectedSection: PayeeSection | null = selectedRow ? { title: 'Selected', items: [selectedRow] } : null;
+  const selectedSection: PayeeSection | null = selectedRow ? { title: t('payee.section.selected'), items: [selectedRow] } : null;
 
   const transfers = filterItems(transferItems);
   const saved = filterItems(payeeItems);
   return [
     ...(selectedSection ? [selectedSection] : []),
-    ...(transfers.length ? [{ title: 'Payments and Transfers', items: transfers }] : []),
-    ...(saved.length ? [{ title: 'Saved Payees', items: saved }] : []),
+    ...(transfers.length ? [{ title: t('payee.section.transfers'), items: transfers }] : []),
+    ...(saved.length ? [{ title: t('payee.section.saved'), items: saved }] : []),
   ];
 }
 

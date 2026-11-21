@@ -8,6 +8,8 @@ import type { ConnectionUpstreamJson, UpstreamAccountJson } from '@/budget/data/
 import { milliToCents } from '@/budget/data/mapping';
 import type { AccountRow } from '@/budget/data/rows';
 
+import { t } from './i18n';
+
 /** The account's working balance (cleared + uncleared) in cents. */
 export function workingCents(account: Pick<AccountRow, 'cleared_balance' | 'uncleared_balance'>): number {
   return milliToCents(account.cleared_balance + account.uncleared_balance);
@@ -33,11 +35,11 @@ export function findLinkedUpstream(
  */
 export function unmatchedLinkHint(upstream: ConnectionUpstreamJson[] | undefined): string {
   return upstream?.some((entry) => entry.accounts == null)
-    ? 'Bank account list unavailable — Sync now to refresh.'
-    : 'This link no longer matches a bank account — change the link to pick a new one.';
+    ? t('link.unavailable')
+    : t('link.stale');
 }
 
 /** "Connected to <institution>": the account's own label wins over the connection's. */
 export function connectedToLabel(accountInstitution: string | null | undefined, connectionInstitution: string | null | undefined): string {
-  return `Connected to ${accountInstitution ?? connectionInstitution ?? 'bank'}`;
+  return t('link.connectedTo', { institution: accountInstitution ?? connectionInstitution ?? t('link.bankFallback') });
 }

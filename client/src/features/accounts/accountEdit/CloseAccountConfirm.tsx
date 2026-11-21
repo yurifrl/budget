@@ -1,7 +1,11 @@
 import { Pressable, Text, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { closeConfirm } from '@/domain/accountEdit';
+import { rich } from '@/ui/i18n/rich';
 import { useMoneyFormat } from '@/ui/moneyFormat';
+import { t } from './i18n';
 import { styles } from './styles';
 
 /**
@@ -27,44 +31,37 @@ export function CloseAccountConfirm({
   return (
       <Pressable style={styles.confirmScrim} onPress={(e) => e.stopPropagation()}>
         <View style={styles.confirmBox}>
-          <Text style={styles.confirmTitle}>Close Account</Text>
+          <Text style={styles.confirmTitle}>{t('close.title')}</Text>
           {confirm.kind === 'plain' ? (
             <>
-              <Text style={styles.confirmBody}>
-                Are you sure you want to close this account?
-              </Text>
+              <Text style={styles.confirmBody}>{t('close.plain')}</Text>
               <View style={styles.confirmFooter}>
                 <Pressable style={styles.ghostBtn} onPress={onCancel}>
-                  <Text style={styles.ghostText}>Cancel</Text>
+                  <Text style={styles.ghostText}>{tCommon('cancel')}</Text>
                 </Pressable>
                 <Pressable style={styles.closeAccountBtn} disabled={busy} onPress={onConfirm}>
-                  <Text style={styles.closeAccountText}>Close</Text>
+                  <Text style={styles.closeAccountText}>{t('close.confirm')}</Text>
                 </Pressable>
               </View>
             </>
           ) : (
             <>
               <Text style={styles.confirmBody}>
-                Before you can close this account, the balance will have to be zeroed
-                out. An adjustment transaction will be created for{' '}
-                <Text style={styles.confirmBodyStrong}>
-                  {formatMoney(confirm.adjustment)}
-                </Text>
-                .
+                {rich(t('close.adjustBody', { amount: formatMoney(confirm.adjustment) }), {
+                  b: (children) => <Text style={styles.confirmBodyStrong}>{children}</Text>,
+                })}
               </Text>
               {confirm.leavesPlan ? (
                 <Text style={styles.helpbox}>
-                  The money in this account will be removed from your plan. If you
-                  would like to keep it in your plan, you can transfer it to another
-                  account before closing this one.
+                  {t('close.leavesPlan')}
                 </Text>
               ) : null}
               <View style={styles.confirmFooter}>
                 <Pressable style={styles.ghostBtn} onPress={onCancel}>
-                  <Text style={styles.ghostText}>Cancel</Text>
+                  <Text style={styles.ghostText}>{tCommon('cancel')}</Text>
                 </Pressable>
                 <Pressable style={styles.indigoBtn} disabled={busy} onPress={onConfirm}>
-                  <Text style={styles.indigoText}>Adjust Balance &amp; Close</Text>
+                  <Text style={styles.indigoText}>{t('close.adjustConfirm')}</Text>
                 </Pressable>
               </View>
             </>

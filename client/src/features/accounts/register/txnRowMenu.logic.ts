@@ -5,9 +5,13 @@
 
 import type { ComponentProps } from 'react';
 
+import { tCommon } from '@shared/i18n/common';
+
 import type { Ionicons } from '@expo/vector-icons';
 
 import type { Budget, Transaction } from '@/domain/types';
+
+import { t } from './i18n';
 
 export type MenuPanel = 'main' | 'match' | 'repeat' | 'move' | 'flag' | 'category';
 
@@ -43,15 +47,15 @@ export interface MainItem {
 /** Back-header title of a submenu; null on the main list. */
 export function menuSubLabel(panel: MenuPanel): string | null {
   return panel === 'match'
-    ? 'Match'
+    ? t('menu.match')
     : panel === 'repeat'
-      ? 'Make Repeating'
+      ? t('menu.makeRepeating')
       : panel === 'move'
-        ? 'Move to Account'
+        ? t('menu.moveToAccount')
         : panel === 'flag'
-          ? 'Flag'
+          ? t('menu.flag')
           : panel === 'category'
-            ? 'Categorize'
+            ? t('menu.categorize')
             : null;
 }
 
@@ -75,11 +79,11 @@ export function mainMenuSections(
   const { busy } = ctx;
   return [
     [
-      { key: 'approve', icon: 'checkmark', label: 'Approve', kbd: ['A'], disabled: txn.approved },
+      { key: 'approve', icon: 'checkmark', label: t('menu.approve'), kbd: ['A'], disabled: txn.approved },
       {
         key: 'reject',
         icon: 'close',
-        label: 'Reject',
+        label: t('menu.reject'),
         kbd: ['shift', 'R'],
         disabled: txn.approved || txn.importId == null,
       },
@@ -88,14 +92,14 @@ export function mainMenuSections(
       {
         key: 'clear',
         icon: 'checkmark-circle-outline',
-        label: 'Mark as Cleared',
+        label: t('menu.markCleared'),
         kbd: ['C'],
         disabled: txn.cleared !== 'uncleared',
       },
       {
         key: 'unclear',
         icon: 'ellipse-outline',
-        label: 'Mark as Uncleared',
+        label: t('menu.markUncleared'),
         kbd: ['C'],
         disabled: txn.cleared !== 'cleared',
       },
@@ -104,7 +108,7 @@ export function mainMenuSections(
       {
         key: 'match',
         icon: 'git-compare',
-        label: 'Match',
+        label: t('menu.match'),
         kbd: ['M'],
         submenu: true,
         disabled: ctx.candidateCount === 0 || busy,
@@ -112,36 +116,36 @@ export function mainMenuSections(
       {
         key: 'unmatch',
         icon: 'unlink',
-        label: 'Unmatch',
+        label: t('menu.unmatch'),
         kbd: ['shift', 'U'],
         disabled: !txn.matchedTransactionId || busy,
       },
     ],
     [
-      { key: 'duplicate', icon: 'copy-outline', label: 'Duplicate', kbd: ['shift', 'D'], disabled: busy },
+      { key: 'duplicate', icon: 'copy-outline', label: t('menu.duplicate'), kbd: ['shift', 'D'], disabled: busy },
       {
         key: 'repeat',
         icon: 'repeat',
-        label: 'Make Repeating',
+        label: t('menu.makeRepeating'),
         kbd: ['shift', 'T'],
         submenu: true,
         disabled: txn.repeatRuleId != null || txn.upcoming || busy,
       },
-      { key: 'flag', icon: 'flag', label: 'Flag', submenu: true },
-      { key: 'memo', icon: 'create-outline', label: 'Memo…' },
-      { key: 'categorize', icon: 'pricetag-outline', label: 'Categorize', submenu: true },
+      { key: 'flag', icon: 'flag', label: t('menu.flag'), submenu: true },
+      { key: 'memo', icon: 'create-outline', label: t('menu.memo') },
+      { key: 'categorize', icon: 'pricetag-outline', label: t('menu.categorize'), submenu: true },
     ],
     [
       {
         key: 'move',
         icon: 'swap-horizontal',
-        label: 'Move to Account',
+        label: t('menu.moveToAccount'),
         submenu: true,
         disabled: ctx.moveTargetCount === 0 || busy,
       },
-      { key: 'export', icon: 'download-outline', label: 'Export 1 Transaction' },
+      { key: 'export', icon: 'download-outline', label: t('menu.export') },
     ],
-    [{ key: 'delete', icon: 'trash-outline', label: 'Delete', kbd: ['delete'], danger: true }],
+    [{ key: 'delete', icon: 'trash-outline', label: tCommon('delete'), kbd: ['delete'], danger: true }],
   ];
 }
 
