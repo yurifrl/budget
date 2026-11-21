@@ -2,6 +2,11 @@ import type { Translation } from '@shared/i18n';
 import type en from './en';
 
 const m: Translation<typeof en> = {
+  'system.startingBalance': 'Saldo inicial',
+  'system.reconciliationAdjustment': 'Ajuste de conciliação',
+  'system.creditCardPayments': 'Pagamentos de cartão de crédito',
+  'system.transfer': 'Transferência : {account}',
+
   'account.nicknameRequired': 'o apelido é obrigatório',
 
   'repeat.weekly': 'Toda semana',

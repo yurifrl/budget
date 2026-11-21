@@ -6,6 +6,7 @@ import { colors } from '@/ui/theme';
 import { t } from './i18n';
 import { styles } from './styles';
 import type { AddTransaction } from './useAddTransaction';
+import { displaySystemName } from '@/domain/systemNames';
 
 /** The open picker (inside the sheet's scroll view): Back, a search box (payee / category), and the choices with a create row. */
 export function SheetPicker({ sheet }: { sheet: AddTransaction }) {
@@ -61,7 +62,7 @@ export function SheetPicker({ sheet }: { sheet: AddTransaction }) {
           ) : null}
           {filteredPayees.map((p) => (
             <Pressable key={p.id} style={styles.row} onPress={() => pickPayee(p.name, p)}>
-              <Text style={styles.rowV}>{p.name}</Text>
+              <Text style={styles.rowV}>{displaySystemName(p.name)}</Text>
               {payee === p.name ? <Text style={{ color: colors.indigo2 }}>✓</Text> : null}
             </Pressable>
           ))}

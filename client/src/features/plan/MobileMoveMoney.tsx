@@ -27,6 +27,7 @@ import { centsPillState, colors, radius } from '@/ui/theme';
 import { tCommon } from '@shared/i18n/common';
 import { useMoveMoney, type MoveMoneyRequest } from './MoveMoneySheet';
 import { t } from './mobile/i18n';
+import { displaySystemName } from '@/domain/systemNames';
 
 /** One counterpart row: null = Ready to Assign. */
 interface MoveRow {
@@ -310,7 +311,7 @@ export function MobileMoveMoney({
                 return (
                   <Fragment key={item.key}>
                     {item.groupTitle !== undefined && (i === 0 || items[i - 1].groupTitle !== item.groupTitle) ? (
-                      <Text style={styles.groupHead}>{item.groupTitle}</Text>
+                      <Text style={styles.groupHead}>{displaySystemName(item.groupTitle)}</Text>
                     ) : null}
                     <Pressable
                       style={styles.row}

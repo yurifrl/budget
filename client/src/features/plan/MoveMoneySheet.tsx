@@ -43,6 +43,7 @@ import { buildCategoryPickItems, type CategoryPickItem } from '@/ui/categoryPick
 import { amountStyle, DropdownShell, dropdownStyles, useDropdownPortal, type DropdownKeyEvent } from '@/ui/dropdown/dropdown';
 import { tCommon } from '@shared/i18n/common';
 import { t } from './mobile/i18n';
+import { displaySystemName } from '@/domain/systemNames';
 
 export interface MoveMoneyRequest {
   /** Source category id, or null to assign out of Ready-to-Assign. */
@@ -162,7 +163,7 @@ export function ToDropdown({
       lastTitle = item.groupTitle;
       rows.push(
         <Text key={item.groupTitle} style={dropdownStyles.sectionTitle}>
-          {item.groupTitle.toUpperCase()}
+          {displaySystemName(item.groupTitle).toUpperCase()}
         </Text>,
       );
     }

@@ -18,6 +18,7 @@ import { TxnMenuTrigger } from './register/TxnMenuTrigger';
 import type { RegisterDensity } from './AccountsToolbar';
 import { SelectionCheckbox } from './SelectionBar';
 import { t } from './i18n';
+import { displaySystemName } from '@/domain/systemNames';
 
 /** What every register row needs, whatever its layout. */
 interface RowBaseProps {
@@ -126,7 +127,7 @@ export function RegisterCard({
       <Pressable
         style={[styles.txnCard, density === 'compact' && styles.txnCardCompact]}
         onPress={tx.cleared === 'reconciled' ? undefined : onEdit}
-        accessibilityLabel={t('register.editLabel', { payee: tx.payee || t('register.noPayee') })}
+        accessibilityLabel={t('register.editLabel', { payee: displaySystemName(tx.payee) || t('register.noPayee') })}
         accessibilityState={{
           disabled: tx.cleared === 'reconciled',
         }}
@@ -134,7 +135,7 @@ export function RegisterCard({
         <View style={styles.txnL1Phone}>
           <View style={styles.txnLeadPhone}>
             <Text style={styles.txnPayee} numberOfLines={1}>
-              {tx.payee || t('register.noPayee')}
+              {displaySystemName(tx.payee) || t('register.noPayee')}
             </Text>
             {tx.upcoming ? <Text style={styles.upcomingPill}>{t('register.repeat')}</Text> : null}
           </View>
@@ -202,12 +203,12 @@ export function RegisterRow({
           e.preventDefault();
           onOpenMenu(tx, e.nativeEvent.pageX, e.nativeEvent.pageY);
         }}
-        accessibilityLabel={t('register.editLabel', { payee: tx.payee || t('register.noPayee') })}
+        accessibilityLabel={t('register.editLabel', { payee: displaySystemName(tx.payee) || t('register.noPayee') })}
       >
         <SelectionCheckbox
           checked={selected}
           onToggle={() => onToggleSelected(tx.id)}
-          label={t('register.selectLabel', { payee: tx.payee || t('register.noPayee') })}
+          label={t('register.selectLabel', { payee: displaySystemName(tx.payee) || t('register.noPayee') })}
         />
         <View style={[styles.regAcctCell, { flex: 1.1 }]}>
           {/* Fixed 16px slot so account names align whether or not the
@@ -231,7 +232,7 @@ export function RegisterRow({
           }}
         >
           <Text style={[styles.regText, { flexShrink: 1 }]} numberOfLines={1}>
-            {tx.payee || t('register.noPayee')}
+            {displaySystemName(tx.payee) || t('register.noPayee')}
           </Text>
           {tx.upcoming ? <Text style={styles.upcomingPill}>{t('register.repeat')}</Text> : null}
         </View>

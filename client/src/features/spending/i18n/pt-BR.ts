@@ -11,7 +11,6 @@ const m: Translation<typeof en> = {
   'row.readyToAssign': '⚖ Pronto para atribuir',
   'row.unknown': '🙋 O que é isto?',
   'row.noPayee': '(sem favorecido)',
-  'row.reconciliation': 'Ajuste de conciliação',
   'row.approve': 'Aprovar',
 };
 

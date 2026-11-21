@@ -6,6 +6,7 @@ import { colors } from '@/ui/theme';
 import { t } from './i18n';
 import { styles } from './styles';
 import type { PayeeAdmin } from './usePayeeAdmin';
+import { displaySystemName } from '@/domain/systemNames';
 
 /** Left pane: the inline add row and the searchable payee list with usage counts. */
 export function PayeeListPane({ admin }: { admin: PayeeAdmin }) {
@@ -41,7 +42,7 @@ export function PayeeListPane({ admin }: { admin: PayeeAdmin }) {
               pressed && { backgroundColor: colors.hover },
             ]}>
             <Text style={[styles.listName, p.hidden && styles.listNameHidden]} numberOfLines={1}>
-              {p.name}
+              {displaySystemName(p.name)}
             </Text>
             <Text style={styles.listCount}>{p.transaction_count}</Text>
           </Pressable>

@@ -14,6 +14,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { FLAG_COLORS, colors } from '@/ui/theme';
 import { t } from './i18n';
 import { menuCategoryGroups, type MainItem, type MainItemKey } from './txnRowMenu.logic';
+import { displaySystemName } from '@/domain/systemNames';
 
 /** The main list: icon, label, shortcut chips and ▸ per item, hairline dividers between sections. */
 export function MainPanel({ sections, onItem }: { sections: MainItem[][]; onItem: (key: MainItemKey) => void }) {
@@ -83,9 +84,9 @@ export function MatchPanel({
             key={c.id}
             style={styles.item}
             onPress={() => onMatch(c)}
-            accessibilityLabel={t('menu.matchWith', { payee: c.payee })}>
+            accessibilityLabel={t('menu.matchWith', { payee: displaySystemName(c.payee) })}>
             <Text style={styles.itemText} numberOfLines={1}>
-              {c.payee || t('menu.noPayee')}
+              {displaySystemName(c.payee) || t('menu.noPayee')}
             </Text>
             <Text style={styles.itemHint}>
               {formatDate(c.date)} · {formatMoney(c.inflow - c.outflow)}
@@ -94,7 +95,7 @@ export function MatchPanel({
         ))
       )}
       {matched ? (
-        <Text style={styles.empty}>{t('menu.matchedWith', { payee: matched.payee || t('menu.noPayee') })}</Text>
+        <Text style={styles.empty}>{t('menu.matchedWith', { payee: displaySystemName(matched.payee) || t('menu.noPayee') })}</Text>
       ) : null}
     </View>
   );
@@ -158,7 +159,7 @@ export function CategoryPanel({
       </Pressable>
       {menuCategoryGroups(budget).map((g) => (
         <View key={g.id}>
-          <Text style={styles.groupLabel}>{g.name}</Text>
+          <Text style={styles.groupLabel}>{displaySystemName(g.name)}</Text>
           {g.categories.map((c) => (
             <Pressable key={c.id} style={styles.item} onPress={() => onPick(c.id)}>
               <View style={styles.itemIcon}>

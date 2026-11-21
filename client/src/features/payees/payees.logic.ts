@@ -9,6 +9,7 @@ import { labels } from '@shared/i18n';
 import { matchTypeLabels, matchTypes, type MatchType } from '@shared/domain/payees';
 
 import type { PayeeAdminRow } from '@/budget/data/rows';
+import { matchesSystemName } from '@/domain/systemNames';
 import { t } from './i18n';
 
 /** Display labels of the match types in the active language (shared `matchTypeLabels` is English-only). */
@@ -26,7 +27,7 @@ export interface RuleDraft {
  */
 export function filterPayees<T extends { name: string }>(all: T[], search: string): T[] {
   const q = search.trim().toLowerCase();
-  return all.filter((p) => !q || p.name.toLowerCase().includes(q));
+  return all.filter((p) => !q || matchesSystemName(p.name, q));
 }
 
 /** Merge targets: other live, non-transfer payees in the budget. */

@@ -8,6 +8,5 @@ export default {
   'row.readyToAssign': '⚖ Ready to Assign',
   'row.unknown': '🙋 What is this?',
   'row.noPayee': '(no payee)',
-  'row.reconciliation': 'Reconciliation Adjustment',
   'row.approve': 'Approve',
 } as const;

@@ -39,6 +39,7 @@ import {
 import type { Transaction } from '@/domain/types';
 import { selectActiveBudgetId } from '@/state/ui';
 import { t } from './i18n';
+import { matchesSystemName } from '@/domain/systemNames';
 
 export type PickerMode = 'none' | 'payee' | 'category' | 'account';
 
@@ -110,7 +111,7 @@ export function useAddTransaction({
     categoryLabel({ name: c.name, bundleId: c.bundle_id ?? undefined }, bundles);
 
   const query = search.trim();
-  const filteredPayees = searchByLabel(payees.data ?? [], search, (p) => p.name);
+  const filteredPayees = (payees.data ?? []).filter((p) => !query || matchesSystemName(p.name, query.toLowerCase()));
   const canCreatePayee = canCreateNamed(payees.data ?? [], search);
   const filteredCategories = searchByLabel(categories.data ?? [], search, labelOf);
   const canCreateCategory = canCreateNamed(categories.data ?? [], search);

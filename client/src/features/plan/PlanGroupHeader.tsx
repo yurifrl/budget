@@ -21,6 +21,7 @@ import { t } from './i18n';
 import { colors } from '@/ui/theme';
 import { styles } from './styles';
 import type { PlanGrid } from './types';
+import { displaySystemName } from '@/domain/systemNames';
 
 export function PlanGroupHeader({ grid, group }: { grid: PlanGrid; group: CategoryGroup }) {
   const { budget, bm, shell, byPerson, phoneActivity, menus, add, groups, anchorAt } = grid;
@@ -50,9 +51,9 @@ export function PlanGroupHeader({ grid, group }: { grid: PlanGrid; group: Catego
         <Pressable
           style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
           onPress={() => groups.toggleGroupCollapsed(group.id)}
-          accessibilityLabel={t('group.toggleLabel', { name: group.name })}>
+          accessibilityLabel={t('group.toggleLabel', { name: displaySystemName(group.name) })}>
           <Text style={styles.groupName}>
-            {isCollapsed ? '▸' : '⌄'} {group.name}
+            {isCollapsed ? '▸' : '⌄'} {displaySystemName(group.name)}
           </Text>
           {groupOwners.length > 0 ? (
             <View
@@ -67,13 +68,13 @@ export function PlanGroupHeader({ grid, group }: { grid: PlanGrid; group: Catego
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Pressable
           style={styles.rowMenuBtn}
-          accessibilityLabel={t('group.addCategoryLabel', { name: group.name })}
+          accessibilityLabel={t('group.addCategoryLabel', { name: displaySystemName(group.name) })}
           onPress={() => add.openAddCategory(group.id)}>
           <Text style={styles.rowMenuText}>＋</Text>
         </Pressable>
         <Pressable
           style={styles.rowMenuBtn}
-          accessibilityLabel={t('group.optionsLabel', { name: group.name })}
+          accessibilityLabel={t('group.optionsLabel', { name: displaySystemName(group.name) })}
           onPress={(e) => {
             const px = e.nativeEvent.pageX;
             const py = e.nativeEvent.pageY;
