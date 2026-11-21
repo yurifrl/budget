@@ -18,3 +18,15 @@ export function pseudoLocaleRequested(): boolean {
 export function applyDocumentLanguage(tag: string): void {
   if (typeof document !== 'undefined') document.documentElement.lang = tag;
 }
+
+/**
+ * Web: reload the page so a language change starts from a clean tree. Remounting
+ * the app boundary would reset expo-router to the home page (measured, see
+ * docs/i18n.md); a reload keeps the URL and the persisted active budget brings
+ * the person back to the same screen. Returns false when there is no page to reload.
+ */
+export function reloadApp(): boolean {
+  if (typeof window === 'undefined' || !window.location || typeof window.location.reload !== 'function') return false;
+  window.location.reload();
+  return true;
+}

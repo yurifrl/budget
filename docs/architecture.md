@@ -31,7 +31,7 @@ budget and connections keep their response row schemas in `outputs.ts`),
 `src/contract-request.ts` (the request builder every client uses),
 `src/errors.ts` (`{ error, code }`), `src/features.ts` (the typed feature
 list and its resolution rule), `src/domain/{payees,transfers}` (pure
-logic both sides need), `src/validation.ts` (uuid, dates, `milliunitsSchema`,
+logic both sides need), `src/i18n/` (typed `t()` engine, `common` and `errors` catalogs; `docs/i18n.md`), `src/validation.ts` (uuid, dates, `milliunitsSchema`,
 `currencyCodeSchema`, `MONEY_UNIT_RULE`), `src/zod.ts`. Lint: only zod, no
 React, hono or pg. Wire rules: every amount is integer milliunits with no
 unit suffix (phase 5d); see `shared/README.md`.
@@ -236,7 +236,10 @@ under `src/` and on a non-pure domain import.
   per-budget KV blob on every `setActiveBudget` and persists settings actions.
   Components format through `useMoneyFormat()` (`ui/moneyFormat.tsx`, fed from
   the slice at the root), pure code takes a `MoneyFormat` argument. No module
-  singletons.
+  singletons, with one deliberate exception: the active language (`@shared/i18n`,
+  set by `platform/locale`) is a device-wide singleton, because it is a property
+  of the device, not of a budget, and pure code (`domain/`, `*.logic.ts`) must
+  translate without a `t` parameter threaded through every signature (`docs/i18n.md`).
 - **Session token.** Web: httpOnly cookie. Native: the Keychain via
   `platform/storage/secretStore.native.ts` (expo-secure-store), moved once
   from AsyncStorage on first read (`sessionToken.ts`).

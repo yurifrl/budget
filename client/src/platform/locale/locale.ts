@@ -20,7 +20,7 @@ import {
 } from '@shared/i18n';
 
 import type { KVStore } from '../storage/types';
-import { applyDocumentLanguage, deviceLanguageTags, pseudoLocaleRequested } from './device';
+import { applyDocumentLanguage, deviceLanguageTags, pseudoLocaleRequested, reloadApp } from './device';
 
 /** KVStore key of the language preference (same family as `budget.activeBudgetId`). */
 export const LANGUAGE_STORAGE_KEY = 'app.language';
@@ -66,11 +66,16 @@ export async function initLocale(storage: KVStore): Promise<LanguagePreference> 
   return stored;
 }
 
-/** Persist and apply a language choice. Everything keyed by the locale (the app boundary) remounts. */
+/**
+ * Persist and apply a language choice. Web reloads the page (a remount would
+ * reset expo-router to the home page); native applies it live and the locale
+ * boundary in `app/_layout.tsx` remounts the app.
+ */
 export async function setLanguagePreference(storage: KVStore, pref: LanguagePreference): Promise<void> {
-  apply(pref);
   if (pref === 'system') await storage.remove(LANGUAGE_STORAGE_KEY);
   else await storage.set(LANGUAGE_STORAGE_KEY, pref);
+  if (localeForPreference(pref, deviceLanguageTags()) !== getLocale() && reloadApp()) return;
+  apply(pref);
 }
 
 export function getLanguagePreference(): LanguagePreference {

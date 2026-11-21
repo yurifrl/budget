@@ -29,8 +29,8 @@ typecheck from inside the directory.
 ```
 task install      # shared first, then api, client, admin
 task typecheck    # tsc --noEmit in all four
-task lint         # eslint in shared, api, client
-task test         # shared, api (needs Postgres :5432), client
+task lint         # eslint in shared, api, client, admin
+task test         # shared, api (needs Postgres :5432), client, admin
 task test:e2e     # api e2e without Temporal (scripts/e2e-api.sh)
 task deps         # Postgres (reuse :5432 or compose :55432) + Temporal :57233
 task run          # api :3100, worker, admin :5191, web :8091 (after `task deps`)
@@ -98,6 +98,13 @@ Layout and rules: `docs/architecture.md` ("client/"). In `client/src`:
 5. Shared widgets used by several features go to `ui/` (which may import
    only `domain/` and `platform/`). `src/architecture.test.ts` fails on import
    cycles. Run `bunx tsc --noEmit`, `bunx eslint .`, `bun test` in `client/`.
+
+## Strings
+
+Every user-visible string goes through the typed `t()` catalogs (English source
++ `pt-BR`); never hard-code UI text. Catalog format, the `t` API, the recipe,
+the lint rule and its `i18n-enforced/*.json` manifests, the do-not-translate
+list and the pt-BR glossary: `docs/i18n.md`.
 
 ## Shared machine rules
 
