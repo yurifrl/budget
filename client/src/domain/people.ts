@@ -28,10 +28,6 @@ export interface Person {
   pending: boolean;
 }
 
-/** Label of the null person. */
-// eslint-disable-next-line budget-i18n/no-untranslated-string -- English-only legacy constant (module scope cannot call t); callers use sharedLabel()
-export const SHARED_LABEL = 'Shared';
-
 /** Label of the null person, in the active language. */
 export function sharedLabel(): string {
   return t('people.shared');

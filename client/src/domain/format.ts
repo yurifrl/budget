@@ -124,31 +124,6 @@ export function formatDateWith(prefs: Pick<FmtPrefs, 'dateFormat'>, iso: string)
   return prefs.dateFormat === "MM/DD/YYYY" ? `${m}/${d}/${y}` : `${d}/${m}/${y}`;
 }
 
-/**
- * English month abbreviations, January first.
- * @deprecated English only: use `monthAbbr(m)` (active language). The TSV file format keeps its own list.
- */
-// eslint-disable-next-line budget-i18n/no-untranslated-string -- deprecated English-only list kept for the TSV format; UI uses monthAbbr/monthName/weekdayAbbr
-export const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
-
-/**
- * English month names, January first.
- * @deprecated English only: use `monthName(m)` (active language).
- */
-export const MONTH_NAMES = [
-  // eslint-disable-next-line budget-i18n/no-untranslated-string -- deprecated English-only list; UI uses monthName
-  "January", "February", "March", "April", "May", "June",
-  // eslint-disable-next-line budget-i18n/no-untranslated-string -- deprecated English-only list; UI uses monthName
-  "July", "August", "September", "October", "November", "December",
-] as const;
-
-/**
- * English weekday abbreviations, Sunday first (Date#getDay order).
- * @deprecated English only: use `weekdayAbbr(d)` (active language).
- */
-// eslint-disable-next-line budget-i18n/no-untranslated-string -- deprecated English-only list kept for the TSV format; UI uses weekdayAbbr
-export const WEEKDAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-
 const MONTH_SHORT_KEYS = [
   "month.short.1", "month.short.2", "month.short.3", "month.short.4", "month.short.5", "month.short.6",
   "month.short.7", "month.short.8", "month.short.9", "month.short.10", "month.short.11", "month.short.12",

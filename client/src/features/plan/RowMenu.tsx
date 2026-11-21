@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, Text, TextInput, type TextInputInstance, View } from 'react-native';
 
-import { personLabel, SHARED_LABEL, type Person } from '@/domain/people';
+import { personLabel, sharedLabel, type Person } from '@/domain/people';
 import { PersonFace } from '@/ui/PersonFace';
 import { tCommon } from '@shared/i18n/common';
+import { displaySystemName } from '@/domain/systemNames';
 import { useClampedMenuTop } from './BundleMenus';
 import { t } from './i18n';
 import { styles } from './styles';
@@ -94,7 +95,7 @@ export function RowMenu({
         <View accessibilityRole="menu" accessibilityLabel={t('menu.assignLabel')}>
           <Text style={styles.menuSubhead}>{isGroup ? t('menu.assignGroupHeading') : t('menu.assignHeading')}</Text>
           {[null, ...people].map((p) => {
-            const label = p ? personLabel(p) : SHARED_LABEL;
+            const label = p ? personLabel(p) : sharedLabel();
             const on = currentOwnerId !== undefined && (p?.user_id ?? null) === currentOwnerId;
             return (
               <Pressable
@@ -152,7 +153,7 @@ export function RowMenu({
           </View>
         ) : (
           <View>
-            <Text style={styles.menuRowName}>{name}</Text>
+            <Text style={styles.menuRowName}>{displaySystemName(name)}</Text>
             <Pressable style={styles.menuItem} onPress={onRename && !batch ? startRename : undefined} disabled={!onRename || batch}>
               <Text style={[styles.menuItemText, (!onRename || batch) && styles.viewsBtnDisabled]}>
                 {t('menu.rename')}

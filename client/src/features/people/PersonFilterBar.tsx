@@ -18,7 +18,7 @@ import {
   PERSON_SHARED,
   personFirstName,
   personLabel,
-  SHARED_LABEL,
+  sharedLabel,
   toAvatarPerson,
   type Person,
 } from '@/domain/people';
@@ -52,7 +52,7 @@ export function PersonFilterBar({
       a11y: t('filter.everyone'),
       face: <AvatarStack people={byPerson.people.map(toAvatarPerson)} max={3} size={16} ring={colors.card} />,
     },
-    { key: PERSON_SHARED, label: SHARED_LABEL, a11y: SHARED_LABEL, face: <SharedGlyph size={18} /> },
+    { key: PERSON_SHARED, label: sharedLabel(), a11y: sharedLabel(), face: <SharedGlyph size={18} /> },
     ...byPerson.people.map((p: Person) => ({
       key: p.user_id,
       label: personFirstName(p),
