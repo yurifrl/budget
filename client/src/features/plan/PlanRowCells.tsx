@@ -8,6 +8,7 @@ import type { Category, Cents } from '@/domain/types';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { MoneyInput, Pill } from '@/ui/bits';
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 import { styles } from './styles';
 import type { PlanGrid } from './types';
 
@@ -70,7 +71,7 @@ export function AssignedCell({ grid, category: c, assigned }: { grid: PlanGrid; 
     <Pressable
       style={styles.colNum}
       onPress={() => overlays.setEditingId(c.id)}
-      accessibilityLabel={`Edit assigned for ${c.name}`}>
+      accessibilityLabel={t('row.editAssignedLabel', { name: c.name })}>
       {overlays.editingId === c.id ? (
         <MoneyInput
           cents={assigned}

@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import type { MoneyFormat } from '@/domain/format';
 import { categoryFigures } from '@/domain/zeroSum';
+import { t } from './i18n';
 import { InlineAddRow } from './InlineAddRow';
 import { styles } from './styles';
 import type { PlanGrid } from './types';
@@ -27,9 +28,9 @@ export function PlanListFooter({
           <Pressable
             style={styles.groupRow}
             onPress={hidden.toggleHidden}
-            accessibilityLabel="Hidden categories">
+            accessibilityLabel={t('hidden.label')}>
             <Text style={styles.groupName}>
-              {hidden.hiddenOpen ? '⌄' : '▸'} Categorias ocultas ({hiddenCats.length})
+              {hidden.hiddenOpen ? '⌄' : '▸'} {t('hidden.heading', { count: hiddenCats.length })}
             </Text>
             <View style={{ flexDirection: 'row' }}>
               <Text style={[styles.groupTotal, styles.colAvail]}>{formatMoney(hidden.hiddenTotal)}</Text>
@@ -48,9 +49,9 @@ export function PlanListFooter({
                   </Text>
                   <Pressable
                     style={styles.rowMenuBtn}
-                    accessibilityLabel={`Restore ${c.name}`}
+                    accessibilityLabel={t('hidden.restoreLabel', { name: c.name })}
                     onPress={() => hidden.restore(c.id)}>
-                    <Text style={styles.rowMenuText}>Restore</Text>
+                    <Text style={styles.rowMenuText}>{t('hidden.restore')}</Text>
                   </Pressable>
                 </View>
               ))
@@ -59,8 +60,8 @@ export function PlanListFooter({
       ) : null}
       {add.addingGroup === 'footer' ? (
         <InlineAddRow
-          placeholder="Group name"
-          accessibilityLabel="New group name"
+          placeholder={t('group.newPlaceholder')}
+          accessibilityLabel={t('group.newLabel')}
           onCommit={add.commitAddGroup}
           onCancel={() => add.setAddingGroup(null)}
         />
@@ -68,8 +69,8 @@ export function PlanListFooter({
         <Pressable
           style={styles.addRow}
           onPress={() => add.setAddingGroup('footer')}
-          accessibilityLabel="Add category group">
-          <Text style={styles.addRowText}>＋ Adicionar grupo de categorias</Text>
+          accessibilityLabel={t('group.addLabel')}>
+          <Text style={styles.addRowText}>{t('group.addButton')}</Text>
         </Pressable>
       )}
     </View>

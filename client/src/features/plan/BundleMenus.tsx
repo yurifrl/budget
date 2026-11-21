@@ -18,6 +18,8 @@ import {
 
 import type { Bundle, Category } from '@/domain/types';
 import { colors, radius } from '@/ui/theme';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './i18n';
 
 /** Bottom space (tab bar, FAB, safe area) a floating menu must stay clear of. */
 const MENU_BOTTOM_GAP = 130;
@@ -44,18 +46,18 @@ export function SelectionBar({
   onClear: () => void;
 }) {
   return (
-    <View style={styles.bar} accessibilityRole="toolbar" accessibilityLabel="Selection actions">
-      <Text style={styles.barCount}>{count} selected</Text>
+    <View style={styles.bar} accessibilityRole="toolbar" accessibilityLabel={t('bundle.selectionLabel')}>
+      <Text style={styles.barCount}>{t('bundle.selectedCount', { count })}</Text>
       <Pressable
         style={styles.barBtn}
         accessibilityRole="button"
-        accessibilityLabel="Bundle selected categories"
+        accessibilityLabel={t('bundle.bundleSelectedLabel')}
         onPress={(e) => onBundle(e.nativeEvent.pageX, e.nativeEvent.pageY)}
       >
-        <Text style={styles.barBtnText}>Bundle…</Text>
+        <Text style={styles.barBtnText}>{t('bundle.bundleSelected')}</Text>
       </Pressable>
-      <Pressable style={styles.barLink} accessibilityLabel="Clear selection" onPress={onClear}>
-        <Text style={styles.barLinkText}>Clear</Text>
+      <Pressable style={styles.barLink} accessibilityLabel={t('bundle.clearLabel')} onPress={onClear}>
+        <Text style={styles.barLinkText}>{t('bundle.clear')}</Text>
       </Pressable>
     </View>
   );
@@ -84,8 +86,8 @@ export function BundleNamePopover({
   const [extra, setExtra] = useState<string[]>([]);
   const inputRef = useRef<TextInputInstance>(null);
   useEffect(() => {
-    const t = setTimeout(() => inputRef.current?.focus(), 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(timer);
   }, []);
   const all = [...ids, ...extra];
   const seed = categories.find((c) => c.id === ids[0]);
@@ -105,21 +107,21 @@ export function BundleNamePopover({
         onPress={(e) => e.stopPropagation()}
         style={[styles.card, { left: Math.max(12, x - 150), top: pos.top, width: 280 }]}
       >
-        <Text style={styles.title}>New bundle</Text>
+        <Text style={styles.title}>{t('bundle.popoverTitle')}</Text>
         <TextInput
           ref={inputRef}
           value={name}
           onChangeText={setName}
           onSubmitEditing={submit}
-          placeholder="Bundle name"
+          placeholder={t('bundle.namePlaceholder')}
           placeholderTextColor={colors.faint}
           autoFocus
           style={styles.input}
-          accessibilityLabel="Bundle name"
+          accessibilityLabel={t('bundle.nameLabel')}
         />
         {candidates.length > 0 ? (
           <View>
-            <Text style={styles.subhead}>With…</Text>
+            <Text style={styles.subhead}>{t('bundle.withHeading')}</Text>
             <ScrollView style={{ maxHeight: 150 }}>
               {candidates.map((c) => {
                 const on = extra.includes(c.id);
@@ -129,7 +131,7 @@ export function BundleNamePopover({
                     style={styles.item}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: on }}
-                    accessibilityLabel={`Bundle with ${c.name}`}
+                    accessibilityLabel={t('bundle.withLabel', { name: c.name })}
                     onPress={() => setExtra((p) => (on ? p.filter((i) => i !== c.id) : [...p, c.id]))}
                   >
                     <Text style={styles.itemText}>
@@ -143,11 +145,11 @@ export function BundleNamePopover({
           </View>
         ) : null}
         <View style={styles.row}>
-          <Pressable style={styles.item} onPress={onClose} accessibilityLabel="Cancel bundle">
-            <Text style={styles.itemText}>Cancel</Text>
+          <Pressable style={styles.item} onPress={onClose} accessibilityLabel={t('bundle.cancelLabel')}>
+            <Text style={styles.itemText}>{tCommon('cancel')}</Text>
           </Pressable>
-          <Pressable style={styles.item} onPress={submit} disabled={!ready} accessibilityLabel="Create bundle">
-            <Text style={[styles.ok, !ready && { opacity: 0.4 }]}>Create</Text>
+          <Pressable style={styles.item} onPress={submit} disabled={!ready} accessibilityLabel={t('bundle.createLabel')}>
+            <Text style={[styles.ok, !ready && { opacity: 0.4 }]}>{t('bundle.create')}</Text>
           </Pressable>
         </View>
       </Pressable>
@@ -172,14 +174,14 @@ export function CategoryBundleItems({
   const [open, setOpen] = useState(false);
   const joinable = bundlesInGroup.filter((b) => b.id !== currentBundleId);
   return (
-    <View accessibilityRole="menu" accessibilityLabel="Bundle">
+    <View accessibilityRole="menu" accessibilityLabel={t('bundle.menuLabel')}>
       <Pressable
         style={styles.item}
         accessibilityRole="menuitem"
-        accessibilityLabel="Add to bundle"
+        accessibilityLabel={t('bundle.addToLabel')}
         onPress={() => setOpen((o) => !o)}
       >
-        <Text style={styles.itemText}>Add to bundle {open ? '⌄' : '▸'}</Text>
+        <Text style={styles.itemText}>{t('bundle.addTo')} {open ? '⌄' : '▸'}</Text>
       </Pressable>
       {open ? (
         <View style={styles.sub}>
@@ -188,7 +190,7 @@ export function CategoryBundleItems({
               key={b.id}
               style={styles.item}
               accessibilityRole="menuitem"
-              accessibilityLabel={`Add to ${b.name}`}
+              accessibilityLabel={t('bundle.addToNamedLabel', { name: b.name })}
               onPress={() => onJoin(b.id)}
             >
               <Text style={styles.itemText} numberOfLines={1}>
@@ -196,8 +198,8 @@ export function CategoryBundleItems({
               </Text>
             </Pressable>
           ))}
-          <Pressable style={styles.item} accessibilityRole="menuitem" accessibilityLabel="New bundle" onPress={onNew}>
-            <Text style={styles.itemText}>New bundle…</Text>
+          <Pressable style={styles.item} accessibilityRole="menuitem" accessibilityLabel={t('bundle.newLabel')} onPress={onNew}>
+            <Text style={styles.itemText}>{t('bundle.new')}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -205,10 +207,10 @@ export function CategoryBundleItems({
         <Pressable
           style={styles.item}
           accessibilityRole="menuitem"
-          accessibilityLabel="Remove from bundle"
+          accessibilityLabel={t('bundle.removeFrom')}
           onPress={onLeave}
         >
-          <Text style={styles.itemText}>Remove from bundle</Text>
+          <Text style={styles.itemText}>{t('bundle.removeFrom')}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -245,26 +247,26 @@ export function BundleRowMenu({
         <Pressable
           style={styles.item}
           accessibilityRole="menuitem"
-          accessibilityLabel="Rename bundle"
+          accessibilityLabel={t('bundle.renameLabel')}
           onPress={onRename}
         >
-          <Text style={styles.itemText}>Rename</Text>
+          <Text style={styles.itemText}>{t('menu.rename')}</Text>
         </Pressable>
         <Pressable
           style={styles.item}
           accessibilityRole="menuitem"
-          accessibilityLabel="Add category here"
+          accessibilityLabel={t('bundle.addCategoryHere')}
           onPress={onAddCategory}
         >
-          <Text style={styles.itemText}>Add category here</Text>
+          <Text style={styles.itemText}>{t('bundle.addCategoryHere')}</Text>
         </Pressable>
         <Pressable
           style={styles.item}
           accessibilityRole="menuitem"
-          accessibilityLabel="Ungroup bundle"
+          accessibilityLabel={t('bundle.ungroupLabel')}
           onPress={onUngroup}
         >
-          <Text style={styles.danger}>Ungroup</Text>
+          <Text style={styles.danger}>{t('bundle.ungroup')}</Text>
         </Pressable>
       </Pressable>
     </Pressable>

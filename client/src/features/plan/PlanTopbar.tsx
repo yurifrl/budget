@@ -10,6 +10,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { setActiveMonth } from '@/state/ui';
 import { IndigoButton } from '@/ui/bits';
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 import { assignDropdownAnchor } from './planGeometry.logic';
 import { styles } from './styles';
 import type { PlanGrid } from './types';
@@ -29,14 +30,14 @@ export function PlanTopbar({ grid }: { grid: Pick<PlanGrid, 'shell' | 'month' | 
           <Pressable
             style={styles.navm}
             onPress={() => dispatch(setActiveMonth(prevMonth(month)))}
-            accessibilityLabel="Previous month">
+            accessibilityLabel={t('topbar.prevMonth')}>
             <Text style={{ color: colors.muted }}>‹</Text>
           </Pressable>
           <Text style={styles.monthLabel}>{formatMonth(month)}</Text>
           <Pressable
             style={styles.navm}
             onPress={() => dispatch(setActiveMonth(nextMonth(month)))}
-            accessibilityLabel="Next month">
+            accessibilityLabel={t('topbar.nextMonth')}>
             <Text style={{ color: colors.muted }}>›</Text>
           </Pressable>
         </View>
@@ -44,12 +45,12 @@ export function PlanTopbar({ grid }: { grid: Pick<PlanGrid, 'shell' | 'month' | 
           <View>
             <Text style={[styles.rtaAmount, rta < 0 && { color: colors.redFg }]}>{formatMoney(rta)}</Text>
             <Text style={styles.rtaSub}>
-              Ready to Assign{byPerson.person !== PERSON_ALL ? ' · household' : ''}
+              {byPerson.person !== PERSON_ALL ? t('topbar.readyToAssignHousehold') : t('topbar.readyToAssign')}
             </Text>
           </View>
           <View ref={assignBtnRef}>
             <IndigoButton
-              label="Assign ›"
+              label={t('topbar.assign')}
               onPress={() => {
                 assignBtnRef.current?.measureInWindow((x, y, width, height) => {
                   overlays.setAssignPos(assignDropdownAnchor({ x, y, width, height }, window.innerWidth));
@@ -64,11 +65,11 @@ export function PlanTopbar({ grid }: { grid: Pick<PlanGrid, 'shell' | 'month' | 
           un-assign popover (web) / minimal sheet (native). */}
       {rta < 0 ? (
         <View style={styles.rtaFixBanner}>
-          <Text style={styles.rtaFixText}>You&apos;ve assigned more money than you have.</Text>
+          <Text style={styles.rtaFixText}>{t('topbar.overassigned')}</Text>
           <Pressable
             ref={fixBtnRef}
             accessibilityRole="button"
-            accessibilityLabel="Fix overspending"
+            accessibilityLabel={t('topbar.fixLabel')}
             onPress={() =>
               // ubgb: measureInWindow anchor (event coords are unreliable for
               // synthetic/CDP presses — same rationale as the pill popovers).
@@ -78,7 +79,7 @@ export function PlanTopbar({ grid }: { grid: Pick<PlanGrid, 'shell' | 'month' | 
                 ),
               )
             }>
-            <Text style={styles.rtaFixAction}>Fix This</Text>
+            <Text style={styles.rtaFixAction}>{t('topbar.fix')}</Text>
           </Pressable>
         </View>
       ) : null}

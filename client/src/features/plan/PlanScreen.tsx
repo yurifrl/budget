@@ -57,6 +57,7 @@ import { usePlanRowMenus } from './usePlanRowMenus';
 import { usePlanSelection } from './usePlanSelection';
 import { usePlanUndo } from './usePlanUndo';
 import { useBudgetShell } from '@/shell/context';
+import { t } from './i18n';
 import { useBundleActions } from './useBundleActions';
 
 export function PlanScreen() {
@@ -115,7 +116,7 @@ export function PlanScreen() {
         ) : (
           <ActivityIndicator color={colors.indigo2} />
         )}
-        {isLoading ? <Text style={{ color: colors.faint, marginTop: 10 }}>Loading budget…</Text> : null}
+        {isLoading ? <Text style={{ color: colors.faint, marginTop: 10 }}>{t('screen.loading')}</Text> : null}
       </View>
     );
   }
@@ -174,10 +175,10 @@ export function PlanScreen() {
           ) : null}
           {/* table header */}
           <View style={styles.thead}>
-            <Text style={[styles.theadText, { flex: 1 }]}>CATEGORY</Text>
-            <Text style={[styles.theadText, styles.colNum, shell.isPhone && styles.colNumPhone]}>{grid.phoneActivity ? 'ACTIVITY' : 'ASSIGNED'}</Text>
-            {grid.showActivity ? <Text style={[styles.theadText, styles.colNum]}>ACTIVITY</Text> : null}
-            <Text style={[styles.theadText, styles.colAvail, shell.isPhone && styles.colAvailPhone]}>AVAILABLE</Text>
+            <Text style={[styles.theadText, { flex: 1 }]}>{t('screen.headerCategory')}</Text>
+            <Text style={[styles.theadText, styles.colNum, shell.isPhone && styles.colNumPhone]}>{grid.phoneActivity ? t('screen.headerActivity') : t('screen.headerAssigned')}</Text>
+            {grid.showActivity ? <Text style={[styles.theadText, styles.colNum]}>{t('screen.headerActivity')}</Text> : null}
+            <Text style={[styles.theadText, styles.colAvail, shell.isPhone && styles.colAvailPhone]}>{t('screen.headerAvailable')}</Text>
           </View>
           <SectionList
             sections={sections}
@@ -192,8 +193,8 @@ export function PlanScreen() {
               if (typeof c === 'string') {
                 return (
                   <InlineAddRow
-                    placeholder="Category name"
-                    accessibilityLabel="New category name"
+                    placeholder={t('screen.newCategoryPlaceholder')}
+                    accessibilityLabel={t('screen.newCategoryLabel')}
                     onCommit={(name) => add.commitAddCategory(section.group.id, name)}
                     onCancel={add.cancelAddCategory}
                   />
