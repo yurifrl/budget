@@ -6,6 +6,7 @@ import { categorizationModes, matchTypes, type CategorizationMode, type MatchTyp
 import { labels } from '@shared/i18n';
 import { tCommon } from '@shared/i18n/common';
 
+import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors } from '@/ui/theme';
 import { DefaultCategoryPicker } from './DefaultCategoryPicker';
 import { MergePrompt } from './MergePrompt';
@@ -27,6 +28,7 @@ const CATEGORIZATION_LABELS: Record<CategorizationMode, { title: string; sub: st
  * renaming rule, hide / merge / delete), or the merge prompt while it is open.
  */
 export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
+  const money = useMoneyFormat();
   const {
     budgetId,
     pickerBudget,
@@ -92,7 +94,7 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
           ) : null}
 
           <Text style={styles.sectionLabel}>{t('detail.activity')}</Text>
-          <Text style={styles.activity}>{activityLine(selected)}</Text>
+          <Text style={styles.activity}>{activityLine(selected, money)}</Text>
 
           {selected.transaction_count > 0 ? (
             <>
