@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { Avatar } from '@/ui/avatar/Avatar';
 import { colors } from '@/ui/theme';
 
@@ -61,7 +62,8 @@ export function AvatarEditor({ me }: { me: Me }) {
       if (picked) await upload(picked.blob).unwrap();
     } catch (e) {
       const { status, message } = asApiError(e);
-      setError(uploadErrorMessage(status, message));
+      // A specific API code shows its own sentence; the status rules and the generic text are the fallback.
+      setError(apiErrorMessage(e, uploadErrorMessage(status, status === 400 ? message : undefined)));
     }
   }
 
@@ -69,14 +71,14 @@ export function AvatarEditor({ me }: { me: Me }) {
     setError(null);
     await remove()
       .unwrap()
-      .catch((e) => setError(asApiError(e).message ?? t('avatar.removeFailed')));
+      .catch((e) => setError(apiErrorMessage(e, t('avatar.removeFailed'))));
   }
 
   async function pickLook(seed: string) {
     setError(null);
     await update({ avatar_seed: seed })
       .unwrap()
-      .catch((e) => setError(asApiError(e).message ?? t('avatar.lookFailed')));
+      .catch((e) => setError(apiErrorMessage(e, t('avatar.lookFailed'))));
   }
 
   return (

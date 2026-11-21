@@ -4,6 +4,7 @@ import type { ConnectionJson, ConnectionUpstreamJson } from '@/budget/data/conne
 import type { AccountRow, TransactionRow } from '@/budget/data/rows';
 import { connectionStatusView, requiresReauth } from '../model/connections';
 import { connectionSparkData } from '../model/connectionSpark';
+import { storedServerMessage } from '../model/serverMessage';
 import { canRequestSync, syncStateView } from '../model/syncRun';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { PausedNotice } from '../keys/PausedNotice';
@@ -113,7 +114,7 @@ export function ConnectionRow({
             <PausedNotice row={row} compact onOpenKeys={onOpenKeys} />
           ) : row.status_message && row.status !== 'connected' ? (
             <Text style={styles.connSub} numberOfLines={2}>
-              {row.status_message}
+              {storedServerMessage(row.status_message, row.status_message_code)}
             </Text>
           ) : null}
           <LinkedBy linkedBy={row.linked_by} />

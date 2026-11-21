@@ -11,6 +11,8 @@
 import { skipToken } from '@reduxjs/toolkit/query';
 import { useMemo } from 'react';
 
+import { apiErrorMessage } from '@/platform/api/baseQuery';
+
 import { useAppSelector } from './hooks';
 import { t } from './i18n';
 
@@ -116,7 +118,7 @@ export function useBudgetModel(): BudgetModel {
   const isLoading = sources.some((q) => q.isLoading);
   const firstError = sources.find((q) => q.error);
   const error = firstError
-    ? ((firstError.error as { message?: string })?.message ?? t('budget.loadFailed'))
+    ? apiErrorMessage(firstError.error, t('budget.loadFailed'))
     : undefined;
 
   return { budgetId, budgets: budgets.data, budget, isLoading, error };

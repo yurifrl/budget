@@ -14,6 +14,8 @@ import {
 
 import type { ConnectionCredentialsJson, ConnectionJson } from '@/budget/data/connections';
 
+import { apiErrorMessage } from '@/platform/api/baseQuery';
+import { storedServerMessage } from '../model/serverMessage';
 import { t } from './i18n';
 
 /** The keys screen route. `?reason=connect` = the user came from a blocked connect. */
@@ -83,6 +85,17 @@ export function apiErrorCode(error: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined;
 }
 
+/**
+ * The translated sentence of a SPECIFIC API error code (`connection_paused`,
+ * `own_keys_required`, ...), or undefined when the error has none (no code, or
+ * a per-status one): the caller then falls back to its own sentence.
+ */
+function specificApiMessage(error: unknown): string | undefined {
+  const marker = '';
+  const message = apiErrorMessage(error, marker);
+  return message === marker ? undefined : message;
+}
+
 /** Check before sending: both fields are required (the server trims too). */
 export function checkKeysInput(clientId: string, clientSecret: string): KeysFormError | null {
   if (clientId.trim() === '') return { field: 'clientId', message: t('form.clientIdRequired') };
@@ -114,14 +127,14 @@ export function saveErrorView(error: unknown): KeysFormError {
     }
     default:
       if (e.status === 'FETCH_ERROR') return { field: 'form', message: t('form.unreachable') };
-      return { field: 'form', message: serverMessage ?? t('form.saveFailed') };
+      return { field: 'form', message: specificApiMessage(error) ?? serverMessage ?? t('form.saveFailed') };
   }
 }
 
 /** What a failed remove means (always a form-level message). */
 export function deleteErrorMessage(error: unknown): string {
   const message = asApiError(error).message;
-  return typeof message === 'string' && message !== '' ? message : t('form.removeFailed');
+  return specificApiMessage(error) ?? (typeof message === 'string' && message !== '' ? message : t('form.removeFailed'));
 }
 
 /**
@@ -163,19 +176,20 @@ export interface PausedGuidance {
 
 /** What a paused connection tells its owner, or null when it is not paused. */
 export function pausedGuidance(
-  row: Pick<ConnectionJson, 'status' | 'status_message' | 'key_source'>,
+  row: Pick<ConnectionJson, 'status' | 'status_message' | 'status_message_code' | 'key_source'>,
 ): PausedGuidance | null {
   if (row.status !== 'paused') return null;
+  // The server's stored sentence, translated by its code when there is one.
+  const why = storedServerMessage(row.status_message, row.status_message_code);
   if (row.key_source === 'own') {
     return {
-      // `status_message` is the server's sentence (stored in English): shown as is until it is mapped by code.
-      why: row.status_message ?? t('paused.ownWhy'),
+      why: why ?? t('paused.ownWhy'),
       todo: t('paused.ownTodo'),
       actionLabel: t('paused.ownAction'),
     };
   }
   return {
-    why: row.status_message ?? t('paused.sharedWhy'),
+    why: why ?? t('paused.sharedWhy'),
     todo: t('paused.sharedTodo'),
     actionLabel: t('paused.sharedAction'),
   };

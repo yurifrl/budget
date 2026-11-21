@@ -9,6 +9,7 @@
 import type { ConnectionJson, SyncCountsJson, SyncRunJson, SyncState, SyncStatusJson } from '@/budget/data/connections';
 
 import { t } from '../i18n';
+import { storedServerMessage } from './serverMessage';
 
 export type SyncRunOutcome =
   | { kind: 'done'; run: SyncRunJson | null }
@@ -62,15 +63,16 @@ export function describeSyncOutcome(
   }
   const run = outcome.run;
   if (!run) return { kind: 'report', text: sync ? t('syncRun.sync.finished') : t('syncRun.reimport.finished') };
-  // `user_message` is the server's own sentence (stored in English); shown as is until it is mapped by code.
+  // `user_message` is the server's stored sentence: translated by its code when there is one.
+  const userMessage = storedServerMessage(run.user_message, run.user_message_code);
   if (run.status === 'failed') {
-    return { kind: 'error', text: run.user_message ?? (sync ? t('syncRun.sync.failed') : t('syncRun.reimport.failed')) };
+    return { kind: 'error', text: userMessage ?? (sync ? t('syncRun.sync.failed') : t('syncRun.reimport.failed')) };
   }
   if (run.status === 'cancelled') {
     return { kind: 'report', text: sync ? t('syncRun.sync.cancelled') : t('syncRun.reimport.cancelled') };
   }
   // Succeeded: a notice (e.g. quota paused) wins over counts.
-  if (run.user_message) return { kind: 'report', text: run.user_message };
+  if (userMessage) return { kind: 'report', text: userMessage };
   const { added = 0, updated = 0, deleted = 0 }: Partial<SyncCountsJson> = run.result ?? {};
   const counts = { added, updated, deleted };
   if (added + updated + deleted === 0) {

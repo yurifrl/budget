@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { colors, radius } from '@/ui/theme';
 
 import { useUpdateMeMutation } from '@/profile/api';
@@ -29,7 +30,7 @@ export function NameField({ me }: { me: Me }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
     } catch (e) {
-      setError((e as { message?: string }).message ?? t('name.saveFailed'));
+      setError(apiErrorMessage(e, t('name.saveFailed')));
       setDraft(me.name ?? '');
     }
   }
