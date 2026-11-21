@@ -20,6 +20,7 @@ import { useFmtPrefs, useMoneyMask } from '@/state/useDisplayPrefs';
 import { selectActiveBudgetId, setFmtPrefs } from '@/state/ui';
 import { BudgetManageSection } from './BudgetManageSection';
 import { MenuRow, Seg } from './menuRows';
+import { t } from './i18n';
 import { canManageBudget, fmtPreviewText, ownerOnlyHint } from './settings.logic';
 import { s } from './styles';
 import { colors } from '@/ui/theme';
@@ -76,12 +77,12 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
     renameBudget({ id: budgetId, name })
       .unwrap()
       .then(() => setSaved(true))
-      .catch((err) => setError(apiErrorMessage(err)));
+      .catch((err) => setError(apiErrorMessage(err, t('plan.renameFailed'))));
   };
 
   return (
     <>
-      <Text style={s.sectionLabel}>PLAN NAME</Text>
+      <Text style={s.sectionLabel}>{t('plan.nameTitle')}</Text>
       {!isOwner ? (
         <>
           <Text style={s.accountEmail}>{activeBudget?.name ?? ''}</Text>
@@ -93,22 +94,24 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
       <TextInput
         value={planName}
         onChangeText={setPlanName}
-        placeholder="Budget name"
+        placeholder={t('plan.namePlaceholder')}
         placeholderTextColor={colors.faint}
         onSubmitEditing={rename}
         style={s.input}
-        accessibilityLabel="Budget name"
+        accessibilityLabel={t('plan.namePlaceholder')}
       />
       {error ? <Text style={s.errorText}>{error}</Text> : null}
-      {saved ? <Text style={s.savedText}>Saved.</Text> : null}
-      <MenuRow label="Rename Budget" emphasized onPress={rename} />
+      {saved ? <Text style={s.savedText}>{t('plan.saved')}</Text> : null}
+      <MenuRow label={t('plan.rename')} emphasized onPress={rename} />
       </>
       ) : null}
 
-      <Text style={s.sectionLabel}>CURRENCY</Text>
+      <Text style={s.sectionLabel}>{t('plan.currency')}</Text>
       <Seg<FmtCurrency>
         options={[
+          // eslint-disable-next-line budget-i18n/no-untranslated-string -- currency symbol sample, not text
           { value: 'BRL', label: 'R$' },
+          // eslint-disable-next-line budget-i18n/no-untranslated-string -- currency symbol sample, not text
           { value: 'USD', label: 'US$' },
         ]}
         value={currentFmt.currency}
@@ -116,10 +119,12 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
           applyFmt({ currency });
         }}
       />
-      <Text style={s.sectionLabel}>SYMBOL PLACEMENT</Text>
+      <Text style={s.sectionLabel}>{t('plan.placement')}</Text>
       <Seg<FmtPlacement>
         options={[
+          // eslint-disable-next-line budget-i18n/no-untranslated-string -- amount format sample, not text
           { value: 'before', label: 'R$ 1.314,51' },
+          // eslint-disable-next-line budget-i18n/no-untranslated-string -- amount format sample, not text
           { value: 'after', label: '1.314,51 R$' },
           { value: 'hidden', label: '1.314,51' },
         ]}
@@ -128,7 +133,7 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
           applyFmt({ currencyPlacement });
         }}
       />
-      <Text style={s.sectionLabel}>NUMBER FORMAT</Text>
+      <Text style={s.sectionLabel}>{t('plan.numberFormat')}</Text>
       <Seg<FmtNumberLocale>
         options={[
           { value: 'pt-BR', label: '1.314,51' },
@@ -139,10 +144,12 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
           applyFmt({ numberLocale });
         }}
       />
-      <Text style={s.sectionLabel}>DATE FORMAT</Text>
+      <Text style={s.sectionLabel}>{t('plan.dateFormat')}</Text>
       <Seg<FmtDateFormat>
         options={[
+          // eslint-disable-next-line budget-i18n/no-untranslated-string -- date format sample, not text
           { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY' },
+          // eslint-disable-next-line budget-i18n/no-untranslated-string -- date format sample, not text
           { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY' },
         ]}
         value={currentFmt.dateFormat}
@@ -156,11 +163,11 @@ export function PlanSettingsPane({ budgetId }: { budgetId: string | null }) {
 
       {isOwner ? (
         <>
-          <Text style={s.sectionLabel}>MANAGE BUDGET</Text>
+          <Text style={s.sectionLabel}>{t('plan.manage')}</Text>
           {budgetId ? (
             <BudgetManageSection budgetId={budgetId} />
           ) : (
-            <Text style={s.hint}>Switch to a budget first.</Text>
+            <Text style={s.hint}>{t('hint.switchFirst')}</Text>
           )}
         </>
       ) : null}

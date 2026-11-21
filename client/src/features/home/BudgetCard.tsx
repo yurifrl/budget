@@ -10,6 +10,7 @@ import { Avatar } from '@/ui/avatar/Avatar';
 import { colors, radius } from '@/ui/theme';
 
 import { budgetCardActions, budgetCardCaption } from './home.logic';
+import { t } from './i18n';
 
 interface Props {
   budget: BudgetListRow;
@@ -28,7 +29,7 @@ export function BudgetCard({ budget, archivedNote, onOpen, onPeople }: Props) {
       <Pressable
         onPress={onOpen}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${budget.name}`}
+        accessibilityLabel={t('card.open', { name: budget.name })}
         style={(state) => [
           styles.main,
           (state.pressed || ('hovered' in state && state.hovered === true)) && styles.mainActive,
@@ -55,12 +56,16 @@ export function BudgetCard({ budget, archivedNote, onOpen, onPeople }: Props) {
         <Pressable
           onPress={onPeople}
           accessibilityRole="button"
-          accessibilityLabel={`${actions.people === 'Invite' ? 'Invite people to' : 'People on'} ${budget.name}`}
+          accessibilityLabel={
+            actions.people === 'Invite'
+              ? t('people.inviteLabel', { name: budget.name })
+              : t('people.title', { name: budget.name })
+          }
           style={(state) => [
             styles.people,
             (state.pressed || ('hovered' in state && state.hovered === true)) && styles.peopleActive,
           ]}>
-          <Text style={styles.peopleText}>{actions.people}</Text>
+          <Text style={styles.peopleText}>{actions.people === 'Invite' ? t('card.invite') : t('card.people')}</Text>
         </Pressable>
       ) : null}
     </View>

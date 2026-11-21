@@ -24,13 +24,15 @@ import { useBudgetModel } from '@/state/useBudgetModel';
 import { usePersonFilter , PersonFilterBar } from '@/features/people';
 import { useBudgetShell } from '@/shell/context';
 
+import { t } from './i18n';
+
 type Report = 'breakdown' | 'trends' | 'networth';
 type Range = 3 | 6 | 0; // months back; 0 = all
 
 const REPORTS: { key: Report; label: string }[] = [
-  { key: 'breakdown', label: 'Spending Breakdown' },
-  { key: 'trends', label: 'Spending Trends' },
-  { key: 'networth', label: 'Net Worth' },
+  { key: 'breakdown', get label() { return t('report.breakdown'); } },
+  { key: 'trends', get label() { return t('report.trends'); } },
+  { key: 'networth', get label() { return t('report.networth'); } },
 ];
 
 /** Month-end net worth per month, walking back from current balances. */
@@ -147,11 +149,11 @@ export function ReflectScreen() {
 
   return (
     <View style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
-      <Text style={styles.title}>Reflect</Text>
+      <Text style={styles.title}>{t('screen.title')}</Text>
       <PersonFilterBar
         byPerson={byPerson}
         budgetId={budgetId}
-        caption={byPerson.accountsLabel ? `Net worth and spending from ${byPerson.accountsLabel}` : null}
+        caption={byPerson.accountsLabel ? t('caption.accounts', { accounts: byPerson.accountsLabel }) : null}
       />
       {/* report switcher */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rtabs} contentContainerStyle={{ gap: 18, paddingHorizontal: 20 }}>
@@ -166,7 +168,7 @@ export function ReflectScreen() {
         {([3, 6, 0] as Range[]).map((r) => (
           <Pressable key={r} onPress={() => setRange(r)} style={[styles.chip, range === r && styles.chipActive]}>
             <Text style={[styles.chipText, range === r && { color: colors.white }]}>
-              {r === 0 ? 'All time' : `Last ${r} months`}
+              {r === 0 ? t('range.all') : t('range.last', { count: r })}
             </Text>
           </Pressable>
         ))}
@@ -196,18 +198,17 @@ export function ReflectScreen() {
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 90 }}>
         {report === 'networth' ? (
           <>
-            <Text style={styles.kicker}>Net Worth</Text>
+            <Text style={styles.kicker}>{t('report.networth')}</Text>
             <Text style={styles.big}>{formatMoney(latestNet)}</Text>
             <View style={styles.legendRow}>
               <Text style={{ color: colors.indigo2, fontSize: 13 }}>
-                Assets {formatMoney(latest?.assets ?? 0)}
+                {t('networth.assets', { amount: formatMoney(latest?.assets ?? 0) })}
               </Text>
               <Text style={{ color: colors.redFg, fontSize: 13 }}>
-                Debts {formatMoney(latest?.debts ?? 0)}
+                {t('networth.debts', { amount: formatMoney(latest?.debts ?? 0) })}
               </Text>
               <Text style={{ color: colors.muted, fontSize: 13 }}>
-                Change {changePct >= 0 ? '+' : ''}
-                {changePct.toFixed(1)}%
+                {t('networth.change', { percent: `${changePct >= 0 ? '+' : ''}${changePct.toFixed(1)}%` })}
               </Text>
             </View>
             <BarChart
@@ -223,7 +224,7 @@ export function ReflectScreen() {
 
         {report === 'trends' ? (
           <>
-            <Text style={styles.kicker}>Total Spending</Text>
+            <Text style={styles.kicker}>{t('trends.total')}</Text>
             <Text style={styles.big}>{formatMoney(trendData.reduce((s, d) => s + d.value, 0))}</Text>
             <BarChart data={trendData} color={colors.indigo} />
           </>
@@ -231,7 +232,7 @@ export function ReflectScreen() {
 
         {report === 'breakdown' ? (
           <>
-            <Text style={styles.kicker}>Spending Breakdown</Text>
+            <Text style={styles.kicker}>{t('report.breakdown')}</Text>
             <Text style={styles.big}>
               {formatMoney(spendByCategory.reduce((s, x) => s + x.total, 0))}
             </Text>
@@ -248,7 +249,7 @@ export function ReflectScreen() {
                   <View key={key}>
                     <Pressable
                       disabled={row.kind !== 'bundle'}
-                      accessibilityLabel={row.kind === 'bundle' ? `${row.bundle.name} bundle` : undefined}
+                      accessibilityLabel={row.kind === 'bundle' ? t('breakdown.bundleLabel', { name: row.bundle.name }) : undefined}
                       onPress={() => {
                         if (row.kind !== 'bundle') return;
                         const next = new Set(expanded);
@@ -277,7 +278,7 @@ export function ReflectScreen() {
                 );
               })}
               {spendByCategory.length === 0 ? (
-                <Text style={{ color: colors.faint }}>No categorized spending in this range.</Text>
+                <Text style={{ color: colors.faint }}>{t('breakdown.empty')}</Text>
               ) : null}
             </View>
           </>

@@ -9,6 +9,8 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import type { BudgetListRow } from '@/budget/data/rows';
 import { PRODUCT_NAME, useAuthSession } from '@/features/auth';
 import { MeAvatarButton } from '@/features/profile';
@@ -18,7 +20,8 @@ import { colors, radius, spacing } from '@/ui/theme';
 
 import { BudgetCard } from './BudgetCard';
 import { CreateBudgetForm } from './CreateBudgetForm';
-import { archivedNote, EMPTY_BODY } from './home.logic';
+import { archivedNote, emptyBody } from './home.logic';
+import { t } from './i18n';
 import { PeopleSheet } from './PeopleSheet';
 import { useHome } from './useHome';
 
@@ -33,8 +36,8 @@ export function HomeScreen() {
 
   const account = (
     <View style={styles.account}>
-      <Pressable onPress={() => void signOut()} accessibilityRole="button" accessibilityLabel="Sign out" hitSlop={8}>
-        <Text style={styles.accountLink}>Sign out</Text>
+      <Pressable onPress={() => void signOut()} accessibilityRole="button" accessibilityLabel={t('header.signOut')} hitSlop={8}>
+        <Text style={styles.accountLink}>{t('header.signOut')}</Text>
       </Pressable>
       <MeAvatarButton size={36} />
     </View>
@@ -73,12 +76,12 @@ export function HomeScreen() {
             <Pressable
               onPress={() => setCreatingOpen(true)}
               accessibilityRole="button"
-              accessibilityLabel="New budget"
+              accessibilityLabel={t('header.newBudget')}
               style={(state) => [
                 styles.newButton,
                 (state.pressed || ('hovered' in state && state.hovered === true)) && styles.newButtonActive,
               ]}>
-              <Text style={styles.newButtonText}>New budget</Text>
+              <Text style={styles.newButtonText}>{t('header.newBudget')}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -88,17 +91,17 @@ export function HomeScreen() {
         {view === 'error' ? (
           <>
             <View accessibilityRole="alert" style={styles.notice}>
-              <Text style={styles.noticeText}>Your budgets could not be loaded.</Text>
+              <Text style={styles.noticeText}>{t('error.loadFailed')}</Text>
             </View>
             <Pressable onPress={() => void home.refetch()} accessibilityRole="button" style={styles.newButton}>
-              <Text style={styles.newButtonText}>Try again</Text>
+              <Text style={styles.newButtonText}>{t('error.retry')}</Text>
             </Pressable>
           </>
         ) : null}
 
         {view === 'empty' ? (
           <>
-            <Text style={styles.body}>{EMPTY_BODY}</Text>
+            <Text style={styles.body}>{emptyBody()}</Text>
             {form(false)}
           </>
         ) : null}
@@ -114,28 +117,26 @@ export function HomeScreen() {
                     home.clearCreateError();
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="Cancel new budget"
+                  accessibilityLabel={t('create.cancelLabel')}
                   hitSlop={8}>
-                  <Text style={styles.accountLink}>Cancel</Text>
+                  <Text style={styles.accountLink}>{tCommon('cancel')}</Text>
                 </Pressable>
               </View>
             ) : null}
 
-            <Section title="My budgets">
+            <Section title={t('section.mine')}>
               {sections.mine.length ? (
                 cards(sections.mine)
               ) : (
-                <Text style={styles.sectionEmpty}>None of your own yet. New budget creates one.</Text>
+                <Text style={styles.sectionEmpty}>{t('section.mineEmpty')}</Text>
               )}
             </Section>
 
-            <Section title="Shared with me">
+            <Section title={t('section.shared')}>
               {sections.shared.length ? (
                 cards(sections.shared)
               ) : (
-                <Text style={styles.sectionEmpty}>
-                  Nothing yet. A budget appears here when its owner adds your email to it.
-                </Text>
+                <Text style={styles.sectionEmpty}>{t('section.sharedEmpty')}</Text>
               )}
             </Section>
 
@@ -145,10 +146,10 @@ export function HomeScreen() {
                   onPress={() => setArchivedOpen((v) => !v)}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: archivedOpen }}
-                  accessibilityLabel={`Archived, ${sections.archived.length}`}
+                  accessibilityLabel={t('section.archivedLabel', { count: sections.archived.length })}
                   hitSlop={8}>
                   <Text style={styles.sectionTitle}>
-                    {archivedOpen ? '▾' : '▸'} Archived ({sections.archived.length})
+                    {archivedOpen ? '▾' : '▸'} {t('section.archived', { count: sections.archived.length })}
                   </Text>
                 </Pressable>
                 {archivedOpen ? cards(sections.archived, true) : null}

@@ -8,6 +8,7 @@ import {
   setShowHiddenCategories,
   setShowProgressBars,
 } from '@/state/ui';
+import { t } from './i18n';
 import { LanguageRow } from './LanguageRow';
 import { ToggleRow } from './menuRows';
 
@@ -26,24 +27,24 @@ export function DisplayPane() {
   return (
     <>
       <ToggleRow
-        label="Progress bars"
-        sub="Funding bars under plan categories"
+        label={t('display.bars')}
+        sub={t('display.barsSub')}
         value={showBars}
         onChange={(v) => {
           dispatch(setShowProgressBars(v));
         }}
       />
       <ToggleRow
-        label="Hidden categories"
-        sub="Show hidden categories in the Plan"
+        label={t('display.hidden')}
+        sub={t('display.hiddenSub')}
         value={showHidden}
         onChange={(v) => {
           dispatch(setShowHiddenCategories(v));
         }}
       />
       <ToggleRow
-        label="Closed accounts"
-        sub="Show the Closed group in the account rail"
+        label={t('display.closed')}
+        sub={t('display.closedSub')}
         value={showClosed}
         onChange={(v) => {
           dispatch(setShowClosedAccounts(v));

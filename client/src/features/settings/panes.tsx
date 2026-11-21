@@ -20,6 +20,7 @@ import { BudgetEditMenuPane, BudgetEditSettingsPane } from './BudgetEditPanes';
 import { DisplayPane } from './DisplayPane';
 import { FlagsPane } from './FlagsPane';
 import { FreshStartPane } from './FreshStartPane';
+import { t } from './i18n';
 import { NewBudgetPane } from './NewBudgetPane';
 import { OpenBudgetPane } from './OpenBudgetPane';
 import { PeopleRoute } from './PeopleRoute';
@@ -30,23 +31,23 @@ import { ShortcutsPane } from './ShortcutsPane';
 /** The gear's pane set — one pane per former Settings-panel view. */
 export function budgetMenuPanes(budgetId: string | null): MenuPane[] {
   return [
-    { id: 'settings-root', title: 'SETTINGS', content: <SettingsRootPane /> },
-    { id: 'open', title: 'OPEN BUDGET', content: <OpenBudgetPane /> },
-    { id: 'budget-edit', title: 'EDIT BUDGET', content: <BudgetEditMenuPane /> },
-    { id: 'new', title: 'NEW BUDGET', content: <NewBudgetPane /> },
-    { id: 'people', title: 'PEOPLE', content: <PeopleRoute budgetId={budgetId} /> },
-    { id: 'fresh-start', title: 'FRESH START', content: <FreshStartPane /> },
-    { id: 'settings', title: 'PLAN SETTINGS', content: <PlanSettingsPane budgetId={budgetId} /> },
+    { id: 'settings-root', title: t('pane.root'), content: <SettingsRootPane /> },
+    { id: 'open', title: t('pane.open'), content: <OpenBudgetPane /> },
+    { id: 'budget-edit', title: t('pane.edit'), content: <BudgetEditMenuPane /> },
+    { id: 'new', title: t('pane.new'), content: <NewBudgetPane /> },
+    { id: 'people', title: t('pane.people'), content: <PeopleRoute budgetId={budgetId} /> },
+    { id: 'fresh-start', title: t('pane.freshStart'), content: <FreshStartPane /> },
+    { id: 'settings', title: t('pane.plan'), content: <PlanSettingsPane budgetId={budgetId} /> },
     {
       id: 'budget-settings',
       // Per-budget copy of Plan Settings for the EDIT BUDGET menu: same pane
       // component, but bound to the menu's target budget (not the active one).
-      title: 'PLAN SETTINGS',
+      title: t('pane.plan'),
       content: <BudgetEditSettingsPane />,
     },
-    { id: 'flags', title: 'EDIT FLAGS', content: <FlagsPane /> },
-    { id: 'display', title: 'DISPLAY OPTIONS', content: <DisplayPane /> },
-    { id: 'shortcuts', title: 'KEYBOARD SHORTCUTS', content: <ShortcutsPane /> },
-    { id: 'account', title: 'ACCOUNT SETTINGS', content: <AccountPane /> },
+    { id: 'flags', title: t('pane.flags'), content: <FlagsPane /> },
+    { id: 'display', title: t('pane.display'), content: <DisplayPane /> },
+    { id: 'shortcuts', title: t('pane.shortcuts'), content: <ShortcutsPane /> },
+    { id: 'account', title: t('pane.account'), content: <AccountPane /> },
   ];
 }
