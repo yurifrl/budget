@@ -25,6 +25,7 @@ import { styles } from './flow/styles';
 import { useImportFlow } from './flow/useImportFlow';
 import { ManagePayeesModal } from '@/features/payees';
 import { useBudgetShell } from '@/shell/context';
+import { t } from './i18n';
 
 /**
  * Import-transactions page. Renders nothing useful before a budget exists;
@@ -39,7 +40,7 @@ export function ImportScreen() {
   if (!budgetId) {
     return (
       <View style={styles.screen}>
-        <Text style={styles.hint}>Activate a budget to import transactions.</Text>
+        <Text style={styles.hint}>{t('screen.needBudget')}</Text>
       </View>
     );
   }
@@ -50,16 +51,14 @@ export function ImportScreen() {
       contentContainerStyle={[styles.container, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}
     >
       <View style={styles.hero}>
-        <Text style={styles.heroTitle}>Import Transactions</Text>
-        <Text style={styles.heroSub}>
-          Bank statements — Nubank CSV, Itaú extrato, generic CSV
-        </Text>
+        <Text style={styles.heroTitle}>{t('screen.title')}</Text>
+        <Text style={styles.heroSub}>{t('screen.subtitle')}</Text>
       </View>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <View style={styles.section}>
-        <Text style={styles.fieldLabel}>Account</Text>
+        <Text style={styles.fieldLabel}>{t('account.label')}</Text>
         <Combobox
           value={account?.name ?? ''}
           onChangeText={() => {}}
@@ -70,22 +69,22 @@ export function ImportScreen() {
           options={(accounts.data ?? [])
             .filter((a) => !a.closed)
             .map((a) => ({ key: a.id, label: a.name, sub: a.account_group }))}
-          placeholder="Choose account…"
+          placeholder={t('account.placeholder')}
           chevron
-          accessibilityLabel="Import account"
+          accessibilityLabel={t('account.a11y')}
         />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.fieldLabel}>File</Text>
+        <Text style={styles.fieldLabel}>{t('file.label')}</Text>
         <View style={styles.fileRow}>
-          <GhostButton label="Choose file…" onPress={() => void chooseFile()} />
+          <GhostButton label={t('file.choose')} onPress={() => void chooseFile()} />
           <Text style={styles.fileName} numberOfLines={1}>
-            {fileName ?? 'No file selected'}
+            {fileName ?? t('file.none')}
           </Text>
-          <GhostButton label="Manage payees" onPress={() => setPayeesOpen(true)} />
+          <GhostButton label={t('file.managePayees')} onPress={() => setPayeesOpen(true)} />
         </View>
-        <Text style={styles.hint}>Supports Nubank CSV, Itaú extrato TXT/XLS, and generic CSV.</Text>
+        <Text style={styles.hint}>{t('file.hint')}</Text>
       </View>
 
       {stage === 'mapping' && rawText ? <MappingSection flow={flow} /> : null}

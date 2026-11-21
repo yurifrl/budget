@@ -4,6 +4,7 @@ import type { DraftImportRow } from '../parsers';
 import { AmountCell, GhostButton, IndigoButton } from '@/ui/bits';
 import { CheckRow, DateCell, MemoCell, PayeeCell } from './cells';
 import { importButtonLabel, importedSummary, payeeDisplay, rulesHeading, selectionSummary } from './importFlow.logic';
+import { t } from '../i18n';
 import { styles } from './styles';
 import type { ImportFlow } from './useImportFlow';
 
@@ -32,18 +33,18 @@ export function ReviewSection({ flow, drafts }: { flow: ImportFlow; drafts: Draf
     <View style={styles.section}>
       <View style={styles.summaryRow}>
         <Text style={styles.parseSummary}>{selectionSummary(included.length, drafts.length)}</Text>
-        <GhostButton label="Deselect all" onPress={() => setAllIncluded(false)} />
-        <GhostButton label="Select all" onPress={() => setAllIncluded(true)} />
+        <GhostButton label={t('review.deselectAll')} onPress={() => setAllIncluded(false)} />
+        <GhostButton label={t('review.selectAll')} onPress={() => setAllIncluded(true)} />
       </View>
 
       {/* Register parity (AccountsScreen reghd): uppercase faint labels
           between border rules; column flex weights match the register. */}
       <View style={styles.tableHead}>
         <View style={styles.checkCell} />
-        <Text style={[styles.thCell, styles.colDate]}>DATE</Text>
-        <Text style={[styles.thCell, styles.colPayee]}>PAYEE</Text>
-        <Text style={[styles.thCell, styles.colMemo]}>MEMO</Text>
-        <Text style={[styles.thCell, styles.colAmount]}>AMOUNT</Text>
+        <Text style={[styles.thCell, styles.colDate]}>{t('review.colDate')}</Text>
+        <Text style={[styles.thCell, styles.colPayee]}>{t('review.colPayee')}</Text>
+        <Text style={[styles.thCell, styles.colMemo]}>{t('review.colMemo')}</Text>
+        <Text style={[styles.thCell, styles.colAmount]}>{t('review.colAmount')}</Text>
       </View>
 
       {pageRows.map((row, i) => {
@@ -82,15 +83,15 @@ export function ReviewSection({ flow, drafts }: { flow: ImportFlow; drafts: Draf
       {pageCount > 1 ? (
         <View style={styles.pager}>
           <GhostButton
-            label="‹ Prev"
+            label={t('review.prev')}
             onPress={() => setPage(safePage - 1)}
             style={safePage === 0 ? { opacity: 0.4 } : undefined}
           />
           <Text style={styles.pageLabel}>
-            Page {safePage + 1} of {pageCount}
+            {t('review.page', { page: safePage + 1, total: pageCount })}
           </Text>
           <GhostButton
-            label="Next ›"
+            label={t('review.next')}
             onPress={() => setPage(safePage + 1)}
             style={safePage >= pageCount - 1 ? { opacity: 0.4 } : undefined}
           />
@@ -102,17 +103,17 @@ export function ReviewSection({ flow, drafts }: { flow: ImportFlow; drafts: Draf
           <Text style={styles.rulesTitle}>{rulesHeading(rules.length)}</Text>
           {rules.slice(0, 4).map((rule) => (
             <Text key={rule.condition} style={styles.rulesLine} numberOfLines={1}>
-              “{rule.condition}” → {rule.replacement}
+              {t('rules.line', { condition: rule.condition, replacement: rule.replacement })}
             </Text>
           ))}
-          {rules.length > 4 ? <Text style={styles.rulesLine}>… and {rules.length - 4} more</Text> : null}
+          {rules.length > 4 ? <Text style={styles.rulesLine}>{t('rules.more', { count: rules.length - 4 })}</Text> : null}
         </View>
       ) : null}
 
       {imported != null ? (
         <>
           <Text style={styles.doneText}>{importedSummary(imported, rules.length)}</Text>
-          <GhostButton label="Import another file" onPress={resetReview} />
+          <GhostButton label={t('review.importAnother')} onPress={resetReview} />
         </>
       ) : (
         <IndigoButton

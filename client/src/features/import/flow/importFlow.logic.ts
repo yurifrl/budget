@@ -14,6 +14,7 @@ import {
   type DraftImportRow,
   type ImportParseResult,
 } from '../parsers';
+import { t } from '../i18n';
 
 /** Review rows per page — a full statement at once is unusable on web. */
 export const PAGE_SIZE = 25;
@@ -204,14 +205,14 @@ export function headerColumnCount(rawText: string | null, mapping: Pick<CsvMappi
 /** Mapper dropdown: "(not imported)" then one entry per file column. */
 export function columnOptions(columnCount: number): { key: string; label: string }[] {
   return [
-    { key: '-1', label: '(not imported)' },
-    ...Array.from({ length: columnCount }, (_, i) => ({ key: String(i), label: `Column ${i + 1}` })),
+    { key: '-1', label: t('mapping.notImported') },
+    ...Array.from({ length: columnCount }, (_, i) => ({ key: String(i), label: t('mapping.column', { n: i + 1 }) })),
   ];
 }
 
 /** Mapper dropdown value: blank only for a cleared (null) role. */
 export function columnLabel(column: number | null | undefined): string {
-  return column == null ? '' : `Column ${column + 1}`;
+  return column == null ? '' : t('mapping.column', { n: column + 1 });
 }
 
 /** The mapping value a dropdown pick stores: "(not imported)" clears the role. */
@@ -219,32 +220,33 @@ export function pickedColumn(key: string): number | null {
   return key === '-1' ? null : Number(key);
 }
 
-const plural = (n: number) => (n === 1 ? '' : 's');
-
 /** "12 transactions, 2 skipped" under the column mapper. */
 export function mappedSummary(mapped: Pick<ImportParseResult, 'rows' | 'skipped'>): string {
-  return `${mapped.rows.length} transaction${plural(mapped.rows.length)}` + (mapped.skipped > 0 ? `, ${mapped.skipped} skipped` : '');
+  const count = mapped.rows.length;
+  return mapped.skipped > 0 ? t('mapping.summarySkipped', { count, skipped: mapped.skipped }) : t('mapping.summary', { count });
 }
 
 /** "3 of 5 transactions selected, 2 excluded" above the review table. */
 export function selectionSummary(included: number, total: number): string {
-  return `${included} of ${total} transaction${plural(total)} selected` + (total - included > 0 ? `, ${total - included} excluded` : '');
+  return total - included > 0
+    ? t('review.selectionExcluded', { included, count: total, excluded: total - included })
+    : t('review.selection', { included, count: total });
 }
 
 /** Heading of the pending-associations note. */
 export function rulesHeading(count: number): string {
-  return `${count === 1 ? '1 payee association will be' : `${count} payee associations will be`} saved as rename rules:`;
+  return t('rules.heading', { count });
 }
 
 /** The success line after an import. */
 export function importedSummary(outcome: ImportOutcome, ruleCount: number): string {
   return (
-    `Imported ${outcome.imported} transaction${plural(outcome.imported)}` +
-    (outcome.duplicates > 0 ? `, skipped ${outcome.duplicates} duplicate${plural(outcome.duplicates)}` : '') +
-    (ruleCount > 0 ? ` — ${ruleCount} payee rule${plural(ruleCount)} saved` : '')
+    t('review.imported', { count: outcome.imported }) +
+    (outcome.duplicates > 0 ? t('review.importedDuplicates', { count: outcome.duplicates }) : '') +
+    (ruleCount > 0 ? t('review.importedRules', { count: ruleCount }) : '')
   );
 }
 
 export function importButtonLabel(included: number): string {
-  return `Import ${included} transaction${plural(included)}`;
+  return t('review.importButton', { count: included });
 }

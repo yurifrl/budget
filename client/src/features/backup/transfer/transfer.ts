@@ -13,6 +13,8 @@ import { budgetMonth, categoryFigures } from '@/domain/zeroSum';
 import { monthOfDate } from '@/domain/format';
 import type { Budget } from '@/domain/types';
 
+import { t } from '../i18n';
+
 import { TRANSFER_PAYEE_RE } from '@shared/domain/transfers';
 import { budgetToPayload, pairTransfers } from './payload';
 import type { TransferPayload } from './payload';
@@ -46,7 +48,9 @@ export interface TransferOptions {
 }
 
 /** Trailing, optional columns (older archives lack them and still import). */
+// eslint-disable-next-line budget-i18n/no-untranslated-string -- archive column header (file format): matched on import, identical in every language
 export const PLAN_PERSON_COLUMN = 'Person';
+// eslint-disable-next-line budget-i18n/no-untranslated-string -- archive column header (file format): matched on import, identical in every language
 export const REGISTER_PERSON_COLUMN = 'Account Person';
 
 const emailOf = (people: readonly TransferPerson[] | undefined, userId: string | null | undefined): string =>
@@ -93,10 +97,12 @@ function buildPlanTsv(budget: Budget, people?: readonly TransferPerson[]): strin
   // The Person column only exists when someone is assigned: a budget without
   // persons exports the exact reference format.
   const withPerson = budget.categories.some((c) => emailOf(people, c.userId) !== '');
+  /* eslint-disable budget-i18n/no-untranslated-string -- Plan.tsv column headers (file format): checked on import, identical in every language */
   let tsv = tsvRow([
     'Month', 'Category Group/Category', 'Category Group', 'Category', 'Assigned', 'Activity', 'Available',
     ...(withPerson ? [PLAN_PERSON_COLUMN] : []),
   ]);
+  /* eslint-enable budget-i18n/no-untranslated-string */
   for (const month of sorted) {
     // Assigned / Activity / Available are the engine's unified figures, so
     // card payment categories export their funded - payments and Available.
@@ -129,10 +135,12 @@ function buildRegisterTsv(budget: Budget, now: Date, people?: readonly TransferP
     .sort((a, b) => (a.t.date < b.t.date ? 1 : a.t.date > b.t.date ? -1 : a.i - b.i));
 
   const withPerson = payload.accounts.some((a) => emailOf(people, a.userId) !== '');
+  /* eslint-disable budget-i18n/no-untranslated-string -- Register.tsv column headers (file format): checked on import, identical in every language */
   let tsv = tsvRow([
     'Account', 'Flag', 'Date', 'Payee', 'Category Group/Category', 'Category Group', 'Category',
     'Memo', 'Outflow', 'Inflow', 'Cleared', ...(withPerson ? [REGISTER_PERSON_COLUMN] : []),
   ]);
+  /* eslint-enable budget-i18n/no-untranslated-string */
   for (const { t, i } of rows) {
     const source = budget.transactions[i]; // payload rows follow budget.transactions; balance rows have none
     // Transfer legs (and split parents, whose legs own the categories) carry no
@@ -146,9 +154,11 @@ function buildRegisterTsv(budget: Budget, now: Date, people?: readonly TransferP
     let name = '';
     let compound = '';
     if (readyToAssign) {
+      /* eslint-disable budget-i18n/no-untranslated-string -- YNAB's Ready to Assign category as written to the archive; parseRegister matches it, so it never follows the language */
       group = 'Inflow';
       name = 'Ready to Assign';
       compound = 'Inflow: Ready to Assign';
+      /* eslint-enable budget-i18n/no-untranslated-string */
     } else if (t.categoryIndex !== null) {
       const category = payload.categories[t.categoryIndex];
       group = payload.groups[category.groupIndex] ?? '';
@@ -183,7 +193,9 @@ export function buildTransferZip(
 ): { zipName: string; bytes: Uint8Array } {
   const now = opts?.now ?? new Date();
   const asOf = stamp(now);
+  // eslint-disable-next-line budget-i18n/no-untranslated-string -- zip file name (file format), not shown in the UI language
   const zipName = `Budget Export - ${budget.name} as of ${asOf}.zip`;
+  // eslint-disable-next-line budget-i18n/no-untranslated-string -- archive entry names: parseTransferFiles matches their PLAN_SUFFIX / REGISTER_SUFFIX
   const prefix = `${budget.name} as of ${asOf}`;
   const bytes = zipSync({
     [`${prefix}${PLAN_SUFFIX}`]: strToU8(buildPlanTsv(budget, opts?.people)),
@@ -233,7 +245,7 @@ function parsePlan(
   const { header, rows } = parseTsv(tsv);
   const personCol = header.indexOf(PLAN_PERSON_COLUMN);
   if (header[0] !== 'Month' || header[2] !== 'Category Group' || header[3] !== 'Category') {
-    errors.push('Plan.tsv: unexpected header row');
+    errors.push(t('transfer.planHeader'));
     return emptyUniverse();
   }
   const universe: Universe = {
@@ -255,7 +267,7 @@ function parsePlan(
   for (const row of rows) {
     const month = monthCellToFirstOfMonth(row[0] ?? '');
     if (month === null) {
-      errors.push(`Plan.tsv: unparseable month cell ${JSON.stringify(row[0] ?? '')}`);
+      errors.push(t('transfer.badMonth', { cell: JSON.stringify(row[0] ?? '') }));
       continue;
     }
     let group = (row[2] ?? '').trim();
@@ -268,7 +280,7 @@ function parsePlan(
       }
     }
     if (group === '' || name === '') {
-      errors.push(`Plan.tsv: row without category ${JSON.stringify(row.slice(0, 4))}`);
+      errors.push(t('transfer.noCategory', { row: JSON.stringify(row.slice(0, 4)) }));
       continue;
     }
     const key = `${group.toLowerCase()}\u0000${name.toLowerCase()}`;
@@ -309,7 +321,7 @@ function resolvePerson(
   if (email === '') return undefined;
   const found = people?.find((p) => p.email?.toLowerCase() === email);
   if (found) return found.user_id;
-  const note = `${file}: ${email} is not a member of this budget -> Shared`;
+  const note = t('transfer.notMember', { file, email });
   if (!warnings.includes(note)) warnings.push(note);
   return null;
 }
@@ -353,7 +365,7 @@ function parseRegister(
 ): { accounts: { name: string; userId?: string | null }[]; transactions: TransferPayload['transactions'] } {
   const { header, rows } = parseTsv(tsv);
   if (header[0] !== 'Account' || header[10] !== 'Cleared') {
-    errors.push('Register.tsv: unexpected header row');
+    errors.push(t('transfer.registerHeader'));
     return { accounts: [], transactions: [] };
   }
   const personCol = header.indexOf(REGISTER_PERSON_COLUMN);
@@ -374,7 +386,7 @@ function parseRegister(
   for (const row of rows) {
     const date = parseDate(row[2] ?? '');
     if (date === null) {
-      errors.push(`Register.tsv: unparseable date cell ${JSON.stringify(row[2] ?? '')}`);
+      errors.push(t('transfer.badDate', { cell: JSON.stringify(row[2] ?? '') }));
       continue;
     }
     const accountIndex = accountIndexOf(row[0] ?? '');
@@ -387,7 +399,7 @@ function parseRegister(
     const clearedRaw = (row[10] ?? '').trim();
     const cleared = parseCleared(clearedRaw);
     if (cleared === null && clearedRaw !== '') {
-      warnings.push(`Register.tsv: unknown Cleared cell ${JSON.stringify(clearedRaw)} -> uncleared`);
+      warnings.push(t('transfer.unknownCleared', { cell: JSON.stringify(clearedRaw) }));
     }
     transactions.push({
       accountIndex,
@@ -403,9 +415,8 @@ function parseRegister(
     });
   }
   if (unmatched.size > 0) {
-    const note = lenientCategories
-      ? `Register.tsv: categories not in this budget (rows stay uncategorized): ${[...unmatched].sort().join(', ')}`
-      : `Register.tsv: unknown categories: ${[...unmatched].sort().join(', ')}`;
+    const list = [...unmatched].sort().join(', ');
+    const note = lenientCategories ? t('transfer.missingCategories', { list }) : t('transfer.unknownCategories', { list });
     (lenientCategories ? warnings : errors).push(note);
   }
   return { accounts, transactions };
@@ -449,7 +460,7 @@ function pairRegisterTransfers(
   for (const c of transactions) {
     const other = TRANSFER_PAYEE_RE.exec(c.payee)?.[1]?.trim() ?? null;
     if (other !== null && accounts.every((a) => a.name.toLowerCase() !== other.toLowerCase())) {
-      errors.push(`Register.tsv: transfer payee names unknown account ${JSON.stringify(other)}`);
+      errors.push(t('transfer.unknownAccount', { account: JSON.stringify(other) }));
     }
   }
   pairTransfers(
@@ -458,7 +469,7 @@ function pairRegisterTransfers(
   );
   for (const c of transactions) {
     if (TRANSFER_PAYEE_RE.test(c.payee) && c.transferPeerIndex === null) {
-      warnings.push(`Register.tsv: unpaired transfer transaction ${JSON.stringify(c.payee)}`);
+      warnings.push(t('transfer.unpairedTransfer', { payee: JSON.stringify(c.payee) }));
     }
   }
 }
@@ -486,7 +497,7 @@ export function parseTransferFiles(
       try {
         text = strFromU8(file.bytes);
       } catch {
-        errors.push(`${file.name}: not valid UTF-8`);
+        errors.push(t('transfer.notUtf8', { file: file.name }));
       }
       if (file.name.endsWith(PLAN_SUFFIX)) plan = plan ?? text;
       else register = register ?? text;
@@ -496,7 +507,7 @@ export function parseTransferFiles(
     try {
       entries = unzipSync(file.bytes);
     } catch {
-      errors.push(`${file.name}: not a readable zip archive`);
+      errors.push(t('transfer.notZip', { file: file.name }));
       continue;
     }
     for (const [entryName, bytes] of Object.entries(entries)) {
@@ -506,11 +517,11 @@ export function parseTransferFiles(
   }
 
   if (plan === undefined && register === undefined) {
-    errors.push('a Plan.tsv or Register.tsv file is required');
+    errors.push(t('transfer.noTable'));
     return { warnings, errors };
   }
   if (plan === undefined && !opts?.existingCategories) {
-    errors.push('Register.tsv alone needs the budget categories to match against');
+    errors.push(t('transfer.needCategories'));
     return { warnings, errors };
   }
 

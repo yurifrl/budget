@@ -17,6 +17,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
+import { tCommon } from '@shared/i18n/common';
 import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { GhostButton, IndigoButton, OverlaySheet } from '@/ui/bits';
 import { colors } from '@/ui/theme';
@@ -36,19 +37,20 @@ import {
   countUnmatchedCategories,
   dependencyNote,
   orderSections,
-  plural,
-  replaceDescription,
+  countText,
+  replaceSentence,
   scopedPayload,
   SECTION_LABELS,
   sectionCountsText,
   toggleSection,
   wireSections,
 } from './importScope.logic';
-import type { BackupSection } from './importScope.logic';
+import type { BackupSection, CountNoun } from './importScope.logic';
 import { useBudgetShell } from '@/shell/context';
+import { t } from './i18n';
 
 /** Payload table names shown in the import summary and restore result. */
-const TABLE_LABELS: [keyof TransferPayload, string][] = [
+const TABLE_LABELS: [keyof TransferPayload, CountNoun][] = [
   ['groups', 'group'],
   ['categories', 'category'],
   ['accounts', 'account'],
@@ -153,7 +155,7 @@ export function ExportImportScreen() {
       const { zipName, bytes } = buildTransferZip(model.budget, { people });
       await deliverExport(zipName, bytes);
     } catch (err) {
-      setExportError(apiErrorMessage(err, 'export failed'));
+      setExportError(apiErrorMessage(err, t('export.failed')));
     } finally {
       setExporting(false);
     }
@@ -173,11 +175,8 @@ export function ExportImportScreen() {
       if (seq !== pickSeq.current) return;
       if (!picked) return;
       const suffix = kind === 'plan' ? PLAN_SUFFIX : REGISTER_SUFFIX;
-      const noun = kind === 'plan' ? 'Plan' : 'Register';
       if (!picked.name.endsWith(suffix)) {
-        setImportError(
-          `${picked.name}: not the ${noun} table — expected a file whose name ends in “${suffix}”`,
-        );
+        setImportError(t('import.wrongTable', { file: picked.name, table: SECTION_LABELS[kind], suffix }));
         return;
       }
       const plan = kind === 'plan' ? picked : pickedPlan;
@@ -189,7 +188,7 @@ export function ExportImportScreen() {
         .map((f) => ({ name: f.name, bytes: f.bytes }));
       const result = parseTransferFiles(files, { people, existingCategories });
       if (result.errors.length > 0 || !result.payload) {
-        setImportError(result.errors.join('\n') || 'not a readable backup');
+        setImportError(result.errors.join('\n') || t('import.unreadable'));
         return;
       }
       setPendingWarnings(result.warnings);
@@ -197,7 +196,7 @@ export function ExportImportScreen() {
       setParsed({ payload: result.payload, available });
       setSelected(available);
     } catch (err) {
-      setImportError(apiErrorMessage(err, 'failed to read the file'));
+      setImportError(apiErrorMessage(err, t('import.readFailed')));
     } finally {
       if (seq === pickSeq.current) setImporting(null);
     }
@@ -219,18 +218,25 @@ export function ExportImportScreen() {
       setPickedPlan(null);
       setPickedRegister(null);
     } catch (err) {
-      setImportError(apiErrorMessage(err, 'restore failed'));
+      setImportError(apiErrorMessage(err, t('import.restoreFailed')));
     } finally {
       setRestoring(false);
     }
   };
+
+  const restoredCounts = restored
+    ? TABLE_LABELS.filter(([key]) => (restored[key] ?? 0) > 0)
+        .map(([key, noun]) => countText(restored[key] ?? 0, noun))
+        .join(', ')
+    : '';
+  const restoredSummary = restoredCounts ? t('restored.summary', { counts: restoredCounts }) : t('restored.nothing');
 
   const unmatchedCategories = parsed ? countUnmatchedCategories(parsed.payload, existingCategories) : 0;
 
   if (!model.budgetId || !model.budget) {
     return (
       <View style={styles.screen}>
-        <Text style={styles.hint}>Activate a budget to export or restore it.</Text>
+        <Text style={styles.hint}>{t('screen.needBudget')}</Text>
       </View>
     );
   }
@@ -240,55 +246,48 @@ export function ExportImportScreen() {
       style={styles.screen}
       contentContainerStyle={[styles.container, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}
     >
-      <Text style={styles.sectionTitle}>Export</Text>
-      <Text style={styles.hint}>
-        Saves the whole budget — category plan and transaction register — as a zip archive with two
-        TSV tables, shareable from this device.
-      </Text>
+      <Text style={styles.sectionTitle}>{t('export.title')}</Text>
+      <Text style={styles.hint}>{t('export.hint')}</Text>
       <View style={styles.actionRow}>
-        <IndigoButton label={exporting ? 'Preparing…' : 'Export backup'} onPress={doExport} />
+        <IndigoButton label={exporting ? t('export.preparing') : t('export.button')} onPress={doExport} />
       </View>
       {exportError ? <Text style={styles.errorText}>{exportError}</Text> : null}
 
-      <Text style={styles.sectionTitle}>Import</Text>
+      <Text style={styles.sectionTitle}>{t('import.title')}</Text>
       {!isOwner ? (
-        <Text style={styles.hint}>Only the owner of this budget can restore a backup into it.</Text>
+        <Text style={styles.hint}>{t('import.ownerOnly')}</Text>
       ) : null}
       {isOwner ? (
       <>
-      <Text style={styles.hint}>
-        Restores backup tables into this budget. Choose the Plan file, the Register file or both,
-        then pick which parts to restore: the plan (categories, assignments) and/or the register
-        (accounts, transactions). Whatever you restore replaces what is currently in the budget.
-      </Text>
+      <Text style={styles.hint}>{t('import.hint')}</Text>
       <View style={styles.pickRow}>
         <GhostButton
           label={
-            importing === 'plan' ? 'Reading…' : pickedPlan ? 'Choose again…' : 'Choose Plan file…'
+            importing === 'plan' ? t('import.reading') : pickedPlan ? t('import.chooseAgain') : t('import.choosePlan')
           }
           onPress={() => {
             void doPick('plan');
           }}
         />
         <Text style={styles.pickName} numberOfLines={1}>
-          {pickedPlan ? pickedPlan.name : 'no file chosen'}
+          {pickedPlan ? pickedPlan.name : t('import.noFile')}
         </Text>
       </View>
       <View style={styles.pickRow}>
         <GhostButton
           label={
             importing === 'register'
-              ? 'Reading…'
+              ? t('import.reading')
               : pickedRegister
-                ? 'Choose again…'
-                : 'Choose Register file…'
+                ? t('import.chooseAgain')
+                : t('import.chooseRegister')
           }
           onPress={() => {
             void doPick('register');
           }}
         />
         <Text style={styles.pickName} numberOfLines={1}>
-          {pickedRegister ? pickedRegister.name : 'no file chosen'}
+          {pickedRegister ? pickedRegister.name : t('import.noFile')}
         </Text>
       </View>
       </>
@@ -296,16 +295,14 @@ export function ExportImportScreen() {
       {importError ? <Text style={styles.errorText}>{importError}</Text> : null}
       {restored ? (
         <Text style={styles.doneText}>
-          Restored {TABLE_LABELS.filter(([key]) => (restored[key] ?? 0) > 0).map(([key, noun]) => plural(restored[key] ?? 0, noun)).join(', ') || 'nothing'}.
-          {(restored.uncategorized ?? 0) > 0
-            ? ` ${plural(restored.uncategorized ?? 0, 'transaction')} had no matching category and stayed uncategorized.`
-            : ''}
+          {restoredSummary}
+          {(restored.uncategorized ?? 0) > 0 ? ` ${t('restored.uncategorized', { count: restored.uncategorized ?? 0 })}` : ''}
         </Text>
       ) : null}
 
       {parsed ? (
         <View style={styles.scopeCard}>
-          <Text style={styles.sectionTitle}>This backup contains</Text>
+          <Text style={styles.sectionTitle}>{t('scope.title')}</Text>
           {(['plan', 'register'] as const).map((section) => {
             const present = parsed.available.includes(section);
             const checked = selected.includes(section);
@@ -324,7 +321,7 @@ export function ExportImportScreen() {
                 <View style={styles.scopeText}>
                   <Text style={styles.scopeTitle}>{SECTION_LABELS[section]}</Text>
                   <Text style={styles.hint}>
-                    {present ? sectionCountsText(parsed.payload, section) : 'not in the chosen file(s)'}
+                    {present ? sectionCountsText(parsed.payload, section) : t('scope.missing')}
                   </Text>
                 </View>
               </Pressable>
@@ -332,7 +329,7 @@ export function ExportImportScreen() {
           })}
           <View style={styles.actionRow}>
             <IndigoButton
-              label={selected.length === 0 ? 'Choose what to restore' : 'Restore selected…'}
+              label={selected.length === 0 ? t('scope.chooseNone') : t('scope.restore')}
               onPress={() => {
                 if (selected.length > 0) setConfirming(true);
               }}
@@ -341,21 +338,19 @@ export function ExportImportScreen() {
         </View>
       ) : null}
 
-      <OverlaySheet visible={confirming && parsed != null} onClose={() => (restoring ? null : setConfirming(false))} title="Restore this backup?">
+      <OverlaySheet visible={confirming && parsed != null} onClose={() => (restoring ? null : setConfirming(false))} title={t('confirm.title')}>
         {parsed ? (
           <>
-            <Text style={styles.confirmText}>
-              This replaces {replaceDescription(selected)} in “{model.budget.name}” with:
-            </Text>
+            <Text style={styles.confirmText}>{replaceSentence(selected, model.budget.name)}</Text>
             {selected.map((section) => (
               <Text key={section} style={styles.confirmRow}>
-                {SECTION_LABELS[section]}: {sectionCountsText(parsed.payload, section)}
+                {t('scope.sectionCounts', { section: SECTION_LABELS[section], counts: sectionCountsText(parsed.payload, section) })}
               </Text>
             ))}
             {dependencyNote(selected) ? <Text style={styles.hint}>{dependencyNote(selected)}</Text> : null}
             {selected.length === 1 && selected[0] === 'register' && unmatchedCategories > 0 ? (
               <Text style={styles.warnText}>
-                {plural(unmatchedCategories, 'transaction')} name a category this budget does not have and will be uncategorized.
+                {t('confirm.unmatched', { count: unmatchedCategories })}
               </Text>
             ) : null}
             {pendingWarnings.length > 0 ? (
@@ -367,12 +362,12 @@ export function ExportImportScreen() {
             ) : null}
             <View style={styles.confirmRow2}>
               <IndigoButton
-                label={restoring ? 'Restoring…' : 'Replace'}
+                label={restoring ? t('confirm.restoring') : t('confirm.replace')}
                 onPress={() => {
                   void confirmRestore();
                 }}
               />
-              <GhostButton label="Cancel" onPress={() => setConfirming(false)} />
+              <GhostButton label={tCommon('cancel')} onPress={() => setConfirming(false)} />
             </View>
           </>
         ) : null}
