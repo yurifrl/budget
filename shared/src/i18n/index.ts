@@ -12,7 +12,6 @@
 
 import { pluralCategory } from './plural';
 import type {
-  ArgsOf,
   Catalog,
   Locale,
   MessageOptions,
