@@ -4,6 +4,7 @@ import { StyleSheet, TextInput, View } from 'react-native';
 import type { Cents } from '@/domain/types';
 import { useMoneyFormat } from '../moneyFormat';
 import { colors, radius } from '@/ui/theme';
+import { t } from '../text/i18n';
 
 /**
  * Hero amount field (mobile category detail / move-money pages): one large
@@ -18,7 +19,7 @@ export function BigMoneyInput({
   autoFocus = false,
   accent = colors.indigo2,
   color = colors.text,
-  accessibilityLabel = 'Amount',
+  accessibilityLabel = t('money.amount'),
 }: {
   cents: Cents;
   onCommit: (next: Cents) => void;

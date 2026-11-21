@@ -36,6 +36,7 @@ import { useBudgetRevisionWatcher } from '@/state/useBudgetRevisionWatcher';
 import { colors, radius } from '@/ui/theme';
 import { AddTransactionSheet } from '@/features/accounts';
 import { budgetMenuPanes } from '@/features/settings';
+import { t } from './i18n';
 import { BudgetRail } from './rail/BudgetRail';
 import { BudgetTabs } from './rail/BudgetTabs';
 import { shellGate } from './rail/rail.logic';
@@ -203,14 +204,14 @@ function BudgetShell({ budgetId }: { budgetId: string }) {
             <Pressable
               style={[styles.chromeBtn, { left: 14, top: chromeTop }]}
               onPress={() => setDrawerOpen(true)}
-              accessibilityLabel="Menu">
+              accessibilityLabel={t('layout.menu')}>
               <Text style={styles.chromeBtnText}>☰</Text>
             </Pressable>
             <Pressable
               style={[styles.chromeBtn, { left: 56, top: chromeTop }]}
               onPress={goHome}
               accessibilityRole="button"
-              accessibilityLabel="All budgets">
+              accessibilityLabel={t('layout.allBudgets')}>
               <IconSymbol size={17} name="house.fill" color={colors.muted} />
             </Pressable>
           </>
@@ -244,11 +245,11 @@ function BudgetShell({ budgetId }: { budgetId: string }) {
                 setPrefillCategoryId(null);
                 setAddTxnOpen(true);
               }}
-              accessibilityLabel="New transaction">
+              accessibilityLabel={t('layout.newTransaction')}>
               {numpadOpen ? (
                 <Text style={styles.fabGlyph}>＋</Text>
               ) : (
-                <Text style={styles.fabText}>＋ Transaction</Text>
+                <Text style={styles.fabText}>{t('layout.fabPill')}</Text>
               )}
             </Pressable>
           </Animated.View>
@@ -260,8 +261,8 @@ function BudgetShell({ budgetId }: { budgetId: string }) {
             style={styles.maskBanner}
             onPress={() => setMasked(false)}
             accessibilityRole="button"
-            accessibilityLabel="Unhide amounts">
-            <Text style={styles.maskBannerText}>🔒 Amounts are hidden — tap to unhide</Text>
+            accessibilityLabel={t('layout.unhideAmounts')}>
+            <Text style={styles.maskBannerText}>{t('layout.amountsHidden')}</Text>
           </Pressable>
         ) : null}
 

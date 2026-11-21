@@ -4,6 +4,7 @@ import Svg, { Circle } from 'react-native-svg';
 import type { Cents, FundingState } from '@/domain/types';
 import { useMoneyFormat } from '../moneyFormat';
 import { barColor, colors, pillColors, radius } from '@/ui/theme';
+import { t } from '../text/i18n';
 
 /** YNAB-style target-progress ball (syscd-app-6jns): a small ring that fills
  * clockwise with the category's funding progress. Null/undefined renders
@@ -59,7 +60,7 @@ export function Pill({
   );
   if (!onPress) return pill;
   return (
-    <Pressable onPress={onPress} hitSlop={6} accessibilityLabel="Available — move money">
+    <Pressable onPress={onPress} hitSlop={6} accessibilityLabel={t('pill.availableMove')}>
       {pill}
     </Pressable>
   );

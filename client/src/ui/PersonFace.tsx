@@ -12,11 +12,13 @@ import { Avatar } from './avatar/Avatar';
 import { personLabel, toAvatarPerson, type Person } from '@/domain/people';
 import { colors } from '@/ui/theme';
 
+import { t } from './text/i18n';
+
 /** Two-people glyph in a neutral circle: "belongs to the household". */
 export function SharedGlyph({ size = 24 }: { size?: number }) {
   return (
     <View
-      accessibilityLabel="Shared"
+      accessibilityLabel={t('person.shared')}
       style={{
         width: size,
         height: size,
@@ -48,7 +50,7 @@ export function PersonFace({ person, size = 24 }: { person: Person | null; size?
 export function AccountOwnerFace({ person, size = 17 }: { person: Person | null; size?: number }) {
   if (!person) return null;
   return (
-    <View accessible accessibilityLabel={`Belongs to ${personLabel(person)}`} {...({ title: `Belongs to ${personLabel(person)}` } as object)}>
+    <View accessible accessibilityLabel={t('person.belongsTo', { name: personLabel(person) })} {...({ title: t('person.belongsTo', { name: personLabel(person) }) } as object)}>
       <PersonFace person={person} size={size} />
     </View>
   );
@@ -56,13 +58,13 @@ export function AccountOwnerFace({ person, size = 17 }: { person: Person | null;
 
 /** "Belongs to Ana" / "Shared by everyone" line under an account's title; the link-coloured ▾ marks it as the way to change the person (opens the editor). */
 export function BelongsTo({ person, onPress }: { person: Person | null; onPress?: () => void }) {
-  const text = person ? `Belongs to ${personLabel(person)}` : 'Shared by everyone';
+  const text = person ? t('person.belongsTo', { name: personLabel(person) }) : t('person.sharedByEveryone');
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : 'text'}
-      accessibilityLabel={onPress ? `${text}. Change person` : text}
+      accessibilityLabel={onPress ? t('person.changePerson', { text }) : text}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5, alignSelf: 'flex-start' }}>
       <PersonFace person={person} size={18} />
       <Text style={{ color: onPress ? colors.indigo3 : colors.muted, fontSize: 12 }} numberOfLines={1}>

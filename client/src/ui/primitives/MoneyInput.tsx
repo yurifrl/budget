@@ -17,6 +17,7 @@ import { createPortalOnWeb } from '../portal';
 import type { Cents } from '@/domain/types';
 import { useMoneyFormat } from '../moneyFormat';
 import { colors, radius } from '@/ui/theme';
+import { t } from '../text/i18n';
 import {
   appendQuickMathOp,
   draftCommitCents,
@@ -220,7 +221,7 @@ export function MoneyInput({
         selectTextOnFocus
         keyboardType="decimal-pad"
         style={[styles.moneyInput, style]}
-        accessibilityLabel="Amount"
+        accessibilityLabel={t('money.amount')}
       />
     );
   }
@@ -270,7 +271,7 @@ export function MoneyInput({
         <Pressable
           onPointerDown={(e) => e.preventDefault()}
           onPress={toggleOps}
-          accessibilityLabel="Quick math operators"
+          accessibilityLabel={t('money.quickMath')}
           style={({ pressed }) => [styles.qmToggle, pressed && { backgroundColor: colors.hover }]}>
           <Text style={styles.qmToggleGlyph}>±</Text>
         </Pressable>
@@ -278,9 +279,9 @@ export function MoneyInput({
       <TextInput
         ref={inputRef}
         value={text}
-        onChangeText={(t) => {
+        onChangeText={(next) => {
           cancelledRef.current = false;
-          setText(t);
+          setText(next);
         }}
         onSubmitEditing={() => {
           setOpsOpen(false);
@@ -297,7 +298,7 @@ export function MoneyInput({
         selectTextOnFocus
         keyboardType={signed ? 'numbers-and-punctuation' : 'decimal-pad'}
         style={styles.qmText}
-        accessibilityLabel="Amount"
+        accessibilityLabel={t('money.amount')}
       />
       {qmPortal}
       {qmInline}

@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
+import { t } from '../text/i18n';
 import { amountStyle, DropdownShell, dropdownStyles, pressNoBlur, useDropdownPortal, type DropdownKeyEvent } from './dropdown';
 import { transferPayeeName } from '@shared/domain/transfers';
 
@@ -119,7 +120,7 @@ export function CategoryDropdown({
       }
     } else {
       if (creatable) {
-        rows.push({ key: '__create__', kind: 'create', targetId: null, label: 'New Category', checked: false });
+        rows.push({ key: '__create__', kind: 'create', targetId: null, label: t('category.new'), checked: false });
       }
       if (current) {
         const groupName = groups.find((g) => g.id === current.groupId)?.name;
@@ -131,7 +132,7 @@ export function CategoryDropdown({
           checked: true,
         });
       }
-      rows.push({ key: '__rta__', kind: 'rta', targetId: null, label: 'Inflow / Ready to Assign', checked: currentCategoryId === null });
+      rows.push({ key: '__rta__', kind: 'rta', targetId: null, label: t('category.inflowReadyToAssign'), checked: currentCategoryId === null });
       for (const g of groups) {
         for (const cat of categories.filter((c) => c.groupId === g.id && matchesCategoryQuery(c, bundles, query))) {
           rows.push({ key: cat.id, kind: 'category', targetId: cat.id, label: categoryLabel(cat, bundles), groupTitle: g.name, checked: cat.id === currentCategoryId });
@@ -184,11 +185,11 @@ export function CategoryDropdown({
     if (item.kind === 'selected') {
       rows.push(
         <Text key="selected-hd" style={dropdownStyles.sectionTitle}>
-          Selected
+          {t('dropdown.selected')}
         </Text>,
       );
     }
-    const itemTitle = transfer ? 'Payments and Transfers' : item.groupTitle;
+    const itemTitle = transfer ? t('category.paymentsAndTransfers') : item.groupTitle;
     if (itemTitle && lastTitle !== itemTitle) {
       lastTitle = itemTitle;
       rows.push(
@@ -240,7 +241,9 @@ export function CategoryDropdown({
   if (query && items.length === 0) {
     rows.push(
       <Text key="empty" style={dropdownStyles.emptyRow}>
-        No {transfer ? 'accounts' : 'categories'} match “{draft.trim()}”
+        {transfer
+          ? t('dropdown.noAccountsMatch', { query: draft.trim() })
+          : t('category.noMatch', { query: draft.trim() })}
       </Text>,
     );
   }
@@ -251,8 +254,8 @@ export function CategoryDropdown({
         open={open}
         anchor={anchor}
         value={inputValue}
-        onChangeText={(t) => {
-          setDraft(t);
+        onChangeText={(text) => {
+          setDraft(text);
           setHighlight(0);
           setOpen(true);
         }}
@@ -278,7 +281,7 @@ export function CategoryDropdown({
               }}
               {...pressNoBlur}
               style={[dropdownStyles.pinnedRow, dropdownStyles.row, styles.footerHalf]}>
-              <Text style={[dropdownStyles.rowLabel, dropdownStyles.pinnedLabel]}>Payment/Transfer</Text>
+              <Text style={[dropdownStyles.rowLabel, dropdownStyles.pinnedLabel]}>{t('category.paymentTransfer')}</Text>
             </Pressable>
             {/* Split (syscd-app-rlt): opens the row's split editor. Only shown
                 through onSplitPick — register rows that can host it. */}
@@ -290,7 +293,7 @@ export function CategoryDropdown({
                 }}
                 {...pressNoBlur}
                 style={[dropdownStyles.pinnedRow, dropdownStyles.row, styles.footerHalf]}>
-                <Text style={[dropdownStyles.rowLabel, dropdownStyles.pinnedLabel]}>Split</Text>
+                <Text style={[dropdownStyles.rowLabel, dropdownStyles.pinnedLabel]}>{t('category.split')}</Text>
               </Pressable>
             ) : null}
           </View>

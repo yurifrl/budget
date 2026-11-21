@@ -8,13 +8,12 @@
  */
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { useMemo, useState, type ReactNode } from 'react';
-import { formatMonthLong, makeMonth, nextMonth, prevMonth, splitMonth, todayIso, WEEKDAY_ABBR } from '@/domain/format';
+import { formatMonthLong, makeMonth, nextMonth, prevMonth, splitMonth, todayIso, weekdayMin } from '@/domain/format';
 import { useMoneyFormat } from '../moneyFormat';
 import type { MonthKey } from '@/domain/types';
 import { colors } from '@/ui/theme';
+import { t } from '../text/i18n';
 import { DropdownShell, dropdownStyles, pressNoBlur, useDropdownPortal, type DropdownKeyEvent } from './dropdown';
-
-const WEEKDAYS = WEEKDAY_ABBR.map((d) => d.slice(0, 2));
 
 interface DayCell {
   iso: string;
@@ -131,7 +130,7 @@ export function DatePickerPopover({
         onFocus={openCalendar}
         onBlur={blurClose}
         onKeyPress={onKeyPress}
-        placeholder="DD/MM/AAAA"
+        placeholder={t('date.placeholder')}
         chevron
         style={style}
         containerStyle={styles.cellInner}
@@ -147,21 +146,21 @@ export function DatePickerPopover({
             <Pressable
               onPress={() => setDisplay(prevMonth(display))}
               {...pressNoBlur}
-              accessibilityLabel="Previous month">
+              accessibilityLabel={t('date.previousMonth')}>
               <Text style={styles.calArrow}>‹</Text>
             </Pressable>
             <Text style={styles.calTitle}>{formatMonthLong(display)}</Text>
             <Pressable
               onPress={() => setDisplay(nextMonth(display))}
               {...pressNoBlur}
-              accessibilityLabel="Next month">
+              accessibilityLabel={t('date.nextMonth')}>
               <Text style={styles.calArrow}>›</Text>
             </Pressable>
           </View>
           <View style={styles.calWeekRow}>
-            {WEEKDAYS.map((w) => (
-              <Text key={w} style={styles.calWeekday}>
-                {w}
+            {[0, 1, 2, 3, 4, 5, 6].map((d) => (
+              <Text key={d} style={styles.calWeekday}>
+                {weekdayMin(d)}
               </Text>
             ))}
           </View>
@@ -178,7 +177,7 @@ export function DatePickerPopover({
                     onPress={() => pick(cell.iso)}
                     onHoverIn={() => setHovered(cell.iso)}
                     onHoverOut={() => setHovered(null)}
-                    accessibilityLabel={`Day ${cell.day}`}
+                    accessibilityLabel={t('date.day', { day: cell.day })}
                     style={[
                       styles.dayCell,
                       isHighlight && dropdownStyles.rowActive,
