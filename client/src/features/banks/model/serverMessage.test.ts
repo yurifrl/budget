@@ -46,7 +46,7 @@ describe('stored sentences at the sites that show them', () => {
     const out = describeSyncOutcome({ kind: 'done', run }, 'Sync');
     expect(out.kind).toBe('error');
     expect(out.text).not.toBe(run.user_message);
-    expect(out.text).toBe(translateErrorCode('server_transient'));
+    expect(out.text).toBe(translateErrorCode('server_transient') ?? '');
   });
 
   test('a paused connection explains itself in the active language', () => {
@@ -57,6 +57,6 @@ describe('stored sentences at the sites that show them', () => {
       status_message_code: 'server_paused_own_keys',
       key_source: 'own',
     });
-    expect(g?.why).toBe(translateErrorCode('server_paused_own_keys'));
+    expect(g?.why).toBe(translateErrorCode('server_paused_own_keys') ?? '');
   });
 });
