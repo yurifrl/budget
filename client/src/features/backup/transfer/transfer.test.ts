@@ -296,9 +296,8 @@ describe('parse error handling', () => {
   const entries = unzipSync(bytes);
   const prefix = Object.keys(entries)[0].replace(PLAN_SUFFIX, '');
 
-  test('plan alone -> error; register alone -> error; garbage zip -> error', () => {
-    expect(parseTransferFiles([{ name: 'x.zip', bytes: entries[`${prefix}${PLAN_SUFFIX}`] }]).errors.join(' '))
-      .toContain('both Plan.tsv and Register.tsv are required');
+  test('no table -> error; garbage zip -> error', () => {
+    expect(parseTransferFiles([]).errors.join(' ')).toContain('a Plan.tsv or Register.tsv file is required');
     expect(parseTransferFiles([{ name: 'x.zip', bytes: new Uint8Array([1, 2, 3]) }]).errors.join(' '))
       .toContain('not a readable zip archive');
   });
@@ -431,5 +430,41 @@ describe('export months and register labels', () => {
     expect(legs).toHaveLength(2);
     expect(legs.every((t) => t.categoryIndex === null && t.transferPeerIndex !== null)).toBe(true);
     expect(txs.find((t) => t.inflow === 9000)!.categoryIndex).toBeNull();
+  });
+});
+
+describe('partial import (one table)', () => {
+  const { bytes } = buildTransferZip(budget, { now: new Date(2026, 9, 7, 14, 5) });
+  const entries = unzipSync(bytes);
+  const prefix = Object.keys(entries)[0].replace(PLAN_SUFFIX, '');
+  const planFile = { name: `${prefix}${PLAN_SUFFIX}`, bytes: entries[`${prefix}${PLAN_SUFFIX}`] };
+  const registerFile = { name: `${prefix}${REGISTER_SUFFIX}`, bytes: entries[`${prefix}${REGISTER_SUFFIX}`] };
+  const full = parseTransferFiles([planFile, registerFile]);
+
+  test('plan alone: groups, categories, assignments; no register rows', () => {
+    const r = parseTransferFiles([planFile]);
+    expect(r.errors).toEqual([]);
+    expect(r.sections).toEqual(['plan']);
+    expect(r.payload!.categories).toEqual(full.payload!.categories);
+    expect(r.payload!.assignments).toEqual(full.payload!.assignments);
+    expect(r.payload!.accounts).toEqual([]);
+    expect(r.payload!.transactions).toEqual([]);
+  });
+
+  test('register alone: needs the budget categories, then resolves against them', () => {
+    expect(parseTransferFiles([registerFile]).errors.join(' ')).toContain('needs the budget categories');
+    const existing = full.payload!.categories.map((c) => ({ group: full.payload!.groups[c.groupIndex], name: c.name }));
+    const r = parseTransferFiles([registerFile], { existingCategories: existing });
+    expect(r.errors).toEqual([]);
+    expect(r.sections).toEqual(['register']);
+    expect(r.payload!.transactions).toEqual(full.payload!.transactions);
+    expect(r.payload!.assignments).toEqual([]);
+  });
+
+  test('register alone: a category the budget lacks is a warning naming it, rows stay uncategorized', () => {
+    const r = parseTransferFiles([registerFile], { existingCategories: [] });
+    expect(r.errors).toEqual([]);
+    expect(r.warnings.join(' ')).toContain('not in this budget');
+    expect(r.payload!.transactions.every((t) => t.categoryIndex === null)).toBe(true);
   });
 });

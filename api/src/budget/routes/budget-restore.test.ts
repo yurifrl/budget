@@ -183,6 +183,7 @@ describe.skipIf(!dbReady)('POST /budgets/restore', () => {
       accounts: 2,
       transactions: 4,
       assignments: 2,
+      uncategorized: 0,
     });
 
     // groups + categories (hidden flag)
@@ -440,5 +441,101 @@ describe.skipIf(!dbReady)('POST /budgets/restore', () => {
     expect(rows.rows).toEqual([{ name: 'Row-less Wallet', ledger: String(12345 * 10) }]);
     // Put the plain payload back for any later test.
     expect((await postRestore(payload())).status).toBe(201);
+  });
+});
+
+describe.skipIf(!dbReady)('POST /budgets/restore: sections', () => {
+  const count = async (sql: string): Promise<number> =>
+    Number((await pool!.query<{ n: string }>(sql, [budgetId])).rows[0].n);
+  const catOf = async (memo: string): Promise<string | null> =>
+    (
+      await pool!.query<{ name: string | null }>(
+        `SELECT c.name FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+         WHERE t.budget_id = $1 AND t.memo = $2`,
+        [budgetId, memo],
+      )
+    ).rows[0].name;
+
+  test('plan only: replaces the plan, keeps the register and re-links categories by group+name', async () => {
+    expect((await postRestore(payload())).status).toBe(201);
+    const next = payload();
+    // Groceries survives (renamed group would break the match, so keep it), Utilities is gone, Rent is new.
+    next.categories = [
+      { groupIndex: 0, name: 'Groceries' },
+      { groupIndex: 0, name: 'Rent' },
+    ];
+    next.assignments = [{ categoryIndex: 1, month: '2026-02-01', budgeted: 70000 }];
+    // The register part of the payload must be ignored.
+    next.accounts = [{ name: 'Ignored' }];
+    const res = await postRestore({ ...next, sections: ['plan'] });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({
+      groups: 2, categories: 2, accounts: 0, transactions: 0, assignments: 1, uncategorized: 0,
+    });
+    expect(await count('SELECT count(*) n FROM accounts WHERE budget_id = $1')).toBe(2);
+    expect(await count('SELECT count(*) n FROM transactions WHERE budget_id = $1')).toBe(4);
+    expect(await count("SELECT count(*) n FROM accounts WHERE budget_id = $1 AND name = 'Ignored'")).toBe(0);
+    expect(await count('SELECT count(*) n FROM assignments WHERE budget_id = $1')).toBe(1);
+    expect(await catOf('weekly shop')).toBe('Groceries');
+    // Balances stay correct (register untouched).
+    expect(await count('SELECT count(*) n FROM payees WHERE budget_id = $1')).toBeGreaterThan(0);
+  });
+
+  test('plan only: a category missing from the new plan leaves its transactions uncategorized', async () => {
+    expect((await postRestore(payload())).status).toBe(201);
+    const next = payload();
+    next.categories = [{ groupIndex: 0, name: 'Rent' }];
+    next.assignments = [];
+    expect((await postRestore({ ...next, sections: ['plan'] })).status).toBe(201);
+    expect(await catOf('weekly shop')).toBeNull();
+    expect(await count('SELECT count(*) n FROM transactions WHERE budget_id = $1')).toBe(4);
+  });
+
+  test('register only: replaces accounts/transactions, keeps the plan, maps categories by group+name', async () => {
+    expect((await postRestore(payload())).status).toBe(201);
+    const next = payload();
+    // Payload plan differs from the budget's: Groceries exists there, "Gone" does not.
+    next.categories = [
+      { groupIndex: 0, name: 'groceries' },
+      { groupIndex: 0, name: 'Gone' },
+      { groupIndex: 1, name: 'Hidden Cat' },
+    ];
+    next.assignments = [{ categoryIndex: 0, month: '2026-09-01', budgeted: 1 }];
+    next.accounts = [{ name: 'Checking Alpha' }, { name: 'Brand New' }];
+    next.transactions = [
+      { accountIndex: 1, date: '2026-03-01', payee: 'A', categoryIndex: 0, memo: 'm1', outflow: 100, inflow: 0, cleared: 'cleared', flag: '', transferPeerIndex: null },
+      { accountIndex: 1, date: '2026-03-02', payee: 'B', categoryIndex: 1, memo: 'm2', outflow: 200, inflow: 0, cleared: 'cleared', flag: '', transferPeerIndex: null },
+    ];
+    const res = await postRestore({ ...next, sections: ['register'] });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({
+      groups: 0, categories: 0, accounts: 2, transactions: 2, assignments: 0, uncategorized: 1,
+    });
+    // Plan untouched: original 3 categories, original 2 assignments.
+    expect(await count('SELECT count(*) n FROM categories WHERE budget_id = $1')).toBe(3);
+    expect(await count('SELECT count(*) n FROM assignments WHERE budget_id = $1')).toBe(2);
+    expect(await count('SELECT count(*) n FROM transactions WHERE budget_id = $1')).toBe(2);
+    expect(await catOf('m1')).toBe('Groceries');
+    expect(await catOf('m2')).toBeNull();
+    expect(await count("SELECT count(*) n FROM accounts WHERE budget_id = $1 AND name = 'Brand New'")).toBe(1);
+    expect(await count("SELECT count(*) n FROM accounts WHERE budget_id = $1 AND name = 'Savings Beta'")).toBe(0);
+    // Balance cache rebuilt for the new ledger.
+    const bal = await pool!.query<{ name: string; cleared: string }>(
+      'SELECT name, cleared_balance::text AS cleared FROM accounts WHERE budget_id = $1 AND name = $2',
+      [budgetId, 'Brand New'],
+    );
+    expect(Number(bal.rows[0].cleared)).toBe(-3000);
+  });
+
+  test('explicit both sections behaves like the default', async () => {
+    const res = await postRestore({ ...payload(), sections: ['plan', 'register'] });
+    expect(res.status).toBe(201);
+    expect(await count('SELECT count(*) n FROM transactions WHERE budget_id = $1')).toBe(4);
+    expect(await count('SELECT count(*) n FROM categories WHERE budget_id = $1')).toBe(3);
+  });
+
+  test('rejects an empty or unknown sections list', async () => {
+    expect((await postRestore({ ...payload(), sections: [] })).status).toBe(400);
+    expect((await postRestore({ ...payload(), sections: ['nope'] })).status).toBe(400);
   });
 });

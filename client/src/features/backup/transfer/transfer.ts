@@ -196,8 +196,13 @@ export function buildTransferZip(
 // Import
 // ---------------------------------------------------------------------------
 
+/** A part of a backup: the Plan table or the Register table. */
+export type BackupSection = 'plan' | 'register';
+
 export interface ParseResult {
   payload?: TransferPayload;
+  /** Which tables were present (and parsed); the other arrays of the payload are empty or borrowed. */
+  sections?: BackupSection[];
   warnings: string[];
   errors: string[];
 }
@@ -309,6 +314,28 @@ function resolvePerson(
   return null;
 }
 
+/** Category universe of an existing budget (groups/categories by name), for a Register-only import. */
+function universeFromCategories(categories: readonly { group: string; name: string }[]): Universe {
+  const universe: Universe = {
+    groups: [],
+    categories: [],
+    groupOf: (index) => universe.groups[universe.categories[index]?.groupIndex ?? -1] ?? '',
+    resolve: (group, name) => {
+      const lowerGroup = group.trim().toLowerCase();
+      const lowerName = name.trim().toLowerCase();
+      return universe.categories.findIndex(
+        (c) => c.name.toLowerCase() === lowerName && (universe.groups[c.groupIndex] ?? '').toLowerCase() === lowerGroup,
+      );
+    },
+  };
+  for (const c of categories) {
+    let groupIndex = universe.groups.indexOf(c.group);
+    if (groupIndex === -1) groupIndex = universe.groups.push(c.group) - 1;
+    universe.categories.push({ groupIndex, name: c.name });
+  }
+  return universe;
+}
+
 /** Placeholder universe for a rejected Plan (parse errors already recorded). */
 function emptyUniverse(): { universe: Universe; assignments: TransferPayload['assignments'] } {
   return { universe: { groups: [], categories: [], groupOf: () => '', resolve: () => -1 }, assignments: [] };
@@ -321,6 +348,8 @@ function parseRegister(
   people: readonly TransferPerson[] | undefined,
   warnings: string[],
   errors: string[],
+  /** Register-only import: categories the budget lacks leave rows uncategorized (a warning, not an error). */
+  lenientCategories = false,
 ): { accounts: { name: string; userId?: string | null }[]; transactions: TransferPayload['transactions'] } {
   const { header, rows } = parseTsv(tsv);
   if (header[0] !== 'Account' || header[10] !== 'Cleared') {
@@ -374,7 +403,10 @@ function parseRegister(
     });
   }
   if (unmatched.size > 0) {
-    errors.push(`Register.tsv: unknown categories: ${[...unmatched].sort().join(', ')}`);
+    const note = lenientCategories
+      ? `Register.tsv: categories not in this budget (rows stay uncategorized): ${[...unmatched].sort().join(', ')}`
+      : `Register.tsv: unknown categories: ${[...unmatched].sort().join(', ')}`;
+    (lenientCategories ? warnings : errors).push(note);
   }
   return { accounts, transactions };
 }
@@ -433,12 +465,15 @@ function pairRegisterTransfers(
 
 /**
  * Parse transfer files (a .zip archive and/or loose TSVs whose names end with
- * the Plan/Register suffixes) into a TransferPayload. Both tables are
- * required; errors are collected, never thrown.
+ * the Plan/Register suffixes) into a TransferPayload. At least one table is
+ * required. A Register without a Plan resolves its categories against
+ * `opts.existingCategories` (the budget's own); that payload's groups/categories
+ * then only name the match targets. A Plan without a Register yields empty
+ * accounts/transactions. Errors are collected, never thrown.
  */
 export function parseTransferFiles(
   files: { name: string; bytes: Uint8Array }[],
-  opts?: Pick<TransferOptions, 'people'>,
+  opts?: Pick<TransferOptions, 'people'> & { existingCategories?: readonly { group: string; name: string }[] },
 ): ParseResult {
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -470,15 +505,30 @@ export function parseTransferFiles(
     }
   }
 
-  if (plan === undefined || register === undefined) {
-    errors.push('both Plan.tsv and Register.tsv are required');
+  if (plan === undefined && register === undefined) {
+    errors.push('a Plan.tsv or Register.tsv file is required');
+    return { warnings, errors };
+  }
+  if (plan === undefined && !opts?.existingCategories) {
+    errors.push('Register.tsv alone needs the budget categories to match against');
     return { warnings, errors };
   }
 
-  const { universe, assignments } = parsePlan(plan, opts?.people, warnings, errors);
-  const { accounts, transactions } = parseRegister(register, universe, opts?.people, warnings, errors);
+  const parsedPlan =
+    plan !== undefined
+      ? parsePlan(plan, opts?.people, warnings, errors)
+      : { universe: universeFromCategories(opts?.existingCategories ?? []), assignments: [] };
+  const { universe, assignments } = parsedPlan;
+  const { accounts, transactions } =
+    register !== undefined
+      ? parseRegister(register, universe, opts?.people, warnings, errors, plan === undefined)
+      : { accounts: [], transactions: [] };
   pairRegisterTransfers(transactions, accounts, warnings, errors);
+  const sections: BackupSection[] = [];
+  if (plan !== undefined) sections.push('plan');
+  if (register !== undefined) sections.push('register');
   return {
+    sections,
     payload: {
       groups: universe.groups,
       categories: universe.categories,
