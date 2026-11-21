@@ -4,30 +4,278 @@
   "id": "budget-lqi",
   "title": "Own Pluggy keys (api): encrypted per-user credentials, key choice per connection, shared-key gate",
   "description": "Users bring their own Pluggy keys; the admin decides per user (feature 'shared-pluggy-key' from the features base) who may use the installation's shared keys. Decisions made by the owner on 2026-11-20; do not reopen them.\n\nDecided:\n- Default: a user needs their own keys. The shared keys are only for users with feature 'shared-pluggy-key' on.\n- One own key set per user. Every connection records which key set created it. Own keys win when a user has both.\n- Turning the feature off for a user PAUSES their shared-key connections (shown as needing own keys); turning it on resumes them. Never delete them.\n- Own-key connections get NO webhooks: the 6-hourly sweep and the manual sync button only. Shared-key webhooks stay exactly as today.\n- Secrets are encrypted by the API with a master key from the environment (not pgcrypto, not plaintext).\n- The owner uses, and users are expected to use, Pluggy's MeuPluggy personal route (free, up to 5 connections; a free application can only use the test bank and the MeuPluggy connector).\n\nFacts from Pluggy's docs (docs.pluggy.ai, checked 2026-11-20):\n- Items are reachable only with the application credentials that created them; no transfer between applications.\n- POST /auth {clientId, clientSecret} validates a pair cheaply (200 apiKey valid 2 h, 401 otherwise).\n- Rate limits are per endpoint per IP (360/min most endpoints), not per application.\n\nFacts from the code:\n- Credentials are global today: configurePluggyEnv/loadPluggyConfig in api/src/connections/adapters/pluggy/client.ts; getAggregator(provider) builds a new PluggyAggregator per call with no arguments (adapters/index.ts, registry.ts). The seam exists: PluggyAggregatorOptions.config and the PluggyClient constructor accept a PluggyConfig.\n- Callers: connections/routes.ts (connect-token, items register, upstream, delete, requestSync), webhook.ts, activities.ts (connectionsSyncWork, connectionsSweepCheck), store.listSweepConnections.\n- No reversible encryption helper or master key exists yet. Secrets reach pods from the 1Password item 'budget' through an ExternalSecret defined in the home-systems repo (GitOps only: do not kubectl anything; list the needed home-systems change in the task notes instead).\n- Related open task: budget-hd3 (empty PLUGGY_* env treated literally).\n\nOut of scope: the client screen (next task), admin changes, per-credential rate-limit queues.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-20T15:33:10.260Z",
-  "updated_at": "2026-11-20T15:33:10.651Z",
+  "updated_at": "2026-11-21T15:58:36.682Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-21T15:58:36.315Z",
   "due_at": null,
   "defer_until": null,
   "parent": "budget-id4",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "OWNER ACTION BEFORE THE NEXT RELEASE (1Password, no kubectl): add a field CREDENTIALS_ENCRYPTION_KEY to the 1Password item 'budget' (vault Kubernetes, the item the ExternalSecret 'budget' reads). Value: 32 random bytes, base64, generated with: openssl rand -base64 32 (paste the output as a CONCEALED field; do not reuse SESSION_SECRET; never change it later, or stored Pluggy secrets become unreadable and users must save their keys again). Why before release: with this change budget-api AND budget-worker refuse to boot in a cluster without it ('FATAL: secrets misconfiguration: CREDENTIALS_ENCRYPTION_KEY must be set in a cluster'). home-systems: read-only check of k8s/applications/budget.yaml shows the app secret extracts every field of the item and both budget-api and budget-worker take it with envFrom, so NO manifest change is needed; the only home-systems edit worth making is the header comment (mention the new required field). Order: add the field, let the ExternalSecret sync, then release. scripts/create-1password-item.sh generates the field for a NEW item only (an existing item is skipped).\nImplemented on tk/budget-lqi (2 commits). Migration 0104_own_pluggy_keys.sql (connection_credentials, connections.key_source/key_client_id, feature on for users with a connection). New: api/src/core/secret-box.ts, api/src/secrets-env.ts, api/src/connections/keys.ts, shared/src/contracts/connections/credentials.ts. Changed: connections routes/activities/store/registry/adapters, shared outputs (status 'paused', key_source), client paused labels, docs. Verification on compose Postgres :55432 (:5432 is down here): typecheck, lint, test (shared 77, api 1163, client 1148, 0 fail), test:e2e all pass. Notes for the owner: (1) syscd-app still shares the DB: it does not know the feature, so its worker keeps syncing a shared-key connection until this API pauses it, and its sweep will get 'not found' for own-key items (sweep error count only). (2) budget-hd3 overlap: own keys treat blank PLUGGY_BASE_URL/PLUGGY_SANDBOX/CLIENT_USER_ID as unset (new loadPluggyOwnConfig); the shared loader is unchanged, hd3 stays open. (3) scripts/e2e-connections.ts (needs Temporal) was updated but not run.\nReview fixes (commit b4c50dd), all seven verified against the code and fixed, each with a test in api/src/connections/own-keys.test.ts ('review fixes'): 1) sweep: listSweepConnections and connectionsSweepCheck now take own-key connections in 'error' (shared-key error rows unchanged). 2) register probes the item with every key set the caller may use now (new port method hasItem, own first) and records the one that reaches it; none: 409 item_not_reachable, nothing stored; the client never names a key set. 3) connect-token with another user's itemId: 404, nothing sent upstream. 4) setConnectionStatus skips 'paused' rows; only the reconcile (or a disconnect / fresh register) leaves paused; tested with a webhook status event and a sync finishing after the pause. 5) new column connections.paused_from (jsonb, in 0104, signature entry updated) remembers status, message and quota pause-until; resume restores them. 6) GCM additional data now binds user, provider, client id and key version. 7) single import from ./registry in routes.ts. Verification on compose Postgres :55432: typecheck, lint, test (shared 77, api 1172, client 1148, 0 fail), test:e2e pass.\nApproved by owner 2026-11-21. Merged to main as 2d083fa, not pushed, not released. Own Pluggy keys in the API: connection_credentials (AES-256-GCM, CREDENTIALS_ENCRYPTION_KEY, AD = user+provider+client id+key version), connections.key_source/key_client_id/paused_from (migration 0104), key set chosen per connection with own keys winning and register probing which key set reaches the item, shared keys gated by feature shared-pluggy-key, paused/resume restoring the prior status, sweep retries own-key errors, no webhookUrl for own keys; migration turns the feature on for every user who ever had a connection (owner's choice). Independent review: 0 blockers, 7 items fixed in b4c50dd. Validation: on the branch typecheck, lint, test (shared 77, api 1172, client 1148) and test:e2e on compose Postgres :55432; on merged main typecheck, lint, shared and client tests pass; api tests not re-run on merged main (Postgres :5432 down). Owner added CREDENTIALS_ENCRYPTION_KEY to 1Password. Evidence: ev-dc9009, ev-c586f2.",
   "design": null,
   "acceptance_criteria": "1) A user can save, replace, read status of (never the secret) and delete their own Pluggy client id + secret; saving validates the pair against Pluggy POST /auth and rejects a wrong pair. 2) Secrets are stored encrypted by the API with a master key from an env var (documented in .env.schema and scripts/create-1password-item.sh); boot fails clearly in a cluster when it is missing; a DB dump contains no plaintext secret (test). 3) Every connection records which key set created it (shared or the user's own); existing rows are backfilled as shared. 4) connect-token, item register, upstream, delete, sync activity and sweep use the connection's key set; own keys win when a user has both. 5) Connecting with the shared keys requires feature 'shared-pluggy-key'; without own keys and without the feature the API answers a clear error code. 6) When the feature is off for a user, their shared-key connections are paused (new status + message, skipped by sync and sweep) and resume when it is turned on again. 7) Own-key connections pass no webhookUrl; they update through the sweep and manual sync only. 8) The migration turns the feature on for every user who already has a connection. 9) task typecheck, lint, test and test:e2e pass.",
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
-  "attachments": [],
+  "branch": "tk/budget-lqi",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-lqi",
+    "changeset": {
+      "base": "a84cc8b292f973a80acf417665cec090f84ff87b",
+      "head": "b4c50dd367b5c90e700f5cd59961385cd8110ad1",
+      "commits": [
+        {
+          "sha": "b4c50dd",
+          "subject": "fix(connections): review fixes for own Pluggy keys"
+        },
+        {
+          "sha": "79306f3",
+          "subject": "docs: own Pluggy keys (key sets, paused connections, CREDENTIALS_ENCRYPTION_KEY)"
+        },
+        {
+          "sha": "0f885f8",
+          "subject": "feat(connections): own Pluggy keys, key set per connection, shared-key gate"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.schema",
+          "status": "M"
+        },
+        {
+          "path": "api/db/migrations/0104_own_pluggy_keys.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/scripts/e2e-connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/activities.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/activities.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/domain/sync-state.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/domain/sync-state.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/keys.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/operations.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/own-keys.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/registry.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/webhook.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/workflows.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/secret-box.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/core/secret-box.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/secrets-env.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/secrets-env.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/worker.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/connections.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/MORNING.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "scripts/create-1password-item.sh",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/credentials.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/connections/credentials.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 2362,
+        "deletions": 61
+      }
+    },
+    "agent_session": "d9a92018-be65-42df-83d8-3631e206fb8b",
+    "finished_at": "2026-11-20T16:34:01.941Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 3,
+        "files": 45,
+        "additions": 2362,
+        "deletions": 61
+      },
+      "head": "b4c50dd367b5c90e700f5cd59961385cd8110ad1",
+      "at": "2026-11-20T16:34:01.941Z"
+    },
+    "worktreePruned": {
+      "pruned": false,
+      "removedWorktree": false,
+      "removedBranch": false,
+      "reason": "worktree has uncommitted changes"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-dc9009",
+      "name": "verification.txt",
+      "mime": "text/plain",
+      "size": 12986,
+      "sha256": "936d83e3baf7b8f7a3295beb3e4230de22c42c1b5ed0934963b579ea79710365",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c586f2",
+      "name": "verification-2.txt",
+      "mime": "text/plain",
+      "size": 9776,
+      "sha256": "ce29b6c0d7a073d1ef9a738c60a784f91101a305581505ea94775dd637c6abd0",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    }
+  ],
   "dependencies": [
     {
       "issue_id": "budget-lqi",
@@ -39,7 +287,7 @@
     }
   ],
   "dependency_count": 1,
-  "dependent_count": 0,
+  "dependent_count": 1,
   "comments": [],
   "comment_count": 0
 }

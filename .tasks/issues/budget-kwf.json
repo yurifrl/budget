@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-kwf",
+  "title": "Favicon: full green envelope mark, drop the dark box (client web + admin)",
+  "description": "",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-20T16:03:54.527Z",
+  "updated_at": "2026-11-20T16:46:40.775Z",
+  "started_at": null,
+  "closed_at": "2026-11-20T16:46:30.575Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Favicon is now the bare envelope mark. admin/public/favicon.svg: dropped the #161a24 rect and nested svg; viewBox 44 44 424 424 (envelope 56-456 x 104-408, ~3% padding, square, transparent). client/assets/images/favicon.png: 48x48 RGBA rendered from that SVG with rsvg-convert -b none. app.config.ts comment updated (no brand/generate.ts). Skipped SVG <link> for the Expo web client: web.output is 'single', so it needs a custom HTML template; not simple. client tsc --noEmit OK. Evidence: before ev-a8a325 (svg), ev-fb24a7 (png); after ev-7687c6 (svg), ev-3c1520 (png).\nApproved by Yuri. Favicon is the bare green envelope mark (no dark box): admin/public/favicon.svg cropped to viewBox 44 44 424 424, client/assets/images/favicon.png re-rendered 48x48 transparent, app.config.ts comment fixed. Commit de13d58, merged to main. Evidence: ev-a8a325, ev-fb24a7 (before), ev-7687c6, ev-3c1520 (after).",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-kwf",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-kwf",
+    "changeset": {
+      "base": "b6946292b902fb512ba933ae068820be2a9ff6c5",
+      "head": "de13d58f57156c16e7c976faf57841cf52b43419",
+      "commits": [
+        {
+          "sha": "de13d58",
+          "subject": "fix(brand): favicon is the bare envelope mark, no dark box"
+        }
+      ],
+      "files": [
+        {
+          "path": "admin/public/favicon.svg",
+          "status": "M"
+        },
+        {
+          "path": "client/app.config.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/assets/images/favicon.png",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 3,
+        "deletions": 3
+      }
+    },
+    "agent_session": "agent",
+    "finished_at": "2026-11-20T16:04:56.974Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 3,
+        "additions": 3,
+        "deletions": 3
+      },
+      "head": "de13d58f57156c16e7c976faf57841cf52b43419",
+      "at": "2026-11-20T16:04:56.974Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-a8a325",
+      "name": "before-favicon-svg-256.png",
+      "mime": "image/png",
+      "size": 9309,
+      "sha256": "86a2eba5c54d7f15bac43ab1bab3cbee318e2187b310735101d5141cd9e5a7be",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-fb24a7",
+      "name": "before-favicon-png-256.png",
+      "mime": "image/png",
+      "size": 23008,
+      "sha256": "c07067f9f6ad5d18f9a0bf49bbf6bd22084f19b9fe17eea7443611b2aeb4794a",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-7687c6",
+      "name": "after-favicon-svg-256.png",
+      "mime": "image/png",
+      "size": 10644,
+      "sha256": "54d72f9ebbb3464436b7b5d907fe8d959701e18765934a5d4174d4623341bc35",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-3c1520",
+      "name": "after-favicon-png-256.png",
+      "mime": "image/png",
+      "size": 30280,
+      "sha256": "ebb96d5e88c193149b5ef328364c2aa11bb89d545c1f53ed338ca68cbf7974e9",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

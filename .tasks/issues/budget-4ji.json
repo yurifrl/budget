@@ -4,30 +4,517 @@
   "id": "budget-4ji",
   "title": "Own Pluggy keys (client): add-your-keys screen and paused-connection state",
   "description": "Client side of own Pluggy keys. Depends on the api task for contracts and on the features base for the evaluated-features hook. Follow AGENTS.md \"Adding a client screen or feature\". Existing analogues for a secret input: features/profile/ChangePasswordCard.tsx; bank area: client/src/features/banks/.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-20T15:33:10.454Z",
-  "updated_at": "2026-11-20T15:33:11.047Z",
+  "updated_at": "2026-11-21T19:58:58.514Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-21T19:58:46.413Z",
   "due_at": null,
   "defer_until": null,
   "parent": "budget-id4",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Branch tk/budget-4ji merges tk/budget-lqi (API contracts for own Pluggy keys) so the client builds on the real contracts; until budget-lqi merges to main this task's diff also includes its commits.\nbudget-lqi is merged to main (2d083fa) and main is merged into tk/budget-4ji: the diff against main now contains only the client work (no budget-lqi commits).\nDone on tk/budget-4ji. Web screenshots and verification attached (ev-8d57e7). iOS: app runs in Expo Go on the simulator against the test API (ev-eeaf10, home screen), but this machine has no Simulator GUI, idb or Appium to tap into a budget, so no iOS screenshot of the new screens; acceptance criterion 5 is only met for web. ev-3aede4 shows the paused-notice copy before the last tweak; ev-0ed7b3 / ev-8e529b show the final copy.\nMerged to main as 488373b. Client: Your Pluggy keys screen (client/src/features/banks/PluggyKeysScreen.tsx, route app/(budget)/pluggy-keys.tsx) with enter/replace/remove, masked secret, inline invalid_credentials, MeuPluggy help and 5-connection limit; connect gate (keys/useConnectGate.ts) sends users with no keys and no shared-key feature to the keys screen; PausedNotice on bank list and bank page. Evidence: ev-235567, ev-a3c105, ev-1ff78e, ev-834753, ev-18c822, ev-3aede4, ev-8e529b, ev-0ed7b3, ev-be2221. Post-merge on main: task typecheck and task lint clean, client bun test 1171 pass. AC5 iOS screenshots not done (no simulator tap tool); user approved with that gap, follow-up budget-wm8x.",
   "design": null,
   "acceptance_criteria": "1) A screen reachable from the bank area lets a user enter, replace and remove their Pluggy client id and secret (secret input masked, never shown back), with the API's validation error shown inline. 2) It explains in plain words how to get keys through MeuPluggy and its 5-connection limit. 3) Connect bank: with neither own keys nor the shared-key feature, the user is led to the keys screen instead of a failing widget. 4) A paused shared-key connection shows why and what to do. 5) Web and iOS screenshots attached as evidence; tsc, eslint, bun test pass in client/.",
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
-  "attachments": [],
+  "branch": "tk/budget-4ji",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-4ji",
+    "changeset": {
+      "base": "9af87e471fea9e0fc70f29e3ad021febe6c509e4",
+      "head": "60ebdc4887f0d76ce172d114a50de730aa03eea1",
+      "commits": [
+        {
+          "sha": "60ebdc4",
+          "subject": "Merge branch 'main' into tk/budget-4ji"
+        },
+        {
+          "sha": "62c518a",
+          "subject": "fix(banks): paused shared-key notice no longer repeats the server's advice"
+        },
+        {
+          "sha": "2d083fa",
+          "subject": "Merge tk/budget-lqi: own Pluggy keys (encrypted per-user credentials, key set per connection, shared-key gate, paused connections)"
+        },
+        {
+          "sha": "bf3a7e9",
+          "subject": "feat(banks): Your Pluggy keys screen, connect gate and paused-bank guidance"
+        },
+        {
+          "sha": "fdd4239",
+          "subject": "Merge branch 'tk/budget-lqi' into tk/budget-4ji"
+        },
+        {
+          "sha": "b4c50dd",
+          "subject": "fix(connections): review fixes for own Pluggy keys"
+        },
+        {
+          "sha": "79306f3",
+          "subject": "docs: own Pluggy keys (key sets, paused connections, CREDENTIALS_ENCRYPTION_KEY)"
+        },
+        {
+          "sha": "0f885f8",
+          "subject": "feat(connections): own Pluggy keys, key set per connection, shared-key gate"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.schema",
+          "status": "M"
+        },
+        {
+          "path": "api/db/migrations/0104_own_pluggy_keys.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/scripts/e2e-connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/activities.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/activities.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/domain/sync-state.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/domain/sync-state.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/keys.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/operations.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/own-keys.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/registry.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/webhook.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/workflows.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/secret-box.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/core/secret-box.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/secrets-env.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/secrets-env.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/worker.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/(budget)/pluggy-keys.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/base.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/ConnectBankScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/ConnectionSettingsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/PluggyKeysScreen.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/ConnectionRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/screenStyles.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/useConnectFlow.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/PausedNotice.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/keys/PluggyKeysCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/keys/PluggyKeysHelp.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/keys/pluggyKeys.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/keys/pluggyKeys.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/keys/useConnectGate.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/keys/usePluggyKeys.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/model/connections.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/state/useFeatures.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/MORNING.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "scripts/create-1password-item.sh",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/credentials.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/connections/credentials.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 3299,
+        "deletions": 77
+      }
+    },
+    "agent_session": "d9a92018-be65-42df-83d8-3631e206fb8b",
+    "finished_at": "2026-11-21T16:08:02.596Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 8,
+        "files": 67,
+        "additions": 3299,
+        "deletions": 77
+      },
+      "head": "60ebdc4887f0d76ce172d114a50de730aa03eea1",
+      "at": "2026-11-21T16:08:02.596Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-8d57e7",
+      "name": "verification.txt",
+      "mime": "text/plain",
+      "size": 1518,
+      "sha256": "2746676daff6d6268441e3753943e6026ee9a00027f14b38cabcda6a546cb1ed",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-18c822",
+      "name": "web-connect-redirects-to-keys.png",
+      "mime": "image/png",
+      "size": 108285,
+      "sha256": "977ca6a39da9d477960ad60dea2f4db5d4b82a2a826dfb4e6ae0059f143ed683",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-235567",
+      "name": "web-keys-empty.png",
+      "mime": "image/png",
+      "size": 98558,
+      "sha256": "b2e24c0aa6ddc65b16f2178b1756000f9a9fa802f5b92bfa50ef2d6404048b95",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a3c105",
+      "name": "web-keys-invalid-credentials.png",
+      "mime": "image/png",
+      "size": 106165,
+      "sha256": "7606447a7d2c3b2829b049bdf995aa8536b03cc8a8d4fab7807c95a8e2b5bcd9",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-dd5884",
+      "name": "web-keys-remove-confirm.png",
+      "mime": "image/png",
+      "size": 105618,
+      "sha256": "d612df7f38b3e18a825596037e38a4a8a61daa6f5d006c6eb0f739fcbd7622af",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f404a4",
+      "name": "web-keys-removed.png",
+      "mime": "image/png",
+      "size": 105214,
+      "sha256": "dcf84fd1b64923e810e69a93938af31aa370f4826f01a8b0c48264b6f7371a4f",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-834753",
+      "name": "web-keys-replacing.png",
+      "mime": "image/png",
+      "size": 101373,
+      "sha256": "5dee5a495ccc0d1b0c5297ab94d02616bcb100c27740b237d02bdb1fedd43879",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-1ff78e",
+      "name": "web-keys-saved.png",
+      "mime": "image/png",
+      "size": 98510,
+      "sha256": "1311e2966ab59b233547e8b851d5a2082cb220ae68b76e8b7fd013c75ce88aa6",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-e0ad48",
+      "name": "web-own-key-bank-resumed-after-save.png",
+      "mime": "image/png",
+      "size": 91172,
+      "sha256": "90ef22dceb79e70522646fce5761eb303ec8b6ed76da06aca7359f52fe87a0b3",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-3aede4",
+      "name": "web-paused-bank-list.png",
+      "mime": "image/png",
+      "size": 82317,
+      "sha256": "9cfc8fc7a0dbf01534d2a405c1da9f02a449d6797e19d0a4eeafeecde8fa3146",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-8e529b",
+      "name": "web-paused-bank-page.png",
+      "mime": "image/png",
+      "size": 81710,
+      "sha256": "7b71e5da8f7c6304a05c2f229c1597b678159e961b92c3dd0c41f49f43c25ed0",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-0ed7b3",
+      "name": "web-paused-shared-and-own.png",
+      "mime": "image/png",
+      "size": 107874,
+      "sha256": "4aec0f65155f2cf46f90a35704482abb78943ec5112ec601a5b0e674e503ca1d",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-be2221",
+      "name": "web-phone-keys-saved.png",
+      "mime": "image/png",
+      "size": 72919,
+      "sha256": "128b8e500f79717a7539908a1f7a8b7fe4521dd4609c39741ab4bc6accb5c5a2",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-eeaf10",
+      "name": "ios-probe.png",
+      "mime": "image/png",
+      "size": 208976,
+      "sha256": "3fa25a236dac29bec79c0f978f47bcf9beb8e6dfcf738965c9a1a4f1cd1fdf43",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    }
+  ],
   "dependencies": [
     {
       "issue_id": "budget-4ji",
