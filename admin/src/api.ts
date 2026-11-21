@@ -37,6 +37,8 @@ export class ApiError extends Error {
     message: string,
     /** The API's machine-readable error code (`{ error, code }` body), when present. */
     readonly code?: string,
+    /** Values for the `{placeholders}` of the code's catalog message, from the error body. */
+    readonly params?: Readonly<Record<string, string | number>>,
   ) {
     super(message);
   }
@@ -67,14 +69,16 @@ async function call<T>(name: string, input: Record<string, unknown> = {}): Promi
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     let code: string | undefined;
+    let params: Record<string, string | number> | undefined;
     try {
-      const body = (await res.json()) as { error?: string; code?: string };
+      const body = (await res.json()) as { error?: string; code?: string; params?: Record<string, string | number> };
       if (body.error) message = body.error;
       code = body.code;
+      params = body.params;
     } catch {
       // keep default
     }
-    throw new ApiError(res.status, message, code);
+    throw new ApiError(res.status, message, code, params);
   }
   return res.status === 204 ? (null as T) : ((await res.json()) as T);
 }

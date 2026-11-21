@@ -1,5 +1,7 @@
 import type { AdminUser } from '@shared/contracts/user';
+import { defaultErrorCode } from '@shared/errors';
 import { getLocale, labels } from '@shared/i18n';
+import { translateErrorCode } from '@shared/i18n/errors';
 
 import { t } from './pages/users/i18n';
 
@@ -93,9 +95,28 @@ const MESSAGES: Record<string, string> = labels(t, {
   password_login_disabled: 'error.passwordLoginDisabled',
 });
 
-export function errorMessage(code: string | undefined, fallback: string, status?: number | 'network'): string {
+export function errorMessage(
+  code: string | undefined,
+  fallback: string,
+  status?: number | 'network',
+  params?: Readonly<Record<string, string | number>>,
+): string {
   if (status === 'network') return t('error.network');
   // 400 invalid_input carries the server's own reason (e.g. "this e-mail is reserved"): keep it, with a lead-in.
   if (code === 'invalid_input') return t('error.notAccepted', { reason: fallback });
-  return (code && MESSAGES[code]) || fallback;
+  if (code && MESSAGES[code]) return MESSAGES[code];
+  // Any other code the API sends has a catalog sentence in the shared errors namespace.
+  if (code) return translateErrorCode(code, params) ?? fallback;
+  // The transport's placeholder when the body carried neither text nor code: that status's generic sentence.
+  if (typeof status === 'number' && fallback === `HTTP ${status}`) return translateErrorCode(defaultErrorCode(status)) ?? fallback;
+  return fallback;
+}
+
+/** Text for any thrown value shown on screen: an `ApiError` (it has `status`) through {@link errorMessage}, anything else as the generic error. */
+export function describeError(e: unknown): string {
+  if (e instanceof Error && 'status' in e) {
+    const { status, code, params } = e as Error & { status: number | 'network'; code?: string; params?: Readonly<Record<string, string | number>> };
+    return errorMessage(code, e.message, status, params);
+  }
+  return translateErrorCode('error') ?? '';
 }

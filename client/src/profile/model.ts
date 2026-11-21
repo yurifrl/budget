@@ -73,12 +73,12 @@ export function displayName(me: Pick<Me, 'name' | 'email'>): string {
   return me.name?.trim() || me.email.split('@')[0];
 }
 
-/** Friendly text for an upload failure (server messages pass through when useful). */
+/** Friendly text for an upload failure; raw server or developer text never reaches the screen. */
 export function uploadErrorMessage(status: number | string | undefined, message: string | undefined): string {
   if (status === 413) return t('upload.tooLarge');
   if (status === 400) return message?.includes('type') ? t('upload.badType') : t('upload.unreadable');
   if (status === 'FETCH_ERROR') return t('upload.offline');
-  return message || t('upload.failed');
+  return t('upload.failed');
 }
 
 /** A connected app (OAuth grant) as returned by GET /oauth/grants. */

@@ -20,9 +20,6 @@ import {
   monthOfDate,
   monthKeyFromDate,
   daysInMonth,
-  MONTH_ABBR,
-  MONTH_NAMES,
-  WEEKDAY_ABBR,
   monthAbbr,
   monthName,
   weekdayAbbr,
@@ -320,8 +317,6 @@ describe("month and date helpers (one definition each)", () => {
     expect(formatMonth(202602)).toBe("Feb 2026");
     expect(formatMonth(202610)).toBe("Oct 2026");
     expect(formatMonthLong(202611)).toBe("November 2026");
-    expect(MONTH_ABBR).toHaveLength(12);
-    expect(WEEKDAY_ABBR[0]).toBe("Sun");
   });
 
   it("monthOfDate / monthKeyFromDate / daysInMonth", () => {
@@ -343,12 +338,15 @@ describe("month and date helpers (one definition each)", () => {
 describe("active-language names", () => {
   afterEach(() => setLocale("en"));
 
-  it("en matches the legacy tables", () => {
+  it("en names", () => {
+    const abbrs = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     for (let m = 1; m <= 12; m++) {
-      expect(monthAbbr(m)).toBe(MONTH_ABBR[m - 1]!);
-      expect(monthName(m)).toBe(MONTH_NAMES[m - 1]!);
+      expect(monthAbbr(m)).toBe(abbrs[m - 1]!);
+      expect(monthName(m)).toBe(names[m - 1]!);
     }
-    for (let d = 0; d < 7; d++) expect(weekdayAbbr(d)).toBe(WEEKDAY_ABBR[d]!);
+    for (let d = 0; d < 7; d++) expect(weekdayAbbr(d)).toBe(days[d]!);
     expect(monthAbbr(0)).toBe("?");
     expect(monthName(13)).toBe("?");
     expect(weekdayAbbr(7)).toBe("?");

@@ -7,7 +7,7 @@ import { isInternalTransferPayee } from '@shared/domain/transfers';
 
 import { computeRunningBalances, workingBalance } from './engine';
 import { t as tr } from './i18n';
-import { matchesSystemName } from './systemNames';
+import { isReconciliationAdjustmentPayee, matchesSystemName } from './systemNames';
 import type { Account, Budget, Cents, Transaction } from './types';
 
 /**
@@ -22,7 +22,7 @@ export function registerCategoryCell(
   t: Pick<Transaction, 'payee' | 'categoryId' | 'splits' | 'inflow'>,
   { transfers = true }: { transfers?: boolean } = {},
 ): { text: string; warn: boolean } {
-  if (t.payee === 'Reconciliation Adjustment' || t.payee === 'Balance Adjustment') {
+  if (isReconciliationAdjustmentPayee(t.payee) || t.payee === 'Balance Adjustment') {
     return { text: tr('register.readyToAssign'), warn: false };
   }
   if (!t.categoryId) {

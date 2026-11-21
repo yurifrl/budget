@@ -271,11 +271,11 @@ describe('makeAutoAssignEdit', () => {
 describe('formatPlanEditAge', () => {
   const now = 10 * 24 * 3600 * 1000;
   test('branches: now, minutes, hours, days', () => {
-    expect(formatPlanEditAge(now, now)).toBe('agora');
+    expect(formatPlanEditAge(now, now)).toBe('now');
     expect(formatPlanEditAge(now - 3 * 60 * 1000, now)).toBe('3m');
     expect(formatPlanEditAge(now - 2 * 3600 * 1000, now)).toBe('2h');
     expect(formatPlanEditAge(now - 5 * 24 * 3600 * 1000, now)).toBe('5d');
-    expect(formatPlanEditAge(now + 1000, now)).toBe('agora');
+    expect(formatPlanEditAge(now + 1000, now)).toBe('now');
   });
 });
 

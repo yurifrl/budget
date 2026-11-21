@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { listRuns } from '../api';
 import { duration, fmt, StatusBadge } from '../badge';
 import { usePolled } from '../hooks';
+import { label, RUN_STATUS_LABEL } from '../enumLabels';
 import { STATUSES } from '../types';
+import { describeError } from '../users.logic';
 import { t } from './runs/i18n';
 
 const PAGE = 25;
@@ -41,12 +43,14 @@ export function RunsPage() {
         <select value={status} onChange={onFilter(setStatus)}>
           <option value="">{t('filter.anyStatus')}</option>
           {STATUSES.map((s) => (
-            <option key={s}>{s}</option>
+            <option key={s} value={s}>
+              {label(RUN_STATUS_LABEL, s)}
+            </option>
           ))}
         </select>
         <span className="muted">{t('filter.autoRefresh')}</span>
       </div>
-      {error && <div className="banner error">{error.message}</div>}
+      {error && <div className="banner error">{describeError(error)}</div>}
       <table>
         <thead>
           <tr>

@@ -80,7 +80,7 @@ const m: Translation<typeof en> = {
   'detail.cover': 'Cobrir este estouro com…',
   'detail.leftOver': 'Sobra de {month}',
   'detail.spending': 'Gastos',
-  'detail.fundedSpending': 'Gastos no cartão financiados',
+  'detail.fundedSpending': 'Gastos no cartão já financiados',
   'detail.paymentsMade': 'Pagamentos feitos',
   'detail.available': 'Disponível',
   'detail.cardDebt': 'Dívida do cartão',

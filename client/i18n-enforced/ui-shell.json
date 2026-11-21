@@ -1,4 +1,0 @@
-{
-  "files": ["src/ui/**/*.{ts,tsx}", "src/shell/**/*.{ts,tsx}"],
-  "ignores": ["src/ui/i18n/**"]
-}

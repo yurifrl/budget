@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { setLocale } from '@shared/i18n';
 
 import { MONEY_MASK_TEXT, formatDateWith } from '@/domain/format';
 import { DEFAULT_FMT_PREFS } from '@/domain/fmtPrefs';
@@ -108,6 +109,17 @@ describe('isDeleteArmed', () => {
     expect(isDeleteArmed('delete')).toBe(true);
     expect(isDeleteArmed('  DELETE ')).toBe(true);
     expect(isDeleteArmed('Delete')).toBe(true);
+  });
+  it('accepts the localized word in pt-BR (and still the English one)', () => {
+    setLocale('pt-BR');
+    try {
+      expect(isDeleteArmed('excluir')).toBe(true);
+      expect(isDeleteArmed(' EXCLUIR ')).toBe(true);
+      expect(isDeleteArmed('delete')).toBe(true);
+      expect(isDeleteArmed('exclui')).toBe(false);
+    } finally {
+      setLocale('en');
+    }
   });
   it('stays disarmed otherwise', () => {
     expect(isDeleteArmed('')).toBe(false);

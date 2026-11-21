@@ -45,9 +45,6 @@ const DENSITY_OPTIONS = [
   },
 ];
 
-// ISO date format hint for the date-range inputs; not translated.
-const DATE_FORMAT_HINT = 'YYYY-MM-DD';
-
 const SYNC_TONE_COLOR = {
   ok: colors.greenPillFg,
   warn: colors.yellowPillFg,
@@ -280,7 +277,7 @@ export function AccountsToolbar({
               <TextInput
                 value={dateFrom}
                 onChangeText={onDateFromChange}
-                placeholder={DATE_FORMAT_HINT}
+                placeholder={t('toolbar.dateHint')}
                 placeholderTextColor={colors.faint}
                 style={styles.dateInput}
                 accessibilityLabel={t('toolbar.fromLabel')}
@@ -291,7 +288,7 @@ export function AccountsToolbar({
               <TextInput
                 value={dateTo}
                 onChangeText={onDateToChange}
-                placeholder={DATE_FORMAT_HINT}
+                placeholder={t('toolbar.dateHint')}
                 placeholderTextColor={colors.faint}
                 style={styles.dateInput}
                 accessibilityLabel={t('toolbar.toLabel')}

@@ -7,7 +7,7 @@
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { personLabel, SHARED_LABEL, type Person } from '@/domain/people';
+import { personLabel, sharedLabel, type Person } from '@/domain/people';
 import { t } from './i18n';
 import { usePeople } from './usePeople';
 import { PersonFace } from '@/ui/PersonFace';
@@ -59,7 +59,7 @@ function PersonOption({
   disabled?: boolean;
   onPress: () => void;
 }) {
-  const label = person ? personLabel(person) : SHARED_LABEL;
+  const label = person ? personLabel(person) : sharedLabel();
   return (
     <Pressable
       style={[styles.chip, on && styles.chipOn]}

@@ -9,6 +9,7 @@ import { labels } from '@shared/i18n';
 import { matchTypeLabels, matchTypes, type MatchType } from '@shared/domain/payees';
 
 import type { PayeeAdminRow } from '@/budget/data/rows';
+import type { MoneyFormat } from '@/domain/format';
 import { matchesSystemName } from '@/domain/systemNames';
 import { t } from './i18n';
 
@@ -79,10 +80,14 @@ export function matchTypeFromLabel(text: string): MatchType | undefined {
 }
 
 /** "3 transactions · last used 2026-01-02" / "0 transactions · never used". */
-export function activityLine(payee: Pick<PayeeAdminRow, 'transaction_count' | 'last_used_date'>): string {
+export function activityLine(
+  payee: Pick<PayeeAdminRow, 'transaction_count' | 'last_used_date'>,
+  /** The person's date format (`useMoneyFormat()`); without it the date is ISO. */
+  fmt?: Pick<MoneyFormat, 'formatDate'>,
+): string {
   const count = payee.transaction_count;
   return payee.last_used_date
-    ? t('activity.lastUsed', { count, date: payee.last_used_date.slice(0, 10) })
+    ? t('activity.lastUsed', { count, date: (fmt?.formatDate ?? ((iso: string) => iso))(payee.last_used_date.slice(0, 10)) })
     : t('activity.neverUsed', { count });
 }
 

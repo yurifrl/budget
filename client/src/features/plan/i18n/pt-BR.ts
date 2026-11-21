@@ -13,7 +13,7 @@ const m: Translation<typeof en> = {
   'topbar.prevMonth': 'Mês anterior',
   'topbar.nextMonth': 'Próximo mês',
   'topbar.readyToAssign': 'Pronto para atribuir',
-  'topbar.readyToAssignHousehold': 'Pronto para atribuir · casa',
+  'topbar.readyToAssignHousehold': 'Pronto para atribuir · casa toda',
   'topbar.assign': 'Atribuir ›',
   'topbar.overassigned': 'Você atribuiu mais dinheiro do que tem.',
   'topbar.fixLabel': 'Corrigir gasto excedente',

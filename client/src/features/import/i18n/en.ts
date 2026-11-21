@@ -4,6 +4,8 @@ export default {
   'screen.subtitle': 'Bank statements — Nubank CSV, Itaú extrato, generic CSV',
   'account.label': 'Account',
   'account.placeholder': 'Choose account…',
+  'account.groupCash': 'Cash',
+  'account.groupCredit': 'Credit',
   'account.a11y': 'Import account',
   'file.label': 'File',
   'file.choose': 'Choose file…',

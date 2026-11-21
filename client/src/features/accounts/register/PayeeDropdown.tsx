@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle, type ViewInstance, type ViewStyle } from 'react-native';
 import type { PayeeAdminRow } from '@/budget/data/rows';
+import { displaySystemName } from '@/domain/systemNames';
 import type { Account } from '@/domain/types';
 import { colors, radius } from '@/ui/theme';
 import { createPortalOnWeb } from '@/ui/portal';
@@ -190,7 +191,8 @@ export function PayeeDropdown({
   return (
     <View ref={containerRef} style={[styles.container, containerStyle]}>
       <TextInput
-        value={value}
+        // A stored system name ("Starting Balance") shows in the active language; the stored text stays the value.
+        value={displaySystemName(value)}
         onChangeText={(t) => {
           onChangeText(t);
           setOpen(true);

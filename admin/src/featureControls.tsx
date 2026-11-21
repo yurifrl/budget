@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { tCommon } from '@shared/i18n/common';
 
-import { ApiError, clearFeatureUser, setFeatureUser, type AdminFeature } from './api';
+import { clearFeatureUser, setFeatureUser, type AdminFeature } from './api';
 import { changedLabel, featureDescription, groupFeatures, groupLabel, popoverPlacement, shownLabel, userState, userSummary, type Placement, type ToggleState } from './features.logic';
 import { t } from './pages/features/i18n';
-import { errorMessage } from './users.logic';
+import { describeError } from './users.logic';
 
-const msg = (e: unknown) => (e instanceof ApiError ? errorMessage(e.code, e.message, e.status) : String(e));
+const msg = describeError;
 
 /** Runs one feature write at a time per id (`<feature>` or `<feature>:<user>`), then reloads; keeps the last error. */
 export function useFeatureActions(reload: () => Promise<void> | void) {

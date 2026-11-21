@@ -6,7 +6,7 @@
  * trigger is a fully native SwiftUI button (SF Symbol `ellipsis`), so no RN
  * `Pressable` competes with the menu gesture; SF Symbols follow the system
  * dark/light appearance. Items: File Import, Reconcile (account scope only),
- * Show/Hide Reconciled, Edit Account (account scope only), Link Account
+ * Show/Hide Reconciled, Edit Account (account scope only)
  * (routes to the linked-banks hub).
  */
 

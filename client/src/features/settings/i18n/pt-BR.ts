@@ -40,7 +40,7 @@ const m: Translation<typeof en> = {
   'root.profile': 'Perfil',
   'root.logOut': 'Sair',
 
-  'account.signedInAs': 'Conectado como',
+  'account.signedInAs': 'Sessão iniciada como',
   'account.back': 'Voltar ao plano',
 
   'edit.unavailable': 'Orçamento indisponível.',
@@ -51,7 +51,7 @@ const m: Translation<typeof en> = {
   'hint.ownerOnlyNamed': 'Somente o dono ({name}) pode renomear, arquivar ou excluir este orçamento.',
   'hint.ownerOnly': 'Somente o dono pode renomear, arquivar ou excluir este orçamento.',
   'hint.freshStart':
-    'Arquiva "{name}" — renomeado com a data e a hora do arquivamento, com todas as linhas mantidas — e inicia um novo "{name}". Mantidos: contas, saldos das contas vinculadas e histórico até hoje, transações agendadas, metas, categorias e favorecidos. Zerados: valores orçados, observações do mês e atividade das categorias. Os orçamentos arquivados continuam em Abrir orçamento.',
+    'Arquiva "{name}" — renomeado com a data e a hora do arquivamento, com todas as linhas mantidas — e inicia um novo "{name}". Mantidos: contas, saldos das contas vinculadas e histórico até hoje, transações agendadas, metas, categorias e favorecidos. Zerados: valores orçados, notas do mês e atividade das categorias. Os orçamentos arquivados continuam em Abrir orçamento.',
   'hint.manage': 'Arquiva "{name}" — todas as linhas são mantidas. Os orçamentos arquivados continuam em Abrir orçamento.',
   'hint.manageArchived': '"{name}" está arquivado. Desarquive para recuperá-lo ou exclua-o permanentemente.',
 
@@ -63,8 +63,9 @@ const m: Translation<typeof en> = {
 
   'delete.title': 'Excluir permanentemente',
   'delete.note': 'Exclui "{name}" e todas as transações, contas, categorias e configurações dele. Isso não pode ser desfeito.',
-  'delete.placeholder': 'Digite "delete" para confirmar',
-  'delete.inputLabel': 'Digite delete para confirmar a exclusão permanente',
+  'delete.word': 'excluir',
+  'delete.placeholder': 'Digite "{word}" para confirmar',
+  'delete.inputLabel': 'Digite {word} para confirmar a exclusão permanente',
   'delete.confirm': 'Excluir para sempre',
   'delete.failed': 'Não foi possível excluir o orçamento.',
 

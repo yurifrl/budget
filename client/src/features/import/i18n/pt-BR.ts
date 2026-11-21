@@ -7,6 +7,8 @@ const m: Translation<typeof en> = {
   'screen.subtitle': 'Extratos bancários — CSV do Nubank, extrato do Itaú, CSV genérico',
   'account.label': 'Conta',
   'account.placeholder': 'Escolha a conta…',
+  'account.groupCash': 'Dinheiro',
+  'account.groupCredit': 'Crédito',
   'account.a11y': 'Conta da importação',
   'file.label': 'Arquivo',
   'file.choose': 'Escolher arquivo…',

@@ -1,5 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { isKeypadOpKey, KEYPAD_KEYS, type KeypadKey } from '@/domain/txnKeypad';
 import { colors } from '@/ui/theme';
 import { t } from './i18n';
@@ -33,7 +35,7 @@ export function Keypad({
               isKeypadOpKey(k) && { color: colors.indigo2 },
               k === 'done' && { color: colors.white, fontSize: 15, fontWeight: '700' },
             ]}>
-            {k}
+            {k === 'done' ? tCommon('done') : k}
           </Text>
         </Pressable>
       ))}

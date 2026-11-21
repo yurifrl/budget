@@ -18,6 +18,11 @@ const RECONCILIATION_ADJUSTMENT = 'Reconciliation Adjustment';
 const CREDIT_CARD_PAYMENTS = 'Credit Card Payments';
 /* eslint-enable budget-i18n/no-untranslated-string */
 
+/** Is this the stored payee the app writes for a reconcile / balance-edit adjustment? (Identity, never the displayed name.) */
+export function isReconciliationAdjustmentPayee(name: string): boolean {
+  return name === RECONCILIATION_ADJUSTMENT;
+}
+
 /** The stored payee / category group name as shown to the person in the active language. */
 export function displaySystemName(name: string): string {
   switch (name) {

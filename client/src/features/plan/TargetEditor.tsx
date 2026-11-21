@@ -166,7 +166,7 @@ export function TargetEditor({
       await onSave({ kind, amountCents: amount, snoozeMonth: target?.snoozeMonth ?? null, config });
       onSaved?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : apiErrorMessage(e, t('editor.saveFailed')));
+      setError(apiErrorMessage(e, t('editor.saveFailed')));
     } finally {
       setBusy(false);
     }
@@ -179,7 +179,7 @@ export function TargetEditor({
     try {
       await onDelete();
     } catch (e) {
-      setError(e instanceof Error ? e.message : apiErrorMessage(e, t('editor.deleteFailed')));
+      setError(apiErrorMessage(e, t('editor.deleteFailed')));
     } finally {
       setBusy(false);
     }

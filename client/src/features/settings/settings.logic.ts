@@ -54,9 +54,14 @@ export function deleteBudgetNote(name: string): string {
   return t('delete.note', { name });
 }
 
-/** The delete only fires once "delete" is typed (any case, surrounding spaces ignored). */
+/**
+ * The delete only fires once the confirmation word is typed (any case, surrounding
+ * spaces ignored): the one the prompt shows in the active language, or the English
+ * "delete" (the word of the wire and of the docs, so it always works).
+ */
 export function isDeleteArmed(confirmText: string): boolean {
-  return confirmText.trim().toLowerCase() === 'delete';
+  const typed = confirmText.trim().toLowerCase();
+  return typed === t('delete.word').toLowerCase() || typed === 'delete';
 }
 
 /** Live preview under the format selects: a sample amount and a sample date. */

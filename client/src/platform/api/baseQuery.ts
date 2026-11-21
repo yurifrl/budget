@@ -8,12 +8,13 @@
 
 import type { BaseQueryFn } from '@reduxjs/toolkit/query';
 import type { ContractRequest } from '@shared/contract-request';
-import { SPECIFIC_ERROR_CODES } from '@shared/errors';
-import { translateErrorCode } from '@shared/i18n/errors';
+import { defaultErrorCode, SPECIFIC_ERROR_CODES } from '@shared/errors';
+import { tError, translateErrorCode } from '@shared/i18n/errors';
 
 import type { Container } from '../di/container';
 import { Tokens } from '../di/tokens';
 import { loadAuthHeaders } from '../storage/sessionToken';
+import { t } from './i18n';
 
 /**
  * One request: the shape `contractRequest` (shared) builds. Params are
@@ -88,7 +89,7 @@ export const apiBaseQuery: BaseQueryFn<ApiQuery, unknown, ApiQueryError> = async
     return {
       error: {
         status: 'FETCH_ERROR',
-        message: cause instanceof Error ? cause.message : 'Network request failed',
+        message: cause instanceof Error ? cause.message : t('network.failed'),
       },
     };
   }
@@ -136,19 +137,25 @@ const SPECIFIC_CODES: readonly string[] = SPECIFIC_ERROR_CODES;
 export function apiErrorMessage(error: unknown, fallback?: string): string {
   let message: string | undefined;
   let code: string | undefined;
+  let status: unknown;
   let params: ErrorParams | undefined;
   if (typeof error === 'object' && error !== null) {
-    const e = error as { message?: unknown; code?: unknown; params?: unknown; data?: { message?: unknown; code?: unknown; params?: unknown } };
+    const e = error as { status?: unknown; message?: unknown; code?: unknown; params?: unknown; data?: { message?: unknown; code?: unknown; params?: unknown } };
+    status = e.status;
     if (typeof e.message === 'string') message = e.message;
     else if (typeof e.data?.message === 'string') message = e.data.message;
     if (typeof e.code === 'string') code = e.code;
     else if (typeof e.data?.code === 'string') code = e.data.code;
     params = readParams(e.params) ?? readParams(e.data?.params);
   }
+  // fetch itself failed (offline, DNS, server down): the browser's text is English and says nothing useful.
+  if (status === 'FETCH_ERROR') return t('network.failed');
+  // The transport's placeholder when the body had no text and no code: treat it as that status's generic error.
+  if (code === undefined && typeof status === 'number' && message === `HTTP ${status}`) code = defaultErrorCode(status);
   const known = code === undefined ? undefined : translateErrorCode(code, params);
   if (code !== undefined && known !== undefined && SPECIFIC_CODES.includes(code)) return known;
   if (fallback !== undefined) return fallback;
   if (known !== undefined) return known;
   if (message !== undefined) return message;
-  return translateErrorCode('error') ?? 'Something went wrong.';
+  return translateErrorCode('error') ?? tError('error');
 }

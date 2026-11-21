@@ -6,7 +6,9 @@ import { getLocale } from '@shared/i18n';
 import { cancelRun, getRun, retryRun } from '../api';
 import { duration, fmt, StatusBadge } from '../badge';
 import { usePolled } from '../hooks';
+import { label, LOG_LEVEL_LABEL } from '../enumLabels';
 import { LEVELS } from '../types';
+import { describeError } from '../users.logic';
 import { t } from './runs/i18n';
 
 export function RunDetailPage({ id, uiUrl }: { id: string; uiUrl: string | null }) {
@@ -23,13 +25,13 @@ export function RunDetailPage({ id, uiUrl }: { id: string; uiUrl: string | null 
       after?.(r as never);
       await reload();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      setActionError(describeError(e));
     } finally {
       setBusy(false);
     }
   };
 
-  if (error && !data) return <div className="banner error">{error.message}</div>;
+  if (error && !data) return <div className="banner error">{describeError(error)}</div>;
   if (!data) return <p className="muted">{tCommon('loading')}</p>;
   const { run, attempts, logs } = data;
   const shownLogs = level ? logs.filter((l) => LEVELS.indexOf(l.level) >= LEVELS.indexOf(level as (typeof LEVELS)[number])) : logs;
@@ -189,7 +191,7 @@ export function RunDetailPage({ id, uiUrl }: { id: string; uiUrl: string | null 
           <option value="">{t('detail.allLevels')}</option>
           {LEVELS.map((l) => (
             <option key={l} value={l}>
-              {l}+
+              {label(LOG_LEVEL_LABEL, l)}+
             </option>
           ))}
         </select>
@@ -198,7 +200,7 @@ export function RunDetailPage({ id, uiUrl }: { id: string; uiUrl: string | null 
         {shownLogs.map((l) => (
           <div key={l.id} className={`log ${l.level}`}>
             <span className="ts">{new Date(l.ts).toLocaleTimeString(getLocale())}</span>
-            <span className="lvl">{l.level}</span>
+            <span className="lvl">{label(LOG_LEVEL_LABEL, l.level)}</span>
             <span>#{l.attempt_no}</span>
             <span className="msg">
               {l.message}

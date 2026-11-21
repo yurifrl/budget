@@ -1,8 +1,0 @@
-{
-  "files": [
-    "src/features/accounts/register/**/*.{ts,tsx}",
-    "src/features/accounts/accountEdit/**/*.{ts,tsx}",
-    "src/features/accounts/addTransaction/**/*.{ts,tsx}"
-  ],
-  "ignores": []
-}

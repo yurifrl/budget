@@ -68,7 +68,7 @@ export function ImportScreen() {
           }}
           options={(accounts.data ?? [])
             .filter((a) => !a.closed)
-            .map((a) => ({ key: a.id, label: a.name, sub: a.account_group }))}
+            .map((a) => ({ key: a.id, label: a.name, sub: a.account_group === 'CREDIT' ? t('account.groupCredit') : t('account.groupCash') }))}
           placeholder={t('account.placeholder')}
           chevron
           accessibilityLabel={t('account.a11y')}

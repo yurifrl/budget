@@ -26,6 +26,7 @@ export default {
   'category.paymentsAndTransfers': 'Payments and Transfers',
   'category.paymentTransfer': 'Payment/Transfer',
   'category.split': 'Split',
+  'combobox.create': 'Create “{query}”',
   'category.noMatch': 'No categories match “{query}”',
   'dropdown.selected': 'Selected',
   'dropdown.cashAccounts': 'Cash Accounts',
