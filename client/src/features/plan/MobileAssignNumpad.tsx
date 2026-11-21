@@ -29,6 +29,7 @@ import { neededBy } from '@/domain/targets';
 import type { Budget, Category, CategoryTarget, MonthKey } from '@/domain/types';
 import { colors, radius } from '@/ui/theme';
 import { QuickAssignList, singleCategorySnap } from './CategoryInspector';
+import { t } from './mobile/i18n';
 
 /** Bottom keypad rows (YNAB mobile: 789− 456+ 123= ✕0⌫✓). */
 const KEY_ROWS = [
@@ -121,7 +122,7 @@ export function MobileAssignNumpad({
       },
     })
       .unwrap()
-      .catch((err) => setSnoozeError(apiErrorMessage(err, 'failed to snooze')));
+      .catch((err) => setSnoozeError(apiErrorMessage(err, t('numpad.snoozeFailed'))));
   };
 
   return (
@@ -131,7 +132,7 @@ export function MobileAssignNumpad({
       <View ref={panelRef} pointerEvents="box-none">
         {pop === 'auto' ? (
           <View style={styles.popCard}>
-            <Text style={styles.popTitle}>Auto-assign</Text>
+            <Text style={styles.popTitle}>{t('numpad.autoAssignTitle')}</Text>
             <ScrollView style={styles.popScroll} nestedScrollEnabled>
               <QuickAssignList
                 budget={budget}
@@ -147,7 +148,7 @@ export function MobileAssignNumpad({
         <View style={styles.sheet}>
           {/* Bundled category: breadcrumb so it is clear which bundle's row is being edited. */}
           {category.bundleId ? (
-            <Text style={styles.crumb} numberOfLines={1} accessibilityLabel="Category">
+            <Text style={styles.crumb} numberOfLines={1} accessibilityLabel={t('numpad.categoryLabel')}>
               {categoryLabel(category, budget.bundles)}
             </Text>
           ) : null}
@@ -158,47 +159,46 @@ export function MobileAssignNumpad({
               <Pressable
                 style={styles.optionBtn}
                 accessibilityRole="button"
-                accessibilityLabel={`Auto-assign for ${category.name}`}
+                accessibilityLabel={t('numpad.autoAssignFor', { name: category.name })}
                 onPress={() => setPop((prev) => (prev === 'auto' ? null : 'auto'))}>
                 <Text style={styles.optionGlyph}>⚡</Text>
               </Pressable>
-              <Text style={styles.optionLabel}>Auto-Assign</Text>
+              <Text style={styles.optionLabel}>{t('numpad.option.autoAssign')}</Text>
             </View>
             <View style={styles.option}>
               <Pressable
                 style={styles.optionBtn}
                 accessibilityRole="button"
-                accessibilityLabel={`Move money from ${category.name}`}
+                accessibilityLabel={t('numpad.moveFrom', { name: category.name })}
                 onPress={onMoveMoney}>
                 <Text style={styles.optionGlyph}>→</Text>
               </Pressable>
-              <Text style={styles.optionLabel}>Move Money</Text>
+              <Text style={styles.optionLabel}>{t('numpad.option.moveMoney')}</Text>
             </View>
             <View style={styles.option}>
               <Pressable
                 style={styles.optionBtn}
                 accessibilityRole="button"
-                accessibilityLabel={`Details for ${category.name}`}
+                accessibilityLabel={t('numpad.detailsFor', { name: category.name })}
                 onPress={onMoreDetails}>
                 <Text style={styles.optionGlyph}>…</Text>
               </Pressable>
-              <Text style={styles.optionLabel}>Details</Text>
+              <Text style={styles.optionLabel}>{t('numpad.option.details')}</Text>
             </View>
           </View>
           {snoozeError ? <Text style={styles.errorText}>{snoozeError}</Text> : null}
           {target && more > 0 ? (
             <View style={styles.hintRow}>
               <View style={styles.hintBanner}>
-                <Text style={styles.hintText}>Assign {formatMoney(more)} more to stay on track</Text>
+                <Text style={styles.hintText}>{t('numpad.hint', { amount: formatMoney(more) })}</Text>
               </View>
               <Pressable
                 style={styles.snoozeBtn}
                 accessibilityRole="button"
-                accessibilityLabel={`Snooze ${category.name} for this month`}
+                accessibilityLabel={t('numpad.snoozeFor', { name: category.name })}
                 onPress={toggleSnooze}>
-                <Text style={styles.snoozeText}>
-                  z<Text style={styles.snoozeSup}>Z</Text>
-                </Text>
+                {/* eslint-disable-next-line budget-i18n/no-untranslated-string -- "zZ" sleep glyph, not a word */}
+                <Text style={styles.snoozeText}>z<Text style={styles.snoozeSup}>Z</Text></Text>
               </Pressable>
             </View>
           ) : null}

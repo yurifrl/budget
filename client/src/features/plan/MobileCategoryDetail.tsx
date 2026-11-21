@@ -34,6 +34,8 @@ import { CategoryPersonField } from './CategoryPersonField';
 import { InspectorTarget, QuickAssignList, singleCategorySnap } from './CategoryInspector';
 import type { MoveMoneyRequest } from './MoveMoneySheet';
 import { useBudgetShell } from '@/shell/context';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './mobile/i18n';
 
 function ActionRow({
   label,
@@ -107,7 +109,7 @@ export function MobileCategoryDetail({
     setRenaming(false);
     const next = renameDraft.trim();
     if (next && next !== category.name) {
-      renameCategory({ budgetId, categoryId: category.id, name: next }).unwrap().catch((e) => fail(e, 'failed to rename'));
+      renameCategory({ budgetId, categoryId: category.id, name: next }).unwrap().catch((e) => fail(e, t('detail.renameFailed')));
     }
   };
 
@@ -115,13 +117,13 @@ export function MobileCategoryDetail({
     setCategoryHidden({ budgetId, categoryId: category.id, hidden: true })
       .unwrap()
       .then(onClose)
-      .catch((e) => fail(e, 'failed to hide'));
+      .catch((e) => fail(e, t('detail.hideFailed')));
 
   const doDelete = () =>
     deleteCategory({ budgetId, categoryId: category.id })
       .unwrap()
       .then(onClose)
-      .catch((e) => fail(e, 'failed to delete'));
+      .catch((e) => fail(e, t('detail.deleteFailed')));
 
   const addTransaction = () => {
     onClose();
@@ -136,7 +138,7 @@ export function MobileCategoryDetail({
       <View style={[styles.root, { paddingTop: insets.top + 4, paddingBottom: insets.bottom + 12 }]}>
         {/* header: back + name (tap name to rename) */}
         <View style={styles.header}>
-          <Pressable onPress={onClose} style={styles.backBtn} accessibilityLabel="Back to budget" accessibilityRole="button">
+          <Pressable onPress={onClose} style={styles.backBtn} accessibilityLabel={t('detail.back')} accessibilityRole="button">
             <Text style={styles.backText}>‹</Text>
           </Pressable>
           {renaming ? (
@@ -147,7 +149,7 @@ export function MobileCategoryDetail({
               onSubmitEditing={commitRename}
               onBlur={commitRename}
               style={styles.renameInput}
-              accessibilityLabel="Category name"
+              accessibilityLabel={t('detail.nameLabel')}
             />
           ) : (
             <Text style={styles.title} numberOfLines={1}>
@@ -164,19 +166,19 @@ export function MobileCategoryDetail({
             <BigMoneyInput
               cents={assigned}
               onCommit={(next) => void setAssigned({ budgetId, month, categoryId: category.id, assignedCents: next })}
-              accessibilityLabel={`Assigned in ${monthLong}`}
+              accessibilityLabel={t('detail.assignedIn', { month: monthLong })}
             />
-            <Text style={styles.heroCaption}>Assigned in {monthLong}</Text>
+            <Text style={styles.heroCaption}>{t('detail.assignedIn', { month: monthLong })}</Text>
           </View>
 
           {/* overspending warning + cover action */}
           {overspent ? (
             <View style={[styles.card, styles.warningCard]}>
               <Text style={styles.warningText}>
-                You budgeted {formatMoney(assigned)}.{'\n'}But spent {formatMoney(spent)}!
+                {t('detail.budgetedSpent', { assigned: formatMoney(assigned), spent: formatMoney(spent) })}
               </Text>
               <Text style={[styles.warningText, { marginTop: 8 }]}>
-                You have overspent this category by {formatMoney(-available.available)}.
+                {t('detail.overspentBy', { amount: formatMoney(-available.available) })}
               </Text>
               <Pressable
                 style={styles.warningAction}
@@ -185,7 +187,7 @@ export function MobileCategoryDetail({
                   onClose();
                   onMoveMoney({ from: null, to: category.id, pickFrom: true });
                 }}>
-                <Text style={styles.warningActionText}>Cover this overspending from…</Text>
+                <Text style={styles.warningActionText}>{t('detail.cover')}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -196,31 +198,31 @@ export function MobileCategoryDetail({
               <View key={row.key} style={styles.balRow}>
                 <Text style={styles.balLabel}>
                   {row.key === 'carryover'
-                    ? `Left Over from ${formatMonthLong(prevMonth(month))}`
+                    ? t('detail.leftOver', { month: formatMonthLong(prevMonth(month)) })
                     : row.key === 'assigned'
-                      ? `Assigned in ${monthLong}`
+                      ? t('detail.assignedIn', { month: monthLong })
                       : row.key === 'activity'
-                        ? 'Spending'
+                        ? t('detail.spending')
                         : row.key === 'funded'
-                          ? 'Funded Card Spending'
-                          : 'Payments Made'}
+                          ? t('detail.fundedSpending')
+                          : t('detail.paymentsMade')}
                 </Text>
                 <Text style={styles.balValue}>{formatMoney(row.cents)}</Text>
               </View>
             ))}
             <View style={[styles.balRow, styles.balTotal]}>
-              <Text style={[styles.balLabel, styles.balTotalLabel]}>Available</Text>
+              <Text style={[styles.balLabel, styles.balTotalLabel]}>{t('detail.available')}</Text>
               <Text style={[styles.balTotalValue, { color: availColors.fg }]}>{formatMoney(available.available)}</Text>
             </View>
             {available.kind === 'payment' ? (
               <>
                 <View style={styles.balRow}>
-                  <Text style={styles.balLabel}>Card Debt</Text>
+                  <Text style={styles.balLabel}>{t('detail.cardDebt')}</Text>
                   <Text style={styles.balValue}>{formatMoney(available.debt ?? 0)}</Text>
                 </View>
                 {(available.underfunded ?? 0) > 0 ? (
                   <View style={styles.balRow}>
-                    <Text style={[styles.balLabel, { color: colors.yellowPillFg }]}>Underfunded</Text>
+                    <Text style={[styles.balLabel, { color: colors.yellowPillFg }]}>{t('detail.underfunded')}</Text>
                     <Text style={[styles.balValue, { color: colors.yellowPillFg }]}>{formatMoney(available.underfunded ?? 0)}</Text>
                   </View>
                 ) : null}
@@ -232,7 +234,7 @@ export function MobileCategoryDetail({
             {personName ? (
               // Filtered slice shown beside, never inside, the household breakdown.
               <View style={styles.balRow}>
-                <Text style={styles.balLabel}>Activity · {personName}</Text>
+                <Text style={styles.balLabel}>{t('detail.activityPerson', { person: personName })}</Text>
                 <Text style={styles.balValue}>{formatMoney(activityFor(bm, category.id, activityMap))}</Text>
               </View>
             ) : null}
@@ -243,19 +245,19 @@ export function MobileCategoryDetail({
                 onClose();
                 onMoveMoney({ from: category.id });
               }}>
-              <Text style={styles.moveLinkText}>Move Money ›</Text>
+              <Text style={styles.moveLinkText}>{t('detail.moveMoney')}</Text>
             </Pressable>
           </View>
 
           {/* person */}
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Person</Text>
+            <Text style={styles.sectionTitle}>{t('detail.person')}</Text>
             <CategoryPersonField budgetId={budgetId} category={category} />
           </View>
 
           {/* auto-assign */}
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Auto-Assign</Text>
+            <Text style={styles.sectionTitle}>{t('detail.autoAssign')}</Text>
             <QuickAssignList
               budget={budget}
               budgetId={budgetId}
@@ -268,28 +270,28 @@ export function MobileCategoryDetail({
 
           {/* target */}
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Target</Text>
+            <Text style={styles.sectionTitle}>{t('detail.target')}</Text>
             <InspectorTarget category={category} budgetId={budgetId} month={month} assigned={assigned} available={available.available} />
           </View>
 
           {/* actions */}
           <View style={styles.card}>
-            <ActionRow label="＋ Transaction" onPress={addTransaction} />
+            <ActionRow label={t('detail.action.transaction')} onPress={addTransaction} />
             <ActionRow
-              label="Rename Category"
+              label={t('detail.action.rename')}
               onPress={() => {
                 setRenameDraft(category.name);
                 setRenaming(true);
               }}
             />
-            <ActionRow label="Hide Category" onPress={hide} />
-            <ActionRow label="Delete Category" danger onPress={() => setConfirmDelete(true)} />
+            <ActionRow label={t('detail.action.hide')} onPress={hide} />
+            <ActionRow label={t('detail.action.delete')} danger onPress={() => setConfirmDelete(true)} />
           </View>
 
           {actionError ? <Text style={styles.errorText}>{actionError}</Text> : null}
 
           <Text style={styles.footerNote}>
-            Overspent categories show a red Available balance; cover them from another category or Ready to Assign.
+            {t('detail.footerNote')}
           </Text>
         </ScrollView>
 
@@ -298,14 +300,14 @@ export function MobileCategoryDetail({
           <Pressable style={styles.confirmBackdrop} onPress={() => setConfirmDelete(false)}>
             <View style={styles.confirmCard}>
               <Text style={styles.confirmText}>
-                Delete “{category.name}”? Its transactions become uncategorized.
+                {t('detail.deleteConfirm', { name: category.name })}
               </Text>
               <View style={styles.confirmBtns}>
                 <Pressable onPress={() => setConfirmDelete(false)} style={styles.confirmBtn} accessibilityRole="button">
-                  <Text style={styles.confirmBtnText}>Cancel</Text>
+                  <Text style={styles.confirmBtnText}>{tCommon('cancel')}</Text>
                 </Pressable>
                 <Pressable onPress={() => void doDelete()} style={styles.confirmBtn} accessibilityRole="button">
-                  <Text style={[styles.confirmBtnText, { color: colors.redFg }]}>Delete</Text>
+                  <Text style={[styles.confirmBtnText, { color: colors.redFg }]}>{tCommon('delete')}</Text>
                 </Pressable>
               </View>
             </View>

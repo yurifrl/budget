@@ -15,6 +15,7 @@ import { useBudgetModel } from '@/state/useBudgetModel';
 import { useBudgetMonth } from '@/state/useBudgetMonth';
 import { ManagePayeesModal } from '@/features/payees';
 import { useBudgetShell } from '@/shell/context';
+import { t } from './mobile/i18n';
 
 export function BudgetHomeScreen() {
   const { formatMoney } = useMoneyFormat();
@@ -39,7 +40,7 @@ export function BudgetHomeScreen() {
   }
 
   const rta = bm.readyToAssign;
-  const newTxns = budget.transactions.filter((t) => !t.approved).length;
+  const newTxns = budget.transactions.filter((txn) => !txn.approved).length;
   const underfunded = budget.categories
     .map((c) => ({ c, f: targetFundingState(c, bm) }))
     // Current Goal lists target shortfalls; a card's underfunded payment has no target.
@@ -56,40 +57,45 @@ export function BudgetHomeScreen() {
         <Text style={styles.heroTitle}>{budget.name}</Text>
       </View>
       <View style={styles.todoCard}>
-        <Text style={styles.todoTitle}>Welcome home</Text>
-        <Text style={styles.todoSub}>Just a few things to do</Text>
+        <Text style={styles.todoTitle}>{t('home.welcome')}</Text>
+        <Text style={styles.todoSub}>{t('home.subtitle')}</Text>
         {newTxns > 0 ? (
           <View style={styles.todoLine}>
             <Text style={styles.badge}>{newTxns}</Text>
-            <Text style={styles.todoLineText}>New transactions</Text>
-            <IndigoButton label="Review" onPress={() => router.navigate('/spending' as never)} />
+            <Text style={styles.todoLineText}>{t('home.newTransactions')}</Text>
+            <IndigoButton label={t('home.review')} onPress={() => router.navigate('/spending' as never)} />
           </View>
         ) : null}
         <View style={styles.todoLine}>
           <Text style={[styles.pillGreen]}>{formatMoney(rta)}</Text>
-          <Text style={[styles.todoLineText, { color: colors.muted }]}>Ready to assign</Text>
-          <IndigoButton label="Assign" onPress={() => router.navigate('/plan' as never)} />
+          <Text style={[styles.todoLineText, { color: colors.muted }]}>{t('home.readyToAssign')}</Text>
+          <IndigoButton label={t('home.assign')} onPress={() => router.navigate('/plan' as never)} />
         </View>
       </View>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Current Goal</Text>
+        <Text style={styles.cardTitle}>{t('home.currentGoal')}</Text>
         {underfunded.length ? (
           underfunded.slice(0, 3).map(({ c, f }) => (
             <Text key={c.id} style={styles.cardBody}>
-              {c.name} — {formatMoney(f.gap)} still needed
-              {c.target?.kind === 'custom' && c.target.config.byDate ? ` by the ${c.target.config.byDate.slice(8)}th` : ''}.
+              {c.target?.kind === 'custom' && c.target.config.byDate
+                ? t('home.stillNeededByDay', {
+                    name: c.name,
+                    amount: formatMoney(f.gap),
+                    day: c.target.config.byDate.slice(8),
+                  })
+                : t('home.stillNeeded', { name: c.name, amount: formatMoney(f.gap) })}
             </Text>
           ))
         ) : (
-          <Text style={styles.cardBody}>All targets funded for {budget.name}. 🎉</Text>
+          <Text style={styles.cardBody}>{t('home.allFunded', { name: budget.name })}</Text>
         )}
       </View>
       {!shell.isPhone ? (
         <View style={styles.card}>
           <Text style={styles.cardBody}>
-            Use Plan to assign money, Accounts for the register, Reflect for reports.
+            {t('home.hint')}
           </Text>
-          <IndigoButton label="Manage Payees…" onPress={() => setPayeesOpen(true)} />
+          <IndigoButton label={t('home.managePayees')} onPress={() => setPayeesOpen(true)} />
         </View>
       ) : null}
       {payeesOpen ? <ManagePayeesModal visible={payeesOpen} onClose={() => setPayeesOpen(false)} /> : null}

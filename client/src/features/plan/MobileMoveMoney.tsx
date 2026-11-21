@@ -24,7 +24,9 @@ import type { Budget, Cents, MonthKey } from '@/domain/types';
 import { Pill } from '@/ui/bits';
 import { buildCategoryPickItems, type CategoryPickItem } from '@/ui/categoryPick';
 import { centsPillState, colors, radius } from '@/ui/theme';
+import { tCommon } from '@shared/i18n/common';
 import { useMoveMoney, type MoveMoneyRequest } from './MoveMoneySheet';
+import { t } from './mobile/i18n';
 
 /** One counterpart row: null = Ready to Assign. */
 interface MoveRow {
@@ -124,7 +126,7 @@ export function MobileMoveMoney({
   // Focus derived from the request: the entry category, or RTA (null) for the banner.
   const focusId: string | null = request.unassign === true ? null : (request.pickFrom === true ? request.to ?? null : request.from);
   const focusCat = focusId ? (budget.categories.find((c) => c.id === focusId) ?? null) : null;
-  const focusLabel = (focusCat ? categoryLabel(focusCat, budget.bundles) : null) ?? 'Ready to Assign';
+  const focusLabel = (focusCat ? categoryLabel(focusCat, budget.bundles) : null) ?? t('label.readyToAssign');
 
   // Target awareness (targets are the plan grid's funding targets): the focus
   // has a need when it is overspent, under its target, or RTA-come-negative.
@@ -216,18 +218,26 @@ export function MobileMoveMoney({
     [budget, focusId, rtaEligible, query, rows],
   );
 
-  const title = `Move ${dir === 'to' ? 'To' : 'From'} ${focusLabel}`;
+  const title = dir === 'to' ? t('move.titleTo', { label: focusLabel }) : t('move.titleFrom', { label: focusLabel });
   const context =
     dir === 'to'
       ? focusCat == null
-        ? `Back to Ready to Assign${m.readyToAssign < 0 ? ` · needs ${formatMoney(-m.readyToAssign)}` : ''}`
+        ? m.readyToAssign < 0
+          ? t('move.context.backToRtaNeeds', { amount: formatMoney(-m.readyToAssign) })
+          : t('move.context.backToRta')
         : bad
-          ? `Needs ${formatMoney(need)} to cover overspending`
+          ? t('move.context.needsCover', { amount: formatMoney(need) })
           : targetGap > 0
-            ? `Needs ${formatMoney(targetGap)} to reach target`
-            : `To ${focusLabel}`
-      : `${focusLabel} · ${formatMoney(focusAvail)} available`;
-  const verb = request.pickFrom === true ? 'Cover' : dir === 'to' && focusId === null ? 'Remove' : 'Move';
+            ? t('move.context.needsTarget', { amount: formatMoney(targetGap) })
+            : t('move.context.to', { label: focusLabel })
+      : t('move.context.available', { label: focusLabel, amount: formatMoney(focusAvail) });
+  const totalText = formatMoney(total);
+  const confirmText =
+    request.pickFrom === true
+      ? t('move.confirm.cover', { amount: totalText })
+      : dir === 'to' && focusId === null
+        ? t('move.confirm.remove', { amount: totalText })
+        : t('move.confirm.move', { amount: totalText });
   const canConfirm = total > 0 && !m.applyState.isLoading;
 
   const back = () => (picking ? setPicking(false) : onClose());
@@ -237,7 +247,7 @@ export function MobileMoveMoney({
       <View style={[styles.root, { paddingTop: insets.top + 4, paddingBottom: insets.bottom + 10 }]}>
         {/* slim header — back leaves the picker first, then the flow */}
         <View style={[styles.header, bad && styles.headerBad]}>
-          <Pressable onPress={back} style={styles.backBtn} accessibilityLabel="Back" accessibilityRole="button">
+          <Pressable onPress={back} style={styles.backBtn} accessibilityLabel={tCommon('back')} accessibilityRole="button">
             <Text style={[styles.backText, bad && styles.headerBadText]}>‹</Text>
           </Pressable>
           <Text style={[styles.title, bad && styles.headerBadText]} numberOfLines={1}>
@@ -257,7 +267,7 @@ export function MobileMoveMoney({
                   setDirection('from');
                   setRows([]);
                 }}>
-                <Text style={[styles.segText, dir === 'from' && styles.segTextOn]}>From</Text>
+                <Text style={[styles.segText, dir === 'from' && styles.segTextOn]}>{t('dir.from')}</Text>
               </Pressable>
               <Pressable
                 style={[styles.segBtn, dir === 'to' && styles.segBtnOn]}
@@ -267,7 +277,7 @@ export function MobileMoveMoney({
                   setDirection('to');
                   setRows([]);
                 }}>
-                <Text style={[styles.segText, dir === 'to' && styles.segTextOn]}>To</Text>
+                <Text style={[styles.segText, dir === 'to' && styles.segTextOn]}>{t('dir.to')}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -281,10 +291,10 @@ export function MobileMoveMoney({
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search…"
+                placeholder={t('move.searchPlaceholder')}
                 placeholderTextColor={colors.faint}
                 style={styles.search}
-                accessibilityLabel="Search categories"
+                accessibilityLabel={t('move.searchLabel')}
                 autoFocus
               />
             </View>
@@ -305,7 +315,7 @@ export function MobileMoveMoney({
                     <Pressable
                       style={styles.row}
                       accessibilityRole="button"
-                      accessibilityLabel={`Add ${item.label}`}
+                      accessibilityLabel={t('move.addLabel', { label: item.label })}
                       onPress={() => addRow(item.categoryId)}>
                       <Text style={styles.rowLabel} numberOfLines={1}>
                         {item.label}
@@ -323,7 +333,7 @@ export function MobileMoveMoney({
               const cat = row.categoryId
                 ? (budget.categories.find((c) => c.id === row.categoryId) ?? null)
                 : null;
-              const label = (cat ? categoryLabel(cat, budget.bundles) : null) ?? 'Ready to Assign';
+              const label = (cat ? categoryLabel(cat, budget.bundles) : null) ?? t('label.readyToAssign');
               const avail = cat ? categoryFigures(m.bm, cat.id).available : m.readyToAssign;
               return (
                 <View key={row.categoryId ?? '__rta__'} style={[styles.rowCard, bad && styles.rowCardBad]}>
@@ -335,7 +345,7 @@ export function MobileMoveMoney({
                     <Pressable
                       onPress={() => removeRow(i)}
                       accessibilityRole="button"
-                      accessibilityLabel={`Remove ${label}`}
+                      accessibilityLabel={t('move.removeLabel', { label })}
                       hitSlop={8}>
                       <Text style={styles.rowRemove}>×</Text>
                     </Pressable>
@@ -345,7 +355,7 @@ export function MobileMoveMoney({
                       value={row.amount}
                       max={rowMax(row, i)}
                       accent={accent}
-                      label={`${label} amount`}
+                      label={t('move.sliderLabel', { label })}
                       onChange={(next) => setRowAmount(i, next)}
                     />
                     <Text style={[styles.rowAmount, row.amount === 0 && styles.rowAmountZero]}>
@@ -356,7 +366,7 @@ export function MobileMoveMoney({
               );
             })}
             <Pressable style={styles.addBtn} accessibilityRole="button" onPress={() => setPicking(true)}>
-              <Text style={styles.addBtnText}>+ Select Another</Text>
+              <Text style={styles.addBtnText}>{t('move.selectAnother')}</Text>
             </Pressable>
           </ScrollView>
         )}
@@ -369,7 +379,7 @@ export function MobileMoveMoney({
             accessibilityState={{ disabled: !canConfirm }}
             onPress={canConfirm ? confirm : undefined}>
             <Text style={styles.confirmBtnText}>
-              {verb} {formatMoney(total)} ›
+              {confirmText}
             </Text>
           </Pressable>
           {m.confirmError ? (
