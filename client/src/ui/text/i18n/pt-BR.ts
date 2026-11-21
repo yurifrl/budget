@@ -30,6 +30,7 @@ const m: Translation<typeof en> = {
   'category.paymentsAndTransfers': 'Pagamentos e transferências',
   'category.paymentTransfer': 'Pagamento/Transferência',
   'category.split': 'Divisão',
+  'combobox.create': 'Criar “{query}”',
   'category.noMatch': 'Nenhuma categoria corresponde a “{query}”',
   'dropdown.selected': 'Selecionado',
   'dropdown.cashAccounts': 'Contas de dinheiro',

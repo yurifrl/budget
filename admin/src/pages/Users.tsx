@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { tCommon } from '@shared/i18n/common';
 
 import {
-  ApiError,
   createUser,
   deleteUser,
   getMe,
@@ -20,7 +19,7 @@ import { rich } from '../rich';
 import { t } from './users/i18n';
 import { fmt } from '../badge';
 import {
-  errorMessage,
+  describeError,
   lockLabel,
   matchesFilter,
   passwordState,
@@ -42,7 +41,7 @@ const GOOGLE = 'Google';
 const ROLES = ['user', 'admin'] as const;
 const STATUS_VALUES = ['active', 'disabled'] as const;
 
-const msg = (e: unknown) => (e instanceof ApiError ? errorMessage(e.code, e.message, e.status) : String(e));
+const msg = describeError;
 
 export function UsersPage() {
   const users = usePolled(listUsers, [], 15000);

@@ -4,6 +4,7 @@ import { listRuns } from '../api';
 import { duration, fmt, StatusBadge } from '../badge';
 import { usePolled } from '../hooks';
 import { STATUSES } from '../types';
+import { describeError } from '../users.logic';
 import { t } from './runs/i18n';
 
 const PAGE = 25;
@@ -46,7 +47,7 @@ export function RunsPage() {
         </select>
         <span className="muted">{t('filter.autoRefresh')}</span>
       </div>
-      {error && <div className="banner error">{error.message}</div>}
+      {error && <div className="banner error">{describeError(error)}</div>}
       <table>
         <thead>
           <tr>

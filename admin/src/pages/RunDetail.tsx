@@ -7,6 +7,7 @@ import { cancelRun, getRun, retryRun } from '../api';
 import { duration, fmt, StatusBadge } from '../badge';
 import { usePolled } from '../hooks';
 import { LEVELS } from '../types';
+import { describeError } from '../users.logic';
 import { t } from './runs/i18n';
 
 export function RunDetailPage({ id, uiUrl }: { id: string; uiUrl: string | null }) {
@@ -23,13 +24,13 @@ export function RunDetailPage({ id, uiUrl }: { id: string; uiUrl: string | null 
       after?.(r as never);
       await reload();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      setActionError(describeError(e));
     } finally {
       setBusy(false);
     }
   };
 
-  if (error && !data) return <div className="banner error">{error.message}</div>;
+  if (error && !data) return <div className="banner error">{describeError(error)}</div>;
   if (!data) return <p className="muted">{tCommon('loading')}</p>;
   const { run, attempts, logs } = data;
   const shownLogs = level ? logs.filter((l) => LEVELS.indexOf(l.level) >= LEVELS.indexOf(level as (typeof LEVELS)[number])) : logs;

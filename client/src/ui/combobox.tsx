@@ -32,6 +32,7 @@ import {
 
 import { colors, radius } from './theme';
 import { createPortalOnWeb } from './portal';
+import { t } from './text/i18n';
 
 export interface ComboboxOption {
   key: string;
@@ -160,7 +161,7 @@ export function Combobox({
         <>
           <Text style={[styles.rowLabel, styles.createMark]}>＋</Text>
           <Text style={[styles.rowLabel, { color: colors.indigo2 }]} numberOfLines={1}>
-            {createLabel ? createLabel(value.trim()) : `Create “${value.trim()}”`}
+            {createLabel ? createLabel(value.trim()) : t('combobox.create', { query: value.trim() })}
           </Text>
         </>
       )}

@@ -7,6 +7,7 @@ import { RunDetailPage } from './pages/RunDetail';
 import { RunsPage } from './pages/Runs';
 import { rich } from './rich';
 import { UsersPage } from './pages/Users';
+import { describeError } from './users.logic';
 
 export function App() {
   const path = useHashPath();
@@ -37,7 +38,11 @@ export function App() {
 
   return (
     <Shell path={path}>
-      {health.error && <div className="banner error">{t('banner.unreachable', { message: health.error.message })}</div>}
+      {health.error && (
+        <div className="banner error">
+          {health.error.status === 'network' ? describeError(health.error) : t('banner.unreachable', { message: describeError(health.error) })}
+        </div>
+      )}
       {health.data && !health.data.temporal.up && (
         <div className="banner warn">
           {rich(

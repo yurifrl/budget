@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 
 import {
-  ApiError,
   clearFeatureEveryone,
   clearFeatureUser,
   listFeatures,
@@ -26,9 +25,9 @@ import {
 import { usePolled } from '../hooks';
 import { rich } from '../rich';
 import { t } from './features/i18n';
-import { errorMessage, matchesFilter } from '../users.logic';
+import { describeError, matchesFilter } from '../users.logic';
 
-const msg = (e: ApiError) => errorMessage(e.code, e.message, e.status);
+const msg = describeError;
 const detailHref = (key: string) => `#/features/${encodeURIComponent(key)}`;
 
 /**

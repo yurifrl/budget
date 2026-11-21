@@ -70,4 +70,7 @@ test('errorMessage maps codes and falls back', () => {
   expect(errorMessage(undefined, 'raw')).toBe('raw');
   expect(errorMessage(undefined, 'Failed to fetch', 'network')).toMatch(/^Cannot reach the API/);
   expect(errorMessage('user_exists', 'raw', 409)).toBe('A user with that e-mail already exists.');
+  // any other known code gets its shared catalog sentence; a bare HTTP placeholder gets the status default
+  expect(errorMessage('rate_limited', 'raw', 429)).toBe('Too many requests. Try again in a moment.');
+  expect(errorMessage(undefined, 'HTTP 502', 502)).toBe('A connected service failed. Try again.');
 });
