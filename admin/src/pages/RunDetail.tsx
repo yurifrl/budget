@@ -6,6 +6,7 @@ import { getLocale } from '@shared/i18n';
 import { cancelRun, getRun, retryRun } from '../api';
 import { duration, fmt, StatusBadge } from '../badge';
 import { usePolled } from '../hooks';
+import { label, LOG_LEVEL_LABEL } from '../enumLabels';
 import { LEVELS } from '../types';
 import { describeError } from '../users.logic';
 import { t } from './runs/i18n';
@@ -190,7 +191,7 @@ export function RunDetailPage({ id, uiUrl }: { id: string; uiUrl: string | null 
           <option value="">{t('detail.allLevels')}</option>
           {LEVELS.map((l) => (
             <option key={l} value={l}>
-              {l}+
+              {label(LOG_LEVEL_LABEL, l)}+
             </option>
           ))}
         </select>
@@ -199,7 +200,7 @@ export function RunDetailPage({ id, uiUrl }: { id: string; uiUrl: string | null 
         {shownLogs.map((l) => (
           <div key={l.id} className={`log ${l.level}`}>
             <span className="ts">{new Date(l.ts).toLocaleTimeString(getLocale())}</span>
-            <span className="lvl">{l.level}</span>
+            <span className="lvl">{label(LOG_LEVEL_LABEL, l.level)}</span>
             <span>#{l.attempt_no}</span>
             <span className="msg">
               {l.message}

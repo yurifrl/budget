@@ -18,6 +18,7 @@ import { usePolled } from '../hooks';
 import { rich } from '../rich';
 import { t } from './users/i18n';
 import { fmt } from '../badge';
+import { label, ROLE_LABEL, USER_STATUS_LABEL } from '../enumLabels';
 import {
   describeError,
   lockLabel,
@@ -118,10 +119,10 @@ export function UsersPage() {
                 </td>
                 <td>{u.name ?? <span className="muted">—</span>}</td>
                 <td>
-                  <span className={`badge ${u.role}`}>{u.role}</span>
+                  <span className={`badge ${u.role}`}>{label(ROLE_LABEL, u.role)}</span>
                 </td>
                 <td>
-                  <span className={`badge ${u.status}`}>{u.status}</span>
+                  <span className={`badge ${u.status}`}>{label(USER_STATUS_LABEL, u.status)}</span>
                 </td>
                 <td>
                   <div className="chips">
@@ -275,7 +276,9 @@ function CreateDialog({ onClose, onDone }: { onClose: () => void; onDone: (r: Ad
           <label htmlFor="cu-role">{t('col.role')}</label>
           <select id="cu-role" value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'user')}>
             {ROLES.map((r) => (
-              <option key={r}>{r}</option>
+              <option key={r} value={r}>
+                {label(ROLE_LABEL, r)}
+              </option>
             ))}
           </select>
         </div>
@@ -321,7 +324,9 @@ function EditDialog({ user, locked, onClose, onDone }: { user: AdminUser; locked
           <label htmlFor="eu-role">{t('col.role')}</label>
           <select id="eu-role" value={role} disabled={!!locked} onChange={(e) => setRole(e.target.value as 'admin' | 'user')}>
             {ROLES.map((r) => (
-              <option key={r}>{r}</option>
+              <option key={r} value={r}>
+                {label(ROLE_LABEL, r)}
+              </option>
             ))}
           </select>
         </div>
@@ -329,7 +334,9 @@ function EditDialog({ user, locked, onClose, onDone }: { user: AdminUser; locked
           <label htmlFor="eu-status">{t('col.status')}</label>
           <select id="eu-status" value={status} disabled={!!locked} onChange={(e) => setStatus(e.target.value as 'active' | 'disabled')}>
             {STATUS_VALUES.map((v) => (
-              <option key={v}>{v}</option>
+              <option key={v} value={v}>
+                {label(USER_STATUS_LABEL, v)}
+              </option>
             ))}
           </select>
         </div>

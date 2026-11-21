@@ -25,6 +25,7 @@ import {
 import { usePolled } from '../hooks';
 import { rich } from '../rich';
 import { t } from './features/i18n';
+import { label, ROLE_LABEL, USER_STATUS_LABEL } from '../enumLabels';
 import { describeError, matchesFilter } from '../users.logic';
 
 const msg = describeError;
@@ -216,7 +217,8 @@ function FeatureDetail({ feature, features, reload }: { feature: AdminFeature; f
                   <td>{u.email}</td>
                   <td>{u.name ?? <span className="muted">—</span>}</td>
                   <td>
-                    <span className={`badge ${u.role}`}>{u.role}</span> <span className={`badge ${u.status}`}>{u.status}</span>
+                    <span className={`badge ${u.role}`}>{label(ROLE_LABEL, u.role)}</span>{' '}
+                    <span className={`badge ${u.status}`}>{label(USER_STATUS_LABEL, u.status)}</span>
                   </td>
                   <td>
                     <span className={`badge ${state.value ? 'active' : 'disabled'}`}>{onOff(state.value)}</span>{' '}

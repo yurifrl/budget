@@ -17,6 +17,19 @@ const m: Translation<typeof en> = {
   'banner.schedulerDown': 'Agendador (Temporal) indisponível — as execuções ficam na fila: {reason}<b> · {count} na fila</b>',
   'banner.unknownReason': 'motivo desconhecido',
   'banner.schedulerUp': 'Agendador ativo · {count} na fila · instância <code>{instance}</code>',
+  'role.user': 'usuário',
+  'role.admin': 'administrador',
+  'userStatus.active': 'ativo',
+  'userStatus.disabled': 'desativado',
+  'runStatus.queued': 'na fila',
+  'runStatus.running': 'em execução',
+  'runStatus.succeeded': 'concluída',
+  'runStatus.failed': 'com falha',
+  'runStatus.cancelled': 'cancelada',
+  'logLevel.debug': 'debug',
+  'logLevel.info': 'info',
+  'logLevel.warn': 'aviso',
+  'logLevel.error': 'erro',
 };
 
 export default m;

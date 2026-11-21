@@ -97,6 +97,7 @@ export default {
   'toolbar.closeViewMenu': 'Close view menu',
   'toolbar.runningBalance': 'Running Balance',
   'toolbar.showClosedTxns': 'Show Closed-Account Transactions',
+  'toolbar.dateHint': 'YYYY-MM-DD',
   'toolbar.from': 'From',
   'toolbar.to': 'To',
   'toolbar.fromLabel': 'Filter from date',

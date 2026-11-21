@@ -1,6 +1,8 @@
 import { getLocale } from '@shared/i18n';
 
-export const StatusBadge = ({ status }: { status: string }) => <span className={`badge ${status}`}>{status}</span>;
+import { label, RUN_STATUS_LABEL } from './enumLabels';
+
+export const StatusBadge = ({ status }: { status: string }) => <span className={`badge ${status}`}>{label(RUN_STATUS_LABEL, status)}</span>;
 
 export const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString(getLocale()) : '—');
 

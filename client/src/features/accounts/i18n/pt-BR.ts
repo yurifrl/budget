@@ -100,6 +100,7 @@ const m: Translation<typeof en> = {
   'toolbar.closeViewMenu': 'Fechar menu de exibição',
   'toolbar.runningBalance': 'Saldo acumulado',
   'toolbar.showClosedTxns': 'Mostrar transações de contas encerradas',
+  'toolbar.dateHint': 'AAAA-MM-DD',
   'toolbar.from': 'De',
   'toolbar.to': 'Até',
   'toolbar.fromLabel': 'Filtrar a partir da data',
