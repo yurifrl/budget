@@ -3,6 +3,7 @@
 const { readdirSync } = require('node:fs');
 const path = require('node:path');
 const { defineConfig } = require('eslint/config');
+const { i18nConfigs } = require('../shared/eslint/i18n-manifest.cjs');
 const expoConfig = require('eslint-config-expo/flat');
 
 /** zod lives in shared/ only; everything else imports it via @shared/zod. */
@@ -100,6 +101,9 @@ module.exports = defineConfig([
       'import/no-restricted-paths': ['error', { zones: [...layerZones, ...domainZones] }],
     },
   },
+  // i18n: `budget-i18n/no-untranslated-string` as an error on the union of the
+  // file sets listed in i18n-enforced/*.json (docs/i18n.md). Nobody edits this.
+  ...i18nConfigs(path.join(__dirname, 'i18n-enforced')),
   // Same as syscd-app: eslint-plugin-react-hooks v7 (via eslint-config-expo
   // 58) ships experimental compiler rules that reject canonical RN patterns
   // this code relies on (Animated `useRef(new Value()).current`, latest-ref

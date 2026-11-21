@@ -13,6 +13,7 @@ Import convention:
   `OperationOutput`, ...)
 - `@shared/contract-request` (`contractRequest(contract, input)`: the HTTP
   request a client sends; used by the app's RTK Query slices and the admin)
+- `@shared/i18n` (typed `t()`, `defineMessages`, locale state), `@shared/i18n/common`, `@shared/i18n/errors` (see `docs/i18n.md`)
 - `@shared/errors` (the `{ error, code }` error body and its codes)
 - `@shared/domain/payees`, `@shared/domain/transfers` (pure domain logic)
 - `@shared/validation` (uuid/date/money/currency zod validators)

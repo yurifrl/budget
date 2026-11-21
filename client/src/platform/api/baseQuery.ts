@@ -8,6 +8,8 @@
 
 import type { BaseQueryFn } from '@reduxjs/toolkit/query';
 import type { ContractRequest } from '@shared/contract-request';
+import { SPECIFIC_ERROR_CODES } from '@shared/errors';
+import { translateErrorCode } from '@shared/i18n/errors';
 
 import type { Container } from '../di/container';
 import { Tokens } from '../di/tokens';
@@ -26,6 +28,18 @@ export interface ApiQueryError {
   message: string;
   /** Stable machine-readable code from the API's `{ error, code }` body (shared/src/errors.ts), when present. */
   code?: string;
+  /** Values for the `{placeholders}` of the code's message, from the error body's optional `params` object. */
+  params?: ErrorParams;
+}
+
+type ErrorParams = Readonly<Record<string, string | number>>;
+
+/** Keep only string and number values of a body's `params`; anything else is not a params object. */
+function readParams(value: unknown): ErrorParams | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const out: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(value)) if (typeof v === 'string' || typeof v === 'number') out[k] = v;
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 const isRaw = (body: unknown): body is Blob => typeof Blob !== 'undefined' && body instanceof Blob;
@@ -82,30 +96,59 @@ export const apiBaseQuery: BaseQueryFn<ApiQuery, unknown, ApiQueryError> = async
   if (!response.ok) {
     let message = `HTTP ${response.status}`;
     let code: string | undefined;
+    let params: ErrorParams | undefined;
     try {
-      const payload = (await response.json()) as { error?: string; message?: string; code?: unknown };
+      const payload = (await response.json()) as { error?: string; message?: string; code?: unknown; params?: unknown };
       message = payload.error || payload.message || message;
       if (typeof payload.code === 'string') code = payload.code;
+      params = readParams(payload.params);
     } catch {
       // ignore parse failure
     }
-    return { error: code === undefined ? { status: response.status, message } : { status: response.status, message, code } };
+    return {
+      error: {
+        status: response.status,
+        message,
+        ...(code === undefined ? {} : { code }),
+        ...(params === undefined ? {} : { params }),
+      },
+    };
   }
 
   const data = response.status === 204 ? null : await response.json();
   return { data };
 };
 
+const SPECIFIC_CODES: readonly string[] = SPECIFIC_ERROR_CODES;
+
 /**
- * Human-readable message from a thrown RTK Query error (`mutation.unwrap()`).
- * Understands our {@link ApiQueryError} shape, RTKQ's serialized-throw blob and
- * `{ data: { message } }` wrappers; anything else falls back to `fallback`.
+ * Message to show for a thrown RTK Query error (`mutation.unwrap()`), in the
+ * active language. Understands our {@link ApiQueryError} shape, RTKQ's
+ * serialized-throw blob and `{ data: { message, code } }` wrappers. Order:
+ *
+ *  1. a specific API code this build has a message for (`invalid_credentials`,
+ *     `password_too_short`, ...): that message, with the body's `params`;
+ *  2. the caller's `fallback` (a translated sentence naming the action that failed);
+ *  3. the per-status code's generic message (`not_found`, `internal`, ...);
+ *  4. the raw server text, for a code this build does not know (or no code);
+ *  5. the generic `error` message.
  */
-export function apiErrorMessage(error: unknown, fallback = 'request failed'): string {
+export function apiErrorMessage(error: unknown, fallback?: string): string {
+  let message: string | undefined;
+  let code: string | undefined;
+  let params: ErrorParams | undefined;
   if (typeof error === 'object' && error !== null) {
-    const e = error as { message?: unknown; data?: { message?: unknown } };
-    if (typeof e.message === 'string') return e.message;
-    if (typeof e.data?.message === 'string') return e.data.message;
+    const e = error as { message?: unknown; code?: unknown; params?: unknown; data?: { message?: unknown; code?: unknown; params?: unknown } };
+    if (typeof e.message === 'string') message = e.message;
+    else if (typeof e.data?.message === 'string') message = e.data.message;
+    if (typeof e.code === 'string') code = e.code;
+    else if (typeof e.data?.code === 'string') code = e.data.code;
+    params = readParams(e.params) ?? readParams(e.data?.params);
   }
-  return fallback;
+  const known = code === undefined ? undefined : translateErrorCode(code, params);
+  if (code !== undefined && known !== undefined && SPECIFIC_CODES.includes(code)) return known;
+  if (fallback !== undefined) return fallback;
+  if (known !== undefined) return known;
+  if (message !== undefined) return message;
+  return translateErrorCode('error') ?? 'Something went wrong.';
 }

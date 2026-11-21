@@ -56,6 +56,7 @@ tasks:
       - cd shared && bun test
       - task: test:api
       - cd client && bun test
+      - cd admin && bun test
 
   test:api:
     desc: bun test in api only, with the DB-backed suites required (no silent skips)
@@ -77,11 +78,12 @@ tasks:
         cmd: cd {{.ITEM}} && bunx tsc --noEmit
 
   lint:
-    desc: eslint in shared, api and client
+    desc: eslint in shared, api, client and admin (client and admin also enforce i18n-enforced/*.json, see docs/i18n.md)
     cmds:
       - cd shared && bunx eslint .
       - cd api && bunx eslint .
       - cd client && bunx eslint .
+      - cd admin && bunx eslint .
 
   api:
     desc: Run the API in local auth-off mode (port 3100, override with API_PORT). DATABASE_URL defaults to budgetnew_dev

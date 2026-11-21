@@ -33,5 +33,7 @@ export default defineConfig([
       ],
     },
   },
+  // The i18n lint rule is CommonJS (the client's CJS ESLint config loads it too).
+  { files: ['eslint/**/*.cjs'], rules: { '@typescript-eslint/no-require-imports': 'off' } },
   { files: ['src/zod.ts'], rules: { 'no-restricted-imports': 'off' } },
 ]);
