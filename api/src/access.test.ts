@@ -630,6 +630,9 @@ const notBudgetAddressed: Record<string, string> = {
   budget_list: "lists only budgets the caller owns or is a member of (asserted below)",
   budget_create: 'creates a new budget owned by the caller',
   connections_connect_token: "mints a widget token bound to the caller's own user id",
+  connections_credentials_delete: "deletes the caller's own key set: keyed by the session user, no id to pass (asserted below)",
+  connections_credentials_get: "status of the caller's own key set, never the secret (asserted below)",
+  connections_credentials_save: "saves the caller's own key set: keyed by the session user, no id to pass",
   connections_items_register: "registers a bank item for the caller; another user's item is 409",
   connections_list: "lists the caller's own connections (asserted below)",
   connections_settings_get: 'reads the app-wide sync window: one number, no budget data',
@@ -798,6 +801,32 @@ describe.skipIf(!dbReady)('D: two people, every budget operation', () => {
     expect(text.includes(A.connection)).toBe(true);
     expect(text.includes(V.connection)).toBe(false);
     expect((await send('connections_settings_update', { syncWindowDays: 7 })).status).toBe(403);
+  });
+
+  test("own bank keys: a user reads and deletes only their own key set, and the secret is never in an answer", async () => {
+    // The victim's key set, stored directly (the bytes stand in for ciphertext + nonce).
+    await pool.query(
+      `INSERT INTO public.connection_credentials (user_id, provider, client_id, secret_ciphertext, secret_nonce, key_version)
+       VALUES ($1, 'pluggy', 'victim-client-id', $2, $3, 1)`,
+      [victim.id, Buffer.from('victim-sealed-secret'), Buffer.from('victim-nonce')],
+    );
+    for (const who of [attacker, operator]) {
+      acting = who;
+      const res = await send('connections_credentials_get', {});
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ provider: 'pluggy', clientId: null, hasSecret: false, updatedAt: null });
+      expect((await send('connections_credentials_delete', {})).status).toBe(200);
+    }
+    const kept = await pool.query(`SELECT client_id FROM public.connection_credentials WHERE user_id = $1`, [victim.id]);
+    expect(kept.rows).toEqual([{ client_id: 'victim-client-id' }]);
+
+    acting = victim;
+    const own = await send('connections_credentials_get', {});
+    const text = await own.text();
+    expect(JSON.parse(text)).toMatchObject({ provider: 'pluggy', clientId: 'victim-client-id', hasSecret: true });
+    expect(text.includes('victim-sealed-secret')).toBe(false);
+    expect(Object.keys(JSON.parse(text)).sort()).toEqual(['clientId', 'hasSecret', 'provider', 'updatedAt']);
+    acting = attacker;
   });
 
   test('the connection summary and transactions show nothing from a budget its owner is no longer on', async () => {

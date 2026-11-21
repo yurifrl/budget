@@ -43,6 +43,8 @@ const instanceId = process.env.JOBS_INSTANCE_ID ?? 'e2e';
 /** Fake bank: a healthy item that reports newer data than any watermark. */
 const fake: BankAggregator = {
   environment: 'production',
+  verifyCredentials: async () => true,
+  hasItem: async () => true,
   createConnectToken: async () => ({ token: 't', clientId: null, widgetUrl: null }),
   listExternalAccounts: async () => [],
   listTransactions: async () => {
@@ -83,6 +85,8 @@ async function main(): Promise<void> {
       `insert into public.users (id, google_sub, email, role, status) values ($1, $2, 'e2e-connections@syscd.local', 'user', 'active')`,
       [USER_ID, USER_ID],
     );
+    // The fake connection runs on the shared keys: this user may use them (else it is paused).
+    await pool.query(`insert into public.feature_overrides (feature_key, user_id, value) values ('shared-pluggy-key', $1, true)`, [USER_ID]);
     const row = await store.upsertConnection({ userId: USER_ID, provider: PROVIDER, externalId: ITEM, status: 'connected', environment: 'production' });
     console.log(JSON.stringify({ connectionId: row.id }));
   } else if (cmd === 'request') {

@@ -15,7 +15,7 @@ import { HttpError } from '../core/validate';
 import { AggregatorError, USER_MESSAGES } from './errors';
 import { enqueueConnectionSync } from './job';
 import { CONNECTIONS_SYNC_JOB, syncSubjectKey, type SyncMode } from './jobspec';
-import { getAggregator } from './registry';
+import { keyAccessForConnection, reconcileKeyAccess, type KeyAccessProblem } from './keys';
 import {
   getConnectionById,
   listSweepConnections,
@@ -94,13 +94,18 @@ export function createConnectionsActivities(db: Pool, trackedAttempt: Tracked) {
     /** The sync itself: item preflight, pull, all-or-nothing write, status bookkeeping. */
     async connectionsSyncWork(args: { runId: string; connectionId: string; mode: SyncMode }): Promise<Record<string, unknown>> {
       return trackedAttempt(args.runId, async (ctx) => {
-        const row = await getConnectionById(args.connectionId);
+        const row = await currentConnection(args.connectionId);
         if (!row) throw ApplicationFailure.create({ message: 'connection not found', type: 'Permanent', nonRetryable: true });
         if (row.status === 'disconnected') return { skipped: 'disconnected' };
-        const aggregator = getAggregator(row.provider);
-        if (!aggregator) {
-          throw ApplicationFailure.create({ message: `provider ${row.provider} is not configured`, type: 'Permanent', nonRetryable: true });
+        if (row.status === 'paused') {
+          await ctx.log('warn', 'connection is paused: its key set may not be used; nothing synced');
+          return { skipped: 'paused' };
         }
+        const access = await keyAccessForConnection(db, row);
+        if (!access.ok) {
+          throw ApplicationFailure.create({ message: keyProblemMessage(access.problem, row.provider), type: 'Permanent', nonRetryable: true });
+        }
+        const { aggregator } = access;
         try {
           return await withHeartbeat(async () => {
             const state = await aggregator.getItemState(row.external_id);
@@ -155,10 +160,19 @@ export function createConnectionsActivities(db: Pool, trackedAttempt: Tracked) {
 
     /** Sweep step 2 (rate-limited queue): one GET item; enqueue a sync only if the provider has newer data. */
     async connectionsSweepCheck(args: { connectionId: string }): Promise<'enqueued' | 'fresh' | 'skipped'> {
-      const row = await getConnectionById(args.connectionId);
-      if (!row || (row.status !== 'connected' && row.status !== 'quota_exhausted')) return 'skipped';
-      const aggregator = getAggregator(row.provider);
-      if (!aggregator) return 'skipped';
+      const before = await getConnectionById(args.connectionId);
+      const row = await currentConnection(args.connectionId);
+      // 'paused' is skipped here: the key set may not be used, so not even the item is read.
+      // An own-key connection in 'error' is retried here: it has no webhook to revive it.
+      const ownError = row?.status === 'error' && row.key_source === 'own';
+      if (!row || (row.status !== 'connected' && row.status !== 'quota_exhausted' && !ownError)) return 'skipped';
+      // A quota pause restored by a resume may still be running.
+      if (row.status === 'quota_exhausted' && row.next_poll_at != null && row.next_poll_at.getTime() > Date.now()) return 'skipped';
+      const access = await keyAccessForConnection(db, row);
+      if (!access.ok) return 'skipped';
+      const { aggregator } = access;
+      // Just resumed (its key set became usable again): sync now, whatever the watermark says.
+      const resumed = before?.status === 'paused';
       try {
         const state = await aggregator.getItemState(row.external_id);
         if (state.status === 'unauthorized') {
@@ -173,7 +187,7 @@ export function createConnectionsActivities(db: Pool, trackedAttempt: Tracked) {
           row.last_synced_at == null ||
           state.lastUpdatedAt == null ||
           Date.parse(state.lastUpdatedAt) > row.last_synced_at.getTime();
-        if (!changed && row.status === 'connected') return 'fresh';
+        if (!changed && !resumed && row.status === 'connected') return 'fresh';
         await enqueueConnectionSync(db, row, 'sync', 'sweep');
         return 'enqueued';
       } catch (err) {
@@ -182,9 +196,28 @@ export function createConnectionsActivities(db: Pool, trackedAttempt: Tracked) {
     },
   };
 
+  /**
+   * The connection as it stands after its owner's pause state was brought up
+   * to date: turning the shared-keys feature off (or removing own keys) pauses
+   * it here, with nobody calling an endpoint, and turning it back on resumes it.
+   */
+  async function currentConnection(id: string): Promise<ConnectionRow | null> {
+    const row = await getConnectionById(id);
+    if (!row || row.status === 'disconnected') return row;
+    await reconcileKeyAccess(db, row.user_id);
+    return getConnectionById(id);
+  }
+
   async function pauseForQuota(row: ConnectionRow): Promise<void> {
     await setConnectionStatus(row.id, 'quota_exhausted', USER_MESSAGES.quota_exhausted, startOfNextMonth(new Date()));
   }
 }
 
 export type ConnectionsActivities = ReturnType<typeof createConnectionsActivities>;
+
+const keyProblemMessage = (problem: KeyAccessProblem, provider: string): string =>
+  problem === 'not_configured'
+    ? `provider ${provider} is not configured`
+    : problem === 'secret_unavailable'
+      ? `the stored ${provider} keys of this connection cannot be decrypted (CREDENTIALS_ENCRYPTION_KEY missing or changed)`
+      : `the ${provider} key set of this connection may not be used`;

@@ -8,20 +8,26 @@
  * one line here.
  */
 
-import type { BankAggregator } from '../types';
+import type { BankAggregator, ProviderCredentials } from '../types';
 
 import { PluggyAggregator } from './pluggy';
-import { loadPluggyConfig } from './pluggy/client';
+import { loadPluggyConfig, loadPluggyOwnConfig } from './pluggy/client';
 
 export type AggregatorEntry = {
-  create: () => BankAggregator;
-  /** True when the provider's credentials are present in the environment. */
+  /**
+   * No argument: an aggregator on the installation's shared keys (provider
+   * env). With `credentials`: one on that user's own key set; the shared keys
+   * need not be configured for it.
+   */
+  create: (credentials?: ProviderCredentials) => BankAggregator;
+  /** True when the provider's SHARED credentials are present in the environment. */
   configured: () => boolean;
 };
 
 const entries: Record<string, AggregatorEntry> = {
   pluggy: {
-    create: () => new PluggyAggregator(),
+    create: (credentials) =>
+      credentials ? new PluggyAggregator({ config: () => loadPluggyOwnConfig(credentials) }) : new PluggyAggregator(),
     configured: () => {
       try {
         loadPluggyConfig();

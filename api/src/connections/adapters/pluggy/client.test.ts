@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 
-import { PluggyClient, PluggyError, PluggyConfigError, loadPluggyConfig, type FetchLike } from './client';
+import { PluggyClient, PluggyError, PluggyConfigError, configurePluggyEnv, loadPluggyConfig, loadPluggyOwnConfig, pluggyEnv, type FetchLike } from './client';
+import adapterEntries from '../index';
 
 const BASE = 'https://api.pluggy.ai';
 
@@ -563,5 +564,83 @@ describe('zod response parsing', () => {
     const call = callsTo(calls, '/items/it1')[0];
     expect(call.init.method).toBe('PATCH');
     expect(String(call.init.body)).toBe('{}');
+  });
+});
+
+describe("a user's own key set", () => {
+  const own = { clientId: 'own-id', clientSecret: 'own-secret' };
+
+  it('own config: the user\'s pair on the installation\'s base URL and sandbox switch, never the shared ids or item ids', () => {
+    expect(
+      loadPluggyOwnConfig(own, {
+        PLUGGY_CLIENT_ID: 'shared-id',
+        PLUGGY_CLIENT_SECRET: 'shared-secret',
+        PLUGGY_BASE_URL: 'https://api.pluggy.ai/',
+        PLUGGY_SANDBOX: 'false',
+        PLUGGY_ITEM_IDS: 'shared-item-1,shared-item-2',
+      }),
+    ).toEqual({
+      pluggyClientId: 'own-id',
+      pluggyClientSecret: 'own-secret',
+      pluggyBaseUrl: 'https://api.pluggy.ai',
+      sandbox: false,
+      itemIds: [],
+      clientUserId: 'syscd-app',
+    });
+  });
+
+  it('own config needs no shared credentials, and blank env values count as unset', () => {
+    // The 1Password item leaves PLUGGY_* empty; External Secrets passes them as ''.
+    const c = loadPluggyOwnConfig(own, { PLUGGY_CLIENT_ID: '', PLUGGY_CLIENT_SECRET: '', PLUGGY_BASE_URL: '', PLUGGY_SANDBOX: '', CLIENT_USER_ID: '' });
+    expect(c).toMatchObject({ pluggyClientId: 'own-id', pluggyBaseUrl: 'https://api.pluggy.ai', sandbox: true, clientUserId: 'syscd-app' });
+    expect(() => loadPluggyOwnConfig(own, { PLUGGY_BASE_URL: 'not a url' })).toThrow(PluggyConfigError);
+  });
+
+  it('verifyCredentials: one POST /auth with the pair; 200 → true, 401/400/403 → false', async () => {
+    const ok = makeFetch(() => authJson('k'));
+    expect(await new PluggyClient(cfg, ok.fetchImpl).verifyCredentials()).toBe(true);
+    expect(ok.calls).toHaveLength(1);
+    expect(ok.calls[0]!.url.pathname).toBe('/auth');
+    expect(ok.calls[0]!.init.method).toBe('POST');
+    expect(JSON.parse(String(ok.calls[0]!.init.body))).toEqual({ clientId: 'cid', clientSecret: 'secret' });
+
+    for (const status of [401, 400, 403]) {
+      const refused = makeFetch(() => ({ status, json: { message: 'Client keys are invalid' } }));
+      expect(await new PluggyClient(cfg, refused.fetchImpl).verifyCredentials()).toBe(false);
+      expect(refused.calls).toHaveLength(1);
+    }
+  });
+
+  it('verifyCredentials: an outage is thrown, not reported as a wrong pair', async () => {
+    const down = makeFetch(() => ({ status: 503, text: 'unavailable' }));
+    const err = await new PluggyClient(cfg, down.fetchImpl).verifyCredentials().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PluggyError);
+    expect((err as PluggyError).status).toBe(503);
+    expect((err as PluggyError).message).not.toContain('secret');
+  });
+
+  it('the registry entry builds the aggregator on the own pair (no shared keys in the env), and on the shared pair without one', async () => {
+    const before = pluggyEnv();
+    const realFetch = globalThis.fetch;
+    const seen: Array<{ clientId: string; clientSecret: string }> = [];
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      seen.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ apiKey: 'k' }), { status: 200 });
+    }) as unknown as typeof fetch;
+    try {
+      configurePluggyEnv({});
+      expect(adapterEntries.pluggy!.configured()).toBe(false);
+      expect(await adapterEntries.pluggy!.create(own).verifyCredentials()).toBe(true);
+      expect(adapterEntries.pluggy!.create(own).environment).toBe('sandbox');
+
+      configurePluggyEnv({ PLUGGY_CLIENT_ID: 'shared-id', PLUGGY_CLIENT_SECRET: 'shared-secret', PLUGGY_SANDBOX: 'false' });
+      expect(await adapterEntries.pluggy!.create().verifyCredentials()).toBe(true);
+      expect(await adapterEntries.pluggy!.create(own).verifyCredentials()).toBe(true);
+      expect(adapterEntries.pluggy!.create(own).environment).toBe('production');
+      expect(seen).toEqual([own, { clientId: 'shared-id', clientSecret: 'shared-secret' }, own]);
+    } finally {
+      globalThis.fetch = realFetch;
+      configurePluggyEnv(before);
+    }
   });
 });

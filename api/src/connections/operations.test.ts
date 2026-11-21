@@ -65,6 +65,8 @@ describe.skipIf(!dbReady)('generated connections routes are scoped to the sessio
     for (const u of [alice, bob]) {
       await pool!.query(`INSERT INTO public.users (id, google_sub, email, role, status) VALUES ($1, null, $2, 'user', 'active')`, [u.id, u.email]);
     }
+    // Alice's connection runs on the shared keys; she may use them.
+    await pool!.query(`insert into public.feature_overrides (feature_key, user_id, value) values ('shared-pluggy-key', $1, true)`, [alice.id]);
     const { upsertConnection } = await import('./store');
     const row = await upsertConnection({
       userId: alice.id,

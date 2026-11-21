@@ -33,6 +33,7 @@ describe('connectionStatusView', () => {
     expect(connectionStatusView('connected')).toEqual({ label: 'Synced', tone: 'ok' });
     expect(connectionStatusView('unauthorized')).toEqual({ label: 'Action needed', tone: 'warn' });
     expect(connectionStatusView('error')).toEqual({ label: 'Sync error', tone: 'bad' });
+    expect(connectionStatusView('paused')).toEqual({ label: 'Paused · needs your keys', tone: 'warn' });
     expect(connectionStatusView('disconnected')).toEqual({ label: 'Disconnected', tone: 'off' });
   });
 });
