@@ -8,6 +8,7 @@
  */
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
@@ -18,6 +19,8 @@ import { LoginGate } from '@/features/auth';
 import { StoreMoneyFormatProvider } from '@/shell/StoreMoneyFormatProvider';
 import { ServiceProvider } from '@/platform/di/ServiceContext';
 import { Tokens } from '@/platform/di/tokens';
+import { initDeviceLocale, initLocale } from '@/platform/locale/locale';
+import { useLocaleKey } from '@/platform/locale/useLocale';
 import { createRuntime } from '@/shell/runtime';
 
 export const unstable_settings = {
@@ -27,8 +30,27 @@ export const unstable_settings = {
 const runtime = createRuntime();
 const apiUrl = runtime.container.resolve(Tokens.Config).apiUrl;
 
+// The device language, synchronously, before the first render; the stored
+// override (Settings > Display > Language) is applied in RootLayout before
+// children render. See platform/locale/locale.ts.
+initDeviceLocale();
+
+/**
+ * Remounts its subtree when the language changes. Not optional: the React
+ * Compiler (`experiments.reactCompiler`) may memoize `t()` results per
+ * component, so a new locale would otherwise leave stale text on screen.
+ */
+function LocaleBoundary({ children }: { children: ReactNode }) {
+  return <Fragment key={useLocaleKey()}>{children}</Fragment>;
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const [localeReady, setLocaleReady] = useState(false);
+  useEffect(() => {
+    void initLocale(runtime.container.resolve(Tokens.Storage)).finally(() => setLocaleReady(true));
+  }, []);
+  if (!localeReady) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -37,6 +59,7 @@ export default function RootLayout() {
           <ReduxProvider store={runtime.store}>
             <StoreMoneyFormatProvider>
             <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+              <LocaleBoundary>
               <LoginGate apiUrl={apiUrl}>
                 <Stack>
                   <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -47,6 +70,7 @@ export default function RootLayout() {
                   <Stack.Screen name="connected-apps" options={{ headerShown: false }} />
                 </Stack>
               </LoginGate>
+              </LocaleBoundary>
               <StatusBar style="auto" />
             </ThemeProvider>
             </StoreMoneyFormatProvider>

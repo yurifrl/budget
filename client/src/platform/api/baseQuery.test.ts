@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 import type { BaseQueryApi } from '@reduxjs/toolkit/query';
 
@@ -6,6 +6,8 @@ import { apiBaseQuery, apiErrorMessage, type ApiQuery } from './baseQuery';
 import { Container } from '../di/container';
 import { Tokens } from '../di/tokens';
 import type { KVStore } from '../storage/types';
+import { setLocale } from '@shared/i18n';
+import { tError } from '@shared/i18n/errors';
 
 /**
  * Transport contract tests: every response path must resolve (never throw) so
@@ -95,7 +97,10 @@ describe('apiBaseQuery', () => {
     try {
       const result = await call({ url: '/transactions', method: 'POST' }, makeApi());
       expect(result).toEqual({ error: { status: 409, message: 'account is closed', code: 'conflict' } });
-      expect(apiErrorMessage((result as { error: unknown }).error)).toBe('account is closed');
+      // i18n (budget-qdwd): a per-status code ('conflict') with no caller fallback now
+      // gets its translated generic message; the raw server text is for unknown codes
+      // (see "apiErrorMessage order" below). This asserted the old raw-message-first order.
+      expect(apiErrorMessage((result as { error: unknown }).error)).toBe(tError('conflict'));
     } finally {
       restore();
     }
@@ -220,6 +225,50 @@ describe('apiBaseQuery', () => {
       expect(result).toEqual({ data: {} });
       expect(seen.body).toBe(blob);
       expect(seen.headers?.['Content-Type']).toBe('image/png');
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe('apiErrorMessage order', () => {
+  afterEach(() => setLocale('en'));
+
+  test('1. a specific code with a catalog entry wins over the caller fallback, with params', () => {
+    const err = { status: 401, message: 'invalid e-mail or password', code: 'invalid_credentials' };
+    expect(apiErrorMessage(err, 'Could not sign in')).toBe(tError('invalid_credentials'));
+    setLocale('pt-BR');
+    expect(apiErrorMessage(err, 'Could not sign in')).toBe('E-mail ou senha inválidos.');
+  });
+
+  test('2. the caller fallback beats a per-status code and the raw message', () => {
+    const err = { status: 404, message: 'budget not found', code: 'not_found' };
+    expect(apiErrorMessage(err, 'Could not open the budget')).toBe('Could not open the budget');
+  });
+
+  test('3. a per-status code gives its generic message', () => {
+    expect(apiErrorMessage({ status: 404, message: 'budget not found', code: 'not_found' })).toBe('Not found.');
+    expect(apiErrorMessage({ data: { message: 'x', code: 'internal' } })).toBe(tError('internal'));
+  });
+
+  test('4. an unknown code (or none) keeps the raw server message', () => {
+    expect(apiErrorMessage({ status: 400, message: 'something new', code: 'brand_new_code' })).toBe('something new');
+    expect(apiErrorMessage({ status: 'FETCH_ERROR', message: 'Network request failed' })).toBe('Network request failed');
+    expect(apiErrorMessage({ data: { message: 'wrapped' } })).toBe('wrapped');
+  });
+
+  test('5. nothing usable gives the generic error', () => {
+    expect(apiErrorMessage(null)).toBe('Something went wrong.');
+    expect(apiErrorMessage('boom')).toBe('Something went wrong.');
+  });
+
+  test('the error body params ride through the transport', async () => {
+    const restore = stubFetch(
+      async () => new Response(JSON.stringify({ error: 'x', code: 'brand_new', params: { n: 3, bad: { a: 1 } } }), { status: 400 }),
+    );
+    try {
+      const result = await call({ url: '/x' }, makeApi());
+      expect(result).toEqual({ error: { status: 400, message: 'x', code: 'brand_new', params: { n: 3 } } });
     } finally {
       restore();
     }

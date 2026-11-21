@@ -1,0 +1,8 @@
+{
+  "files": [
+    "src/platform/locale/**/*.{ts,tsx}",
+    "src/features/settings/LanguageRow.tsx",
+    "src/app/_layout.tsx"
+  ],
+  "ignores": []
+}

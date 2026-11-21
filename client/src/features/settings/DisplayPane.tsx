@@ -8,6 +8,7 @@ import {
   setShowHiddenCategories,
   setShowProgressBars,
 } from '@/state/ui';
+import { LanguageRow } from './LanguageRow';
 import { ToggleRow } from './menuRows';
 
 /** Display Options: the RTK display toggles, persisted via the blob. */
@@ -48,6 +49,7 @@ export function DisplayPane() {
           dispatch(setShowClosedAccounts(v));
         }}
       />
+      <LanguageRow />
     </>
   );
 }

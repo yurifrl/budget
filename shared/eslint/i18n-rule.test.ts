@@ -57,6 +57,10 @@ tester.run('no-untranslated-string', rule, {
     // wire values and identifiers: no prose shape
     tsx(`const k = 'income'; const u = 'https://example.com/a'; const id = 'plan_state'; const c = '#fff'; const m = 'POST';`),
     tsx(`const css = 'ease-in ease-out'; const d = '0.2s linear';`),
+    // colours, URLs, markup and RTK tags are not text
+    tsx(`const theme = { text: '#eef1f7', label: 'rgba(0, 0, 0, 0.5)' }; const svg = '<svg xmlns="x"></svg>';`),
+    tsx(`const api = createApi({ tagTypes: ['Budgets', 'Pending Items'], endpoints: () => ({ a: { providesTags: ['Payees'] } }) });`),
+    tsx(`dispatch(api.util.invalidateTags(['Budgets']));`),
     // object keys
     tsx(`const o = { 'Hello world': 1, Total: 2 };`),
     tsx(`const v = o['Hello world'];`),

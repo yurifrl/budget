@@ -9,6 +9,8 @@
  * types.ts).
  */
 
+import { tCommon } from "@shared/i18n/common";
+
 import { localToday } from "./date";
 import type { Cents, MonthKey } from "./types";
 import { DEFAULT_FMT_PREFS, type FmtCurrency, type FmtNumberLocale, type FmtPrefs } from "./fmtPrefs";
@@ -122,17 +124,67 @@ export function formatDateWith(prefs: Pick<FmtPrefs, 'dateFormat'>, iso: string)
   return prefs.dateFormat === "MM/DD/YYYY" ? `${m}/${d}/${y}` : `${d}/${m}/${y}`;
 }
 
-/** English month abbreviations, January first (UI labels; the TSV file format keeps its own). */
+/**
+ * English month abbreviations, January first.
+ * @deprecated English only: use `monthAbbr(m)` (active language). The TSV file format keeps its own list.
+ */
 export const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
-/** English month names, January first. */
+/**
+ * English month names, January first.
+ * @deprecated English only: use `monthName(m)` (active language).
+ */
 export const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ] as const;
 
-/** English weekday abbreviations, Sunday first (Date#getDay order). */
+/**
+ * English weekday abbreviations, Sunday first (Date#getDay order).
+ * @deprecated English only: use `weekdayAbbr(d)` (active language).
+ */
 export const WEEKDAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+const MONTH_SHORT_KEYS = [
+  "month.short.1", "month.short.2", "month.short.3", "month.short.4", "month.short.5", "month.short.6",
+  "month.short.7", "month.short.8", "month.short.9", "month.short.10", "month.short.11", "month.short.12",
+] as const;
+const MONTH_LONG_KEYS = [
+  "month.long.1", "month.long.2", "month.long.3", "month.long.4", "month.long.5", "month.long.6",
+  "month.long.7", "month.long.8", "month.long.9", "month.long.10", "month.long.11", "month.long.12",
+] as const;
+const WEEKDAY_KEYS = [
+  "weekday.0", "weekday.1", "weekday.2", "weekday.3", "weekday.4", "weekday.5", "weekday.6",
+] as const;
+const WEEKDAY_MIN_KEYS = [
+  "weekday.min.0", "weekday.min.1", "weekday.min.2", "weekday.min.3", "weekday.min.4", "weekday.min.5", "weekday.min.6",
+] as const;
+
+/** Month abbreviation in the active language, `m` 1-12 ("Jan" / "Jan"; "Feb" / "Fev"). "?" when out of range. */
+export function monthAbbr(m: number): string {
+  const key = MONTH_SHORT_KEYS[m - 1];
+  return key ? tCommon(key) : "?";
+}
+
+/** Month name in the active language, `m` 1-12, first letter capitalised ("June" / "Junho"). "?" when out of range. */
+export function monthName(m: number): string {
+  const key = MONTH_LONG_KEYS[m - 1];
+  if (!key) return "?";
+  const name = tCommon(key);
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** Weekday abbreviation in the active language, `d` 0-6 with Sunday = 0 (Date#getDay order). "?" when out of range. */
+export function weekdayAbbr(d: number): string {
+  const key = WEEKDAY_KEYS[d];
+  return key ? tCommon(key) : "?";
+}
+
+/** Shortest weekday label for calendar headers ("Su" / "D"), `d` 0-6 with Sunday = 0. "?" when out of range. */
+export function weekdayMin(d: number): string {
+  const key = WEEKDAY_MIN_KEYS[d];
+  return key ? tCommon(key) : "?";
+}
 
 /** Split a MonthKey (202606) into { year, month } where month is 1-12. */
 export function splitMonth(key: MonthKey): { year: number; month: number } {
@@ -147,13 +199,13 @@ export function makeMonth(year: number, month: number): MonthKey {
 /** Format a MonthKey as "Jun 2026". */
 export function formatMonth(key: MonthKey): string {
   const { year, month } = splitMonth(key);
-  return `${MONTH_ABBR[month - 1] ?? "?"} ${year}`;
+  return `${monthAbbr(month)} ${year}`;
 }
 
 /** Format a MonthKey as "June 2026". */
 export function formatMonthLong(key: MonthKey): string {
   const { year, month } = splitMonth(key);
-  return `${MONTH_NAMES[month - 1] ?? "?"} ${year}`;
+  return `${monthName(month)} ${year}`;
 }
 
 /** The MonthKey immediately before the given one. */
@@ -201,15 +253,18 @@ export function todayIso(now: Date = new Date()): string {
 }
 
 /**
- * Long English date following the date-format pref: "5 June 2026" for
- * DD/MM/YYYY, "June 5, 2026" for MM/DD/YYYY. Section headers (Spending).
+ * Long date in the active language following the date-format pref: en "5 June
+ * 2026" for DD/MM/YYYY and "June 5, 2026" for MM/DD/YYYY; pt-BR "5 de junho de
+ * 2026" for both. Section headers (Spending).
  */
 export function formatDateLongWith(prefs: Pick<FmtPrefs, "dateFormat">, iso: string): string {
   const [y, m, d] = iso.split("-");
-  const name = MONTH_NAMES[Number(m) - 1];
-  if (!y || !name || !d) return iso;
-  const day = Number(d);
-  return prefs.dateFormat === "MM/DD/YYYY" ? `${name} ${day}, ${y}` : `${day} ${name} ${y}`;
+  const monthKey = MONTH_LONG_KEYS[Number(m) - 1];
+  if (!y || !monthKey || !d) return iso;
+  const params = { day: Number(d), month: tCommon(monthKey), year: y };
+  return prefs.dateFormat === "MM/DD/YYYY"
+    ? tCommon("date.long.monthFirst", params)
+    : tCommon("date.long.dayFirst", params);
 }
 
 const DATE_SEP = /[-/.]/;

@@ -55,8 +55,14 @@ const STYLE_KEY = new RegExp(
 
 const LEGACY_NAMES = new Set(['MONTH_ABBR', 'MONTH_NAMES', 'WEEKDAY_ABBR']);
 const TRANSLATE_FNS = new Set(['t', 'tCommon', 'tError']);
-const EXEMPT_CALLEES = new Set(['t', 'tCommon', 'tError', 'labels', 'describe', 'test', 'it', 'require', 'Symbol', 'RegExp']);
-const EXEMPT_METHODS = new Set(['startsWith', 'endsWith', 'includes', 'indexOf', 'lastIndexOf', 'match', 'matchAll', 'search']);
+const EXEMPT_CALLEES = new Set(['t', 'tCommon', 'tError', 'labels', 'describe', 'test', 'it', 'require', 'Symbol', 'RegExp', 'token']);
+const EXEMPT_METHODS = new Set([
+  'startsWith', 'endsWith', 'includes', 'indexOf', 'lastIndexOf', 'match', 'matchAll', 'search',
+  // RTK Query tag names are cache identity, not text.
+  'invalidateTags', 'selectInvalidatedBy',
+]);
+/** Object properties whose whole value is cache or wiring identity (RTK Query tags, slice/api names). */
+const IDENTITY_PROPS = new Set(['tagTypes', 'providesTags', 'invalidatesTags', 'reducerPath']);
 const TS_EXPRESSION_WRAPPERS = new Set([
   'TSAsExpression', 'TSSatisfiesExpression', 'TSNonNullExpression', 'TSTypeAssertion', 'TSInstantiationExpression',
 ]);
@@ -68,9 +74,12 @@ const HAS_LETTER = /\p{L}/u;
 const TWO_WORDS = /(?<![\w\-.#/:@$%])\p{L}{2,}(?![\w\-.#/:@$%]) +(?<![\w\-.#/:@$%])\p{L}{2,}(?![\w\-.#/:@$%])/u;
 const ONE_CAPITALISED_WORD = /^\p{Lu}\p{Ll}{1,}[.:!?…]?$/u;
 
+// Values that are never display text whatever slot they sit in: colours, CSS lengths, URLs and paths, markup.
+const NON_TEXT_VALUE = /^(#[0-9a-fA-F]{3,8}|(rgba?|hsla?|var|url|calc)\(.*\)|-?\d+(\.\d+)?(px|em|rem|vh|vw|pt|ms|s|%|deg)?|(https?:|mailto:|tel:|data:)\S*|[./~]\S*\/\S*|<[A-Za-z!?][\s\S]*>)$/;
+
 function looksLikeProse(text) {
   const trimmed = text.trim();
-  if (!HAS_LETTER.test(trimmed)) return false;
+  if (!HAS_LETTER.test(trimmed) || NON_TEXT_VALUE.test(trimmed)) return false;
   return TWO_WORDS.test(trimmed) || ONE_CAPITALISED_WORD.test(trimmed);
 }
 
@@ -166,6 +175,7 @@ function isExemptContext(node) {
         break;
       case 'Property':
         if (parent.key === child && !parent.computed) return true;
+        if (!parent.computed && IDENTITY_PROPS.has(nameOfKey(parent.key, false))) return true;
         if (parent.value === child && parent.parent && parent.parent.type === 'ObjectExpression') {
           const name = nameOfKey(parent.key, parent.computed);
           if (name !== null && STYLE_KEY.test(name)) return true;
@@ -249,7 +259,7 @@ const rule = {
       if (isExemptContext(node)) return;
       const slot = userFacingSlotName(node);
       if (slot !== null) {
-        if (HAS_LETTER.test(text)) context.report({ node, messageId: 'userFacing', data: { text: shorten(text), name: slot } });
+        if (HAS_LETTER.test(text) && !NON_TEXT_VALUE.test(text.trim())) context.report({ node, messageId: 'userFacing', data: { text: shorten(text), name: slot } });
         return;
       }
       if (looksLikeProse(text)) context.report({ node, messageId: 'prose', data: { text: shorten(text) } });

@@ -1,4 +1,5 @@
-import { describe, it, expect } from "bun:test";
+import { afterEach, describe, it, expect } from "bun:test";
+import { setLocale } from "@shared/i18n";
 import { DEFAULT_FMT_PREFS, type FmtPrefs } from "./fmtPrefs";
 import {
   DEFAULT_MONEY_FORMAT,
@@ -20,7 +21,12 @@ import {
   monthKeyFromDate,
   daysInMonth,
   MONTH_ABBR,
+  MONTH_NAMES,
   WEEKDAY_ABBR,
+  monthAbbr,
+  monthName,
+  weekdayAbbr,
+  weekdayMin,
 } from "./format";
 
 // The default-prefs formatters (what the store-backed wrappers used to return
@@ -331,5 +337,34 @@ describe("month and date helpers (one definition each)", () => {
     expect(formatDateLongWith({ dateFormat: "DD/MM/YYYY" }, "2026-06-05")).toBe("5 June 2026");
     expect(formatDateLongWith({ dateFormat: "MM/DD/YYYY" }, "2026-06-05")).toBe("June 5, 2026");
     expect(formatDateLongWith({ dateFormat: "DD/MM/YYYY" }, "bad")).toBe("bad");
+  });
+});
+
+describe("active-language names", () => {
+  afterEach(() => setLocale("en"));
+
+  it("en matches the legacy tables", () => {
+    for (let m = 1; m <= 12; m++) {
+      expect(monthAbbr(m)).toBe(MONTH_ABBR[m - 1]!);
+      expect(monthName(m)).toBe(MONTH_NAMES[m - 1]!);
+    }
+    for (let d = 0; d < 7; d++) expect(weekdayAbbr(d)).toBe(WEEKDAY_ABBR[d]!);
+    expect(monthAbbr(0)).toBe("?");
+    expect(monthName(13)).toBe("?");
+    expect(weekdayAbbr(7)).toBe("?");
+    expect(weekdayMin(1)).toBe("Mo");
+  });
+
+  it("pt-BR month and weekday names and the long date", () => {
+    setLocale("pt-BR");
+    expect(monthAbbr(2)).toBe("Fev");
+    expect(monthName(6)).toBe("Junho");
+    expect(weekdayAbbr(6)).toBe("Sáb");
+    expect(weekdayMin(0)).toBe("D");
+    expect(formatMonth(202602)).toBe("Fev 2026");
+    expect(formatMonthLong(202606)).toBe("Junho 2026");
+    expect(formatDateLongWith({ dateFormat: "DD/MM/YYYY" }, "2026-06-05")).toBe("5 de junho de 2026");
+    expect(formatDateLongWith({ dateFormat: "MM/DD/YYYY" }, "2026-06-05")).toBe("5 de junho de 2026");
+    expect(formatDateLongWith({ dateFormat: "DD/MM/YYYY" }, "2026-13-05")).toBe("2026-13-05");
   });
 });

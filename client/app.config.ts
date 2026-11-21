@@ -61,7 +61,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       dark: './assets/images/icon-dark.png',
       tinted: './assets/images/icon-tinted.png',
     },
-    infoPlist: { ITSAppUsesNonExemptEncryption: false },
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+      // Languages the app ships (shared/src/i18n LOCALES); lets iOS offer them in per-app language settings.
+      CFBundleLocalizations: ['en', 'pt-BR'],
+    },
     // ASC only accepts an `X.Y.Z` marketing version.
     version: VERSION.replace(/-\d{2}$/, ''),
     buildNumber: BUILD_NUMBER,
@@ -78,7 +82,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     versionCode: Math.floor(NOW.getTime() / 1000),
   },
   web: { output: 'single', favicon: './assets/images/favicon.png' },
-  plugins: ['expo-router', 'expo-image', 'expo-sharing', 'expo-status-bar', 'expo-web-browser'],
+  plugins: ['expo-router', 'expo-image', 'expo-localization', 'expo-sharing', 'expo-status-bar', 'expo-web-browser'],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
