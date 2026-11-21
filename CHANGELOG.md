@@ -1,5 +1,44 @@
 # Changelog
 
+## v2026.11.21-01 2026-11-21 release
+
+### Changed
+
+- release: v2026.11.21-01
+- fix(shared): i18n rule test no longer reads it.only (bun throws under CI=true)
+- docs: $values source is enabled; task release deploys with no home-systems commit
+- i18n sweep: account group labels in import, payee last-used date format, keypad done key, pt-BR fixes, docs
+- i18n sweep: translate admin enum labels, date hint, system names; fixes from running the app
+- i18n sweep: pt-BR consistency (Encerrar, Notas, Saldo acum., gender-neutral), glossary, docs refresh, manifest READMEs
+- i18n sweep: drop legacy English month/weekday tables and SHARED_LABEL, show system payee names translated
+- i18n sweep: handed-over items (errors via apiErrorMessage, delete word, date format, hints, system name identity)
+- i18n sweep: localize admin API errors, combobox create row, target editor and avatar errors
+- i18n: one enforcement manifest for client src; localize network and bare-HTTP errors
+- Fix test typing
+- Translate system payee and category group names on screen (displaySystemName), search matches both names
+- Translate stored bank sentences by code; route raw API error messages through apiErrorMessage
+- i18n API: typed error codes with params, 44 specific codes in en/pt-BR, server-message codes, translated OAuth consent page
+- i18n: import and backup features (import, backup namespaces; pt-BR; manifest import-backup)
+- i18n: banks-core slice (banks + banks.keys catalogs, manifest, Pluggy widget language)
+- i18n: convert home, reflect, spending, settings to catalogs (en + pt-BR)
+- i18n: convert ui/ and shell/ to catalogs (ui, shell namespaces), manifest ui-shell
+- i18n accounts-main: catalog (en + pt-BR), convert accounts screen, toolbar, header, modals, selection bar, reconcile
+- i18n admin: catalogs (admin shell, runs, features, users) en + pt-BR, language select, rich helper, manifest
+- i18n: convert features/auth and features/profile to catalogs (auth, profile.screen)
+- i18n: accounts register, accountEdit and addTransaction catalogs (en + pt-BR)
+- i18n core: domain, state, profile catalogs (en + pt-BR), core manifest
+- i18n plan-grid: plan grid catalog (en + pt-BR), manifest, conversion of plan grid files
+- i18n: payees and people catalogs (en + pt-BR), manifest payees-people
+- i18n: banks bank + connect-bank slice (banks.bank, banks.connect catalogs, banks-ui manifest)
+- i18n: plan mobile slice (category detail, move money, assign numpad, home) en + pt-BR
+- i18n: plan inspector slice (TargetEditor, CategoryInspector, AutoAssignPanel, AssignDropdown, MonthSummary, CategoryPersonField)
+- i18n: web language switch reloads, admin eslint + catalog test, CI/Taskfile, docs/i18n.md, AGENTS and architecture notes
+- i18n client: locale platform, boundary, Language row, format helpers, apiErrorMessage order, catalog test, lint config
+- i18n: budget-i18n/no-untranslated-string rule, manifest reader, tests
+- i18n: lint fix
+- i18n: shared typed t() engine, common and errors catalogs
+
+
 ## v2026.11.21 2026-11-21 release
 
 ### Changed
