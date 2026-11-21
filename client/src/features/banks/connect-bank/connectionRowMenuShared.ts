@@ -4,7 +4,10 @@
  * Symbols). Also owns the Remove confirmation copy shared with the settings page.
  */
 
+import { tCommon } from '@shared/i18n/common';
+
 import { requiresReauth } from '../model/connections';
+import { t } from './i18n';
 
 /** The row's menu action kinds, shared across platforms. */
 export type ConnectionRowActionKind = 'sync' | 'reimport' | 'reconnect' | 'settings' | 'disconnect';
@@ -28,16 +31,16 @@ export interface ConnectionRowAction {
  */
 export function connectionRowActions({ status }: { status: string }): ConnectionRowAction[] {
   const actions: ConnectionRowAction[] = [
-    { kind: 'sync', label: 'Sync now', disabled: status !== 'connected' },
-    { kind: 'reimport', label: 'Re-import history', disabled: status !== 'connected' },
+    { kind: 'sync', label: t('menu.sync'), disabled: status !== 'connected' },
+    { kind: 'reimport', label: t('menu.reimport'), disabled: status !== 'connected' },
   ];
 
   if (requiresReauth(status)) {
-    actions.splice(1, 0, { kind: 'reconnect', label: 'Reconnect credentials' });
+    actions.splice(1, 0, { kind: 'reconnect', label: t('menu.reconnect') });
   }
 
-  actions.push({ kind: 'settings', label: 'Settings' });
-  actions.push({ kind: 'disconnect', label: 'Remove', danger: true });
+  actions.push({ kind: 'settings', label: t('menu.settings') });
+  actions.push({ kind: 'disconnect', label: tCommon('remove'), danger: true });
 
   return actions;
 }
@@ -50,13 +53,13 @@ export function removeConfirmation(
   if (linkedCount > 0) {
     return {
       kind: 'blocked',
-      title: `Can't remove ${institution}`,
-      message: `Unlink the ${linkedCount} linked account${linkedCount === 1 ? '' : 's'} in the account editor first.`,
+      title: t('remove.blockedTitle', { institution }),
+      message: t('remove.blockedBody', { count: linkedCount }),
     };
   }
   return {
     kind: 'confirm',
-    title: `Remove ${institution}?`,
-    message: 'The bank connection is deleted. Imported history stays in your budget.',
+    title: t('remove.confirmTitle', { institution }),
+    message: t('remove.confirmBody'),
   };
 }

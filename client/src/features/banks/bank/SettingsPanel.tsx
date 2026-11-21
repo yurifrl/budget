@@ -11,6 +11,7 @@ import { requiresReauth, syncWindowLabel } from '../model/connections';
 import { colors, radius } from '@/ui/theme';
 import { GhostButton, IndigoButton } from '@/ui/bits';
 import { SyncWindowControl } from '../connect-bank/SyncWindowControl';
+import { t } from './i18n';
 
 export function SettingsPanel({
   connection,
@@ -39,8 +40,8 @@ export function SettingsPanel({
   const connected = connection.status === 'connected';
   return (
     <View style={styles.wrap}>
-      <Section title="Sync history">
-        <Text style={styles.hint}>How far back this bank&apos;s pulls reach. Default follows the app-wide setting.</Text>
+      <Section title={t('settings.history.title')}>
+        <Text style={styles.hint}>{t('settings.history.hint')}</Text>
         <SyncWindowControl
           days={windowSaving ? undefined : connection.sync_window_days}
           defaultLabel={appWindow == null ? '…' : syncWindowLabel(appWindow)}
@@ -48,7 +49,7 @@ export function SettingsPanel({
         />
         <View style={styles.row}>
           <GhostButton
-            label="Re-import history"
+            label={t('settings.reimport')}
             onPress={connected && !busy ? onReimport : undefined}
             style={[styles.btn, (!connected || busy) && styles.dim]}
           />
@@ -57,16 +58,16 @@ export function SettingsPanel({
       </Section>
 
       {requiresReauth(connection.status) ? (
-        <Section title="Credentials">
-          <Text style={styles.hint}>The bank needs fresh credentials before it can sync again.</Text>
-          <IndigoButton label="Reconnect" style={styles.btn} onPress={onReconnect} />
+        <Section title={t('settings.credentials.title')}>
+          <Text style={styles.hint}>{t('settings.credentials.hint')}</Text>
+          <IndigoButton label={t('settings.reconnect')} style={styles.btn} onPress={onReconnect} />
         </Section>
       ) : null}
 
-      <Section title="Danger zone" danger>
-        <Text style={styles.hint}>Removes the bank connection. Imported history stays in your budget.</Text>
-        <GhostButton label="Remove bank" style={[styles.btn, styles.dangerBtn]} onPress={onRemove} />
-        {linkedCount > 0 ? <Text style={styles.hint}>Unlink its accounts in the account editor first.</Text> : null}
+      <Section title={t('settings.danger.title')} danger>
+        <Text style={styles.hint}>{t('settings.danger.hint')}</Text>
+        <GhostButton label={t('settings.remove')} style={[styles.btn, styles.dangerBtn]} onPress={onRemove} />
+        {linkedCount > 0 ? <Text style={styles.hint}>{t('settings.unlinkFirst')}</Text> : null}
       </Section>
     </View>
   );

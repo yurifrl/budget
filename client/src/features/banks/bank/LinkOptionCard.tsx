@@ -10,6 +10,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { LinkOption } from '../model/linkPicker';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
+import { t } from './i18n';
 
 export function LinkOptionCard({ option, dim }: { option: LinkOption; dim?: boolean }) {
   const { formatMoney } = useMoneyFormat();
@@ -34,19 +35,19 @@ export function LinkOptionCard({ option, dim }: { option: LinkOption; dim?: bool
 
       {credit ? (
         <View style={styles.lines}>
-          {credit.billCents != null ? <Line label="Current bill" value={formatMoney(credit.billCents)} /> : null}
-          {credit.due ? <Line label="Due date" value={credit.due} /> : null}
-          {credit.usedCents != null ? <Line label="Limit used" value={formatMoney(credit.usedCents)} /> : null}
-          {credit.limitCents != null ? <Line label="Limit" value={formatMoney(credit.limitCents)} /> : null}
+          {credit.billCents != null ? <Line label={t('card.currentBill')} value={formatMoney(credit.billCents)} /> : null}
+          {credit.due ? <Line label={t('card.dueDate')} value={credit.due} /> : null}
+          {credit.usedCents != null ? <Line label={t('card.limitUsed')} value={formatMoney(credit.usedCents)} /> : null}
+          {credit.limitCents != null ? <Line label={t('card.limit')} value={formatMoney(credit.limitCents)} /> : null}
         </View>
       ) : null}
 
       {option.linkedTo ? (
-        <Text style={styles.linkedTo}>{`Linked to ${option.linkedTo}`}</Text>
+        <Text style={styles.linkedTo}>{t('card.linkedTo', { name: option.linkedTo })}</Text>
       ) : hint ? (
         <View style={[styles.hint, hint.kind === 'match' ? styles.hintOk : styles.hintDiff]}>
           <Text style={hint.kind === 'match' ? styles.hintOkText : styles.hintDiffText}>
-            {hint.kind === 'match' ? 'Matches your balance' : `${formatMoney(hint.diffCents)} different`}
+            {hint.kind === 'match' ? t('card.matches') : t('card.different', { amount: formatMoney(hint.diffCents) })}
           </Text>
         </View>
       ) : null}

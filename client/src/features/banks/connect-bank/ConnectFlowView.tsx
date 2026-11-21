@@ -1,8 +1,11 @@
 import { ActivityIndicator, Text, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { GhostButton } from '@/ui/bits';
 import { colors } from '@/ui/theme';
 import { ConnectBankWidget } from '../ConnectBankWidget';
+import { t } from './i18n';
 import { styles } from './screenStyles';
 import type { ConnectFlow } from './useConnectFlow';
 
@@ -19,8 +22,8 @@ export function ConnectFlowView({
   return (
     <>
       <View style={styles.head}>
-        <Text style={styles.title}>{connect.flow === 'new' ? 'Link bank account' : 'Reconnect bank'}</Text>
-        <GhostButton label="Close" onPress={connect.finish} />
+        <Text style={styles.title}>{connect.flow === 'new' ? t('flow.titleNew') : t('flow.titleReconnect')}</Text>
+        <GhostButton label={tCommon('close')} onPress={connect.finish} />
       </View>
 
       {error ? (
@@ -41,14 +44,14 @@ export function ConnectFlowView({
           {connect.busy && !connect.tokenLoading ? (
             <View style={styles.widgetOverlay}>
               <ActivityIndicator color={colors.indigo2} />
-              <Text style={styles.pendingText}>Finishing the connection…</Text>
+              <Text style={styles.pendingText}>{t('flow.finishing')}</Text>
             </View>
           ) : null}
         </View>
       ) : connect.tokenLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.indigo2} />
-          <Text style={styles.pendingText}>Opening the connection window…</Text>
+          <Text style={styles.pendingText}>{t('flow.opening')}</Text>
         </View>
       ) : (
         <View style={styles.center}>

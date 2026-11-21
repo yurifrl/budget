@@ -11,7 +11,9 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import type { LinkOptionGroup } from '../model/linkPicker';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
+import { t } from './i18n';
 import { LinkOptionCard } from './LinkOptionCard';
+import { tCommon } from '@shared/i18n/common';
 
 export function LinkPicker({
   heading,
@@ -70,10 +72,10 @@ export function LinkPicker({
       {loading ? <ActivityIndicator size="small" color={colors.indigo2} /> : null}
       {loadFailed && all.length === 0 ? (
         <View style={styles.reference}>
-          <Text style={styles.unavailable}>Could not load your bank accounts — the bank did not answer.</Text>
+          <Text style={styles.unavailable}>{t('picker.loadFailed')}</Text>
           {onRetry ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Retry loading bank accounts" onPress={onRetry}>
-              <Text style={styles.referenceValue}>Retry</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('picker.retryA11y')} onPress={onRetry}>
+              <Text style={styles.referenceValue}>{tCommon('retry')}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -116,7 +118,7 @@ export function LinkPicker({
       <View style={styles.actions}>
         {onCancel ? (
           <Pressable style={styles.ghost} disabled={busy} onPress={onCancel} accessibilityRole="button">
-            <Text style={styles.ghostText}>Cancel</Text>
+            <Text style={styles.ghostText}>{tCommon('cancel')}</Text>
           </Pressable>
         ) : null}
         <Pressable
@@ -126,7 +128,7 @@ export function LinkPicker({
           accessibilityRole="button"
           accessibilityState={{ disabled: !selected || busy }}>
           <Text style={styles.primaryText} numberOfLines={1}>
-            {busy ? 'Linking…' : selected ? `Link to ${selected.title}` : 'Select one to link'}
+            {busy ? t('picker.linking') : selected ? t('picker.linkTo', { title: selected.title }) : t('picker.selectOne')}
           </Text>
         </Pressable>
       </View>

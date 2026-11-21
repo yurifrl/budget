@@ -16,6 +16,8 @@ import { apiErrorMessage } from '@/platform/api/baseQuery';
 
 import { useLinkAccountMutation } from '@/budget/data/api';
 
+import { t } from './i18n';
+
 export function useAccountLink(budgetId: string) {
   const [linkAccount, { isLoading }] = useLinkAccountMutation();
 
@@ -25,7 +27,7 @@ export function useAccountLink(budgetId: string) {
         await linkAccount({ budgetId: accountBudgetId, accountId, connectionId, externalAccountId, institution }).unwrap();
         return null;
       } catch (err) {
-        return apiErrorMessage(err, 'failed to link account');
+        return apiErrorMessage(err, t('link.failed'));
       }
     },
     [budgetId, linkAccount],
@@ -37,7 +39,7 @@ export function useAccountLink(budgetId: string) {
         await linkAccount({ budgetId: accountBudgetId, accountId, connectionId: null }).unwrap();
         return null;
       } catch (err) {
-        return apiErrorMessage(err, 'failed to unlink account');
+        return apiErrorMessage(err, t('link.unlinkFailed'));
       }
     },
     [linkAccount],
@@ -62,7 +64,7 @@ export function useAccountLink(budgetId: string) {
       const failure = await link(toAccountId, connectionId, externalAccountId, institution);
       if (!failure) return null;
       const restored = await link(fromAccountId, connectionId, externalAccountId, institution, fromBudgetId);
-      return restored ? `${failure} (and the previous link could not be restored: ${restored})` : failure;
+      return restored ? t('link.restoreFailed', { failure, restored }) : failure;
     },
     [link, unlink],
   );

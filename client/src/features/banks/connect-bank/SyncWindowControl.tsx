@@ -10,6 +10,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { syncWindowLabel } from '../model/connections';
 import { colors, radius } from '@/ui/theme';
+import { t } from './i18n';
 
 /** The preset pills offered; 0 = All history (no lower bound). */
 const WINDOW_PRESETS = [0, 365, 180, 90, 30] as const;
@@ -56,13 +57,13 @@ export function SyncWindowControl({
       {defaultLabel != null
         ? pill(
             'default',
-            `Default (${defaultLabel})`,
+            t('window.default', { label: defaultLabel }),
             days === null,
             () => {
               setCustomOpen(false);
               onPick(null);
             },
-            'Sync history default',
+            t('window.defaultA11y'),
           )
         : null}
       {WINDOW_PRESETS.map((d) =>
@@ -74,7 +75,7 @@ export function SyncWindowControl({
             setCustomOpen(false);
             onPick(d);
           },
-          `Sync history ${syncWindowLabel(d)}`,
+          t('window.presetA11y', { label: syncWindowLabel(d) }),
         ),
       )}
       {customOpen
@@ -84,23 +85,23 @@ export function SyncWindowControl({
               style={styles.winInput}
               value={custom}
               onChangeText={setCustom}
-              placeholder="days"
+              placeholder={t('window.daysPlaceholder')}
               keyboardType="number-pad"
               autoFocus
               onSubmitEditing={applyCustom}
             />,
-            pill('set', 'Set', false, applyCustom, 'Apply custom sync window'),
-            pill('cancel', '×', false, () => setCustomOpen(false), 'Cancel custom sync window'),
+            pill('set', t('window.set'), false, applyCustom, t('window.setA11y')),
+            pill('cancel', '×', false, () => setCustomOpen(false), t('window.cancelA11y')),
           ]
         : pill(
             'other',
-            isCustom ? `${days}d` : 'Other…',
+            isCustom ? t('window.customDays', { days }) : t('window.other'),
             isCustom,
             () => {
               setCustom(isCustom ? String(days) : '');
               setCustomOpen(true);
             },
-            'Custom sync window',
+            t('window.customA11y'),
           )}
     </View>
   );

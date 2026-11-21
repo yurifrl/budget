@@ -17,6 +17,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
 import { BankBalanceCard } from './BankBalanceCard';
 import { CreditBillCard } from './CreditBillCard';
+import { t } from './i18n';
 import { LinkAccountSheet, UnlinkAccountSheet } from './LinkSheets';
 
 export function OverviewTab({
@@ -52,16 +53,16 @@ export function OverviewTab({
   return (
     <View style={styles.wrap}>
       <View style={styles.totals}>
-        <Stat label="Linked accounts" value={linkedAccounts.length} />
-        <Stat label="Imported" value={summary.totals.importedCount} />
-        <Stat label="Edited by you" value={summary.totals.editedCount} tone="warn" />
-        <Stat label="Removed at bank" value={summary.totals.removedCount} tone="bad" />
-        <Stat label="Total rows" value={summary.totals.totalCount} />
+        <Stat label={t('overview.stat.linked')} value={linkedAccounts.length} />
+        <Stat label={t('overview.stat.imported')} value={summary.totals.importedCount} />
+        <Stat label={t('overview.stat.edited')} value={summary.totals.editedCount} tone="warn" />
+        <Stat label={t('overview.stat.removed')} value={summary.totals.removedCount} tone="bad" />
+        <Stat label={t('overview.stat.total')} value={summary.totals.totalCount} />
       </View>
 
-      <Text style={styles.sectionTitle}>Accounts</Text>
+      <Text style={styles.sectionTitle}>{t('overview.accounts')}</Text>
       {linkedAccounts.length === 0 ? (
-        <Text style={styles.hint}>No budget account is linked to this bank yet. Use “Link to a budget account” on a bank account below.</Text>
+        <Text style={styles.hint}>{t('overview.empty')}</Text>
       ) : (
         <View style={styles.grid}>
           {linkedAccounts.map((acct) => (
@@ -81,7 +82,7 @@ export function OverviewTab({
 
       {unlinked.length > 0 ? (
         <>
-          <Text style={styles.sectionTitle}>Not linked</Text>
+          <Text style={styles.sectionTitle}>{t('overview.notLinked')}</Text>
           <View style={styles.grid}>
             {unlinked.map((u) => (
               <View key={u.externalId} style={[styles.card, styles.cardOff]}>
@@ -90,7 +91,7 @@ export function OverviewTab({
                     <Text style={styles.cardTitle} numberOfLines={1}>
                       {u.name}
                     </Text>
-                    <Text style={styles.sub}>{`${u.type === 'CREDIT' ? 'Credit' : 'Bank'} account · not linked to a budget account`}</Text>
+                    <Text style={styles.sub}>{u.type === 'CREDIT' ? t('overview.unlinked.credit') : t('overview.unlinked.bank')}</Text>
                   </View>
                 </View>
                 <BankBalanceOf bank={u} />
@@ -99,9 +100,9 @@ export function OverviewTab({
                   <Pressable
                     style={styles.primaryBtn}
                     accessibilityRole="button"
-                    accessibilityLabel={`Link ${u.name} to a budget account`}
+                    accessibilityLabel={t('overview.linkA11y', { name: u.name })}
                     onPress={() => setLinking({ bank: u, current: null })}>
-                    <Text style={styles.primaryBtnText}>Link to a budget account</Text>
+                    <Text style={styles.primaryBtnText}>{t('overview.linkButton')}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -137,9 +138,9 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 'wa
 function Counts({ c }: { c: ConnectionCountsJson }) {
   return (
     <View style={styles.counts}>
-      <Stat label="Imported" value={c.importedCount} />
-      <Stat label="Edited by you" value={c.editedCount} tone="warn" />
-      <Stat label="Removed at bank" value={c.removedCount} tone="bad" />
+      <Stat label={t('overview.stat.imported')} value={c.importedCount} />
+      <Stat label={t('overview.stat.edited')} value={c.editedCount} tone="warn" />
+      <Stat label={t('overview.stat.removed')} value={c.removedCount} tone="bad" />
     </View>
   );
 }
@@ -188,19 +189,19 @@ function AccountCard({
   onUnlink: () => void;
 }) {
   const { formatDate } = useMoneyFormat();
-  const range = acct.firstDate && acct.lastDate ? `${formatDate(acct.firstDate)} – ${formatDate(acct.lastDate)}` : 'No transactions yet';
+  const range = acct.firstDate && acct.lastDate ? `${formatDate(acct.firstDate)} – ${formatDate(acct.lastDate)}` : t('overview.noTransactions');
   return (
     // The open-tab press covers the content only; link controls sit outside it
     // so pressing them never also opens the tab.
     <View style={styles.card}>
-      <Pressable onPress={onPress} style={styles.cardPress} accessibilityRole="button" accessibilityLabel={`Open ${bank?.name ?? acct.name}`}>
+      <Pressable onPress={onPress} style={styles.cardPress} accessibilityRole="button" accessibilityLabel={t('overview.openA11y', { name: bank?.name ?? acct.name })}>
         <View style={styles.cardHead}>
           <View style={styles.flex}>
             <Text style={styles.cardTitle} numberOfLines={1}>
               {bank?.name ?? acct.name}
             </Text>
             <Text style={styles.sub} numberOfLines={1}>
-              {`${bank ? (bank.type === 'CREDIT' ? 'Credit account' : 'Bank account') : 'Bank account'} → ${acct.name}`}
+              {bank?.type === 'CREDIT' ? t('overview.account.credit', { name: acct.name }) : t('overview.account.bank', { name: acct.name })}
             </Text>
           </View>
         </View>
@@ -210,12 +211,12 @@ function AccountCard({
         <Text style={styles.sub}>{range}</Text>
       </Pressable>
       <View style={styles.controls}>
-        <Text style={styles.linkedLine} numberOfLines={2}>{`Linked to ${acct.name}`}</Text>
-        <Pressable style={styles.ghostBtn} accessibilityRole="button" accessibilityLabel={`Change link for ${bank?.name ?? acct.name}`} disabled={!bank} onPress={onChange}>
-          <Text style={styles.ghostBtnText}>Change</Text>
+        <Text style={styles.linkedLine} numberOfLines={2}>{t('overview.linkedTo', { name: acct.name })}</Text>
+        <Pressable style={styles.ghostBtn} accessibilityRole="button" accessibilityLabel={t('overview.changeA11y', { name: bank?.name ?? acct.name })} disabled={!bank} onPress={onChange}>
+          <Text style={styles.ghostBtnText}>{t('overview.change')}</Text>
         </Pressable>
-        <Pressable style={styles.ghostBtn} accessibilityRole="button" accessibilityLabel={`Unlink ${acct.name}`} onPress={onUnlink}>
-          <Text style={styles.ghostBtnText}>Unlink</Text>
+        <Pressable style={styles.ghostBtn} accessibilityRole="button" accessibilityLabel={t('overview.unlinkA11y', { name: acct.name })} onPress={onUnlink}>
+          <Text style={styles.ghostBtnText}>{t('unlink.button')}</Text>
         </Pressable>
       </View>
     </View>

@@ -3,6 +3,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '@/ui/theme';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './i18n';
 
 export function UnlinkConfirm({
   accountName,
@@ -19,17 +21,17 @@ export function UnlinkConfirm({
 }) {
   return (
     <View style={styles.box}>
-      <Text style={styles.title}>Unlink bank account?</Text>
+      <Text style={styles.title}>{t('unlink.title')}</Text>
       <Text style={styles.body}>
-        {`${accountName} will stop syncing with the bank. Transactions already imported stay in your budget; no new ones arrive until you link again.`}
+        {t('unlink.body', { name: accountName })}
       </Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.footer}>
         <Pressable style={styles.ghost} disabled={busy} onPress={onCancel} accessibilityRole="button">
-          <Text style={styles.ghostText}>Cancel</Text>
+          <Text style={styles.ghostText}>{tCommon('cancel')}</Text>
         </Pressable>
         <Pressable style={styles.danger} disabled={busy} onPress={onConfirm} accessibilityRole="button">
-          <Text style={styles.dangerText}>{busy ? 'Unlinking…' : 'Unlink'}</Text>
+          <Text style={styles.dangerText}>{busy ? t('unlink.busy') : t('unlink.button')}</Text>
         </Pressable>
       </View>
     </View>

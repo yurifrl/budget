@@ -12,6 +12,7 @@ import type { AccountRow } from '@/budget/data/rows';
 import { creditSummary } from '../model/connections';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 
 export function UpstreamAccountsList({
   up,
@@ -29,14 +30,14 @@ export function UpstreamAccountsList({
   if (up.accounts == null) {
     return (
       <View style={box}>
-        <Text style={styles.acctWarn}>Accounts unavailable — Sync now to refresh.</Text>
+        <Text style={styles.acctWarn}>{t('upstream.unavailable')}</Text>
       </View>
     );
   }
   if (up.accounts.length === 0) {
     return (
       <View style={box}>
-        <Text style={styles.acctHint}>No accounts returned by this bank.</Text>
+        <Text style={styles.acctHint}>{t('upstream.none')}</Text>
       </View>
     );
   }
@@ -46,7 +47,7 @@ export function UpstreamAccountsList({
         const linked = acct.linkedAccountId ? accounts.find((a) => a.id === acct.linkedAccountId) : undefined;
         return (
           <View key={acct.externalId} style={styles.acctRow}>
-            <Text style={styles.acctType}>{acct.type === 'CREDIT' ? 'credit' : 'bank'}</Text>
+            <Text style={styles.acctType}>{acct.type === 'CREDIT' ? t('upstream.type.credit') : t('upstream.type.bank')}</Text>
             <Text style={styles.acctName} numberOfLines={1}>
               {acct.name}
             </Text>
@@ -56,7 +57,7 @@ export function UpstreamAccountsList({
               return text != null ? <Text style={styles.acctBalance}>{text}</Text> : null;
             })()}
             <Text style={[styles.acctLink, linked ? undefined : styles.acctLinkNone]} numberOfLines={1}>
-              {linked ? `→ ${linked.name}` : 'not linked'}
+              {linked ? `→ ${linked.name}` : t('upstream.notLinked')}
             </Text>
           </View>
         );

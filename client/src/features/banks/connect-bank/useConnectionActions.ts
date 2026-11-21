@@ -6,11 +6,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { apiErrorMessage } from '@/platform/api/baseQuery';
 
 import { useDisconnectConnectionMutation } from '@/budget/data/api';
 import type { ConnectionJson } from '@/budget/data/connections';
 import { removeConfirmation } from './connectionRowMenuShared';
+import { t } from './i18n';
 import { useSyncRunner } from './useSyncRunner';
 
 export function useConnectionActions({
@@ -57,12 +60,12 @@ export function useConnectionActions({
     [budgetId, runner],
   );
 
-  const sync = useCallback((row: ConnectionJson) => follow(row, 'sync', 'could not sync the bank'), [follow]);
+  const sync = useCallback((row: ConnectionJson) => follow(row, 'sync', t('actions.syncFailed')), [follow]);
 
   /** Watermark-ignoring history re-pull (deduped) — back-fills accounts that
    *  were linked after the connection first synced. Safe to repeat. */
   const reimport = useCallback(
-    (row: ConnectionJson) => follow(row, 'reimport', 'could not re-import the bank history'),
+    (row: ConnectionJson) => follow(row, 'reimport', t('actions.reimportFailed')),
     [follow],
   );
 
@@ -73,10 +76,10 @@ export function useConnectionActions({
         await disconnectConnection({ id: row.id, budgetId: budgetId ?? '' }).unwrap();
         // Say what happened: the row disappears from the list, its imported
         // history stays on the linked budget accounts.
-        setReport('Bank removed — its imported history stays in your budget.');
+        setReport(t('actions.removed'));
         onRemoved?.();
       } catch (err) {
-        setError(apiErrorMessage(err, 'could not disconnect the bank'));
+        setError(apiErrorMessage(err, t('actions.removeFailed')));
       }
     },
     [budgetId, disconnectConnection, onRemoved],
@@ -94,8 +97,8 @@ export function useConnectionActions({
       }
       if (c.kind === 'blocked') return Alert.alert(c.title, c.message);
       Alert.alert(c.title, c.message, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => void remove(row) },
+        { text: tCommon('cancel'), style: 'cancel' },
+        { text: tCommon('remove'), style: 'destructive', onPress: () => void remove(row) },
       ]);
     },
     [remove],
