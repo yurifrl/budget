@@ -36,5 +36,6 @@ expo-env.d.ts
 # tk worktree pool (also in .git/info/exclude; kept here so clones ignore it too)
 .worktrees/
 
-#
+# Local data dir at the repo root only. Unanchored `data/` also matched
+# client/src/budget/data, which EAS then dropped from the build upload.
 /data/
