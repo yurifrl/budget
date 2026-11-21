@@ -8,6 +8,7 @@ import { Combobox } from '@/ui/combobox';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { t } from '../i18n';
 import { styles } from './styles';
+import { displaySystemName } from '@/domain/systemNames';
 
 /** Small square toggle used for the mapper options and row inclusion. */
 export function CheckRow({
@@ -110,7 +111,7 @@ export function PayeeCell({
     return (
       <View style={styles.payeeBound}>
         <Text style={styles.payeeBoundName} numberOfLines={1}>
-          {display}
+          {displaySystemName(display)}
         </Text>
         {unbind}
       </View>
@@ -123,7 +124,7 @@ export function PayeeCell({
         onChangeText={(text) => onChange({ payee: text, payeeId: null })}
         onPick={(key) => onChange({ payeeId: key })}
         onCreate={(query) => onChange({ payee: query, payeeId: null })}
-        options={options}
+        options={options.map((o) => ({ ...o, label: displaySystemName(o.label), searchText: o.label }))}
         placeholder={t('cell.payeePlaceholder')}
         style={styles.payeeInput}
         containerStyle={styles.payeeEditorField}

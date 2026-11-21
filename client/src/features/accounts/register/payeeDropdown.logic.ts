@@ -8,6 +8,8 @@ import { transferPayeeName } from '@shared/domain/transfers';
 import type { PayeeAdminRow } from '@/budget/data/rows';
 import type { Account } from '@/domain/types';
 
+import { displaySystemName, matchesSystemName } from '@/domain/systemNames';
+
 import { t } from './i18n';
 
 type ItemKind = 'selected' | 'transfer' | 'payee';
@@ -52,7 +54,7 @@ export function payeeSections({
     .map((a) => ({
       kind: 'transfer' as const,
       key: `transfer:${a.id}`,
-      label: transferPayeeName(a.name),
+      label: displaySystemName(transferPayeeName(a.name)),
       sub: a.group === 'CASH' ? t('payee.sub.cash') : a.group === 'CREDIT' ? t('payee.sub.credit') : t('payee.sub.account'),
       commit: transferPayeeName(a.name),
     }));
@@ -61,12 +63,12 @@ export function payeeSections({
     .map((p) => ({
       kind: 'payee' as const,
       key: `payee:${p.id}`,
-      label: p.name,
+      label: displaySystemName(p.name),
       commit: p.name,
     }));
 
-  const matches = (s: string) => s.toLowerCase().includes(query);
-  const filterItems = (list: PayeeItem[]) => (query ? list.filter((i) => matches(i.label)) : list);
+  // The typed text finds the stored name or the name as displayed (`commit` is the stored one).
+  const filterItems = (list: PayeeItem[]) => (query ? list.filter((i) => matchesSystemName(i.commit, query)) : list);
 
   const visiblePayee = payees.find((p) => !p.hidden && p.name === trimmedValue);
   // A selected transfer (committed from Payments and Transfers, or an
@@ -75,12 +77,12 @@ export function payeeSections({
   // option list omits but the field can still hold.
   const visibleTransfer = accounts.find((a) => transferPayeeName(a.name) === trimmedValue);
   const selectedRow: PayeeItem | null = visiblePayee
-    ? { kind: 'selected' as const, key: 'selected', label: visiblePayee.name, commit: visiblePayee.name, checked: true }
+    ? { kind: 'selected' as const, key: 'selected', label: displaySystemName(visiblePayee.name), commit: visiblePayee.name, checked: true }
     : visibleTransfer
       ? {
           kind: 'selected' as const,
           key: 'selected-transfer',
-          label: transferPayeeName(visibleTransfer.name),
+          label: displaySystemName(transferPayeeName(visibleTransfer.name)),
           commit: transferPayeeName(visibleTransfer.name),
           checked: true,
         }
@@ -111,7 +113,7 @@ export function payeeMenu(sections: readonly PayeeSection[], value: string): Pay
   const trimmedValue = value.trim();
   const flatRows = sections.flatMap((s) => s.items);
   const hasExactMatch =
-    query.length > 0 && (flatRows.some((r) => r.label.toLowerCase() === query) || trimmedValue.length === 0);
+    query.length > 0 && (flatRows.some((r) => r.label.toLowerCase() === query || r.commit.toLowerCase() === query) || trimmedValue.length === 0);
   const showCreate = !!query && !hasExactMatch;
   // +1 create row (typed query with no exact match), +1 Manage Payees row.
   return { flatRows, showCreate, rowCount: flatRows.length + (showCreate ? 1 : 0) + 1 };

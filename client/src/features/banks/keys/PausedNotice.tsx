@@ -15,7 +15,7 @@ export function PausedNotice({
   compact,
   onOpenKeys,
 }: {
-  row: Pick<ConnectionJson, 'status' | 'status_message' | 'key_source'>;
+  row: Pick<ConnectionJson, 'status' | 'status_message' | 'status_message_code' | 'key_source'>;
   compact?: boolean;
   onOpenKeys: () => void;
 }) {

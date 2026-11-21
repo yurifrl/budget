@@ -28,6 +28,7 @@ import { FLAG_COLORS, colors } from '@/ui/theme';
 import { useFlagLabels } from '@/state/useDisplayPrefs';
 import { tCommon } from '@shared/i18n/common';
 import { t } from './i18n';
+import { displaySystemName } from '@/domain/systemNames';
 
 /** YNAB reference pill — deeper than the theme indigo accents. */
 const BAR_BG = '#4a3fa5';
@@ -129,7 +130,7 @@ export function SelectionBar({
                     if (groupCats.length === 0) return null;
                     return (
                       <View key={g.id}>
-                        <Text style={styles.menuGroup}>{g.name}</Text>
+                        <Text style={styles.menuGroup}>{displaySystemName(g.name)}</Text>
                         {groupCats.map((c) => (
                           <Pressable
                             key={c.id}

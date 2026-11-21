@@ -3,6 +3,7 @@ import type { Budget, MonthKey } from '@/domain/types';
 import { useBudgetMonth } from '@/state/useBudgetMonth';
 import { CategoryDropdown } from '@/ui/dropdown/CategoryDropdown';
 import { t } from './i18n';
+import { displaySystemName } from '@/domain/systemNames';
 
 /** Fixed-mode default-category picker (reuses the register's CategoryDropdown). */
 export function DefaultCategoryPicker({
@@ -27,7 +28,7 @@ export function DefaultCategoryPicker({
   const bm = useBudgetMonth(budget, month);
   const current = budget.categories.find((c) => c.id === payee.default_category_id) ?? null;
   const placeholder = current
-    ? `${current.name} (${budget.groups.find((g) => g.id === current.groupId)?.name ?? ''})`
+    ? `${current.name} (${displaySystemName(budget.groups.find((g) => g.id === current.groupId)?.name ?? '')})`
     : t('picker.none');
 
   const createCategory = async (query: string, assign: (id: string) => void) => {

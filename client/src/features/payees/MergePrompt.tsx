@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Combobox } from '@/ui/combobox';
 
 import type { PayeeAdminRow } from '@/budget/data/rows';
+import { displaySystemName } from '@/domain/systemNames';
 import { tCommon } from '@shared/i18n/common';
 import { t } from './i18n';
 import { styles } from './styles';
@@ -31,15 +32,15 @@ export function MergePrompt({
     <>
       <Text style={styles.sectionLabel}>{t('merge.title')}</Text>
       <Text style={styles.mergeCopy}>
-        {t('merge.body', { name: payee.name, count: payee.transaction_count })}
+        {t('merge.body', { name: displaySystemName(payee.name), count: payee.transaction_count })}
       </Text>
       <Combobox
         value={query}
         onChangeText={setQuery}
-        options={candidates.map((c) => ({ key: c.id, label: c.name }))}
+        options={candidates.map((c) => ({ key: c.id, label: displaySystemName(c.name), searchText: c.name }))}
         onPick={(key) => {
           onTargetChange(key);
-          setQuery(candidates.find((c) => c.id === key)?.name ?? '');
+          setQuery(displaySystemName(candidates.find((c) => c.id === key)?.name ?? ''));
         }}
         placeholder={t('merge.search')}
         chevron

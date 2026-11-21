@@ -27,6 +27,7 @@ import type { Account, Bundle, Category, CategoryGroup } from '@/domain/types';
 import { categoryFigures, type BudgetMonth } from '@/domain/zeroSum';
 import { matchesCategoryQuery } from '../categoryPick';
 import { colors } from '@/ui/theme';
+import { displaySystemName } from '@/domain/systemNames';
 
 interface Item {
   key: string;
@@ -128,7 +129,7 @@ export function CategoryDropdown({
           key: '__selected__',
           kind: 'selected',
           targetId: current.id,
-          label: groupName ? `${categoryLabel(current, bundles)} (${groupName})` : categoryLabel(current, bundles),
+          label: groupName ? `${categoryLabel(current, bundles)} (${displaySystemName(groupName)})` : categoryLabel(current, bundles),
           checked: true,
         });
       }
@@ -194,7 +195,7 @@ export function CategoryDropdown({
       lastTitle = itemTitle;
       rows.push(
         <Text key={itemTitle} style={dropdownStyles.sectionTitle}>
-          {itemTitle.toUpperCase()}
+          {displaySystemName(itemTitle).toUpperCase()}
         </Text>,
       );
     }

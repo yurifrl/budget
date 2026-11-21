@@ -17,6 +17,7 @@ import { colors, radius } from '@/ui/theme';
 import { AmountPill } from '@/ui/AmountPill';
 import { ClearedBadge } from '@/ui/ClearedBadge';
 import { t } from './i18n';
+import { displaySystemName } from '@/domain/systemNames';
 
 const TONE_BG: Record<TxnStateTone, string> = {
   neutral: colors.grayPillBg,
@@ -104,7 +105,7 @@ function TxnRow({ txn }: { txn: ConnectionTxnJson }) {
     <View style={[styles.row, txn.state === 'removed' && styles.removed]}>
       <Text style={[styles.cell, styles.cDate, { color: colors.muted }]}>{formatDate(txn.date)}</Text>
       <Text style={[styles.cell, styles.cPayee]} numberOfLines={1}>
-        {txn.payee || t('account.noPayee')}
+        {displaySystemName(txn.payee ?? '') || t('account.noPayee')}
       </Text>
       <Text style={[styles.cell, styles.cMemo, { color: colors.faint }]} numberOfLines={1}>
         {txn.memo ?? ''}
@@ -128,7 +129,7 @@ function TxnCard({ txn }: { txn: ConnectionTxnJson }) {
     <View style={[styles.card, txn.state === 'removed' && styles.removed]}>
       <View style={styles.cardL1}>
         <Text style={styles.cardPayee} numberOfLines={1}>
-          {txn.payee || t('account.noPayee')}
+          {displaySystemName(txn.payee ?? '') || t('account.noPayee')}
         </Text>
         <AmountPill cents={milliToCents(txn.amount)} />
         <ClearedBadge compact status={txn.cleared} />

@@ -30,6 +30,7 @@ import { disabled } from "@expo/ui/swift-ui/modifiers";
 
 import type { Budget, RepeatFrequency, Transaction } from "@/domain/types";
 import { displayFlagLabel } from "@/domain/flagLabels";
+import { displaySystemName } from "@/domain/systemNames";
 import { useFlagLabels } from "@/state/useDisplayPrefs";
 import { useMoneyFormat } from "@/ui/moneyFormat";
 import { REPEAT_FREQS, REPEAT_LABELS } from "./InlineAddRow";
@@ -140,7 +141,7 @@ export function TxnMenuTrigger({
                   <Button
                     key={c.id}
                     label={t('menu.matchOption', {
-                      payee: c.payee,
+                      payee: displaySystemName(c.payee),
                       date: formatDate(c.date),
                       amount: formatMoney(Math.abs(c.inflow - c.outflow)),
                     })}

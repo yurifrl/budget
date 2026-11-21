@@ -41,6 +41,7 @@ import { ClearedBadge } from '@/ui/ClearedBadge';
 import { useBudgetShell } from '@/shell/context';
 import { tCommon } from '@shared/i18n/common';
 import { t } from './i18n';
+import { displaySystemName } from '@/domain/systemNames';
 
 /** Header subtitle labels, mirroring AccountsScreen's map. */
 const ACCOUNT_TYPE_LABEL: Record<Budget['accounts'][number]['type'], string> = labels(t, {
@@ -205,7 +206,7 @@ export function LinkedAccountDetailScreen() {
                   <View style={styles.txnL1Phone}>
                     <View style={styles.txnLeadPhone}>
                       <Text style={styles.txnPayee} numberOfLines={1}>
-                        {txn.payee || t('detail.noPayee')}
+                        {displaySystemName(txn.payee) || t('detail.noPayee')}
                       </Text>
                       {txn.upcoming ? (
                         <Text style={styles.upcomingPill}>{t('detail.repeat')}</Text>
@@ -235,7 +236,7 @@ export function LinkedAccountDetailScreen() {
                   {formatDate(txn.date)}
                 </Text>
                 <Text style={[styles.regText, { flex: 1.4 }]} numberOfLines={1}>
-                  {txn.payee || t('detail.noPayee')}
+                  {displaySystemName(txn.payee) || t('detail.noPayee')}
                 </Text>
                 <Text
                   style={[styles.tagPill, cat.warn && styles.tagPillWarn]}

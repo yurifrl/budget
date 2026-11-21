@@ -37,6 +37,8 @@ export interface ComboboxOption {
   key: string;
   label: string;
   sub?: string;
+  /** Extra text the typed query also matches (e.g. the stored name behind a translated label). */
+  searchText?: string;
 }
 
 export function Combobox({
@@ -111,7 +113,7 @@ export function Combobox({
 
   const query = value.trim().toLowerCase();
   const filtered = useMemo(
-    () => (query ? options.filter((o) => o.label.toLowerCase().includes(query)) : options),
+    () => (query ? options.filter((o) => o.label.toLowerCase().includes(query) || o.searchText?.toLowerCase().includes(query)) : options),
     [options, query],
   );
   const canCreate =

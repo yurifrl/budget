@@ -1,4 +1,9 @@
 export default {
+  'system.startingBalance': 'Starting Balance',
+  'system.reconciliationAdjustment': 'Reconciliation Adjustment',
+  'system.creditCardPayments': 'Credit Card Payments',
+  'system.transfer': 'Transfer : {account}',
+
   'account.nicknameRequired': 'nickname is required',
 
   'repeat.weekly': 'Every week',

@@ -5,6 +5,7 @@ import { colors } from '@/ui/theme';
 import { t } from './i18n';
 import { styles } from './styles';
 import type { AddTransaction } from './useAddTransaction';
+import { displaySystemName } from '@/domain/systemNames';
 
 /** The sheet's field rows (inside the sheet's scroll view): payee, category and account open a picker; the date steps by a day. */
 export function SheetFields({ sheet }: { sheet: AddTransaction }) {
@@ -16,7 +17,7 @@ export function SheetFields({ sheet }: { sheet: AddTransaction }) {
         <Text style={styles.rowIcon}>◎</Text>
         <View style={{ flex: 1 }}>
           <Text style={styles.rowK}>{t('field.payee')}</Text>
-          <Text style={styles.rowV}>{payee || t('field.choose')}</Text>
+          <Text style={styles.rowV}>{displaySystemName(payee) || t('field.choose')}</Text>
         </View>
         <Text style={styles.chev}>›</Text>
       </Pressable>

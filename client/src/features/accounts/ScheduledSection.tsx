@@ -18,6 +18,7 @@ import type { Budget, Transaction } from '@/domain/types';
 import { colors } from '@/ui/theme';
 import { InlineAddRow } from './register/InlineAddRow';
 import { t } from './i18n';
+import { displaySystemName } from '@/domain/systemNames';
 
 interface ScheduledSectionProps {
   budget: Budget;
@@ -82,14 +83,14 @@ export function ScheduledSection({
               <View key={txn.id}>
                 <Pressable
                   style={[styles.row, checked && styles.rowSelected]}
-                  accessibilityLabel={t('scheduled.rowLabel', { name: txn.payee || account?.name || '' })}
+                  accessibilityLabel={t('scheduled.rowLabel', { name: displaySystemName(txn.payee) || account?.name || '' })}
                   onPress={() => openEditor(txn)}
                 >
                   <Pressable
                     style={styles.checkHit}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked }}
-                    accessibilityLabel={t('scheduled.selectLabel', { name: txn.payee || account?.name || '' })}
+                    accessibilityLabel={t('scheduled.selectLabel', { name: displaySystemName(txn.payee) || account?.name || '' })}
                     onPress={() => toggle(txn.id)}
                   >
                     <View style={[styles.box, checked && styles.boxChecked]}>
@@ -104,7 +105,7 @@ export function ScheduledSection({
                     style={[styles.name, checked && styles.textOn]}
                     numberOfLines={1}
                   >
-                    {account?.name ?? txn.payee ?? ''}
+                    {account?.name ?? displaySystemName(txn.payee ?? '')}
                   </Text>
                   <Text style={[styles.date, checked && styles.textOn]}>
                     {formatDate(txn.date)}

@@ -14,6 +14,7 @@ import { activityLine, MATCH_TYPE_LABEL, matchTypeFromLabel } from './payees.log
 import { PayeeTxnsPane } from './PayeeTxnsPane';
 import { styles } from './styles';
 import type { PayeeAdmin } from './usePayeeAdmin';
+import { displaySystemName } from '@/domain/systemNames';
 
 const CATEGORIZATION_LABELS: Record<CategorizationMode, { title: string; sub: string }> = {
   auto: labels(t, { title: 'mode.auto.title', sub: 'mode.auto.sub' }),
@@ -152,7 +153,7 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
 
           <Text style={styles.sectionLabel}>{t('detail.renaming')}</Text>
           <Text style={styles.radioSub}>
-            {t('detail.renamingHint', { name: selected.name })}
+            {t('detail.renamingHint', { name: displaySystemName(selected.name) })}
           </Text>
           <View style={styles.ruleForm}>
             <Combobox

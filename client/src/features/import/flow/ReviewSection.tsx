@@ -7,6 +7,7 @@ import { importButtonLabel, importedSummary, payeeDisplay, rulesHeading, selecti
 import { t } from '../i18n';
 import { styles } from './styles';
 import type { ImportFlow } from './useImportFlow';
+import { displaySystemName } from '@/domain/systemNames';
 
 /**
  * Review step: the paginated, editable table of parsed rows, the pending
@@ -103,7 +104,7 @@ export function ReviewSection({ flow, drafts }: { flow: ImportFlow; drafts: Draf
           <Text style={styles.rulesTitle}>{rulesHeading(rules.length)}</Text>
           {rules.slice(0, 4).map((rule) => (
             <Text key={rule.condition} style={styles.rulesLine} numberOfLines={1}>
-              {t('rules.line', { condition: rule.condition, replacement: rule.replacement })}
+              {t('rules.line', { condition: rule.condition, replacement: displaySystemName(rule.replacement) })}
             </Text>
           ))}
           {rules.length > 4 ? <Text style={styles.rulesLine}>{t('rules.more', { count: rules.length - 4 })}</Text> : null}

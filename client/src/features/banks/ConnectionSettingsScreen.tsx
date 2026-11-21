@@ -39,6 +39,7 @@ import { PausedNotice } from './keys/PausedNotice';
 import { PLUGGY_KEYS_ROUTE } from './keys/pluggyKeys.logic';
 import { useConnectionActions } from './connect-bank/useConnectionActions';
 import { useSyncStatus } from './connect-bank/useSyncStatus';
+import { storedServerMessage } from './model/serverMessage';
 import { canRequestSync, syncStateView } from './model/syncRun';
 import { useBudgetShell } from '@/shell/context';
 import { t } from './i18n';
@@ -197,7 +198,7 @@ export function ConnectionSettingsScreen() {
             <PausedNotice row={connection} onOpenKeys={() => router.push(PLUGGY_KEYS_ROUTE as Href)} />
           ) : connection.status_message && connection.status !== 'connected' ? (
             <View style={styles.banner}>
-              <Text style={styles.bannerText}>{connection.status_message}</Text>
+              <Text style={styles.bannerText}>{storedServerMessage(connection.status_message, connection.status_message_code)}</Text>
             </View>
           ) : null}
           {error ? (

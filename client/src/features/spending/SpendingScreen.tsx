@@ -18,6 +18,7 @@ import { usePersonFilter , PersonFilterBar } from '@/features/people';
 import { useBudgetShell } from '@/shell/context';
 
 import { t } from './i18n';
+import { displaySystemName } from '@/domain/systemNames';
 
 export function SpendingScreen() {
   const { formatMoney, formatDateLong } = useMoneyFormat();
@@ -89,7 +90,7 @@ export function SpendingScreen() {
             <View style={styles.txn}>
               <View style={styles.l1}>
                 <Text style={styles.payee} numberOfLines={1}>
-                  {txn.payee === 'Reconciliation Adjustment' ? t('row.reconciliation') : txn.payee || t('row.noPayee')}
+                  {displaySystemName(txn.payee) || t('row.noPayee')}
                 </Text>
                 <Text style={[styles.amt, txn.inflow > 0 && { color: colors.greenPillFg }]}>
                   {txn.inflow > 0 ? formatMoney(txn.inflow) : `−${formatMoney(txn.outflow)}`}

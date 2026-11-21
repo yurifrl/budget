@@ -7,6 +7,7 @@ import { isInternalTransferPayee } from '@shared/domain/transfers';
 
 import { computeRunningBalances, workingBalance } from './engine';
 import { t as tr } from './i18n';
+import { matchesSystemName } from './systemNames';
 import type { Account, Budget, Cents, Transaction } from './types';
 
 /**
@@ -92,7 +93,7 @@ export function filterRegisterTxns(
     const cat = categories.find((c) => c.id === t.categoryId);
     if (qCents !== 0 && (t.inflow === qCents || t.outflow === qCents)) return true;
     return (
-      (t.payee ?? '').toLowerCase().includes(q) ||
+      matchesSystemName(t.payee ?? '', q) ||
       (cat?.name ?? '').toLowerCase().includes(q) ||
       (t.memo ?? '').toLowerCase().includes(q)
     );
