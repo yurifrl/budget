@@ -100,6 +100,14 @@ export function BudgetTabs({ isPhone }: { isPhone: boolean }) {
           tabBarItemStyle: { display: 'none' },
         }}
       />
+      {/* Own Pluggy keys: opened from Linked banks / a paused bank, never a tab. */}
+      <Tabs.Screen
+        name="pluggy-keys"
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
       {/* Linked-account detail: pushed with ?account=<id>, never a tab. */}
       <Tabs.Screen
         name="linked-account"

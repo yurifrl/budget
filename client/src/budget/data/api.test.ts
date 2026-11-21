@@ -243,6 +243,27 @@ describe('formerly hand-written URLs now come from contracts (same routes)', () 
     ['disconnectConnection', () => budgetApi.endpoints.disconnectConnection.initiate({ id: 'c-1', budgetId: 'b-1' }), 'DELETE', '/connections/c-1', null],
     ['getUpstreamAccounts', () => budgetApi.endpoints.getUpstreamAccounts.initiate(), 'GET', '/connections/upstream', null],
     ['getConnectionSettings', () => budgetApi.endpoints.getConnectionSettings.initiate(), 'GET', '/connections/settings', null],
+    [
+      'getConnectionCredentials',
+      () => budgetApi.endpoints.getConnectionCredentials.initiate({ provider: 'pluggy' }),
+      'GET',
+      '/connections/credentials?provider=pluggy',
+      null,
+    ],
+    [
+      'saveConnectionCredentials',
+      () => budgetApi.endpoints.saveConnectionCredentials.initiate({ provider: 'pluggy', clientId: 'id-1', clientSecret: 's-1' }),
+      'PUT',
+      '/connections/credentials',
+      { provider: 'pluggy', clientId: 'id-1', clientSecret: 's-1' },
+    ],
+    [
+      'deleteConnectionCredentials',
+      () => budgetApi.endpoints.deleteConnectionCredentials.initiate({ provider: 'pluggy' }),
+      'DELETE',
+      '/connections/credentials?provider=pluggy',
+      null,
+    ],
     ['updateSyncWindow', () => budgetApi.endpoints.updateSyncWindow.initiate({ syncWindowDays: 90 }), 'PATCH', '/connections/settings', { syncWindowDays: 90 }],
     [
       'updateConnectionSyncWindow',
@@ -268,7 +289,7 @@ describe('the split slice is still one api', () => {
   test('one reducer path, the same tag types, every endpoint reachable from budgetApi', () => {
     expect(budgetApi.reducerPath).toBe('budgetApi');
     const endpoints = Object.keys(budgetApi.endpoints);
-    expect(endpoints).toHaveLength(82);
+    expect(endpoints).toHaveLength(85);
     for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget']) {
       expect(endpoints).toContain(name);
     }

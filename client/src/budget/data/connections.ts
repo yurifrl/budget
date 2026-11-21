@@ -5,7 +5,7 @@
  * already uses.
  *
  * `status` is the generic connection lifecycle ('connected' | 'unauthorized'
- * | 'disconnected' | 'error' | 'quota_exhausted') — see `domain/connections.ts`
+ * | 'disconnected' | 'error' | 'quota_exhausted' | 'paused') — see `domain/connections.ts`
  * for the display helpers. Upstream accounts come back camelCase, straight
  * from the adapter port, with amounts in integer MILLIUNITS; the app's domain
  * and screens read them in CENTS, so `externalAccountFromWire` converts them
@@ -16,6 +16,7 @@ import type { z } from '@shared/zod';
 import type {
   connectTokenSchema,
   connectionAccountSummarySchema,
+  connectionCredentialsSchema,
   connectionCountsSchema,
   connectionSchema,
   connectionSettingsSchema,
@@ -40,6 +41,8 @@ export type LinkedByJson = z.infer<typeof linkedBySchema>;
 export type ConnectionJson = z.infer<typeof connectionSchema>;
 /** POST /connections/connect-token — widget credentials (token is short-lived, frontend-only). */
 export type ConnectTokenJson = z.infer<typeof connectTokenSchema>;
+/** The caller's own provider key set status (client id, whether a secret is stored; never the secret). */
+export type ConnectionCredentialsJson = z.infer<typeof connectionCredentialsSchema>;
 /** Counts a finished sync run reports in `result` (absent when the run skipped). */
 export type SyncCountsJson = z.infer<typeof syncCountsSchema>;
 /** One background sync run (job ledger row, user-safe fields only). */

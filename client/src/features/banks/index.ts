@@ -10,3 +10,4 @@ export { upstreamOption } from './model/linkPicker';
 export { ConnectBankScreen } from './ConnectBankScreen';
 export { ConnectionSettingsScreen } from './ConnectionSettingsScreen';
 export { LinkedAccountDetailScreen } from './LinkedAccountDetailScreen';
+export { PluggyKeysScreen } from './PluggyKeysScreen';

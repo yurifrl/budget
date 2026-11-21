@@ -5,9 +5,9 @@
  */
 import { contractRequest } from '@shared/contract-request';
 import { accountsUpdate } from '@shared/contracts/budget';
-import { connectionsConnectToken, connectionsDelete, connectionsGet, connectionsItemsRegister, connectionsList, connectionsReimport, connectionsSettingsGet, connectionsSettingsUpdate, connectionsSettingsUpdateOne, connectionsSummary, connectionsSync, connectionsSyncStatus, connectionsTransactions, connectionsUpstream } from '@shared/contracts/connections';
+import { connectionsConnectToken, connectionsCredentialsDelete, connectionsCredentialsGet, connectionsCredentialsSave, connectionsDelete, connectionsGet, connectionsItemsRegister, connectionsList, connectionsReimport, connectionsSettingsGet, connectionsSettingsUpdate, connectionsSettingsUpdateOne, connectionsSummary, connectionsSync, connectionsSyncStatus, connectionsTransactions, connectionsUpstream } from '@shared/contracts/connections';
 import type { OperationOutput } from '@shared/operation-contract';
-import { type ConnectionJson, type ConnectionSettingsJson, type ConnectionsSyncResult, type ConnectionSummaryJson, type ConnectionTxnPageJson, type ConnectionUpstreamJson, type ConnectionUpstreamWire, type ConnectTokenJson, externalAccountFromWire, type ExternalAccountJson, type SyncStatusJson, upstreamFromWire } from '../connections';
+import { type ConnectionCredentialsJson, type ConnectionJson, type ConnectionSettingsJson, type ConnectionsSyncResult, type ConnectionSummaryJson, type ConnectionTxnPageJson, type ConnectionUpstreamJson, type ConnectionUpstreamWire, type ConnectTokenJson, externalAccountFromWire, type ExternalAccountJson, type SyncStatusJson, upstreamFromWire } from '../connections';
 import type { AccountRow } from '../rows';
 import type { BudgetScope } from './base';
 import { registerApi } from './register';
@@ -56,6 +56,36 @@ export const connectionsApi = registerApi.injectEndpoints({
         accounts: wire.accounts.map((a) => externalAccountFromWire(a)),
       }),
       invalidatesTags: ['Connections'],
+    }),
+
+    /**
+     * The caller's own provider key set: client id and whether a secret is
+     * stored. The secret never comes back.
+     */
+    getConnectionCredentials: b.query<ConnectionCredentialsJson, { provider: string }>({
+      query: ({ provider }) => contractRequest(connectionsCredentialsGet, { provider }),
+      providesTags: ['ConnectionCredentials'],
+    }),
+
+    /**
+     * Save or replace the own key set. The server checks the pair with the
+     * provider first (400 invalid_credentials). Saving resumes or pauses
+     * connections, so the connections list is refetched too. Callers reset
+     * the mutation once it settles so the secret does not stay in the store.
+     */
+    saveConnectionCredentials: b.mutation<
+      OperationOutput<typeof connectionsCredentialsSave>,
+      { provider: string; clientId: string; clientSecret: string }
+    >({
+      query: ({ provider, clientId, clientSecret }) =>
+        contractRequest(connectionsCredentialsSave, { provider, clientId, clientSecret }),
+      invalidatesTags: ['ConnectionCredentials', 'Connections'],
+    }),
+
+    /** Remove the own key set. Connections made with it are paused, never deleted. */
+    deleteConnectionCredentials: b.mutation<OperationOutput<typeof connectionsCredentialsDelete>, { provider: string }>({
+      query: ({ provider }) => contractRequest(connectionsCredentialsDelete, { provider }),
+      invalidatesTags: ['ConnectionCredentials', 'Connections'],
     }),
 
     /** Per-account import counts + totals for one connection (bank page Overview). */
