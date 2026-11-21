@@ -11,6 +11,7 @@ import type { ConnectionUpstreamJson, UpstreamAccountJson } from '@/budget/data/
 import type { AccountRow } from '@/budget/data/rows';
 import { accountOptionGroups, comparableBankCents, upstreamOptionGroups, workingBalanceCents } from '../model/linkPicker';
 import { OverlaySheet } from '@/ui/bits';
+import { t } from './i18n';
 import { LinkPicker } from './LinkPicker';
 import { UnlinkConfirm } from './UnlinkConfirm';
 import { useAccountLink } from './useAccountLink';
@@ -44,18 +45,18 @@ export function LinkAccountSheet({
   useEffect(() => setError(null), [bank]);
 
   return (
-    <OverlaySheet visible={bank != null} onClose={onClose} title={bank ? `Link ${bank.name}` : undefined}>
+    <OverlaySheet visible={bank != null} onClose={onClose} title={bank ? t('sheet.linkTitle', { name: bank.name }) : undefined}>
       {bank ? (
         <View style={styles.pad}>
           <LinkPicker
             key={bank.externalId}
-            heading="Choose one budget account"
-            helper="A bank account feeds exactly one budget account. Tap an account to select it, then confirm."
-            referenceLabel={bank.type === 'CREDIT' ? 'Owed on the card' : 'Bank balance'}
+            heading={t('sheet.account.heading')}
+            helper={t('sheet.account.helper')}
+            referenceLabel={bank.type === 'CREDIT' ? t('sheet.account.owed') : t('sheet.account.bankBalance')}
             referenceCents={comparableBankCents(bank)}
             groups={accountOptionGroups(bank, accounts, upstream)}
             loading={false}
-            emptyText="No open budget accounts to link."
+            emptyText={t('sheet.account.empty')}
             busy={busy}
             error={error}
             listMaxHeight={380}
@@ -103,18 +104,18 @@ export function UpstreamPickerSheet({
   useEffect(() => setError(null), [visible]);
 
   return (
-    <OverlaySheet visible={visible} onClose={onClose} title={`Link ${account.name}`}>
+    <OverlaySheet visible={visible} onClose={onClose} title={t('sheet.linkTitle', { name: account.name })}>
       <View style={styles.pad}>
         <LinkPicker
-          heading="Choose one bank account"
-          helper="A budget account follows exactly one bank account. Tap one to select it, then confirm."
-          referenceLabel="Your balance in syscd"
+          heading={t('sheet.bank.heading')}
+          helper={t('sheet.bank.helper')}
+          referenceLabel={t('sheet.bank.reference')}
           referenceCents={workingBalanceCents(account)}
           groups={upstreamOptionGroups(upstream, account, budgetAccounts)}
           loading={loading}
           loadFailed={loadFailed}
           onRetry={onRetry}
-          emptyText="No bank accounts available yet — connect a new bank first."
+          emptyText={t('sheet.bank.empty')}
           busy={busy}
           error={error}
           listMaxHeight={380}

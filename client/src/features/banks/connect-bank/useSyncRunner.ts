@@ -37,6 +37,7 @@ export function useSyncRunner(budgetId: string | null | undefined) {
           ]),
         );
       }
+      // eslint-disable-next-line budget-i18n/no-untranslated-string -- discriminator consumed by model/syncRun's describeSyncOutcome, which owns the wording
       return describeSyncOutcome(outcome, mode === 'sync' ? 'Sync' : 'Re-import');
     },
     [budgetId, dispatch, fetchStatus, requestReimport, requestSync],

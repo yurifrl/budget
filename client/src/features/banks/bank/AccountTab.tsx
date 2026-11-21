@@ -16,6 +16,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
 import { AmountPill } from '@/ui/AmountPill';
 import { ClearedBadge } from '@/ui/ClearedBadge';
+import { t } from './i18n';
 
 const TONE_BG: Record<TxnStateTone, string> = {
   neutral: colors.grayPillBg,
@@ -44,31 +45,31 @@ export function AccountTab({ connectionId, accountId, wide }: { connectionId: st
     );
   }
   if (query.isError) {
-    return <Text style={styles.hint}>Could not load this account&apos;s transactions.</Text>;
+    return <Text style={styles.hint}>{t('account.loadFailed')}</Text>;
   }
   if (items.length === 0) {
-    return <Text style={styles.hint}>No imported transactions for this account yet. Sync the bank to pull them.</Text>;
+    return <Text style={styles.hint}>{t('account.empty')}</Text>;
   }
 
   return (
     <View style={styles.wrap}>
       {wide ? (
         <View style={styles.thead}>
-          <Text style={[styles.th, styles.cDate]}>DATE</Text>
-          <Text style={[styles.th, styles.cPayee]}>PAYEE</Text>
-          <Text style={[styles.th, styles.cMemo]}>MEMO</Text>
-          <Text style={[styles.th, styles.cState]}>STATE</Text>
-          <Text style={[styles.th, styles.cAmount]}>AMOUNT</Text>
-          <Text style={[styles.th, styles.cCleared]}>C</Text>
+          <Text style={[styles.th, styles.cDate]}>{t('account.col.date')}</Text>
+          <Text style={[styles.th, styles.cPayee]}>{t('account.col.payee')}</Text>
+          <Text style={[styles.th, styles.cMemo]}>{t('account.col.memo')}</Text>
+          <Text style={[styles.th, styles.cState]}>{t('account.col.state')}</Text>
+          <Text style={[styles.th, styles.cAmount]}>{t('account.col.amount')}</Text>
+          <Text style={[styles.th, styles.cCleared]}>{t('account.col.cleared')}</Text>
         </View>
       ) : null}
       <FlatList
         style={styles.list}
         data={items}
-        keyExtractor={(t) => t.id}
+        keyExtractor={(txn) => txn.id}
         onEndReached={loadMore}
         onEndReachedThreshold={0.6}
-        renderItem={({ item }) => (wide ? <TxnRow t={item} /> : <TxnCard t={item} />)}
+        renderItem={({ item }) => (wide ? <TxnRow txn={item} /> : <TxnCard txn={item} />)}
         contentContainerStyle={wide ? undefined : styles.cards}
         ListFooterComponent={
           <View style={styles.footer}>
@@ -76,10 +77,10 @@ export function AccountTab({ connectionId, accountId, wide }: { connectionId: st
               <ActivityIndicator color={colors.indigo2} />
             ) : hasNextPage ? (
               <Pressable onPress={loadMore} accessibilityRole="button">
-                <Text style={styles.more}>Load more</Text>
+                <Text style={styles.more}>{t('account.loadMore')}</Text>
               </Pressable>
             ) : (
-              <Text style={styles.end}>{`${items.length} transaction${items.length === 1 ? '' : 's'} · end of history`}</Text>
+              <Text style={styles.end}>{t('account.end', { count: items.length })}</Text>
             )}
           </View>
         }
@@ -88,8 +89,8 @@ export function AccountTab({ connectionId, accountId, wide }: { connectionId: st
   );
 }
 
-function StatePill({ t }: { t: ConnectionTxnJson }) {
-  const view = txnStateView(t.state);
+function StatePill({ txn }: { txn: ConnectionTxnJson }) {
+  const view = txnStateView(txn.state);
   return (
     <View style={[styles.statePill, { backgroundColor: TONE_BG[view.tone] }]}>
       <Text style={[styles.stateText, { color: TONE_FG[view.tone] }]}>{view.label}</Text>
@@ -97,46 +98,46 @@ function StatePill({ t }: { t: ConnectionTxnJson }) {
   );
 }
 
-function TxnRow({ t }: { t: ConnectionTxnJson }) {
+function TxnRow({ txn }: { txn: ConnectionTxnJson }) {
   const { formatDate } = useMoneyFormat();
   return (
-    <View style={[styles.row, t.state === 'removed' && styles.removed]}>
-      <Text style={[styles.cell, styles.cDate, { color: colors.muted }]}>{formatDate(t.date)}</Text>
+    <View style={[styles.row, txn.state === 'removed' && styles.removed]}>
+      <Text style={[styles.cell, styles.cDate, { color: colors.muted }]}>{formatDate(txn.date)}</Text>
       <Text style={[styles.cell, styles.cPayee]} numberOfLines={1}>
-        {t.payee || '(no payee)'}
+        {txn.payee || t('account.noPayee')}
       </Text>
       <Text style={[styles.cell, styles.cMemo, { color: colors.faint }]} numberOfLines={1}>
-        {t.memo ?? ''}
+        {txn.memo ?? ''}
       </Text>
       <View style={styles.cState}>
-        <StatePill t={t} />
+        <StatePill txn={txn} />
       </View>
       <View style={[styles.cAmount, styles.amountCell]}>
-        <AmountPill cents={milliToCents(t.amount)} />
+        <AmountPill cents={milliToCents(txn.amount)} />
       </View>
       <View style={styles.cCleared}>
-        <ClearedBadge status={t.cleared} />
+        <ClearedBadge status={txn.cleared} />
       </View>
     </View>
   );
 }
 
-function TxnCard({ t }: { t: ConnectionTxnJson }) {
+function TxnCard({ txn }: { txn: ConnectionTxnJson }) {
   const { formatDate } = useMoneyFormat();
   return (
-    <View style={[styles.card, t.state === 'removed' && styles.removed]}>
+    <View style={[styles.card, txn.state === 'removed' && styles.removed]}>
       <View style={styles.cardL1}>
         <Text style={styles.cardPayee} numberOfLines={1}>
-          {t.payee || '(no payee)'}
+          {txn.payee || t('account.noPayee')}
         </Text>
-        <AmountPill cents={milliToCents(t.amount)} />
-        <ClearedBadge compact status={t.cleared} />
+        <AmountPill cents={milliToCents(txn.amount)} />
+        <ClearedBadge compact status={txn.cleared} />
       </View>
       <View style={styles.cardL2}>
         <Text style={styles.cardMeta} numberOfLines={1}>
-          {[formatDate(t.date), t.memo].filter(Boolean).join(' · ')}
+          {[formatDate(txn.date), txn.memo].filter(Boolean).join(' · ')}
         </Text>
-        <StatePill t={t} />
+        <StatePill txn={txn} />
       </View>
     </View>
   );

@@ -11,6 +11,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
 import { Sparkline } from '@/ui/Sparkline';
+import { t } from './i18n';
 
 export interface BankBalanceLinked {
   /** From balanceReconcile(). */
@@ -27,11 +28,11 @@ export function BankBalanceCard({ balanceCents, linked }: { balanceCents: number
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
-        <Text style={styles.label}>BANK BALANCE</Text>
+        <Text style={styles.label}>{t('balance.title')}</Text>
         {rec ? (
           <View style={rec.matches ? styles.okPill : styles.warnPill}>
             <Text style={rec.matches ? styles.okText : styles.warnText}>
-              {rec.matches ? 'Matches budget' : `Budget differs by ${formatMoney(rec.diffCents)}`}
+              {rec.matches ? t('balance.matches') : t('balance.differs', { amount: formatMoney(rec.diffCents) })}
             </Text>
           </View>
         ) : null}
@@ -44,11 +45,11 @@ export function BankBalanceCard({ balanceCents, linked }: { balanceCents: number
           </View>
           <View style={styles.row}>
             <Text style={styles.flows}>
-              <Text style={styles.inflow}>{`↑ ${formatMoney(linked.inCents)} in`}</Text>
+              <Text style={styles.inflow}>{t('balance.in', { amount: formatMoney(linked.inCents) })}</Text>
               <Text style={styles.muted}>{'  ·  '}</Text>
-              <Text style={styles.outflow}>{`↓ ${formatMoney(linked.outCents)} out`}</Text>
+              <Text style={styles.outflow}>{t('balance.out', { amount: formatMoney(linked.outCents) })}</Text>
             </Text>
-            <Text style={styles.muted}>last 30 days</Text>
+            <Text style={styles.muted}>{t('balance.last30')}</Text>
           </View>
         </>
       ) : null}

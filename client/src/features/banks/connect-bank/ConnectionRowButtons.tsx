@@ -7,6 +7,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 
 export function ConnectionRowButtons({
   institution,
@@ -29,7 +30,7 @@ export function ConnectionRowButtons({
         disabled={!canSync}
         onPress={onSync}
         accessibilityRole="button"
-        accessibilityLabel={`Sync ${institution}`}
+        accessibilityLabel={t('row.syncA11y', { institution })}
         accessibilityState={{ disabled: !canSync, busy: syncing }}
       >
         {syncing ? (
@@ -43,7 +44,7 @@ export function ConnectionRowButtons({
         style={styles.btn}
         onPress={onEdit}
         accessibilityRole="button"
-        accessibilityLabel={`Edit ${institution}`}
+        accessibilityLabel={t('row.editA11y', { institution })}
       >
         <Ionicons name="ellipsis-horizontal-circle" size={22} color={colors.indigo2} />
       </Pressable>

@@ -5,6 +5,7 @@
  */
 
 import type { ConnectionJson, ConnectionUpstreamJson } from '@/budget/data/connections';
+import { t } from './i18n';
 import { classifyWidgetMessage, formatSyncStamp, oauthRelayUrl, widgetItemId } from '../model/connections';
 
 /** Which row shows the widget: 'new' = a new bank, an item id = re-auth, null = the list. */
@@ -73,9 +74,7 @@ export function visibleConnections<T extends Pick<ConnectionJson, 'status'>>(con
 export function banksHint(connections: readonly Pick<ConnectionJson, 'status'>[]): string {
   const visible = visibleConnections(connections).length;
   const connected = connections.filter((r) => r.status === 'connected').length;
-  return visible === 0
-    ? 'No banks linked yet. Connect one to pull accounts and transactions.'
-    : `${visible} bank${visible === 1 ? '' : 's'} · ${connected} connected`;
+  return visible === 0 ? t('list.none') : t('list.summary', { count: visible, connected });
 }
 
 /** A bank's display name: the institution, else the provider. */
@@ -89,9 +88,16 @@ export function connectionSubline(
   reauth: boolean,
   stamp: (iso: string) => string = formatSyncStamp,
 ): string {
-  return reauth
-    ? `Reconnect to refresh credentials · ${row.environment === 'sandbox' ? 'sandbox' : 'added ' + stamp(row.created_at)}`
-    : `Last sync: ${row.last_synced_at ? stamp(row.last_synced_at) : 'added ' + stamp(row.created_at)}${row.environment === 'sandbox' ? ' · sandbox' : ''}`;
+  const sandbox = row.environment === 'sandbox';
+  if (reauth) {
+    return sandbox ? t('row.reauthSandbox') : t('row.reauthAdded', { stamp: stamp(row.created_at) });
+  }
+  if (row.last_synced_at) {
+    const synced = stamp(row.last_synced_at);
+    return sandbox ? t('row.lastSyncSandbox', { stamp: synced }) : t('row.lastSync', { stamp: synced });
+  }
+  const added = stamp(row.created_at);
+  return sandbox ? t('row.lastAddedSandbox', { stamp: added }) : t('row.lastAdded', { stamp: added });
 }
 
 /** How many of a connection's upstream accounts are linked to budget accounts. */

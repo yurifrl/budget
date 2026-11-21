@@ -19,6 +19,7 @@ import {
 } from '@/budget/data/api';
 import { isOwnKeysRequired, PLUGGY_KEYS_FROM_CONNECT, PLUGGY_KEYS_ROUTE } from '../keys/pluggyKeys.logic';
 import { buildWidgetUrl } from '../model/connections';
+import { t } from './i18n';
 import { initialFlowTarget, stepSuccessRoute, widgetStep, type ConnectFlowTarget } from './connectBank.logic';
 
 export type ConnectFlow = ReturnType<typeof useConnectFlow>;
@@ -87,7 +88,7 @@ export function useConnectFlow({
           router.push((flow === 'new' ? PLUGGY_KEYS_FROM_CONNECT : PLUGGY_KEYS_ROUTE) as Href);
           return;
         }
-        setError(apiErrorMessage(err, 'could not start the connection flow'));
+        setError(apiErrorMessage(err, t('flow.startFailed')));
       }
     };
     void run();
@@ -122,7 +123,7 @@ export function useConnectFlow({
       // the relayed auth back comes over the app deep link, not here.
       if (step.kind === 'oauth') {
         if (!step.url) {
-          setError('The bank needs its own login window — allow it to open, then try again.');
+          setError(t('flow.needsLogin'));
           return;
         }
         await Browser.openBrowserAsync(step.url);
@@ -140,7 +141,7 @@ export function useConnectFlow({
           await syncConnection({ id: step.connectionId, budgetId: budgetId ?? '' }).unwrap();
           finish();
         } catch (err) {
-          setError(apiErrorMessage(err, 'could not refresh the reconnected bank'));
+          setError(apiErrorMessage(err, t('flow.refreshFailed')));
         }
         return;
       }
@@ -165,7 +166,7 @@ export function useConnectFlow({
           router.push(PLUGGY_KEYS_FROM_CONNECT as Href);
           return;
         }
-        setError(apiErrorMessage(err, 'could not register the connected bank'));
+        setError(apiErrorMessage(err, t('flow.registerFailed')));
       }
     },
     [budgetId, connectionIdState, finish, flow, busy, registerConnection, router, setError, syncConnection, landOnConnectBank],

@@ -9,6 +9,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { CreditView } from '../model/connections';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
+import { t } from './i18n';
 
 export function CreditBillCard({ view }: { view: CreditView }) {
   const { formatMoney } = useMoneyFormat();
@@ -18,10 +19,10 @@ export function CreditBillCard({ view }: { view: CreditView }) {
     <View style={styles.wrap}>
       {billCents != null || due ? (
         <View style={styles.row}>
-          <Text style={styles.label}>{billCents != null ? 'CURRENT BILL' : 'BILL'}</Text>
+          <Text style={styles.label}>{billCents != null ? t('bill.current') : t('bill.title')}</Text>
           {due ? (
             <View style={styles.duePill}>
-              <Text style={styles.dueText}>{`Due ${due}`}</Text>
+              <Text style={styles.dueText}>{t('bill.due', { date: due })}</Text>
             </View>
           ) : null}
         </View>
@@ -35,14 +36,14 @@ export function CreditBillCard({ view }: { view: CreditView }) {
           <View style={styles.row}>
             <Text style={styles.used}>
               {formatMoney(usedCents)}
-              <Text style={styles.muted}>{usedPct != null ? ` used · ${usedPct}%` : ' used'}</Text>
+              <Text style={styles.muted}>{' '}{usedPct != null ? t('bill.usedPct', { pct: usedPct }) : t('bill.used')}</Text>
             </Text>
-            <Text style={styles.muted}>{`of ${formatMoney(limitCents)}`}</Text>
+            <Text style={styles.muted}>{t('bill.of', { amount: formatMoney(limitCents) })}</Text>
           </View>
-          {availableCents != null ? <Text style={styles.available}>{`${formatMoney(availableCents)} available`}</Text> : null}
+          {availableCents != null ? <Text style={styles.available}>{t('bill.available', { amount: formatMoney(availableCents) })}</Text> : null}
         </View>
       ) : limitCents != null ? (
-        <Text style={styles.muted}>{`Limit ${formatMoney(limitCents)}`}</Text>
+        <Text style={styles.muted}>{t('bill.limit', { amount: formatMoney(limitCents) })}</Text>
       ) : null}
     </View>
   );

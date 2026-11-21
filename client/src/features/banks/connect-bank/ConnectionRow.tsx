@@ -13,6 +13,7 @@ import { colors } from '@/ui/theme';
 import { connectionName, connectionSubline, linkedAccountCount } from './connectBank.logic';
 import { ConnectionRowButtons } from './ConnectionRowButtons';
 import { ConnectionRowMenu } from './ConnectionRowMenu';
+import { t } from './i18n';
 import { styles } from './screenStyles';
 import { UpstreamAccountsList } from './UpstreamAccountsList';
 import type { useSyncStatus } from './useSyncStatus';
@@ -84,7 +85,7 @@ export function ConnectionRow({
         // own Sync/Edit buttons: keep the label, drop the role there.
         accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
         role={Platform.OS === 'web' ? 'group' : undefined}
-        accessibilityLabel={`Open ${name}`}
+        accessibilityLabel={t('row.openA11y', { name })}
         style={(state) => [
           styles.connCard,
           styles.connCardPress,
