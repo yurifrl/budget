@@ -1,2 +1,18 @@
-/** English strings of the admin SPA. Empty until the admin pages are converted (docs/i18n.md). */
-export default {} as const;
+/** English strings of the admin shell (header, sign-in notices, scheduler banner, language select). Pages have their own namespaces. */
+export default {
+  'app.title': 'Budget admin',
+  'nav.jobs': 'Jobs',
+  'nav.users': 'Users',
+  'nav.features': 'Features',
+  'language.label': 'Language',
+  'language.system': 'System',
+  'auth.signInTitle': 'Sign in required',
+  'auth.signInBody':
+    'Sign in at <link>{url}</link> with an admin account, then reload this page. Signing in at the app (with any method: password, Google or Access) also works, since the session cookie is shared.',
+  'auth.notAdminTitle': 'Not an admin',
+  'auth.notAdminBody': 'Your account is not an admin.',
+  'banner.unreachable': 'Cannot reach the API: {message}',
+  'banner.schedulerDown': 'Scheduler (Temporal) unavailable — runs stay queued: {reason}<b> · {count} queued</b>',
+  'banner.unknownReason': 'unknown reason',
+  'banner.schedulerUp': 'Scheduler up · {count} queued · instance <code>{instance}</code>',
+} as const;

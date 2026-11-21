@@ -1,4 +1,7 @@
 import type { AdminUser } from '@shared/contracts/user';
+import { getLocale, labels } from '@shared/i18n';
+
+import { t } from './pages/users/i18n';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -6,18 +9,17 @@ const DAY = 24 * HOUR;
 
 /** "5 days", "3 hours", "12 minutes". `up` rounds the count up (time left); default rounds down (time elapsed). */
 export function duration(ms: number, up = false): string {
-  const unit = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
   const round = up ? Math.ceil : Math.floor;
-  if (ms >= DAY) return unit(round(ms / DAY), 'day');
-  if (ms >= HOUR) return unit(round(ms / HOUR), 'hour');
-  return unit(Math.max(1, round(ms / MIN)), 'minute');
+  if (ms >= DAY) return t('time.day', { count: round(ms / DAY) });
+  if (ms >= HOUR) return t('time.hour', { count: round(ms / HOUR) });
+  return t('time.minute', { count: Math.max(1, round(ms / MIN)) });
 }
 
 export function relativeTime(iso: string | null, now: number): string {
-  if (!iso) return 'never';
+  if (!iso) return t('relative.never');
   const ms = now - new Date(iso).getTime();
-  if (ms < MIN) return 'just now';
-  return `${duration(ms)} ago`;
+  if (ms < MIN) return t('relative.justNow');
+  return t('relative.ago', { time: duration(ms) });
 }
 
 export interface SignInMethods {
@@ -34,25 +36,25 @@ export function passwordState(
   u: Pick<AdminUser, 'has_password' | 'must_change_password' | 'temp_expires_at'>,
   now: number,
 ): { label: string; tone: 'none' | 'ok' | 'warn' | 'bad' } {
-  if (!u.has_password) return { label: 'no password', tone: 'none' };
-  if (!u.must_change_password) return { label: 'password set', tone: 'ok' };
-  if (!u.temp_expires_at) return { label: 'temp password, must change', tone: 'warn' };
+  if (!u.has_password) return { label: t('password.none'), tone: 'none' };
+  if (!u.must_change_password) return { label: t('password.set'), tone: 'ok' };
+  if (!u.temp_expires_at) return { label: t('password.tempMustChange'), tone: 'warn' };
   const left = new Date(u.temp_expires_at).getTime() - now;
-  if (left <= 0) return { label: 'temp password expired', tone: 'bad' };
-  return { label: `temp password, expires in ${duration(left, true)}`, tone: 'warn' };
+  if (left <= 0) return { label: t('password.tempExpired'), tone: 'bad' };
+  return { label: t('password.tempExpires', { time: duration(left, true) }), tone: 'warn' };
 }
 
 /** "locked until 14:32" while locked; null when not (or the lock has passed). */
 export function lockLabel(lockedUntil: string | null, now: number): string | null {
   if (!lockedUntil) return null;
-  const t = new Date(lockedUntil);
-  if (t.getTime() <= now) return null;
-  const time = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return `locked until ${time}`;
+  const until = new Date(lockedUntil);
+  if (until.getTime() <= now) return null;
+  const time = until.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
+  return t('lock.until', { time });
 }
 
 export function signedInLabel(u: Pick<AdminUser, 'signed_in_at'>, now: number): string {
-  return u.signed_in_at ? `signed in ${relativeTime(u.signed_in_at, now)}` : 'never signed in';
+  return u.signed_in_at ? t('signedIn.at', { when: relativeTime(u.signed_in_at, now) }) : t('signedIn.never');
 }
 
 export function matchesFilter(u: Pick<AdminUser, 'email' | 'name'>, q: string): boolean {
@@ -69,31 +71,31 @@ export interface SelfLimits {
   hint: string | null;
 }
 export const selfLimits = (u: Pick<AdminUser, 'email'>, meEmail: string | null): SelfLimits => {
-  if (!meEmail) return { isSelf: false, locked: true, hint: 'Checking who you are: disable and delete stay off until your identity is known.' };
+  if (!meEmail) return { isSelf: false, locked: true, hint: t('self.checking') };
   const isSelf = u.email.toLowerCase() === meEmail.toLowerCase();
   return {
     isSelf,
     locked: isSelf,
-    hint: isSelf ? 'This is you: you cannot disable, demote or delete your own account.' : null,
+    hint: isSelf ? t('self.you') : null,
   };
 };
 
-const MESSAGES: Record<string, string> = {
-  unauthorized: 'You are signed out. Sign in again and retry.',
-  account_disabled: 'Your account is disabled.',
-  forbidden: 'Only an admin signed in at the app or admin can do this.',
-  origin_not_allowed: 'This page is not an allowed origin for the API.',
-  not_found: 'That user no longer exists (or cannot be managed). Refresh the list.',
-  user_exists: 'A user with that e-mail already exists.',
-  cannot_modify_self: 'You cannot disable, demote or delete your own account.',
-  last_admin: 'This is the last active admin: it cannot be disabled, demoted or deleted.',
-  user_has_data: 'This user has data (budgets, memberships, accounts...) and cannot be deleted. Disable the user instead.',
-  password_login_disabled: 'Password login is turned off on the server (AUTH_PASSWORD_LOGIN=0).',
-};
+const MESSAGES: Record<string, string> = labels(t, {
+  unauthorized: 'error.unauthorized',
+  account_disabled: 'error.accountDisabled',
+  forbidden: 'error.forbidden',
+  origin_not_allowed: 'error.originNotAllowed',
+  not_found: 'error.notFound',
+  user_exists: 'error.userExists',
+  cannot_modify_self: 'error.cannotModifySelf',
+  last_admin: 'error.lastAdmin',
+  user_has_data: 'error.userHasData',
+  password_login_disabled: 'error.passwordLoginDisabled',
+});
 
 export function errorMessage(code: string | undefined, fallback: string, status?: number | 'network'): string {
-  if (status === 'network') return 'Cannot reach the API. Check your connection and that the API is running, then retry.';
+  if (status === 'network') return t('error.network');
   // 400 invalid_input carries the server's own reason (e.g. "this e-mail is reserved"): keep it, with a lead-in.
-  if (code === 'invalid_input') return `Not accepted: ${fallback}.`;
+  if (code === 'invalid_input') return t('error.notAccepted', { reason: fallback });
   return (code && MESSAGES[code]) || fallback;
 }

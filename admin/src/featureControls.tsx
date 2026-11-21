@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { ApiError, clearFeatureUser, setFeatureUser, type AdminFeature } from './api';
-import { changedLabel, groupFeatures, popoverPlacement, shownLabel, userState, userSummary, type Placement, type ToggleState } from './features.logic';
+import { changedLabel, featureDescription, groupFeatures, groupLabel, popoverPlacement, shownLabel, userState, userSummary, type Placement, type ToggleState } from './features.logic';
+import { t } from './pages/features/i18n';
 import { errorMessage } from './users.logic';
 
 const msg = (e: unknown) => (e instanceof ApiError ? errorMessage(e.code, e.message, e.status) : String(e));
@@ -47,7 +50,7 @@ export function FeatureToggle(props: {
       <label className="switch">
         <input type="checkbox" role="switch" aria-label={props.name} checked={state.value} disabled={busy} onChange={(e) => props.onSet(e.target.checked)} />
         <span className="track" aria-hidden="true" />
-        <span className="switch-text">{state.value ? 'On' : 'Off'}</span>
+        <span className="switch-text">{state.value ? t('toggle.on') : t('toggle.off')}</span>
       </label>
       <span className={`badge ${state.stored ? 'overridden' : 'inherited'}`}>{state.label}</span>
       {state.stored && <span className="muted sub">{changedLabel(state.stored, props.now)}</span>}
@@ -133,7 +136,7 @@ export function UserFeaturesDropdown(props: {
   return (
     <span className="features-dropdown" ref={rootRef}>
       <button ref={buttonRef} className="dropdown-button" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? listId : undefined} disabled={!features} onClick={toggle}>
-        {features ? userSummary(all, user.id).label : 'Loading'}
+        {features ? userSummary(all, user.id).label : tCommon('loading')}
         <span className="caret" aria-hidden="true">
           ▾
         </span>
@@ -143,7 +146,7 @@ export function UserFeaturesDropdown(props: {
           id={listId}
           className="features-popover"
           role="dialog"
-          aria-label={`Features for ${user.email}`}
+          aria-label={t('popover.label', { email: user.email })}
           data-testid={`features-popover-${user.email}`}
           style={{ ...place }}
         >
@@ -152,8 +155,8 @@ export function UserFeaturesDropdown(props: {
               ref={filterRef}
               className="grow"
               type="search"
-              placeholder="Filter features by name, group or description"
-              aria-label="Filter features"
+              placeholder={t('popover.filterPlaceholder')}
+              aria-label={t('popover.filterLabel')}
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -163,20 +166,20 @@ export function UserFeaturesDropdown(props: {
           {notice && <div className="err popover-notice">{notice}</div>}
           <div className="popover-list">
             {groups.map((g) => (
-              <section key={g.group} aria-label={g.group}>
-                <h4>{g.group}</h4>
+              <section key={g.group} aria-label={groupLabel(g.group)}>
+                <h4>{groupLabel(g.group)}</h4>
                 {g.features.map((f) => {
                   const id = `${f.key}:${user.id}`;
                   return (
                     <div className="popover-feature" key={f.key}>
                       <div className="popover-feature-name">
                         <code>{f.key}</code>
-                        <div className="muted sub">{f.description}</div>
+                        <div className="muted sub">{featureDescription(f)}</div>
                       </div>
                       <FeatureToggle
                         state={userState(f, user.id)}
-                        name={`${f.key} for ${user.email}`}
-                        clearLabel="Inherit"
+                        name={t('toggle.userName', { key: f.key, email: user.email })}
+                        clearLabel={t('action.inherit')}
                         busy={busy.has(id)}
                         now={now}
                         onSet={(value) => void run(id, () => setFeatureUser(f.key, user.id, value))}
@@ -187,7 +190,7 @@ export function UserFeaturesDropdown(props: {
                 })}
               </section>
             ))}
-            {groups.length === 0 && <div className="muted popover-empty">{all.length === 0 ? 'No features are defined.' : 'No feature matches the filter.'}</div>}
+            {groups.length === 0 && <div className="muted popover-empty">{all.length === 0 ? t('popover.noFeatures') : t('popover.noMatch')}</div>}
           </div>
         </div>
       )}

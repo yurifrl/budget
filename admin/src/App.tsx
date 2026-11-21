@@ -1,8 +1,11 @@
 import { getHealth, loginUrl } from './api';
 import { usePolled, useHashPath } from './hooks';
+import { t } from './i18n';
+import { LanguageSelect } from './LanguageSelect';
 import { FeaturesPage } from './pages/Features';
 import { RunDetailPage } from './pages/RunDetail';
 import { RunsPage } from './pages/Runs';
+import { rich } from './rich';
 import { UsersPage } from './pages/Users';
 
 export function App() {
@@ -15,11 +18,8 @@ export function App() {
     return (
       <Shell path={path}>
         <div className="notice">
-          <h2>Sign in required</h2>
-          <p>
-            Sign in at <a href={loginUrl()}>{loginUrl()}</a> with an admin account, then reload this page. Signing in at the
-            app (with any method: password, Google or Access) also works, since the session cookie is shared.
-          </p>
+          <h2>{t('auth.signInTitle')}</h2>
+          <p>{rich(t('auth.signInBody', { url: loginUrl() }), { link: (c) => <a href={loginUrl()}>{c}</a> })}</p>
         </div>
       </Shell>
     );
@@ -28,8 +28,8 @@ export function App() {
     return (
       <Shell path={path}>
         <div className="notice">
-          <h2>Not an admin</h2>
-          <p>Your account is not an admin.</p>
+          <h2>{t('auth.notAdminTitle')}</h2>
+          <p>{t('auth.notAdminBody')}</p>
         </div>
       </Shell>
     );
@@ -37,16 +37,23 @@ export function App() {
 
   return (
     <Shell path={path}>
-      {health.error && <div className="banner error">Cannot reach the API: {health.error.message}</div>}
+      {health.error && <div className="banner error">{t('banner.unreachable', { message: health.error.message })}</div>}
       {health.data && !health.data.temporal.up && (
         <div className="banner warn">
-          Scheduler (Temporal) unavailable — runs stay queued: {health.data.temporal.reason ?? 'unknown reason'}
-          <strong> · {health.data.queued} queued</strong>
+          {rich(
+            t('banner.schedulerDown', {
+              reason: health.data.temporal.reason ?? t('banner.unknownReason'),
+              count: health.data.queued,
+            }),
+            { b: (c) => <strong>{c}</strong> },
+          )}
         </div>
       )}
       {health.data?.temporal.up && (
         <div className="banner ok">
-          Scheduler up · {health.data.queued} queued · instance <code>{health.data.instance_id}</code>
+          {rich(t('banner.schedulerUp', { count: health.data.queued, instance: health.data.instance_id }), {
+            code: (c) => <code>{c}</code>,
+          })}
         </div>
       )}
       {path.startsWith('/users') ? (
@@ -69,19 +76,20 @@ function Shell({ children, path = '/' }: { children: React.ReactNode; path?: str
     <div className="shell">
       <header>
         <a href="#/" className="brand">
-          Budget admin
+          {t('app.title')}
         </a>
         <nav>
           <a href="#/" className={users || features ? '' : 'active'}>
-            Jobs
+            {t('nav.jobs')}
           </a>
           <a href="#/users" className={users ? 'active' : ''}>
-            Users
+            {t('nav.users')}
           </a>
           <a href="#/features" className={features ? 'active' : ''}>
-            Features
+            {t('nav.features')}
           </a>
         </nav>
+        <LanguageSelect />
       </header>
       <main>{children}</main>
     </div>
