@@ -17,6 +17,17 @@ import { MY_FEATURES_REFETCH, useGetMyFeaturesQuery } from '@/profile/api';
 const DEFAULTS: FeatureValues = featureDefaults();
 
 export function useFeatures(): FeatureValues {
-  const { data } = useGetMyFeaturesQuery(undefined, MY_FEATURES_REFETCH);
-  return data ?? DEFAULTS;
+  return useFeaturesState().values;
+}
+
+/**
+ * The values plus whether they are the API's answer yet: 'loading' before
+ * the first answer, 'failed' when it could not be read (values are then the
+ * defaults), 'ready' otherwise. For a screen that must not act on a default
+ * it has not confirmed (e.g. sending someone away from a flow).
+ */
+export function useFeaturesState(): { values: FeatureValues; status: 'loading' | 'ready' | 'failed' } {
+  const { data, isError } = useGetMyFeaturesQuery(undefined, MY_FEATURES_REFETCH);
+  if (data) return { values: data, status: 'ready' };
+  return { values: DEFAULTS, status: isError ? 'failed' : 'loading' };
 }

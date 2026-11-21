@@ -7,6 +7,7 @@ import { colors, radius } from '@/ui/theme';
 export const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, padding: 16, gap: 10 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { color: colors.text, fontSize: 22, fontWeight: '800' },
   hint: { color: colors.muted, fontSize: 13 },
   banner: {

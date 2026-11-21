@@ -35,6 +35,8 @@ import { ConnectionRow } from './connect-bank/ConnectionRow';
 import { styles } from './connect-bank/screenStyles';
 import { useConnectFlow } from './connect-bank/useConnectFlow';
 import { useConnectionActions } from './connect-bank/useConnectionActions';
+import { PLUGGY_KEYS_FROM_CONNECT, PLUGGY_KEYS_ROUTE } from './keys/pluggyKeys.logic';
+import { useConnectGate } from './keys/useConnectGate';
 import { useSyncStatus } from './connect-bank/useSyncStatus';
 import { useBudgetShell } from '@/shell/context';
 
@@ -69,6 +71,18 @@ export function ConnectBankScreen() {
   const { error, setError, report: syncReport, setReport, syncingId, sync, reimport, requestRemove } = actions;
   const connect = useConnectFlow({ budgetId, itemId, connectionId, actionsBusy: actions.busy, setError });
   const { flow, busy, tokenLoading, landOnAccounts, startFlow } = connect;
+  const gate = useConnectGate();
+  const openKeys = useCallback(() => router.push(PLUGGY_KEYS_ROUTE as Href), [router]);
+
+  /** "Connect another bank": the widget, or the keys screen when no key set may be used. */
+  const connectNew = useCallback(() => {
+    if (gate === 'wait') return;
+    if (gate === 'needs_keys') {
+      router.push(PLUGGY_KEYS_FROM_CONNECT as Href);
+      return;
+    }
+    void startFlow('new');
+  }, [gate, router, startFlow]);
 
   // The settings page redirects here with ?removed=1 after "Remove bank":
   // surface the report it could not show itself, then clear the param.
@@ -100,8 +114,11 @@ export function ConnectBankScreen() {
     <View style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
       <View style={styles.head}>
         <Text style={styles.title}>Linked banks</Text>
-        {/* Close affordance in every phase (back-nav requirement). */}
-        <GhostButton label="Close" onPress={() => landOnAccounts()} />
+        <View style={styles.headActions}>
+          <GhostButton label="Your Pluggy keys" onPress={openKeys} />
+          {/* Close affordance in every phase (back-nav requirement). */}
+          <GhostButton label="Close" onPress={() => landOnAccounts()} />
+        </View>
       </View>
 
       {error ? (
@@ -147,14 +164,15 @@ export function ConnectBankScreen() {
                 onReimport={() => void reimport(row)}
                 onReconnect={() => void startFlow(row.external_id, row.id)}
                 onSettings={() => openSettings(row.id)}
+                onOpenKeys={openKeys}
                 onDisconnect={(linkedCount) => requestRemove(row, linkedCount)}
               />
             ))}
           </ScrollView>
           <IndigoButton
-            label={tokenLoading || busy ? 'Working…' : 'Connect another bank'}
+            label={tokenLoading || busy ? 'Working…' : gate === 'wait' ? 'Checking…' : 'Connect another bank'}
             style={styles.connectBtn}
-            onPress={tokenLoading || busy ? undefined : () => void startFlow('new')}
+            onPress={tokenLoading || busy || gate === 'wait' ? undefined : connectNew}
           />
         </>
       )}

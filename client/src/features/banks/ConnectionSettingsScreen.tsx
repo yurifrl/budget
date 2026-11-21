@@ -33,6 +33,8 @@ import { GhostButton, IndigoButton, OverlaySheet } from '@/ui/bits';
 import { AccountTab } from './bank/AccountTab';
 import { OverviewTab } from './bank/OverviewTab';
 import { SettingsPanel } from './bank/SettingsPanel';
+import { PausedNotice } from './keys/PausedNotice';
+import { PLUGGY_KEYS_ROUTE } from './keys/pluggyKeys.logic';
 import { useConnectionActions } from './connect-bank/useConnectionActions';
 import { useSyncStatus } from './connect-bank/useSyncStatus';
 import { canRequestSync, syncStateView } from './model/syncRun';
@@ -184,7 +186,9 @@ export function ConnectionSettingsScreen() {
               <Text style={styles.reportText}>{syncStatus.banner}</Text>
             </View>
           ) : null}
-          {connection.status_message && connection.status !== 'connected' ? (
+          {connection.status === 'paused' ? (
+            <PausedNotice row={connection} onOpenKeys={() => router.push(PLUGGY_KEYS_ROUTE as Href)} />
+          ) : connection.status_message && connection.status !== 'connected' ? (
             <View style={styles.banner}>
               <Text style={styles.bannerText}>{connection.status_message}</Text>
             </View>

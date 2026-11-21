@@ -17,6 +17,7 @@ import {
   useRegisterConnectionMutation,
   useSyncConnectionMutation,
 } from '@/budget/data/api';
+import { isOwnKeysRequired, PLUGGY_KEYS_FROM_CONNECT, PLUGGY_KEYS_ROUTE } from '../keys/pluggyKeys.logic';
 import { buildWidgetUrl } from '../model/connections';
 import { initialFlowTarget, stepSuccessRoute, widgetStep, type ConnectFlowTarget } from './connectBank.logic';
 
@@ -78,13 +79,19 @@ export function useConnectFlow({
         setConnectToken(token.token);
         setWidgetUrl(buildWidgetUrl(token.widgetUrl, token.token));
       } catch (err) {
-        setError(apiErrorMessage(err, 'could not start the connection flow'));
         setFlow(null);
         startedRef.current = false;
+        // No usable key set (no own keys, no shared-key feature, or the own
+        // keys this bank was made with are gone): the keys screen, not an error.
+        if (isOwnKeysRequired(err)) {
+          router.push((flow === 'new' ? PLUGGY_KEYS_FROM_CONNECT : PLUGGY_KEYS_ROUTE) as Href);
+          return;
+        }
+        setError(apiErrorMessage(err, 'could not start the connection flow'));
       }
     };
     void run();
-  }, [createToken, flow, setError]);
+  }, [createToken, flow, router, setError]);
 
   /** End the whole flow and land on the accounts screen. A replace (not
    *  back) — this screen can be entered from anywhere (menu, account edit),
@@ -153,10 +160,15 @@ export function useConnectFlow({
         const route = stepSuccessRoute(step);
         if (route) landOnConnectBank(route);
       } catch (err) {
+        if (isOwnKeysRequired(err)) {
+          finish();
+          router.push(PLUGGY_KEYS_FROM_CONNECT as Href);
+          return;
+        }
         setError(apiErrorMessage(err, 'could not register the connected bank'));
       }
     },
-    [budgetId, connectionIdState, finish, flow, busy, registerConnection, setError, syncConnection, landOnConnectBank],
+    [budgetId, connectionIdState, finish, flow, busy, registerConnection, router, setError, syncConnection, landOnConnectBank],
   );
 
   /** Start the widget flow for a row (re-auth) or a new connection. */

@@ -6,6 +6,7 @@ import { connectionStatusView, requiresReauth } from '../model/connections';
 import { connectionSparkData } from '../model/connectionSpark';
 import { canRequestSync, syncStateView } from '../model/syncRun';
 import { useMoneyFormat } from '@/ui/moneyFormat';
+import { PausedNotice } from '../keys/PausedNotice';
 import { LinkedBy } from '../LinkedBy';
 import { Sparkline } from '@/ui/Sparkline';
 import { colors } from '@/ui/theme';
@@ -33,6 +34,7 @@ export function ConnectionRow({
   onReimport,
   onReconnect,
   onSettings,
+  onOpenKeys,
   onDisconnect,
 }: {
   row: ConnectionJson;
@@ -53,6 +55,8 @@ export function ConnectionRow({
   onReconnect: () => void;
   /** Edit (⋯) / row press: the bank's own configuration page. */
   onSettings: () => void;
+  /** A paused row's "add your keys" action: the keys screen. */
+  onOpenKeys: () => void;
   onDisconnect: (linkedCount: number) => void;
 }) {
   const { formatMoney } = useMoneyFormat();
@@ -104,7 +108,9 @@ export function ConnectionRow({
           <Text style={styles.connSub} numberOfLines={1}>
             {connectionSubline(row, reauth)}
           </Text>
-          {row.status_message && row.status !== 'connected' ? (
+          {row.status === 'paused' ? (
+            <PausedNotice row={row} compact onOpenKeys={onOpenKeys} />
+          ) : row.status_message && row.status !== 'connected' ? (
             <Text style={styles.connSub} numberOfLines={2}>
               {row.status_message}
             </Text>
