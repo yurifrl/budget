@@ -14,6 +14,7 @@ import {
   useSaveConnectionCredentialsMutation,
 } from '@/budget/data/api';
 import { loadConfig } from '@/platform/config';
+import { t } from './i18n';
 import { checkKeysInput, deleteErrorMessage, keysScreenMode, saveErrorView, type KeysFormError } from './pluggyKeys.logic';
 
 export function usePluggyKeys() {
@@ -65,7 +66,7 @@ export function usePluggyKeys() {
       await saveKeys({ provider, clientId: clientId.trim(), clientSecret: clientSecret.trim() }).unwrap();
       setClientSecret('');
       setReplacing(false);
-      setNotice('Keys saved. Pluggy accepted them.');
+      setNotice(t('hook.saved'));
     } catch (err) {
       setError(saveErrorView(err));
     } finally {
@@ -81,7 +82,7 @@ export function usePluggyKeys() {
       setConfirmingRemove(false);
       setReplacing(false);
       setClientId('');
-      setNotice('Keys removed. Banks connected with them are paused until you save the same keys again.');
+      setNotice(t('hook.removed'));
     } catch (err) {
       setError({ field: 'form', message: deleteErrorMessage(err) });
     }

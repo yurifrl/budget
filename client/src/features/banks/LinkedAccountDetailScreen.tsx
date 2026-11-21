@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
+import { labels } from '@shared/i18n';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useAppSelector } from '@/state/hooks';
@@ -38,15 +39,17 @@ import { BalanceFormulaRow } from '@/ui/BalanceFormulaRow';
 import { AmountPill } from '@/ui/AmountPill';
 import { ClearedBadge } from '@/ui/ClearedBadge';
 import { useBudgetShell } from '@/shell/context';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './i18n';
 
 /** Header subtitle labels, mirroring AccountsScreen's map. */
-const ACCOUNT_TYPE_LABEL: Record<Budget['accounts'][number]['type'], string> = {
-  checking: 'Checking',
-  savings: 'Savings',
-  cash: 'Cash',
-  credit: 'Credit Card',
-  tracking: 'Tracking Account',
-};
+const ACCOUNT_TYPE_LABEL: Record<Budget['accounts'][number]['type'], string> = labels(t, {
+  checking: 'accountType.checking',
+  savings: 'accountType.savings',
+  cash: 'accountType.cash',
+  credit: 'accountType.credit',
+  tracking: 'accountType.tracking',
+});
 
 /** Stable empty array so memos stay referentially equal while loading. */
 const EMPTY_TXNS: Transaction[] = [];
@@ -84,7 +87,7 @@ export function LinkedAccountDetailScreen() {
   // Hooks must precede the loading guard below (rules of hooks).
   const txns = useMemo(() => {
     if (!budget || !accountId) return EMPTY_TXNS;
-    return budget.transactions.filter((t) => t.accountId === accountId);
+    return budget.transactions.filter((txn) => txn.accountId === accountId);
   }, [budget, accountId]);
 
   const runningBalances = useMemo(() => {
@@ -96,7 +99,7 @@ export function LinkedAccountDetailScreen() {
   if (!accountId || !budgetId) {
     return (
       <Centered>
-        <Text style={styles.hintText}>No account selected.</Text>
+        <Text style={styles.hintText}>{t('detail.noAccount')}</Text>
       </Centered>
     );
   }
@@ -117,7 +120,7 @@ export function LinkedAccountDetailScreen() {
   if (!accountRow || !budget) {
     return (
       <Centered>
-        <Text style={styles.hintText}>Account not found in this budget.</Text>
+        <Text style={styles.hintText}>{t('detail.notFound')}</Text>
       </Centered>
     );
   }
@@ -135,7 +138,7 @@ export function LinkedAccountDetailScreen() {
         {/* Header: back · name · provenance (institution · link status) +
             an explicit read-only mark where the editing toolbar would sit. */}
         <View style={styles.head}>
-          <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Back">
+          <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel={tCommon('back')}>
             <Ionicons name="chevron-back" size={20} color={colors.muted} />
           </Pressable>
           <View style={styles.headMain}>
@@ -158,7 +161,7 @@ export function LinkedAccountDetailScreen() {
           </View>
           <View style={styles.roMark}>
             <Ionicons name="lock-closed" size={12} color={colors.faint} />
-            <Text style={styles.roText}>Read-only</Text>
+            <Text style={styles.roText}>{t('detail.readOnly')}</Text>
           </View>
         </View>
         <BalanceFormulaRow
@@ -170,31 +173,29 @@ export function LinkedAccountDetailScreen() {
 
         {txns.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.hintText}>
-              No transactions yet — sync this connection to pull bank rows.
-            </Text>
+            <Text style={styles.hintText}>{t('detail.empty')}</Text>
           </View>
         ) : null}
 
         {/* register header — the Accounts table minus the select column */}
         {txns.length > 0 && showWide ? (
           <View style={styles.reghd}>
-            <Text style={[styles.reghdText, { flex: 1.1 }]}>ACCOUNT</Text>
-            <Text style={[styles.reghdText, { flex: 0.7 }]}>DATE</Text>
-            <Text style={[styles.reghdText, { flex: 1.4 }]}>PAYEE</Text>
-            <Text style={[styles.reghdText, { flex: 1.4 }]}>CATEGORY</Text>
-            <Text style={[styles.reghdText, { flex: 1.2 }]}>MEMO</Text>
-            <Text style={[styles.reghdText, { flex: 1.1, textAlign: 'right' }]}>AMOUNT</Text>
-            <Text style={[styles.reghdText, { flex: 1, textAlign: 'right' }]}>RUN. BAL</Text>
-            <Text style={[styles.reghdText, styles.slotW]}>C</Text>
+            <Text style={[styles.reghdText, { flex: 1.1 }]}>{t('detail.header.account')}</Text>
+            <Text style={[styles.reghdText, { flex: 0.7 }]}>{t('detail.header.date')}</Text>
+            <Text style={[styles.reghdText, { flex: 1.4 }]}>{t('detail.header.payee')}</Text>
+            <Text style={[styles.reghdText, { flex: 1.4 }]}>{t('detail.header.category')}</Text>
+            <Text style={[styles.reghdText, { flex: 1.2 }]}>{t('detail.header.memo')}</Text>
+            <Text style={[styles.reghdText, { flex: 1.1, textAlign: 'right' }]}>{t('detail.header.amount')}</Text>
+            <Text style={[styles.reghdText, { flex: 1, textAlign: 'right' }]}>{t('detail.header.balance')}</Text>
+            <Text style={[styles.reghdText, styles.slotW]}>{t('detail.header.cleared')}</Text>
           </View>
         ) : null}
 
         <FlatList
           data={txns}
-          keyExtractor={(t) => t.id}
-          renderItem={({ item: t }) => {
-            const cat = registerCategoryCell(budget, t, { transfers: false });
+          keyExtractor={(txn) => txn.id}
+          renderItem={({ item: txn }) => {
+            const cat = registerCategoryCell(budget, txn, { transfers: false });
             if (!showWide) {
               // Phone card — AccountsScreen's txnCard layout without the
               // Pressable/editor: payee + Repeat + amount + cleared mark,
@@ -204,15 +205,15 @@ export function LinkedAccountDetailScreen() {
                   <View style={styles.txnL1Phone}>
                     <View style={styles.txnLeadPhone}>
                       <Text style={styles.txnPayee} numberOfLines={1}>
-                        {t.payee || '(no payee)'}
+                        {txn.payee || t('detail.noPayee')}
                       </Text>
-                      {t.upcoming ? (
-                        <Text style={styles.upcomingPill}>Repeat</Text>
+                      {txn.upcoming ? (
+                        <Text style={styles.upcomingPill}>{t('detail.repeat')}</Text>
                       ) : null}
                     </View>
-                    <AmountPill cents={t.outflow > 0 ? -t.outflow : t.inflow} />
+                    <AmountPill cents={txn.outflow > 0 ? -txn.outflow : txn.inflow} />
                     {/* Read-only: no approve/toggle handlers — static mark. */}
-                    <ClearedBadge compact status={t.cleared} />
+                    <ClearedBadge compact status={txn.cleared} />
                   </View>
                   <View style={styles.txnL2Phone}>
                     <Text
@@ -231,10 +232,10 @@ export function LinkedAccountDetailScreen() {
                   {accountRow.name}
                 </Text>
                 <Text style={[styles.regText, { flex: 0.7, color: colors.muted }]}>
-                  {formatDate(t.date)}
+                  {formatDate(txn.date)}
                 </Text>
                 <Text style={[styles.regText, { flex: 1.4 }]} numberOfLines={1}>
-                  {t.payee || '(no payee)'}
+                  {txn.payee || t('detail.noPayee')}
                 </Text>
                 <Text
                   style={[styles.tagPill, cat.warn && styles.tagPillWarn]}
@@ -246,19 +247,19 @@ export function LinkedAccountDetailScreen() {
                   style={[styles.regText, { flex: 1.2, color: colors.faint }]}
                   numberOfLines={1}
                 >
-                  {t.memo}
+                  {txn.memo}
                 </Text>
                 <View style={{ flex: 1.1, flexDirection: 'row', justifyContent: 'flex-end' }}>
-                  <AmountPill cents={t.outflow > 0 ? -t.outflow : t.inflow} />
+                  <AmountPill cents={txn.outflow > 0 ? -txn.outflow : txn.inflow} />
                 </View>
                 <Text style={[styles.regText, styles.runBal]}>
-                  {runningBalances.has(t.id)
-                    ? formatMoney(runningBalances.get(t.id)!)
+                  {runningBalances.has(txn.id)
+                    ? formatMoney(runningBalances.get(txn.id)!)
                     : ''}
                 </Text>
                 {/* Read-only provenance: imported/cleared state, no actions. */}
                 <View style={styles.slotW}>
-                  <ClearedBadge status={t.cleared} />
+                  <ClearedBadge status={txn.cleared} />
                 </View>
               </View>
             );

@@ -5,12 +5,15 @@
 
 import type { ConnectionTxnState } from '@/budget/data/connections';
 
+import { t } from '../i18n';
+
 /**
  * Human bank name. Providers sometimes hand back a raw lowercase id
  * ("nubank", "banco-inter"): those are title-cased; names that already carry
  * capitals ("Itaú Unibanco", "XP") are left alone.
  */
 /** Known provider ids whose real name carries diacritics. */
+// eslint-disable-next-line budget-i18n/no-untranslated-string -- bank names are proper nouns, not translated
 const KNOWN_BANKS: Record<string, string> = { itau: 'Itaú', 'banco-do-brasil': 'Banco do Brasil', caixa: 'Caixa' };
 
 export function bankDisplayName(institution: string | null | undefined, provider: string): string {
@@ -30,10 +33,10 @@ export type TxnStateTone = 'neutral' | 'warn' | 'bad';
 export function txnStateView(state: ConnectionTxnState): { label: string; tone: TxnStateTone } {
   switch (state) {
     case 'edited':
-      return { label: 'Edited by you', tone: 'warn' };
+      return { label: t('txnState.edited'), tone: 'warn' };
     case 'removed':
-      return { label: 'Removed at bank', tone: 'bad' };
+      return { label: t('txnState.removed'), tone: 'bad' };
     default:
-      return { label: 'Imported', tone: 'neutral' };
+      return { label: t('txnState.imported'), tone: 'neutral' };
   }
 }

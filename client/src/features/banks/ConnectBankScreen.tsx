@@ -18,6 +18,8 @@ import { skipToken } from '@reduxjs/toolkit/query';
 import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { useAppSelector } from '@/state/hooks';
 
 import {
@@ -39,6 +41,7 @@ import { PLUGGY_KEYS_FROM_CONNECT, PLUGGY_KEYS_ROUTE } from './keys/pluggyKeys.l
 import { useConnectGate } from './keys/useConnectGate';
 import { useSyncStatus } from './connect-bank/useSyncStatus';
 import { useBudgetShell } from '@/shell/context';
+import { t } from './i18n';
 
 export function ConnectBankScreen() {
   const router = useRouter();
@@ -88,7 +91,7 @@ export function ConnectBankScreen() {
   // surface the report it could not show itself, then clear the param.
   useEffect(() => {
     if (removed !== '1') return;
-    setReport('Bank removed — its imported history stays in your budget.');
+    setReport(t('list.bankRemoved'));
     router.setParams({ removed: undefined });
   }, [removed, router, setReport]);
 
@@ -113,11 +116,11 @@ export function ConnectBankScreen() {
   return (
     <View style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
       <View style={styles.head}>
-        <Text style={styles.title}>Linked banks</Text>
+        <Text style={styles.title}>{t('list.title')}</Text>
         <View style={styles.headActions}>
-          <GhostButton label="Your Pluggy keys" onPress={openKeys} />
+          <GhostButton label={t('list.keysButton')} onPress={openKeys} />
           {/* Close affordance in every phase (back-nav requirement). */}
-          <GhostButton label="Close" onPress={() => landOnAccounts()} />
+          <GhostButton label={tCommon('close')} onPress={() => landOnAccounts()} />
         </View>
       </View>
 
@@ -170,7 +173,7 @@ export function ConnectBankScreen() {
             ))}
           </ScrollView>
           <IndigoButton
-            label={tokenLoading || busy ? 'Working…' : gate === 'wait' ? 'Checking…' : 'Connect another bank'}
+            label={tokenLoading || busy ? t('list.working') : gate === 'wait' ? t('list.checking') : t('list.connectAnother')}
             style={styles.connectBtn}
             onPress={tokenLoading || busy || gate === 'wait' ? undefined : connectNew}
           />

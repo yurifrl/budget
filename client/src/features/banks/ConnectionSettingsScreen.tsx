@@ -13,6 +13,8 @@ import { skipToken } from '@reduxjs/toolkit/query';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { useAppSelector } from '@/state/hooks';
 
@@ -39,6 +41,7 @@ import { useConnectionActions } from './connect-bank/useConnectionActions';
 import { useSyncStatus } from './connect-bank/useSyncStatus';
 import { canRequestSync, syncStateView } from './model/syncRun';
 import { useBudgetShell } from '@/shell/context';
+import { t } from './i18n';
 
 const STATUS_BG = { ok: colors.greenPillBg, warn: colors.yellowPillBg, bad: colors.redPillBg, off: colors.grayPillBg } as const;
 const STATUS_FG = { ok: colors.greenPillFg, warn: colors.yellowPillFg, bad: colors.redFg, off: colors.grayPillFg } as const;
@@ -81,7 +84,7 @@ export function ConnectionSettingsScreen() {
       try {
         await updateWindow({ id, syncWindowDays: days }).unwrap();
       } catch (err) {
-        setError(apiErrorMessage(err, 'could not save the sync window'));
+        setError(apiErrorMessage(err, t('page.windowFailed')));
       }
     },
     [id, setError, updateWindow],
@@ -105,10 +108,10 @@ export function ConnectionSettingsScreen() {
       <View style={[styles.screen, pad]}>
         <View style={[styles.body, styles.gap]}>
           <View style={styles.head}>
-            <Text style={styles.title}>Bank</Text>
-            <GhostButton label="Close" onPress={back} />
+            <Text style={styles.title}>{t('page.title')}</Text>
+            <GhostButton label={tCommon('close')} onPress={back} />
           </View>
-          <Text style={styles.hint}>This bank is no longer linked.</Text>
+          <Text style={styles.hint}>{t('page.unlinked')}</Text>
         </View>
       </View>
     );
@@ -123,6 +126,10 @@ export function ConnectionSettingsScreen() {
   const linkedCount = summary?.accounts.length ?? 0;
   const activeAccount = tab === OVERVIEW ? null : (summary?.accounts.find((a) => a.accountId === tab) ?? null);
   const wide = !shell.isPhone;
+  const sandbox = connection.environment === 'sandbox';
+  const lastSyncLine = connection.last_synced_at
+    ? t(sandbox ? 'page.lastSyncSandbox' : 'page.lastSync', { stamp: formatSyncStamp(connection.last_synced_at) })
+    : t(sandbox ? 'page.addedSandbox' : 'page.added', { stamp: formatSyncStamp(connection.created_at) });
 
   const settings = (
     <SettingsPanel
@@ -149,8 +156,8 @@ export function ConnectionSettingsScreen() {
       <View style={styles.frame}>
         <View style={[styles.body, styles.gap]}>
           <View style={styles.head}>
-            <Pressable onPress={back} hitSlop={8} accessibilityRole="button" accessibilityLabel="Back to linked banks">
-              <Text style={styles.backText}>‹ Linked banks</Text>
+            <Pressable onPress={back} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('page.backLabel')}>
+              <Text style={styles.backText}>{t('page.backText')}</Text>
             </Pressable>
           </View>
           <View style={[styles.identity, shell.isPhone && styles.identityPhone]}>
@@ -167,17 +174,17 @@ export function ConnectionSettingsScreen() {
                 </View>
               </View>
               <Text style={styles.sub}>
-                {`Last sync: ${connection.last_synced_at ? formatSyncStamp(connection.last_synced_at) : 'added ' + formatSyncStamp(connection.created_at)}${connection.environment === 'sandbox' ? ' · sandbox' : ''}`}
+                {lastSyncLine}
               </Text>
             </View>
             <View style={styles.actions}>
               <IndigoButton
-                label={syncing ? 'Syncing…' : 'Sync now'}
+                label={syncing ? t('page.syncing') : t('page.syncNow')}
                 disabled={!connected || actions.busy}
                 onPress={() => void actions.sync(connection)}
                 style={styles.btn}
               />
-              <GhostButton label="Settings" onPress={() => setSettingsOpen((v) => !v)} style={styles.btn} />
+              <GhostButton label={t('page.settings')} onPress={() => setSettingsOpen((v) => !v)} style={styles.btn} />
             </View>
           </View>
 
@@ -205,7 +212,7 @@ export function ConnectionSettingsScreen() {
           ) : null}
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll} contentContainerStyle={styles.tabs}>
-            <Chip label="Overview" active={tab === OVERVIEW} onPress={() => setTab(OVERVIEW)} />
+            <Chip label={t('page.overview')} active={tab === OVERVIEW} onPress={() => setTab(OVERVIEW)} />
             {(summary?.accounts ?? []).map((a) => (
               <Chip
                 key={a.accountId}
@@ -219,14 +226,14 @@ export function ConnectionSettingsScreen() {
           <View style={styles.main}>
             {summaryQuery.isLoading || !summary ? (
               <View style={styles.center}>
-                {summaryQuery.isError ? <Text style={styles.hint}>Could not load this bank.</Text> : <ActivityIndicator color={colors.indigo2} />}
+                {summaryQuery.isError ? <Text style={styles.hint}>{t('page.loadFailed')}</Text> : <ActivityIndicator color={colors.indigo2} />}
               </View>
             ) : tab === OVERVIEW || !activeAccount ? (
               <ScrollView contentContainerStyle={styles.overviewContent}>
                 {upstreamQuery.isError ? (
                   <View style={styles.banner}>
-                    <Text style={styles.bannerText}>Could not load the accounts from the provider.</Text>
-                    <GhostButton label="Retry" onPress={() => void upstreamQuery.refetch()} />
+                    <Text style={styles.bannerText}>{t('page.upstreamFailed')}</Text>
+                    <GhostButton label={tCommon('retry')} onPress={() => void upstreamQuery.refetch()} />
                   </View>
                 ) : null}
                 <OverviewTab
@@ -250,8 +257,8 @@ export function ConnectionSettingsScreen() {
         {shell.isDesktop && settingsOpen ? (
           <View style={styles.panel}>
             <View style={styles.panelHead}>
-              <Text style={styles.panelTitle}>Settings</Text>
-              <GhostButton label="Close" onPress={() => setSettingsOpen(false)} />
+              <Text style={styles.panelTitle}>{t('page.settings')}</Text>
+              <GhostButton label={tCommon('close')} onPress={() => setSettingsOpen(false)} />
             </View>
             <ScrollView>{settings}</ScrollView>
           </View>
@@ -259,7 +266,7 @@ export function ConnectionSettingsScreen() {
       </View>
 
       {!shell.isDesktop ? (
-        <OverlaySheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} title={`${name} settings`}>
+        <OverlaySheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} title={t('page.settingsTitle', { name })}>
           <ScrollView style={styles.sheetScroll}>{settings}</ScrollView>
         </OverlaySheet>
       ) : null}

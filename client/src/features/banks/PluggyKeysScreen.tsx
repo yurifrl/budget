@@ -10,6 +10,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { useBudgetShell } from '@/shell/context';
 import { GhostButton, IndigoButton } from '@/ui/bits';
 import { colors, radius } from '@/ui/theme';
@@ -17,6 +19,7 @@ import { CONNECT_BANK_ROUTE } from './connect-bank/connectBank.logic';
 import { PluggyKeysCard } from './keys/PluggyKeysCard';
 import { PluggyKeysHelp } from './keys/PluggyKeysHelp';
 import { usePluggyKeys } from './keys/usePluggyKeys';
+import { t } from './i18n';
 
 export function PluggyKeysScreen() {
   const router = useRouter();
@@ -30,22 +33,20 @@ export function PluggyKeysScreen() {
     <View style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.head}>
-          <Text style={styles.title}>Your Pluggy keys</Text>
-          <GhostButton label="Close" onPress={back} />
+          <Text style={styles.title}>{t('keys.title')}</Text>
+          <GhostButton label={tCommon('close')} onPress={back} />
         </View>
 
         {fromConnect && keys.mode !== 'saved' ? (
           <View style={styles.banner}>
-            <Text style={styles.bannerText}>
-              To connect a bank, add your own Pluggy keys first: the app’s shared keys are not available for your account.
-            </Text>
+            <Text style={styles.bannerText}>{t('keys.connectBanner')}</Text>
           </View>
         ) : null}
 
         <PluggyKeysCard keys={keys} />
 
         {fromConnect && keys.mode === 'saved' ? (
-          <IndigoButton label="Connect a bank" onPress={back} style={styles.connect} />
+          <IndigoButton label={t('keys.connectButton')} onPress={back} style={styles.connect} />
         ) : null}
 
         <PluggyKeysHelp />
