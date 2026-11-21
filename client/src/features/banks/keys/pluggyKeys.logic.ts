@@ -172,8 +172,10 @@ export function pausedGuidance(
     };
   }
   return {
-    why: row.status_message ?? "Paused: this bank uses the app's shared Pluggy keys, which are not available for your account.",
-    todo: 'Add your own Pluggy keys and connect this bank again, or ask the admin to turn shared keys back on for you (it then resumes by itself).',
+    why:
+      row.status_message ??
+      "Paused: this bank uses the app's shared Pluggy keys, which are not available for your account. Add your own Pluggy keys and connect the bank again.",
+    todo: 'Or ask the admin to turn the shared keys back on for you: the bank then resumes by itself.',
     actionLabel: 'Add your Pluggy keys',
   };
 }
