@@ -4,22 +4,22 @@
   "id": "budget-fxc",
   "title": "Backup page: allow importing only the plan or only the register",
   "description": "",
-  "status": "ready-to-review",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-19T13:51:33.307Z",
-  "updated_at": "2026-11-19T14:01:07.920Z",
+  "updated_at": "2026-11-21T21:23:58.561Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-21T21:23:41.681Z",
   "due_at": null,
   "defer_until": null,
   "parent": null,
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Merged to main as 598c9b8 on user's instruction (merge all open worktrees). Backup restore of only the plan or only the register. post-merge on main: typecheck+lint clean; tests shared 81, api 1180 (compose PG :55432), client 1180 pass; e2e not run (no psql on host)",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
@@ -29,7 +29,76 @@
   "metadata": {
     "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-fxc",
     "changeset": {
-      "base": "fee59ff3a2d16ab91345e5a8f5e5199bb4439bc0"
+      "base": "fee59ff3a2d16ab91345e5a8f5e5199bb4439bc0",
+      "head": "53335ae1c194f22a0bf7ecab03c1144ab3675f89",
+      "commits": [
+        {
+          "sha": "53335ae",
+          "subject": "backup: restore only the plan or only the register (sections)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/src/budget/domain/restore-scope.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/restore-scope.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/backup/ExportImportScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/backup/importScope.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/backup/importScope.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/backup/transfer/transfer.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/backup/transfer/transfer.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/budget-restore.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/schemas.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 792,
+        "deletions": 85
+      }
     },
     "agent_session": "90dec31f-d71a-469c-9522-3dcb313d76f8",
     "finished_at": "2026-11-19T14:01:07.838Z",
@@ -43,6 +112,11 @@
       },
       "head": "53335ae1c194f22a0bf7ecab03c1144ab3675f89",
       "at": "2026-11-19T14:01:07.838Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
     }
   },
   "attachments": [

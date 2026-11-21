@@ -422,3 +422,11 @@
 {"seq":417,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T19:58:58.533Z","task":"budget-4ji","type":"task.update","actor":"yuri","data":{"fields":["metadata.changeset","metadata.worktreePruned","notes"]}}
 {"seq":418,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T19:59:03.160Z","task":"budget-id4","type":"task.status","actor":"yuri","data":{"from":"open","to":"closed"}}
 {"seq":419,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T19:59:03.160Z","task":"budget-id4","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
+{"seq":420,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T21:23:40.882Z","task":"budget-7se","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":421,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T21:23:40.882Z","task":"budget-7se","type":"task.update","actor":"yuri","data":{"fields":["metadata.changeset","metadata.worktreePruned","notes"]}}
+{"seq":422,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T21:23:58.585Z","task":"budget-fxc","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":423,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T21:23:58.585Z","task":"budget-fxc","type":"task.update","actor":"yuri","data":{"fields":["metadata.changeset","metadata.worktreePruned","notes"]}}
+{"seq":424,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T21:24:02.861Z","task":"budget-0dq","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":425,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T21:24:02.861Z","task":"budget-0dq","type":"task.update","actor":"yuri","data":{"fields":["metadata.changeset","metadata.worktreePruned","notes"]}}
+{"seq":426,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T21:24:04.730Z","task":"budget-hg2","type":"task.status","actor":"yuri","data":{"from":"ready-to-review","to":"closed"}}
+{"seq":427,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-21T21:24:04.730Z","task":"budget-hg2","type":"task.update","actor":"yuri","data":{"fields":["metadata.changeset","metadata.worktreePruned","notes"]}}

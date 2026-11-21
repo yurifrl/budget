@@ -8,3 +8,5 @@
 {"issue_id":"budget-7se","action":"save","at":"2026-11-20T15:41:23.553Z","actor":null,"data":{"status":"open","title":"release: EAS iOS build fails at Bundle JavaScript for v2026.11.20"}}
 {"issue_id":"budget-7se","action":"save","at":"2026-11-20T15:41:23.799Z","actor":null,"data":{"status":"ready-to-review","title":"release: EAS iOS build fails at Bundle JavaScript for v2026.11.20"}}
 {"issue_id":"budget-7se","action":"save","at":"2026-11-20T15:49:00.468Z","actor":null,"data":{"status":"ready-to-review","title":"release: EAS iOS build fails at Bundle JavaScript for v2026.11.20"}}
+{"issue_id":"budget-7se","action":"save","at":"2026-11-21T21:23:27.833Z","actor":null,"data":{"status":"closed","title":"release: EAS iOS build fails at Bundle JavaScript for v2026.11.20"}}
+{"issue_id":"budget-7se","action":"save","at":"2026-11-21T21:23:40.859Z","actor":null,"data":{"status":"closed","title":"release: EAS iOS build fails at Bundle JavaScript for v2026.11.20"}}

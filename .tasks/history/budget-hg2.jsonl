@@ -1,3 +1,5 @@
 {"issue_id":"budget-hg2","action":"save","at":"2026-11-18T19:22:00.995Z","actor":null,"data":{"status":"open","title":"api: build the Temporal workflow bundle into the image (worker OOMs bundling at boot)"}}
 {"issue_id":"budget-hg2","action":"save","at":"2026-11-18T19:22:02.535Z","actor":null,"data":{"status":"open","title":"api: build the Temporal workflow bundle into the image (worker OOMs bundling at boot)"}}
 {"issue_id":"budget-hg2","action":"save","at":"2026-11-18T19:30:09.062Z","actor":null,"data":{"status":"ready-to-review","title":"api: build the Temporal workflow bundle into the image (worker OOMs bundling at boot)"}}
+{"issue_id":"budget-hg2","action":"save","at":"2026-11-21T21:24:03.816Z","actor":null,"data":{"status":"closed","title":"api: build the Temporal workflow bundle into the image (worker OOMs bundling at boot)"}}
+{"issue_id":"budget-hg2","action":"save","at":"2026-11-21T21:24:04.707Z","actor":null,"data":{"status":"closed","title":"api: build the Temporal workflow bundle into the image (worker OOMs bundling at boot)"}}
