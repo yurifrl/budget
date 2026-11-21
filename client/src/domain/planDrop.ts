@@ -5,6 +5,7 @@
  */
 import { BUNDLE_ROW_PREFIX, type DropTarget } from './bundleDrop';
 import { dropIntent } from './bundles';
+import { t } from './i18n';
 import type { Bundle, Category } from './types';
 
 export interface RowRect {
@@ -52,6 +53,6 @@ export function dropLabel(
     ? target.rowId.slice(BUNDLE_ROW_PREFIX.length)
     : categories.find((c) => c.id === target.rowId)?.bundleId;
   const bundle = bundleId ? bundles.find((b) => b.id === bundleId) : undefined;
-  if (bundle) return `Add to ${bundle.name}`;
-  return `Bundle with ${categories.find((c) => c.id === target.rowId)?.name ?? ''}`;
+  if (bundle) return t('drop.addTo', { name: bundle.name });
+  return t('drop.bundleWith', { name: categories.find((c) => c.id === target.rowId)?.name ?? '' });
 }

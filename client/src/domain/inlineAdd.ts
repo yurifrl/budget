@@ -4,7 +4,10 @@
  * draft and the validation that turns a draft into the fields to save.
  */
 
+import { labels } from '@shared/i18n';
+
 import { isUsdDraft, makeMonth } from './format';
+import { t } from './i18n';
 import type { RowDraft } from './rowEdit';
 import type { Cents, MonthKey, RepeatFrequency, Transaction, TransactionSplit } from './types';
 
@@ -17,14 +20,14 @@ export const REPEAT_FREQS: RepeatFrequency[] = [
   'quarterly',
   'annually',
 ];
-export const REPEAT_LABELS: Record<RepeatFrequency, string> = {
-  weekly: 'Every week',
-  'every-other-week': 'Every other week',
-  monthly: 'Monthly',
-  'every-other-month': 'Every other month',
-  quarterly: 'Quarterly',
-  annually: 'Yearly',
-};
+export const REPEAT_LABELS: Record<RepeatFrequency, string> = labels(t, {
+  weekly: 'repeat.weekly',
+  'every-other-week': 'repeat.everyOtherWeek',
+  monthly: 'repeat.monthly',
+  'every-other-month': 'repeat.everyOtherMonth',
+  quarterly: 'repeat.quarterly',
+  annually: 'repeat.yearly',
+});
 
 /** RepeatCadence values a rule can actually use (a stored txn may carry any cadence). */
 const isRepeatFreq = (cadence: string): cadence is RepeatFrequency =>
@@ -66,7 +69,12 @@ export function splitTotalLabel(
 ): { text: string; zero: boolean } {
   const { outflow, inflow } = splitTotals(splits);
   return {
-    text: outflow > 0 ? `${formatMoney(outflow)} out` : inflow > 0 ? `${formatMoney(inflow)} in` : 'no amount',
+    text:
+      outflow > 0
+        ? t('split.totalOut', { amount: formatMoney(outflow) })
+        : inflow > 0
+          ? t('split.totalIn', { amount: formatMoney(inflow) })
+          : t('split.noAmount'),
     zero: outflow + inflow === 0,
   };
 }
@@ -196,17 +204,17 @@ export function planInlineSave(
 ): InlineSavePlan {
   const draftSplits = d.splitsOpen ? d.splits : [];
   if (d.outflow === 0 && d.inflow === 0 && !draftSplits.some((s) => s.outflow !== 0 || s.inflow !== 0)) {
-    return { ok: false, error: 'enter an amount' };
+    return { ok: false, error: t('inline.amountRequired') };
   }
   const date = resolveDraftDate(d.dateText, ctx.parseDateInput, ctx.today);
   if (!date) {
-    return { ok: false, error: `invalid date — try ${ctx.dateFormat} or 5, 5/9` };
+    return { ok: false, error: t('inline.dateInvalid', { format: ctx.dateFormat }) };
   }
   if (draftSplits.length > 0 && draftSplits.some((s) => !s.categoryId)) {
-    return { ok: false, error: 'every split needs a category' };
+    return { ok: false, error: t('inline.splitCategoryRequired') };
   }
   if (draftSplits.length > 0 && draftSplits.every((s) => s.outflow === 0 && s.inflow === 0)) {
-    return { ok: false, error: 'enter an amount on each split' };
+    return { ok: false, error: t('inline.splitAmountRequired') };
   }
   // Legs count only while the split panel is open — a closed panel means a
   // plain categorized row (explicit un-split gesture in edit mode).
@@ -223,8 +231,8 @@ export function planInlineSave(
       return {
         ok: false,
         error: ctx.rateFetching
-          ? 'fetching the USD→BRL rate — try again in a moment'
-          : 'no exchange rate available — enter the amount in R$ (without $)',
+          ? t('inline.rateFetching')
+          : t('inline.rateMissing'),
       };
     }
     const brl = usdToLedger(d.usd, rate);

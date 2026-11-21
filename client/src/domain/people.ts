@@ -9,6 +9,7 @@
 import type { AvatarPerson, PersonAvatar } from './avatar';
 
 import { recomputeActivity } from './engine';
+import { t } from './i18n';
 import { categoryFigures, sumFigures, type BudgetMonth } from './zeroSum';
 import type { Account, Budget, Category, Cents, MonthKey, Transaction } from './types';
 
@@ -28,12 +29,18 @@ export interface Person {
 }
 
 /** Label of the null person. */
+// eslint-disable-next-line budget-i18n/no-untranslated-string -- English-only legacy constant (module scope cannot call t); callers use sharedLabel()
 export const SHARED_LABEL = 'Shared';
+
+/** Label of the null person, in the active language. */
+export function sharedLabel(): string {
+  return t('people.shared');
+}
 
 /** Display label: the trimmed name when set, else the email, else a neutral fallback. */
 export function personLabel(person: Pick<Person, 'email' | 'name'>): string {
   const name = person.name?.trim();
-  return name || person.email || 'Unnamed';
+  return name || person.email || t('people.unnamed');
 }
 
 /**
@@ -50,7 +57,7 @@ export function personStatus(person: Pick<Person, 'email' | 'pending'>): 'placeh
 export function personFirstName(person: Pick<Person, 'email' | 'name'>): string {
   const name = person.name?.trim();
   if (name) return name.split(/\s+/)[0];
-  return person.email ? person.email.split('@')[0] : 'Unnamed';
+  return person.email ? person.email.split('@')[0] : t('people.unnamed');
 }
 
 /**
@@ -94,22 +101,22 @@ export type InviteCheck =
 export function checkInvite(rawEmail: string, rawName: string, people: readonly Person[]): InviteCheck {
   const email = rawEmail.trim().toLowerCase();
   const name = rawName.trim();
-  if (name.length > PERSON_NAME_MAX) return { ok: false, error: `Name must be ${PERSON_NAME_MAX} characters or fewer` };
+  if (name.length > PERSON_NAME_MAX) return { ok: false, error: t('invite.nameTooLong', { max: PERSON_NAME_MAX }) };
   if (!email) {
-    if (!name) return { ok: false, error: 'Enter a name (or an email address)' };
+    if (!name) return { ok: false, error: t('invite.nameRequired') };
     return { ok: true, email: undefined, name };
   }
-  if (!EMAIL_SHAPE.test(email) || email.length > 254) return { ok: false, error: 'That doesn’t look like an email address' };
+  if (!EMAIL_SHAPE.test(email) || email.length > 254) return { ok: false, error: t('invite.emailInvalid') };
   const existing = people.find((p) => p.email?.toLowerCase() === email);
-  if (existing) return { ok: false, error: `${personLabel(existing)} is already in this budget` };
+  if (existing) return { ok: false, error: t('invite.alreadyMember', { name: personLabel(existing) }) };
   return { ok: true, email, name: name || undefined };
 }
 
 /** Validate the "Link email" form for a placeholder (same email rules, no name). */
 export function checkLinkEmail(rawEmail: string): { ok: true; email: string } | { ok: false; error: string } {
   const email = rawEmail.trim().toLowerCase();
-  if (!email) return { ok: false, error: 'Enter an email address' };
-  if (!EMAIL_SHAPE.test(email) || email.length > 254) return { ok: false, error: 'That doesn’t look like an email address' };
+  if (!email) return { ok: false, error: t('invite.emailRequired') };
+  if (!EMAIL_SHAPE.test(email) || email.length > 254) return { ok: false, error: t('invite.emailInvalid') };
   return { ok: true, email };
 }
 
@@ -177,8 +184,8 @@ export function budgetForPerson(budget: Budget, person: PersonFilter): Budget {
 export function personAccountsLabel(people: readonly Person[], person: PersonFilter): string | null {
   if (person === PERSON_ALL) return null;
   const found = personFor(people, person);
-  if (person === PERSON_SHARED || !found) return 'Shared accounts';
-  return `${personFirstName(found)}’s accounts`;
+  if (person === PERSON_SHARED || !found) return t('people.sharedAccounts');
+  return t('people.accountsOf', { name: personFirstName(found) });
 }
 
 /**
@@ -314,14 +321,14 @@ export function rollupForPerson(
 export function personFilterScopeLabel(people: readonly Person[], person: PersonFilter): string | null {
   if (person === PERSON_ALL) return null;
   const found = personFor(people, person);
-  if (person === PERSON_SHARED || !found) return 'Shared categories';
-  return `${personFirstName(found)}’s categories`;
+  if (person === PERSON_SHARED || !found) return t('people.sharedCategories');
+  return t('people.categoriesOf', { name: personFirstName(found) });
 }
 
 /** Display label of the selection: null for 'all', Shared, the member's label, or 'Former member'. */
 export function personFilterLabel(people: readonly Person[], person: PersonFilter): string | null {
   if (person === PERSON_ALL) return null;
-  if (person === PERSON_SHARED) return SHARED_LABEL;
+  if (person === PERSON_SHARED) return sharedLabel();
   const found = personFor(people, person);
-  return found ? personLabel(found) : 'Former member';
+  return found ? personLabel(found) : t('people.formerMember');
 }

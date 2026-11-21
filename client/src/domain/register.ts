@@ -6,6 +6,7 @@
 import { isInternalTransferPayee } from '@shared/domain/transfers';
 
 import { computeRunningBalances, workingBalance } from './engine';
+import { t as tr } from './i18n';
 import type { Account, Budget, Cents, Transaction } from './types';
 
 /**
@@ -21,12 +22,12 @@ export function registerCategoryCell(
   { transfers = true }: { transfers?: boolean } = {},
 ): { text: string; warn: boolean } {
   if (t.payee === 'Reconciliation Adjustment' || t.payee === 'Balance Adjustment') {
-    return { text: 'Ready to Assign', warn: false };
+    return { text: tr('register.readyToAssign'), warn: false };
   }
   if (!t.categoryId) {
-    if (t.splits?.length) return { text: `Split (${t.splits.length})`, warn: false };
-    if (transfers && isInternalTransferPayee(t.payee, budget.accounts)) return { text: 'Transfer', warn: false };
-    return t.inflow > 0 ? { text: 'Ready to Assign', warn: false } : { text: 'needs category', warn: true };
+    if (t.splits?.length) return { text: tr('register.split', { count: t.splits.length }), warn: false };
+    if (transfers && isInternalTransferPayee(t.payee, budget.accounts)) return { text: tr('register.transfer'), warn: false };
+    return t.inflow > 0 ? { text: tr('register.readyToAssign'), warn: false } : { text: tr('register.needsCategory'), warn: true };
   }
   const cat = budget.categories.find((c) => c.id === t.categoryId);
   return { text: cat?.name ?? '?', warn: false };

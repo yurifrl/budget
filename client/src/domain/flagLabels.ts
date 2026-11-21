@@ -7,7 +7,17 @@
  * name (see `displayFlagLabel`).
  */
 
+import { t } from './i18n';
 import type { FlagColor } from './types';
+
+const FLAG_NAME_KEYS = {
+  red: 'flag.red',
+  orange: 'flag.orange',
+  yellow: 'flag.yellow',
+  green: 'flag.green',
+  blue: 'flag.blue',
+  purple: 'flag.purple',
+} as const satisfies Record<FlagColor, string>;
 
 export type FlagLabels = Record<FlagColor, string>;
 
@@ -27,9 +37,9 @@ export const DEFAULT_FLAG_LABELS: FlagLabels = {
  */
 export function setFlagLabels(_next: FlagLabels): void {}
 
-/** "red" -> "Red". Fallback when no user label is set. */
+/** "red" -> "Red" (active language). Fallback when no user label is set. */
 export function defaultFlagLabel(color: FlagColor): string {
-  return color.charAt(0).toUpperCase() + color.slice(1);
+  return t(FLAG_NAME_KEYS[color]);
 }
 
 /** User label for a color, or its capitalized name when blank/whitespace. */

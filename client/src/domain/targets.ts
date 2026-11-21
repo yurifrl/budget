@@ -21,6 +21,7 @@
  */
 import type { Cents, CategoryTarget, MonthKey } from "./types";
 import { daysInMonth, makeMonth, splitMonth } from "./format";
+import { t } from "./i18n";
 
 /** Weekday (0=Sunday) of the month identified by `key`, day 1. */
 function firstWeekdayOfMonth(key: MonthKey): number {
@@ -139,19 +140,19 @@ export function targetBadge(
   const { year } = splitMonth(month);
   switch (target.kind) {
     case "weekly":
-      byLabel = "per week";
+      byLabel = t('target.perWeek');
       break;
     case "monthly":
-      byLabel = "per month";
+      byLabel = t('target.perMonth');
       break;
     case "yearly": {
       const due = makeMonth(year, target.config.monthOfYear ?? 12);
       const day = clampDay(target.config.dayOfMonth ?? 1, due);
-      byLabel = `by ${day}/${due % 100}`;
+      byLabel = t('target.byDate', { date: `${day}/${due % 100}` });
       break;
     }
     case "custom":
-      if (target.config.byDate) byLabel = `by ${target.config.byDate.split("-").reverse().join("/")}`;
+      if (target.config.byDate) byLabel = t('target.byDate', { date: target.config.byDate.split("-").reverse().join("/") });
       break;
   }
   return { state: "needed", more: Math.max(0, need - assigned), byLabel };

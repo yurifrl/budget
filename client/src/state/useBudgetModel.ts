@@ -12,6 +12,7 @@ import { skipToken } from '@reduxjs/toolkit/query';
 import { useMemo } from 'react';
 
 import { useAppSelector } from './hooks';
+import { t } from './i18n';
 
 import {
   targetsByCategoryFromRows,
@@ -115,7 +116,7 @@ export function useBudgetModel(): BudgetModel {
   const isLoading = sources.some((q) => q.isLoading);
   const firstError = sources.find((q) => q.error);
   const error = firstError
-    ? ((firstError.error as { message?: string })?.message ?? 'failed to load budget data')
+    ? ((firstError.error as { message?: string })?.message ?? t('budget.loadFailed'))
     : undefined;
 
   return { budgetId, budgets: budgets.data, budget, isLoading, error };
