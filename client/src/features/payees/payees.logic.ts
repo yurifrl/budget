@@ -5,9 +5,14 @@
  * than in domain/.
  */
 
+import { labels } from '@shared/i18n';
 import { matchTypeLabels, matchTypes, type MatchType } from '@shared/domain/payees';
 
 import type { PayeeAdminRow } from '@/budget/data/rows';
+import { t } from './i18n';
+
+/** Display labels of the match types in the active language (shared `matchTypeLabels` is English-only). */
+export const MATCH_TYPE_LABEL: Record<MatchType, string> = labels(t, { contains: 'rule.contains', is: 'rule.is' });
 
 /** Unsaved renaming-rule edit of the selected payee. */
 export interface RuleDraft {
@@ -63,16 +68,21 @@ export function renameToCommit(draft: string | null, currentName: string): strin
 
 /**
  * Matcher is pick-only: a typed label is adopted only when it matches one
- * exactly (case-insensitive, trimmed).
+ * exactly (case-insensitive, trimmed), in the active language or in English.
  */
 export function matchTypeFromLabel(text: string): MatchType | undefined {
-  return matchTypes.find((m) => matchTypeLabels[m].toLowerCase() === text.trim().toLowerCase());
+  const typed = text.trim().toLowerCase();
+  return matchTypes.find(
+    (m) => MATCH_TYPE_LABEL[m].toLowerCase() === typed || matchTypeLabels[m].toLowerCase() === typed,
+  );
 }
 
 /** "3 transactions · last used 2026-01-02" / "0 transactions · never used". */
 export function activityLine(payee: Pick<PayeeAdminRow, 'transaction_count' | 'last_used_date'>): string {
-  const count = `${payee.transaction_count} transaction${payee.transaction_count === 1 ? '' : 's'}`;
-  return count + (payee.last_used_date ? ` · last used ${payee.last_used_date.slice(0, 10)}` : ' · never used');
+  const count = payee.transaction_count;
+  return payee.last_used_date
+    ? t('activity.lastUsed', { count, date: payee.last_used_date.slice(0, 10) })
+    : t('activity.neverUsed', { count });
 }
 
 /** Pages of a paginated table; an empty table still has page 1. */

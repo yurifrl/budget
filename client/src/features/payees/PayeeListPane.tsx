@@ -1,6 +1,9 @@
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 import { styles } from './styles';
 import type { PayeeAdmin } from './usePayeeAdmin';
 
@@ -14,19 +17,19 @@ export function PayeeListPane({ admin }: { admin: PayeeAdmin }) {
           value={newName}
           onChangeText={setNewName}
           onSubmitEditing={addNewPayee}
-          placeholder="Add a payee…"
+          placeholder={t('list.addPlaceholder')}
           placeholderTextColor={colors.faint}
           style={styles.addInput}
-          accessibilityLabel="New payee name"
+          accessibilityLabel={t('list.newNameLabel')}
         />
-        <Pressable onPress={addNewPayee} accessibilityRole="button" accessibilityLabel="Add payee">
+        <Pressable onPress={addNewPayee} accessibilityRole="button" accessibilityLabel={t('list.addLabel')}>
           <Text style={styles.addRowBtn}>＋</Text>
         </Pressable>
       </View>
       {busy ? (
-        <Text style={styles.empty}>Loading…</Text>
+        <Text style={styles.empty}>{tCommon('loading')}</Text>
       ) : filtered.length === 0 ? (
-        <Text style={styles.empty}>No payees match “{search.trim()}”.</Text>
+        <Text style={styles.empty}>{t('list.noMatch', { query: search.trim() })}</Text>
       ) : (
         filtered.map((p) => (
           <Pressable

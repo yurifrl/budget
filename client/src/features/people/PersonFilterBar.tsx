@@ -22,6 +22,7 @@ import {
   toAvatarPerson,
   type Person,
 } from '@/domain/people';
+import { t } from './i18n';
 import type { PersonFilterModel } from './usePersonFilter';
 import { setPersonFilter } from '@/state/ui';
 import { useBudgetShell } from '@/shell/context';
@@ -47,8 +48,8 @@ export function PersonFilterBar({
   const options: { key: string; label: string; a11y: string; face: ReactNode }[] = [
     {
       key: PERSON_ALL,
-      label: 'Everyone',
-      a11y: 'Everyone',
+      label: t('filter.everyone'),
+      a11y: t('filter.everyone'),
       face: <AvatarStack people={byPerson.people.map(toAvatarPerson)} max={3} size={16} ring={colors.card} />,
     },
     { key: PERSON_SHARED, label: SHARED_LABEL, a11y: SHARED_LABEL, face: <SharedGlyph size={18} /> },
@@ -66,8 +67,8 @@ export function PersonFilterBar({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 8, alignItems: 'center' }}
         accessibilityRole="radiogroup"
-        accessibilityLabel="Filter by person">
-        {isPhone ? null : <Text style={styles.personLabel}>Person</Text>}
+        accessibilityLabel={t('filter.title')}>
+        {isPhone ? null : <Text style={styles.personLabel}>{t('filter.label')}</Text>}
         {options.map((o) => {
           const on = byPerson.person === o.key;
           return (
@@ -75,7 +76,7 @@ export function PersonFilterBar({
               key={o.key}
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
-              accessibilityLabel={`Person ${o.a11y}`}
+              accessibilityLabel={t('filter.option', { name: o.a11y })}
               onPress={() => dispatch(setPersonFilter(o.key))}
               style={[styles.chip, on && styles.chipActive]}>
               {o.face}
@@ -88,7 +89,7 @@ export function PersonFilterBar({
         <Pressable
           onPress={openPeople}
           accessibilityRole="button"
-          accessibilityLabel="Add people"
+          accessibilityLabel={t('filter.addPeople')}
           style={styles.addChip}>
           <Text style={styles.addChipText}>＋</Text>
         </Pressable>
@@ -104,8 +105,7 @@ export function PersonFilterBar({
       {showOwnsNoneHint && byPerson.ownsNone && byPerson.selected ? (
         <View style={styles.hint} accessibilityRole="text">
           <Text style={styles.hintText}>
-            No categories assigned to {personFirstName(byPerson.selected)} yet — open a category and set its Person.
-            Shared ones are shown below.
+            {t('filter.ownsNone', { name: personFirstName(byPerson.selected) })}
           </Text>
         </View>
       ) : null}
@@ -116,9 +116,9 @@ export function PersonFilterBar({
 /** One short line: which categories show, and whose accounts feed Activity. */
 export function planCaption(byPerson: PersonFilterModel): string {
   const { selected } = byPerson;
-  if (byPerson.person === PERSON_SHARED || !selected) return 'Shared categories · Activity from Shared accounts';
+  if (byPerson.person === PERSON_SHARED || !selected) return t('filter.captionShared');
   const first = personFirstName(selected);
-  return `${first}’s categories + Shared · Activity from ${first}’s accounts`;
+  return t('filter.captionPerson', { name: first });
 }
 
 /**
@@ -146,10 +146,10 @@ function AddPeoplePrompt({ budgetId, onOpen }: { budgetId: string | null; onOpen
       <Pressable
         onPress={onOpen}
         accessibilityRole="button"
-        accessibilityLabel="Add people"
+        accessibilityLabel={t('filter.addPeople')}
         style={styles.ctaMain}>
-        <Text style={styles.ctaText}>Planning with someone? </Text>
-        <Text style={styles.ctaLink}>Add people →</Text>
+        <Text style={styles.ctaText}>{t('prompt.question')}{' '}</Text>
+        <Text style={styles.ctaLink}>{t('prompt.link')}</Text>
       </Pressable>
       <Pressable
         onPress={() => {
@@ -157,7 +157,7 @@ function AddPeoplePrompt({ budgetId, onOpen }: { budgetId: string | null; onOpen
           void saveBudgetSettingsPatch(storage, budgetId, { display: { peoplePromptDismissed: true } });
         }}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss add people prompt"
+        accessibilityLabel={t('prompt.dismiss')}
         hitSlop={8}
         style={styles.ctaClose}>
         <Text style={styles.ctaCloseText}>✕</Text>

@@ -1,0 +1,63 @@
+export default {
+  'picker.person': 'Person',
+  'picker.option': '{prefix} {name}',
+
+  'filter.title': 'Filter by person',
+  'filter.label': 'Person',
+  'filter.everyone': 'Everyone',
+  'filter.option': 'Person {name}',
+  'filter.addPeople': 'Add people',
+  'filter.ownsNone': 'No categories assigned to {name} yet — open a category and set its Person. Shared ones are shown below.',
+  'filter.captionShared': 'Shared categories · Activity from Shared accounts',
+  'filter.captionPerson': '{name}’s categories + Shared · Activity from {name}’s accounts',
+
+  'prompt.question': 'Planning with someone?',
+  'prompt.link': 'Add people →',
+  'prompt.dismiss': 'Dismiss add people prompt',
+
+  'pane.noBudget': 'No budget selected.',
+  'pane.hint': 'Everyone here sees and edits everything in this budget.',
+  'pane.invitedHint': 'Invited people find this budget on their home page when they sign in with that email. Adding them sends no message and does not give them a login.',
+  'pane.placeholderHint': 'People with no email are just for grouping — link their email later, once they connect.',
+  'pane.ownerOnly': 'Only the owner can remove people.',
+  'pane.enterName': 'Enter a name',
+
+  'add.title': 'ADD A PERSON',
+  'add.namePlaceholder': 'Name',
+  'add.nameLabel': 'Name of the person to add',
+  'add.emailPlaceholder': 'Email (optional — add later)',
+  'add.emailLabel': 'Email of the person to add (optional)',
+  'add.button': 'Add Person',
+  'add.adding': 'Adding…',
+
+  'badge.owner': 'OWNER',
+  'badge.you': 'YOU',
+  'badge.invited': 'INVITED',
+  'badge.noEmail': 'NO EMAIL',
+
+  'row.notConnected': 'Not connected',
+  'row.editProfile': 'Edit profile',
+  'row.linkEmail': 'Link email',
+  'row.linkEmailLabel': 'Link email for {name}',
+  'row.rename': 'Rename',
+  'row.renameLabel': 'Rename {name}',
+  'row.removeLabel': 'Remove {name}',
+
+  'edit.emailPlaceholder': 'person@example.com',
+  'edit.emailLabel': 'Email for {name}',
+  'edit.nameLabel': 'New name for {name}',
+  'edit.linkWarning': 'If this email already belongs to someone in the app, they take over {name}’s accounts and categories and {name} disappears from the list.',
+  'edit.saveEmailLabel': 'Save email',
+  'edit.saveNameLabel': 'Save name',
+  'edit.link': 'Link',
+  'edit.save': 'Save',
+
+  'remove.confirm': 'Remove {name}? They lose access to this budget and their accounts become Shared.',
+  'remove.cancelLabel': 'Cancel removal',
+  'remove.yesLabel': 'Yes, remove {name}',
+
+  'error.add': 'Could not add the person.',
+  'error.link': 'Could not link the email.',
+  'error.rename': 'Could not rename the person.',
+  'error.remove': 'Could not remove the person.',
+} as const;

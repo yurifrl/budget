@@ -4,6 +4,8 @@ import { Pressable, Text, View } from 'react-native';
 import { Combobox } from '@/ui/combobox';
 
 import type { PayeeAdminRow } from '@/budget/data/rows';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './i18n';
 import { styles } from './styles';
 
 /** Delete-with-transactions fallback: merge into a surviving payee. */
@@ -27,10 +29,9 @@ export function MergePrompt({
   const [query, setQuery] = useState('');
   return (
     <>
-      <Text style={styles.sectionLabel}>MERGE PAYEE</Text>
+      <Text style={styles.sectionLabel}>{t('merge.title')}</Text>
       <Text style={styles.mergeCopy}>
-        “{payee.name}” has {payee.transaction_count} transaction{payee.transaction_count === 1 ? '' : 's'}. Choose a
-        payee to merge it into — its transactions move to that payee.
+        {t('merge.body', { name: payee.name, count: payee.transaction_count })}
       </Text>
       <Combobox
         value={query}
@@ -40,22 +41,22 @@ export function MergePrompt({
           onTargetChange(key);
           setQuery(candidates.find((c) => c.id === key)?.name ?? '');
         }}
-        placeholder="Search payees…"
+        placeholder={t('merge.search')}
         chevron
         autoFocus
         containerStyle={styles.mergeSelect}
-        accessibilityLabel="Payee to merge into"
+        accessibilityLabel={t('merge.targetLabel')}
       />
       <View style={styles.footerRow}>
         <Pressable onPress={onCancel} accessibilityRole="button">
-          <Text style={styles.linkText}>Cancel</Text>
+          <Text style={styles.linkText}>{tCommon('cancel')}</Text>
         </Pressable>
         <Pressable
           onPress={onConfirm}
           disabled={!targetId}
           style={styles.mergeBtn}
           accessibilityRole="button">
-          <Text style={styles.mergeBtnText}>Merge</Text>
+          <Text style={styles.mergeBtnText}>{t('merge.confirm')}</Text>
         </Pressable>
       </View>
     </>

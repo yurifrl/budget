@@ -2,20 +2,23 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { Combobox } from '@/ui/combobox';
-import { categorizationModes, matchTypeLabels, matchTypes, type CategorizationMode, type MatchType } from '@shared/domain/payees';
+import { categorizationModes, matchTypes, type CategorizationMode, type MatchType } from '@shared/domain/payees';
+import { labels } from '@shared/i18n';
+import { tCommon } from '@shared/i18n/common';
 
 import { colors } from '@/ui/theme';
 import { DefaultCategoryPicker } from './DefaultCategoryPicker';
 import { MergePrompt } from './MergePrompt';
-import { activityLine, matchTypeFromLabel } from './payees.logic';
+import { t } from './i18n';
+import { activityLine, MATCH_TYPE_LABEL, matchTypeFromLabel } from './payees.logic';
 import { PayeeTxnsPane } from './PayeeTxnsPane';
 import { styles } from './styles';
 import type { PayeeAdmin } from './usePayeeAdmin';
 
 const CATEGORIZATION_LABELS: Record<CategorizationMode, { title: string; sub: string }> = {
-  auto: { title: 'Auto-select', sub: 'suggest a category from past transactions' },
-  fixed: { title: 'Fixed category', sub: 'always use the default category below' },
-  never: { title: 'Never categorize', sub: 'leave new transactions uncategorized' },
+  auto: labels(t, { title: 'mode.auto.title', sub: 'mode.auto.sub' }),
+  fixed: labels(t, { title: 'mode.fixed.title', sub: 'mode.fixed.sub' }),
+  never: labels(t, { title: 'mode.never.title', sub: 'mode.never.sub' }),
 };
 
 /**
@@ -55,7 +58,7 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
   return (
     <ScrollView style={styles.detailPane} contentContainerStyle={styles.detailContent}>
       {!selected ? (
-        <Text style={styles.empty}>Select a payee to edit its details.</Text>
+        <Text style={styles.empty}>{t('detail.empty')}</Text>
       ) : mergeOpen ? (
         <MergePrompt
           payee={selected}
@@ -67,7 +70,7 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
         />
       ) : (
         <>
-          <Text style={styles.sectionLabel}>NAME</Text>
+          <Text style={styles.sectionLabel}>{t('detail.name')}</Text>
           <View style={styles.nameRow}>
             <TextInput
               value={nameDraft ?? selected.name}
@@ -87,7 +90,7 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
             </Text>
           ) : null}
 
-          <Text style={styles.sectionLabel}>ACTIVITY</Text>
+          <Text style={styles.sectionLabel}>{t('detail.activity')}</Text>
           <Text style={styles.activity}>{activityLine(selected)}</Text>
 
           {selected.transaction_count > 0 ? (
@@ -97,7 +100,9 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
                 accessibilityRole="button"
                 accessibilityState={{ expanded: showTxns }}>
                 <Text style={styles.linkText}>
-                  {showTxns ? 'Hide' : 'Show'} {selected.transaction_count} Transactions
+                  {showTxns
+                    ? t('detail.hideTxns', { count: selected.transaction_count })
+                    : t('detail.showTxns', { count: selected.transaction_count })}
                 </Text>
               </Pressable>
               {showTxns ? (
@@ -106,7 +111,7 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
             </>
           ) : null}
 
-          <Text style={styles.sectionLabel}>CATEGORIZATION</Text>
+          <Text style={styles.sectionLabel}>{t('detail.categorization')}</Text>
           {categorizationModes.map((mode) => (
             <Pressable
               key={mode}
@@ -126,44 +131,44 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
           {selected.categorization_mode === 'auto' ? (
             <Text style={styles.radioSub}>
               {selected.inferred_category_name
-                ? `Current default category: ${selected.inferred_category_name}`
-                : 'Current default category: none yet'}
+                ? t('detail.defaultCategoryCurrent', { name: selected.inferred_category_name })
+                : t('detail.defaultCategoryNone')}
             </Text>
           ) : null}
           {selected.categorization_mode === 'fixed' && pickerBudget ? (
             <>
-              <Text style={styles.pickerLabel}>Default category</Text>
+              <Text style={styles.pickerLabel}>{t('detail.defaultCategory')}</Text>
               <DefaultCategoryPicker
                 payee={selected}
                 budget={pickerBudget}
                 month={activeMonth}
                 onCommit={(defaultCategoryId) => void setDefaultCategory(defaultCategoryId)}
-                onCreateError={(err) => setError(apiErrorMessage(err, 'failed to create category'))}
+                onCreateError={(err) => setError(apiErrorMessage(err, t('error.createCategory')))}
                 addCategory={addCategory}
                 budgetId={budgetId}
               />
             </>
           ) : null}
 
-          <Text style={styles.sectionLabel}>RENAMING</Text>
+          <Text style={styles.sectionLabel}>{t('detail.renaming')}</Text>
           <Text style={styles.radioSub}>
-            Imported payees that match this rule will be renamed to “{selected.name}”.
+            {t('detail.renamingHint', { name: selected.name })}
           </Text>
           <View style={styles.ruleForm}>
             <Combobox
-              value={matchTypeLabels[ruleDraft?.matchType ?? selected.rename_match_type ?? 'contains']}
+              value={MATCH_TYPE_LABEL[ruleDraft?.matchType ?? selected.rename_match_type ?? 'contains']}
               onChangeText={(v) => {
                 // Matcher is pick-only: adopt a typed label when it
                 // matches exactly, otherwise snap back to the current one.
                 const mt = matchTypeFromLabel(v);
                 if (mt && mt !== draftMatchType) void saveRule({ matchType: mt });
               }}
-              options={matchTypes.map((mt) => ({ key: mt, label: matchTypeLabels[mt] }))}
+              options={matchTypes.map((mt) => ({ key: mt, label: MATCH_TYPE_LABEL[mt] }))}
               onPick={(key) => void saveRule({ matchType: key as MatchType })}
               chevron
               style={styles.ruleMatcher}
               containerStyle={styles.ruleMatcherBox}
-              accessibilityLabel="Renaming matcher"
+              accessibilityLabel={t('rule.matcherLabel')}
             />
             <TextInput
               value={ruleDraft?.condition ?? selected.rename_condition ?? ''}
@@ -171,24 +176,24 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
               onEndEditing={() => void saveRule()}
               onSubmitEditing={() => void saveRule()}
               onBlur={() => void saveRule()}
-              placeholder={draftMatchType === 'is' ? 'Is…' : 'Contains…'}
+              placeholder={draftMatchType === 'is' ? t('rule.isPlaceholder') : t('rule.containsPlaceholder')}
               placeholderTextColor={colors.faint}
               style={[styles.ruleInput, { flex: 1 }]}
-              accessibilityLabel="Renaming condition"
+              accessibilityLabel={t('rule.conditionLabel')}
             />
           </View>
 
           <View style={styles.footerRow}>
             <Pressable onPress={() => void toggleHidden()} accessibilityRole="button">
-              <Text style={styles.linkText}>{selected.hidden ? 'Unhide this payee' : 'Hide this payee'}</Text>
+              <Text style={styles.linkText}>{selected.hidden ? t('detail.unhide') : t('detail.hide')}</Text>
             </Pressable>
             {selected.transaction_count > 0 && mergeCandidates.length > 0 ? (
               <Pressable onPress={openMerge} accessibilityRole="button">
-                <Text style={styles.linkText}>Merge into…</Text>
+                <Text style={styles.linkText}>{t('detail.mergeInto')}</Text>
               </Pressable>
             ) : null}
             <Pressable onPress={tryDelete} accessibilityRole="button">
-              <Text style={styles.deleteText}>Delete</Text>
+              <Text style={styles.deleteText}>{tCommon('delete')}</Text>
             </Pressable>
           </View>
         </>

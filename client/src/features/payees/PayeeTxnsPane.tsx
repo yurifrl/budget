@@ -3,7 +3,10 @@ import { Pressable, Text, View } from 'react-native';
 
 import { useGetPayeeTransactionsQuery } from '@/budget/data/api';
 import { milliToCents } from '@/budget/data/mapping';
+import { tCommon } from '@shared/i18n/common';
+
 import { useMoneyFormat } from '@/ui/moneyFormat';
+import { t } from './i18n';
 import { pageCount } from './payees.logic';
 import { styles } from './styles';
 
@@ -14,8 +17,8 @@ export function PayeeTxnsPane({ budgetId, payeeId }: { budgetId: string; payeeId
   const [page, setPage] = useState(0);
   const query = useGetPayeeTransactionsQuery({ budgetId, payeeId, limit: PAGE_SIZE, offset: page * PAGE_SIZE });
 
-  if (query.isLoading) return <Text style={styles.txnsEmpty}>Loading…</Text>;
-  if (query.error) return <Text style={styles.txnsEmpty}>Failed to load transactions.</Text>;
+  if (query.isLoading) return <Text style={styles.txnsEmpty}>{tCommon('loading')}</Text>;
+  if (query.error) return <Text style={styles.txnsEmpty}>{t('txns.error')}</Text>;
 
   const rows = query.data?.rows ?? [];
   const total = query.data?.total ?? 0;
@@ -24,15 +27,15 @@ export function PayeeTxnsPane({ budgetId, payeeId }: { budgetId: string; payeeId
   return (
     <View style={styles.txnsPane}>
       {rows.length === 0 ? (
-        <Text style={styles.txnsEmpty}>No transactions.</Text>
+        <Text style={styles.txnsEmpty}>{t('txns.empty')}</Text>
       ) : (
         <View style={styles.txnsTable}>
           <View style={[styles.txnsRow, styles.txnsHead]}>
-            <Text style={[styles.txnsCell, styles.txnsDate]}>DATE</Text>
-            <Text style={[styles.txnsCell, styles.txnsPayee]}>MEMO</Text>
-            <Text style={[styles.txnsCell, styles.txnsAccount]}>ACCOUNT</Text>
-            <Text style={[styles.txnsCell, styles.txnsCat]}>CATEGORY</Text>
-            <Text style={[styles.txnsCellRight, styles.txnsAmount]}>AMOUNT</Text>
+            <Text style={[styles.txnsCell, styles.txnsDate]}>{t('txns.col.date')}</Text>
+            <Text style={[styles.txnsCell, styles.txnsPayee]}>{t('txns.col.memo')}</Text>
+            <Text style={[styles.txnsCell, styles.txnsAccount]}>{t('txns.col.account')}</Text>
+            <Text style={[styles.txnsCell, styles.txnsCat]}>{t('txns.col.category')}</Text>
+            <Text style={[styles.txnsCellRight, styles.txnsAmount]}>{t('txns.col.amount')}</Text>
           </View>
           {rows.map((t) => (
             <Pressable key={t.id} style={styles.txnsRow}>
@@ -60,15 +63,15 @@ export function PayeeTxnsPane({ budgetId, payeeId }: { budgetId: string; payeeId
       )}
       <View style={styles.txnsPager}>
         <Pressable onPress={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
-          <Text style={[styles.txnsPageBtn, page === 0 && styles.txnsPageBtnOff]}>← Prev</Text>
+          <Text style={[styles.txnsPageBtn, page === 0 && styles.txnsPageBtnOff]}>{t('txns.prev')}</Text>
         </Pressable>
         <Text style={styles.txnsPageInfo}>
-          Page {page + 1} of {pages}
+          {t('txns.page', { page: page + 1, pages })}
         </Text>
         <Pressable
           onPress={() => setPage((p) => (p + 1 < pages ? p + 1 : p))}
           disabled={page + 1 >= pages}>
-          <Text style={[styles.txnsPageBtn, page + 1 >= pages && styles.txnsPageBtnOff]}>Next →</Text>
+          <Text style={[styles.txnsPageBtn, page + 1 >= pages && styles.txnsPageBtnOff]}>{t('txns.next')}</Text>
         </Pressable>
       </View>
     </View>

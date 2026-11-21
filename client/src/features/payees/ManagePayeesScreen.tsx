@@ -18,7 +18,10 @@
 
 import { Pressable, Text, TextInput, View } from 'react-native';
 
+import { tCommon } from '@shared/i18n/common';
+
 import { colors } from '@/ui/theme';
+import { t } from './i18n';
 import { PayeeDetailPane } from './PayeeDetailPane';
 import { PayeeListPane } from './PayeeListPane';
 import { styles } from './styles';
@@ -40,9 +43,9 @@ export function ManagePayeesBody({
   return (
     <View style={[styles.screen, contentTopPad > 0 && { paddingTop: contentTopPad }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Manage Payees</Text>
+        <Text style={styles.title}>{t('screen.title')}</Text>
         {onClose ? (
-          <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={8}>
+          <Pressable onPress={onClose} accessibilityLabel={tCommon('close')} hitSlop={8}>
             <Text style={styles.close}>✕</Text>
           </Pressable>
         ) : null}
@@ -53,7 +56,7 @@ export function ManagePayeesBody({
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Search by name"
+          placeholder={t('screen.search')}
           placeholderTextColor={colors.faint}
           style={styles.searchInput}
         />

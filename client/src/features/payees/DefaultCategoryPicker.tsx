@@ -2,6 +2,7 @@ import type { PayeeAdminRow } from '@/budget/data/rows';
 import type { Budget, MonthKey } from '@/domain/types';
 import { useBudgetMonth } from '@/state/useBudgetMonth';
 import { CategoryDropdown } from '@/ui/dropdown/CategoryDropdown';
+import { t } from './i18n';
 
 /** Fixed-mode default-category picker (reuses the register's CategoryDropdown). */
 export function DefaultCategoryPicker({
@@ -27,7 +28,7 @@ export function DefaultCategoryPicker({
   const current = budget.categories.find((c) => c.id === payee.default_category_id) ?? null;
   const placeholder = current
     ? `${current.name} (${budget.groups.find((g) => g.id === current.groupId)?.name ?? ''})`
-    : 'None';
+    : t('picker.none');
 
   const createCategory = async (query: string, assign: (id: string) => void) => {
     const group = budget.groups[0];
@@ -61,7 +62,7 @@ export function DefaultCategoryPicker({
       onTransferPick={() => undefined}
       placeholder={placeholder}
       chevron
-      accessibilityLabel="Default category"
+      accessibilityLabel={t('detail.defaultCategory')}
     />
   );
 }

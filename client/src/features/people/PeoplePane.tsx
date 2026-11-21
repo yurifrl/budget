@@ -28,6 +28,8 @@ import {
   useRenameBudgetMemberMutation,
 } from '@/budget/data/api';
 import { checkInvite, checkLinkEmail, personLabel, personStatus, toAvatarPerson, type Person } from '@/domain/people';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './i18n';
 import { usePeople } from './usePeople';
 import { colors } from '@/ui/theme';
 
@@ -45,7 +47,7 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
   const [adding, setAdding] = useState<{ email?: string; name?: string } | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const nameRef = useRef<TextInputInstance>(null);
-  if (!budgetId) return <Text style={s.hint}>No budget selected.</Text>;
+  if (!budgetId) return <Text style={s.hint}>{t('pane.noBudget')}</Text>;
 
   const add = () => {
     if (adding) return;
@@ -59,7 +61,7 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
         setEmail('');
         setName('');
       })
-      .catch((err) => setError(apiErrorMessage(err)))
+      .catch((err) => setError(apiErrorMessage(err, t('error.add'))))
       .finally(() => {
         setAdding(null);
         nameRef.current?.focus();
@@ -76,14 +78,14 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
       .unwrap()
       .then(() => true)
       .catch((err) => {
-        setError(apiErrorMessage(err));
+        setError(apiErrorMessage(err, t('error.link')));
         return false;
       });
   };
   const rename = (userId: string, raw: string): Promise<boolean> => {
     const next = raw.trim();
     if (!next) {
-      setError('Enter a name');
+      setError(t('pane.enterName'));
       return Promise.resolve(false);
     }
     setError(null);
@@ -91,7 +93,7 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
       .unwrap()
       .then(() => true)
       .catch((err) => {
-        setError(apiErrorMessage(err));
+        setError(apiErrorMessage(err, t('error.rename')));
         return false;
       });
   };
@@ -100,12 +102,12 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
     setConfirming(null);
     removeMember({ budgetId, userId })
       .unwrap()
-      .catch((err) => setError(apiErrorMessage(err)));
+      .catch((err) => setError(apiErrorMessage(err, t('error.remove'))));
   };
 
   return (
     <>
-      <Text style={s.hint}>Everyone here sees and edits everything in this budget.</Text>
+      <Text style={s.hint}>{t('pane.hint')}</Text>
       <View style={s.list}>
         {people.map((p) => (
           <PersonRow
@@ -125,17 +127,16 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
       </View>
       {people.some((p) => personStatus(p) === 'invited') ? (
         <Text style={s.hint}>
-          Invited people find this budget on their home page when they sign in with that email. Adding them sends
-          no message and does not give them a login.
+          {t('pane.invitedHint')}
         </Text>
       ) : null}
       {people.some((p) => personStatus(p) === 'placeholder') ? (
         <Text style={s.hint}>
-          People with no email are just for grouping — link their email later, once they connect.
+          {t('pane.placeholderHint')}
         </Text>
       ) : null}
       <View style={s.form}>
-        <Text style={s.formTitle}>ADD A PERSON</Text>
+        <Text style={s.formTitle}>{t('add.title')}</Text>
         <TextInput
           ref={nameRef}
           value={name}
@@ -143,12 +144,12 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
             setName(v);
             setError(null);
           }}
-          placeholder="Name"
+          placeholder={t('add.namePlaceholder')}
           placeholderTextColor={colors.faint}
           onSubmitEditing={add}
           editable={!adding}
           style={[s.input, error && s.inputError]}
-          accessibilityLabel="Name of the person to add"
+          accessibilityLabel={t('add.nameLabel')}
           maxLength={80}
           returnKeyType="next"
         />
@@ -158,12 +159,12 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
             setEmail(v);
             setError(null);
           }}
-          placeholder="Email (optional — add later)"
+          placeholder={t('add.emailPlaceholder')}
           placeholderTextColor={colors.faint}
           onSubmitEditing={add}
           editable={!adding}
           style={s.input}
-          accessibilityLabel="Email of the person to add (optional)"
+          accessibilityLabel={t('add.emailLabel')}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
@@ -178,12 +179,12 @@ export function PeoplePane({ budgetId, onOpenProfile }: { budgetId: string | nul
           onPress={add}
           disabled={!!adding}
           accessibilityRole="button"
-          accessibilityLabel="Add Person"
+          accessibilityLabel={t('add.button')}
           style={({ pressed }) => [s.addBtn, (pressed || !!adding) && s.addBtnPressed]}>
-          {adding ? <ActivityIndicator size="small" color={colors.white} /> : <Text style={s.addBtnText}>Add Person</Text>}
+          {adding ? <ActivityIndicator size="small" color={colors.white} /> : <Text style={s.addBtnText}>{t('add.button')}</Text>}
         </Pressable>
       </View>
-      {!canManage ? <Text style={s.hint}>Only the owner can remove people.</Text> : null}
+      {!canManage ? <Text style={s.hint}>{t('pane.ownerOnly')}</Text> : null}
     </>
   );
 }
@@ -246,40 +247,40 @@ function PersonRow({
             <Text style={s.name} numberOfLines={1} ellipsizeMode={person.name?.trim() ? 'tail' : 'middle'}>
               {label}
             </Text>
-            {person.is_owner ? <Badge label="OWNER" tone="owner" /> : null}
-            {person.is_me ? <Badge label="YOU" tone="you" /> : null}
-            {status === 'invited' ? <Badge label="INVITED" tone="invited" /> : null}
-            {status === 'placeholder' ? <Badge label="NO EMAIL" tone="invited" /> : null}
+            {person.is_owner ? <Badge label={t('badge.owner')} tone="owner" /> : null}
+            {person.is_me ? <Badge label={t('badge.you')} tone="you" /> : null}
+            {status === 'invited' ? <Badge label={t('badge.invited')} tone="invited" /> : null}
+            {status === 'placeholder' ? <Badge label={t('badge.noEmail')} tone="invited" /> : null}
           </View>
           {person.email && person.name?.trim() ? (
             <Text style={s.email} numberOfLines={1} ellipsizeMode="middle">
               {person.email}
             </Text>
           ) : status === 'placeholder' ? (
-            <Text style={s.email}>Not connected</Text>
+            <Text style={s.email}>{t('row.notConnected')}</Text>
           ) : null}
         </View>
         {person.is_me ? (
-          <Pressable onPress={onOpenProfile} accessibilityRole="link" accessibilityLabel="Edit profile" hitSlop={8}>
-            <Text style={s.link}>Edit profile</Text>
+          <Pressable onPress={onOpenProfile} accessibilityRole="link" accessibilityLabel={t('row.editProfile')} hitSlop={8}>
+            <Text style={s.link}>{t('row.editProfile')}</Text>
           </Pressable>
         ) : null}
       </View>
       {!person.is_me && (person.pending || (removable && !confirming)) && !editing ? (
         <View style={s.actions}>
           {status === 'placeholder' ? (
-            <Pressable onPress={() => open('link')} accessibilityRole="button" accessibilityLabel={`Link email for ${label}`} hitSlop={8}>
-              <Text style={s.link}>Link email</Text>
+            <Pressable onPress={() => open('link')} accessibilityRole="button" accessibilityLabel={t('row.linkEmailLabel', { name: label })} hitSlop={8}>
+              <Text style={s.link}>{t('row.linkEmail')}</Text>
             </Pressable>
           ) : null}
           {person.pending ? (
-            <Pressable onPress={() => open('rename')} accessibilityRole="button" accessibilityLabel={`Rename ${label}`} hitSlop={8}>
-              <Text style={s.link}>Rename</Text>
+            <Pressable onPress={() => open('rename')} accessibilityRole="button" accessibilityLabel={t('row.renameLabel', { name: label })} hitSlop={8}>
+              <Text style={s.link}>{t('row.rename')}</Text>
             </Pressable>
           ) : null}
           {removable && !confirming ? (
-            <Pressable onPress={onAskRemove} accessibilityRole="button" accessibilityLabel={`Remove ${label}`} hitSlop={8}>
-              <Text style={s.removeText}>Remove</Text>
+            <Pressable onPress={onAskRemove} accessibilityRole="button" accessibilityLabel={t('row.removeLabel', { name: label })} hitSlop={8}>
+              <Text style={s.removeText}>{tCommon('remove')}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -289,13 +290,13 @@ function PersonRow({
           <TextInput
             value={draft}
             onChangeText={setDraft}
-            placeholder={editing === 'link' ? 'person@example.com' : 'Name'}
+            placeholder={editing === 'link' ? t('edit.emailPlaceholder') : t('add.namePlaceholder')}
             placeholderTextColor={colors.faint}
             onSubmitEditing={submit}
             editable={!busy}
             autoFocus
             style={s.input}
-            accessibilityLabel={editing === 'link' ? `Email for ${label}` : `New name for ${label}`}
+            accessibilityLabel={editing === 'link' ? t('edit.emailLabel', { name: label }) : t('edit.nameLabel', { name: label })}
             autoCapitalize={editing === 'link' ? 'none' : 'words'}
             autoCorrect={false}
             keyboardType={editing === 'link' ? 'email-address' : 'default'}
@@ -304,21 +305,20 @@ function PersonRow({
           />
           {editing === 'link' ? (
             <Text style={s.confirmText}>
-              If this email already belongs to someone in the app, they take over {label}’s accounts and categories
-              and {label} disappears from the list.
+              {t('edit.linkWarning', { name: label })}
             </Text>
           ) : null}
           <View style={s.confirmBtns}>
-            <Pressable onPress={() => setEditing(null)} accessibilityRole="button" accessibilityLabel="Cancel" style={s.btnGhost}>
-              <Text style={s.btnGhostText}>Cancel</Text>
+            <Pressable onPress={() => setEditing(null)} accessibilityRole="button" accessibilityLabel={tCommon('cancel')} style={s.btnGhost}>
+              <Text style={s.btnGhostText}>{tCommon('cancel')}</Text>
             </Pressable>
             <Pressable
               onPress={submit}
               disabled={busy}
               accessibilityRole="button"
-              accessibilityLabel={editing === 'link' ? 'Save email' : 'Save name'}
+              accessibilityLabel={editing === 'link' ? t('edit.saveEmailLabel') : t('edit.saveNameLabel')}
               style={[s.btnDanger, { backgroundColor: colors.indigo }]}>
-              <Text style={s.btnDangerText}>{editing === 'link' ? 'Link' : 'Save'}</Text>
+              <Text style={s.btnDangerText}>{editing === 'link' ? t('edit.link') : t('edit.save')}</Text>
             </Pressable>
           </View>
         </View>
@@ -326,14 +326,14 @@ function PersonRow({
       {confirming ? (
         <View style={s.confirm}>
           <Text style={s.confirmText}>
-            Remove {label}? They lose access to this budget and their accounts become Shared.
+            {t('remove.confirm', { name: label })}
           </Text>
           <View style={s.confirmBtns}>
-            <Pressable onPress={onCancelRemove} accessibilityRole="button" accessibilityLabel="Cancel removal" style={s.btnGhost}>
-              <Text style={s.btnGhostText}>Cancel</Text>
+            <Pressable onPress={onCancelRemove} accessibilityRole="button" accessibilityLabel={t('remove.cancelLabel')} style={s.btnGhost}>
+              <Text style={s.btnGhostText}>{tCommon('cancel')}</Text>
             </Pressable>
-            <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel={`Yes, remove ${label}`} style={s.btnDanger}>
-              <Text style={s.btnDangerText}>Remove</Text>
+            <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel={t('remove.yesLabel', { name: label })} style={s.btnDanger}>
+              <Text style={s.btnDangerText}>{tCommon('remove')}</Text>
             </Pressable>
           </View>
         </View>
@@ -356,7 +356,7 @@ function GhostRow({ email, name }: { email?: string; name?: string }) {
           <Text style={s.name} numberOfLines={1}>
             {name ?? email}
           </Text>
-          <Text style={s.email}>Adding…</Text>
+          <Text style={s.email}>{t('add.adding')}</Text>
         </View>
       </View>
     </View>

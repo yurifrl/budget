@@ -8,6 +8,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { personLabel, SHARED_LABEL, type Person } from '@/domain/people';
+import { t } from './i18n';
 import { usePeople } from './usePeople';
 import { PersonFace } from '@/ui/PersonFace';
 import { colors } from '@/ui/theme';
@@ -17,7 +18,7 @@ export function PersonPicker({
   value,
   onChange,
   disabled,
-  label = 'Person',
+  label = t('picker.person'),
 }: {
   budgetId: string;
   /** Selected member id; null = Shared. */
@@ -65,7 +66,7 @@ function PersonOption({
       disabled={disabled}
       accessibilityRole="radio"
       accessibilityState={{ checked: on }}
-      accessibilityLabel={`${prefix} ${label}`}
+      accessibilityLabel={t('picker.option', { prefix, name: label })}
       onPress={onPress}>
       <PersonFace person={person} size={20} />
       <Text style={[styles.chipText, on && styles.chipTextOn]} numberOfLines={1}>
