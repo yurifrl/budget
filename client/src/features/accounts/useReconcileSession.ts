@@ -13,6 +13,7 @@ import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { useReconcileAccountMutation } from '@/budget/data/api';
 import { workingBalance } from '@/domain/engine';
 import type { Account } from '@/domain/types';
+import { t } from './i18n';
 import { desktopReconcileAnchor, phoneReconcileAnchor, reconcileDifference } from './reconcile.logic';
 
 export function useReconcileSession({
@@ -101,13 +102,13 @@ export function useReconcileSession({
         statedBalanceCents: workingBalance(selectedAccount),
         reconcileAll: true,
       }).unwrap();
-      onToast('Account reconciled');
+      onToast(t('reconcile.done'));
     } catch (err) {
       // Auto-reconcile failed (network/server): drop into the manual session
       // so the user can finish it by hand instead of a dead-end error.
       setReconciling(true);
       setStatedBalance(workingBalance(selectedAccount));
-      setReconcileError(apiErrorMessage(err, 'failed to reconcile account'));
+      setReconcileError(apiErrorMessage(err, t('reconcile.failed')));
     }
   };
 
@@ -123,9 +124,9 @@ export function useReconcileSession({
       setReconciling(false);
       // syscd-app-qfr: success toast; reconciled rows vanish because the
       // showReconciled view option defaults to false.
-      onToast('Account reconciled');
+      onToast(t('reconcile.done'));
     } catch (err) {
-      setReconcileError(apiErrorMessage(err, 'failed to reconcile account'));
+      setReconcileError(apiErrorMessage(err, t('reconcile.failed')));
     }
   };
 

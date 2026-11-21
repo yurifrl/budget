@@ -19,6 +19,8 @@ import { DeleteAccountConfirm } from './accountEdit/DeleteAccountConfirm';
 import { styles } from './accountEdit/styles';
 import { useAccountEdit } from './accountEdit/useAccountEdit';
 import { UpstreamPickerSheet , UnlinkConfirm } from '@/features/banks';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './i18n';
 
 export function AccountEditModal({
   account,
@@ -66,40 +68,40 @@ export function AccountEditModal({
       <KeyboardModalFrame onBackdropPress={onClose} cardStyle={styles.modal}>
         <ScrollView keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text style={styles.title}>Edit Account</Text>
-            <Pressable onPress={onClose} accessibilityLabel="Close">
+            <Text style={styles.title}>{t('action.editAccount')}</Text>
+            <Pressable onPress={onClose} accessibilityLabel={tCommon('close')}>
               <Text style={styles.close}>✕</Text>
             </Pressable>
           </View>
 
           {account.closed ? (
             <Text style={styles.closedBanner}>
-              This account is closed — its details are read-only. Reopen it to make changes.
+              {t('edit.closedBanner')}
             </Text>
           ) : null}
 
-          <Text style={styles.section}>ACCOUNT INFORMATION</Text>
-          <Text style={styles.label}>Account Nickname</Text>
+          <Text style={styles.section}>{t('edit.sectionInfo')}</Text>
+          <Text style={styles.label}>{t('edit.nickname')}</Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="Account nickname"
+            placeholder={t('edit.nicknamePlaceholder')}
             placeholderTextColor={colors.faint}
             editable={!isLoading && !account.closed}
           />
-          <Text style={styles.label}>Account Notes</Text>
+          <Text style={styles.label}>{t('edit.notes')}</Text>
           <TextInput
             style={[styles.input, styles.notes]}
             value={note}
             onChangeText={setNote}
-            placeholder="Notes"
+            placeholder={t('edit.notesPlaceholder')}
             placeholderTextColor={colors.faint}
             multiline
             editable={!isLoading && !account.closed}
           />
 
-          <Text style={styles.label}>Person</Text>
+          <Text style={styles.label}>{t('edit.person')}</Text>
           <PersonPicker
             budgetId={budgetId}
             value={userId}
@@ -109,23 +111,23 @@ export function AccountEditModal({
 
           <View style={styles.divider} />
 
-          <Text style={styles.label}>Working Balance</Text>
+          <Text style={styles.label}>{t('edit.workingBalance')}</Text>
           <TextInput
             style={styles.input}
             value={balance.text}
-            onChangeText={(t) => setBalanceDraft(t)}
+            onChangeText={(text) => setBalanceDraft(text)}
             editable={!isLoading && !account.closed}
             inputMode="decimal"
           />
           {balance.changed ? (
             <Text style={styles.hint}>
-              Sets the balance directly — an override, not a ledger entry.
+              {t('edit.balanceHint')}
             </Text>
           ) : null}
 
           <View style={styles.divider} />
 
-          <Text style={styles.section}>BANK CONNECTION</Text>
+          <Text style={styles.section}>{t('edit.sectionBank')}</Text>
           <BankConnectionSection edit={edit} />
 
           <View style={styles.divider} />
@@ -135,10 +137,10 @@ export function AccountEditModal({
             {account.closed ? (
               <>
                 <Pressable style={styles.closeAccountBtn} disabled={isLoading} onPress={() => void save(false)}>
-                  <Text style={styles.closeAccountText}>Re-open</Text>
+                  <Text style={styles.closeAccountText}>{t('edit.reopen')}</Text>
                 </Pressable>
                 <Pressable style={styles.deleteBtn} disabled={deleting || isLoading} onPress={() => setDeleteAsk(true)}>
-                  <Text style={styles.deleteText}>{deleting ? 'Deleting…' : 'Delete'}</Text>
+                  <Text style={styles.deleteText}>{deleting ? t('edit.deleting') : tCommon('delete')}</Text>
                 </Pressable>
               </>
             ) : (
@@ -146,16 +148,16 @@ export function AccountEditModal({
                 style={styles.closeAccountBtn}
                 disabled={isLoading}
                 onPress={() => setCloseAsk({ amount: working })}>
-                <Text style={styles.closeAccountText}>Close Account</Text>
+                <Text style={styles.closeAccountText}>{t('edit.closeAccount')}</Text>
               </Pressable>
             )}
             <View style={styles.footerRight}>
               <Pressable style={styles.ghostBtn} disabled={isLoading} onPress={onClose}>
-                <Text style={styles.ghostText}>Cancel</Text>
+                <Text style={styles.ghostText}>{tCommon('cancel')}</Text>
               </Pressable>
               {account.closed ? null : (
                 <Pressable style={styles.indigoBtn} disabled={isLoading} onPress={() => void save()}>
-                  <Text style={styles.indigoText}>Save</Text>
+                  <Text style={styles.indigoText}>{tCommon('save')}</Text>
                 </Pressable>
               )}
             </View>

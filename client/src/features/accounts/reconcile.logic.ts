@@ -5,6 +5,7 @@
 
 import { workingBalance } from '@/domain/engine';
 import type { Account, Cents } from '@/domain/types';
+import { t } from './i18n';
 
 /** Popover width budget used to keep it on screen. */
 const POPOVER_W = 268;
@@ -57,5 +58,5 @@ export function reconcileDifference(
 
 /** Toast after the connect flow lands here with ?linked=N. */
 export function linkedToastText(count: number): string {
-  return `Linked ${count} account${count === 1 ? '' : 's'}`;
+  return t('reconcile.linkedToast', { count });
 }

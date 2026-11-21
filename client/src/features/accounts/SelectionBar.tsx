@@ -26,6 +26,8 @@ import type { Category, CategoryGroup, FlagColor } from '@/domain/types';
 import { displayFlagLabel } from '@/domain/flagLabels';
 import { FLAG_COLORS, colors } from '@/ui/theme';
 import { useFlagLabels } from '@/state/useDisplayPrefs';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './i18n';
 
 /** YNAB reference pill — deeper than the theme indigo accents. */
 const BAR_BG = '#4a3fa5';
@@ -103,7 +105,7 @@ export function SelectionBar({
         <Modal transparent animationType="fade" onRequestClose={closeMenu}>
           <Pressable
             style={styles.scrim}
-            accessibilityLabel="Close menu"
+            accessibilityLabel={t('selection.closeMenu')}
             onPress={closeMenu}>
             <View
               style={[
@@ -120,7 +122,7 @@ export function SelectionBar({
                       onCategorize(null);
                       closeMenu();
                     }}>
-                    <Text style={styles.menuItemText}>Ready to Assign</Text>
+                    <Text style={styles.menuItemText}>{t('selection.readyToAssign')}</Text>
                   </Pressable>
                   {groups.map((g) => {
                     const groupCats = categories.filter((c) => c.groupId === g.id && !c.hidden);
@@ -151,7 +153,7 @@ export function SelectionBar({
                       onFlag(null);
                       closeMenu();
                     }}>
-                    <Text style={styles.menuItemText}>No flag</Text>
+                    <Text style={styles.menuItemText}>{t('selection.noFlag')}</Text>
                   </Pressable>
                   {FLAG_COLORS.map((f) => (
                     <Pressable
@@ -172,11 +174,11 @@ export function SelectionBar({
                     style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                     onPress={() => setMenu('more')}>
                     <Ionicons name="chevron-back" size={14} color={colors.muted} />
-                    <Text style={styles.menuItemText}>Move to Account</Text>
+                    <Text style={styles.menuItemText}>{t('selection.moveToAccount')}</Text>
                   </Pressable>
                   <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: 4 }}>
                     {moveTargets.length === 0 ? (
-                      <Text style={styles.menuEmpty}>No other accounts</Text>
+                      <Text style={styles.menuEmpty}>{t('selection.noOtherAccounts')}</Text>
                     ) : null}
                     {moveTargets.map((a) => (
                       <Pressable
@@ -205,7 +207,7 @@ export function SelectionBar({
                       closeMenu();
                     }}>
                     <Text style={styles.menuItemText}>
-                      {allCleared ? 'Mark as Uncleared' : 'Mark as Cleared'}
+                      {allCleared ? t('selection.markUncleared') : t('selection.markCleared')}
                     </Text>
                     <Keycaps keys={['C']} />
                   </Pressable>
@@ -221,7 +223,7 @@ export function SelectionBar({
                       onMatch();
                       closeMenu();
                     }}>
-                    <Text style={styles.menuItemText}>Match</Text>
+                    <Text style={styles.menuItemText}>{t('selection.match')}</Text>
                     <Keycaps keys={['M']} />
                   </Pressable>
                   <Pressable
@@ -235,7 +237,7 @@ export function SelectionBar({
                       onUnmatch();
                       closeMenu();
                     }}>
-                    <Text style={styles.menuItemText}>Unmatch</Text>
+                    <Text style={styles.menuItemText}>{t('selection.unmatch')}</Text>
                     <Keycaps keys={['shift', 'U']} />
                   </Pressable>
                   <Pressable
@@ -244,7 +246,7 @@ export function SelectionBar({
                       onDuplicate();
                       closeMenu();
                     }}>
-                    <Text style={styles.menuItemText}>Duplicate</Text>
+                    <Text style={styles.menuItemText}>{t('selection.duplicate')}</Text>
                     <Keycaps keys={['shift', 'D']} />
                   </Pressable>
                   <Pressable
@@ -253,12 +255,12 @@ export function SelectionBar({
                       onMemo();
                       closeMenu();
                     }}>
-                    <Text style={styles.menuItemText}>Memo…</Text>
+                    <Text style={styles.menuItemText}>{t('selection.memo')}</Text>
                   </Pressable>
                   <Pressable
                     style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                     onPress={() => setMenu('more-move')}>
-                    <Text style={styles.menuItemText}>Move to Account</Text>
+                    <Text style={styles.menuItemText}>{t('selection.moveToAccount')}</Text>
                     <Ionicons name="chevron-forward" size={14} color={colors.muted} />
                   </Pressable>
                   <View style={styles.menuDivider} />
@@ -269,7 +271,7 @@ export function SelectionBar({
                       closeMenu();
                     }}>
                     <Text style={styles.menuItemText}>
-                      Export {count === 1 ? '1 Transaction' : `${count} Transactions`}
+                      {t('selection.export', { count })}
                     </Text>
                   </Pressable>
                   <View style={styles.menuDivider} />
@@ -279,7 +281,7 @@ export function SelectionBar({
                       onDelete();
                       closeMenu();
                     }}>
-                    <Text style={[styles.menuItemText, styles.menuItemDanger]}>Delete</Text>
+                    <Text style={[styles.menuItemText, styles.menuItemDanger]}>{tCommon('delete')}</Text>
                     <Keycaps keys={['delete']} />
                   </Pressable>
                 </>
@@ -294,11 +296,11 @@ export function SelectionBar({
           style={({ pressed }) => [styles.barIcon, pressed && styles.barBtnPressed]}
           onPress={onClose}
           accessibilityRole="button"
-          accessibilityLabel="Clear selection">
+          accessibilityLabel={t('selection.clear')}>
           <Ionicons name="close" size={16} color={colors.white} />
         </Pressable>
         <Text style={styles.count} accessibilityLiveRegion="polite">
-          {count === 1 ? '1 Transaction' : `${count} Transactions`}
+          {t('selection.count', { count })}
         </Text>
         <View style={styles.divider} />
         <View ref={(v) => { catRef.current = v; }} collapsable={false}>
@@ -306,9 +308,9 @@ export function SelectionBar({
             style={({ pressed }) => [styles.barBtn, pressed && styles.barBtnPressed]}
             onPress={() => openMenu('categorize', catRef.current)}
             accessibilityRole="button"
-            accessibilityLabel="Categorize selected transactions">
+            accessibilityLabel={t('selection.categorizeLabel')}>
             <Ionicons name="checkbox" size={15} color={colors.white} />
-            <Text style={styles.barBtnText}>Categorize</Text>
+            <Text style={styles.barBtnText}>{t('selection.categorize')}</Text>
           </Pressable>
         </View>
         <View ref={(v) => { flagRef.current = v; }} collapsable={false}>
@@ -316,9 +318,9 @@ export function SelectionBar({
             style={({ pressed }) => [styles.barBtn, pressed && styles.barBtnPressed]}
             onPress={() => openMenu('flag', flagRef.current)}
             accessibilityRole="button"
-            accessibilityLabel="Flag selected transactions">
+            accessibilityLabel={t('selection.flagLabel')}>
             <Ionicons name="flag" size={15} color={colors.white} />
-            <Text style={styles.barBtnText}>Flag</Text>
+            <Text style={styles.barBtnText}>{t('selection.flag')}</Text>
           </Pressable>
         </View>
         <View style={styles.divider} />
@@ -327,9 +329,9 @@ export function SelectionBar({
             style={({ pressed }) => [styles.barBtn, pressed && styles.barBtnPressed]}
             onPress={() => openMenu('more', moreRef.current)}
             accessibilityRole="button"
-            accessibilityLabel="More actions">
+            accessibilityLabel={t('menu.moreActions')}>
             <Ionicons name="ellipsis-horizontal" size={15} color={colors.white} />
-            <Text style={styles.barBtnText}>More</Text>
+            <Text style={styles.barBtnText}>{t('selection.more')}</Text>
           </Pressable>
         </View>
       </View>

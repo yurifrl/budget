@@ -18,15 +18,17 @@ import { BelongsTo } from '@/ui/PersonFace';
 import { colors, radius } from '@/ui/theme';
 import { AccountsMoreMenu } from './AccountsMoreMenu';
 import { BalanceFormulaRow } from '@/ui/BalanceFormulaRow';
+import { labels } from '@shared/i18n';
+import { t } from './i18n';
 
 // Header subtitle (syscd-app-8uy): '<type label> · reconciled status'.
-const ACCOUNT_TYPE_LABEL: Record<Budget['accounts'][number]['type'], string> = {
-  checking: 'Checking',
-  savings: 'Savings',
-  cash: 'Cash',
-  credit: 'Credit Card',
-  tracking: 'Tracking Account',
-};
+const ACCOUNT_TYPE_LABEL: Record<Budget['accounts'][number]['type'], string> = labels(t, {
+  checking: 'accountType.checking',
+  savings: 'accountType.savings',
+  cash: 'accountType.cash',
+  credit: 'accountType.creditCard',
+  tracking: 'accountType.tracking',
+});
 
 export function AccountHeader({
   isPhone,
@@ -76,7 +78,7 @@ export function AccountHeader({
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {selectedAccount ? selectedAccount.name : 'All Accounts'}
+              {selectedAccount ? selectedAccount.name : t('header.allAccounts')}
             </Text>
             {selectedAccount ? (
               <Pressable
@@ -84,7 +86,7 @@ export function AccountHeader({
                 style={styles.iconBtn}
                 onPress={() => onEditAccount(selectedAccount.id)}
                 accessibilityRole="button"
-                accessibilityLabel={`Edit account ${selectedAccount.name}`}
+                accessibilityLabel={t('header.editAccount', { name: selectedAccount.name })}
               >
                 <Ionicons name="pencil" size={14} color={colors.faint} />
               </Pressable>
@@ -101,7 +103,7 @@ export function AccountHeader({
             {isPhone ? (
               <View style={[styles.topbarTrail, process.env.EXPO_OS === 'web' && styles.topbarTrailWeb]}>
                 {process.env.EXPO_OS === 'web' && selectedAccount && !reconciling ? (
-                  <IndigoButton label="Reconcile" onPress={onReconcile} />
+                  <IndigoButton label={t('action.reconcile')} onPress={onReconcile} />
                 ) : null}
                 <AccountsMoreMenu
                   onImport={onImport}
@@ -119,8 +121,8 @@ export function AccountHeader({
             <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">
               {ACCOUNT_TYPE_LABEL[selectedAccount.type]} ·{' '}
               {selectedAccount.lastReconciledAt
-                ? `Last reconciled ${formatDate(selectedAccount.lastReconciledAt.slice(0, 10))}`
-                : '🔒 Not Yet Reconciled'}
+                ? t('header.lastReconciled', { date: formatDate(selectedAccount.lastReconciledAt.slice(0, 10)) })
+                : t('header.notReconciled')}
             </Text>
           ) : null}
           {selectedAccount ? (
@@ -133,7 +135,7 @@ export function AccountHeader({
           menu (tk-lj5l). */}
         {!isPhone && selectedAccount && !reconciling ? (
           <View ref={reconcileBtnRef} collapsable={false} style={styles.reconcileBtnWrap}>
-            <IndigoButton label="Reconcile" onPress={onReconcile} />
+            <IndigoButton label={t('action.reconcile')} onPress={onReconcile} />
           </View>
         ) : null}
       </View>
@@ -155,10 +157,10 @@ export function AccountHeader({
               onPress={onToggleUnapprovedOnly}
               accessibilityRole="button"
               accessibilityState={{ selected: showUnapprovedOnly }}
-              accessibilityLabel={`${unapprovedCount} transactions to approve`}
+              accessibilityLabel={t('header.toApproveLabel', { count: unapprovedCount })}
             >
               <Text style={[styles.unclearedText, showUnapprovedOnly && styles.unclearedTextOn]}>
-                {unapprovedCount} to approve
+                {t('header.toApprove', { count: unapprovedCount })}
               </Text>
             </Pressable>
           ) : null}

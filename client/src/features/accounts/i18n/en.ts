@@ -1,0 +1,173 @@
+export default {
+  // Shared actions
+  'action.import': 'File Import',
+  'action.reconcile': 'Reconcile',
+  'action.editAccount': 'Edit Account',
+  'action.showReconciled': 'Show Reconciled',
+  'action.hideReconciled': 'Hide Reconciled',
+  'menu.moreActions': 'More actions',
+
+  // Account types (header subtitle and add-account chips)
+  'accountType.checking': 'Checking',
+  'accountType.savings': 'Savings',
+  'accountType.cash': 'Cash',
+  'accountType.creditCard': 'Credit Card',
+  'accountType.tracking': 'Tracking Account',
+
+  // Header
+  'header.allAccounts': 'All Accounts',
+  'header.editAccount': 'Edit account {name}',
+  'header.lastReconciled': 'Last reconciled {date}',
+  'header.notReconciled': '🔒 Not Yet Reconciled',
+  'header.toApprove': '{count} to approve',
+  'header.toApproveLabel': {
+    one: '{count} transaction to approve',
+    other: '{count} transactions to approve',
+  },
+
+  // More menu
+  'moreMenu.hint': 'File Import, Reconcile, Show Reconciled, Edit Account, Link Account',
+  'moreMenu.closeLabel': 'Close actions menu',
+
+  // Edit account modal
+  'edit.closedBanner': 'This account is closed — its details are read-only. Reopen it to make changes.',
+  'edit.sectionInfo': 'ACCOUNT INFORMATION',
+  'edit.nickname': 'Account Nickname',
+  'edit.nicknamePlaceholder': 'Account nickname',
+  'edit.notes': 'Account Notes',
+  'edit.notesPlaceholder': 'Notes',
+  'edit.person': 'Person',
+  'edit.workingBalance': 'Working Balance',
+  'edit.balanceHint': 'Sets the balance directly — an override, not a ledger entry.',
+  'edit.sectionBank': 'BANK CONNECTION',
+  'edit.reopen': 'Re-open',
+  'edit.deleting': 'Deleting…',
+  'edit.closeAccount': 'Close Account',
+
+  // Add account modal
+  'add.title': 'Add Account',
+  'add.nameLabel': 'Account Name',
+  'add.namePlaceholder': 'e.g. Checking',
+  'add.typeLabel': 'Account Type',
+  'add.person': 'Person',
+  'add.openingBalance': 'Opening Balance',
+  'add.create': 'Create Account',
+  'add.nameRequired': 'account name is required',
+  'add.createFailed': 'failed to create account',
+  'add.group.cash': 'CASH',
+  'add.group.credit': 'CREDIT',
+  'add.group.debt': 'DEBT & LOANS',
+  'add.type.lineOfCredit': 'Line of Credit',
+  'add.type.otherLiability': 'Other Liability',
+  'add.type.mortgage': 'Mortgage',
+  'add.type.autoLoan': 'Auto Loan',
+  'add.type.studentLoan': 'Student Loan',
+  'add.type.personalLoan': 'Personal Loan',
+  'add.type.medicalDebt': 'Medical Debt',
+  'add.type.otherDebt': 'Other Debt',
+
+  // Add transaction sheet
+  'sheet.toggleKind': 'Toggle spending or income',
+  'sheet.income': '⊞ Income ⇅',
+  'sheet.spending': '⊟ Spending ⇅',
+
+  // Approval banner
+  'banner.info': 'Information',
+  'banner.text': {
+    one: '{count} new transaction to approve or categorize.',
+    other: '{count} new transactions to approve or categorize.',
+  },
+  'banner.showAllLabel': 'Show all transactions',
+  'banner.viewUnapprovedLabel': 'View unapproved transactions',
+  'banner.viewAll': 'View all',
+  'banner.view': 'View',
+  'banner.dismiss': 'Dismiss approval banner',
+
+  // Toolbar
+  'toolbar.comfortable': 'Comfortable rows',
+  'toolbar.compact': 'Compact rows',
+  'toolbar.syncStatus': 'Bank sync status: {bank} {label}',
+  'toolbar.searchPlaceholder': 'Search All Accounts',
+  'toolbar.searchLabel': 'Search transactions',
+  'toolbar.addTransaction': 'Add Transaction',
+  'toolbar.undo': 'Undo',
+  'toolbar.redo': 'Redo',
+  'toolbar.view': 'View',
+  'toolbar.viewOptions': 'View options',
+  'toolbar.closeViewMenu': 'Close view menu',
+  'toolbar.runningBalance': 'Running Balance',
+  'toolbar.showClosedTxns': 'Show Closed-Account Transactions',
+  'toolbar.from': 'From',
+  'toolbar.to': 'To',
+  'toolbar.fromLabel': 'Filter from date',
+  'toolbar.toLabel': 'Filter to date',
+
+  // Reconcile banner and popover
+  'reconcile.bankBalance': 'Bank balance',
+  'reconcile.balanced': '✓ balanced',
+  'reconcile.difference': 'Difference: {amount}',
+  'reconcile.finish': 'Finish reconciling',
+  'reconcile.anyway': 'Reconcile anyway',
+  'reconcile.closeQuestion': 'Close reconcile question',
+  'reconcile.question': 'Is your current balance {amount}?',
+  'reconcile.no': 'No',
+  'reconcile.yes': 'Yes',
+  'reconcile.done': 'Account reconciled',
+  'reconcile.failed': 'failed to reconcile account',
+  'reconcile.linkedToast': {
+    one: 'Linked {count} account',
+    other: 'Linked {count} accounts',
+  },
+
+  // Register rows and header
+  'register.selectAll': 'Select all transactions',
+  'register.colAccount': 'ACCOUNT',
+  'register.colDate': 'DATE',
+  'register.colPayee': 'PAYEE',
+  'register.colCategory': 'CATEGORY',
+  'register.colMemo': 'MEMO',
+  'register.colAmount': 'AMOUNT',
+  'register.colRunningBalance': 'RUN. BAL',
+  'register.colCleared': 'C',
+  'register.noPayee': '(no payee)',
+  'register.editLabel': 'Edit transaction {payee}',
+  'register.selectLabel': 'Select transaction {payee}',
+  'register.repeat': 'Repeat',
+
+  // Scheduled section
+  'scheduled.title': 'Scheduled Transactions',
+  'scheduled.rowLabel': 'Scheduled transaction {name}',
+  'scheduled.selectLabel': 'Select scheduled transaction {name}',
+
+  // Selection bar
+  'selection.closeMenu': 'Close menu',
+  'selection.readyToAssign': 'Ready to Assign',
+  'selection.noFlag': 'No flag',
+  'selection.moveToAccount': 'Move to Account',
+  'selection.noOtherAccounts': 'No other accounts',
+  'selection.markUncleared': 'Mark as Uncleared',
+  'selection.markCleared': 'Mark as Cleared',
+  'selection.match': 'Match',
+  'selection.unmatch': 'Unmatch',
+  'selection.duplicate': 'Duplicate',
+  'selection.memo': 'Memo…',
+  'selection.export': {
+    one: 'Export {count} Transaction',
+    other: 'Export {count} Transactions',
+  },
+  'selection.count': {
+    one: '{count} Transaction',
+    other: '{count} Transactions',
+  },
+  'selection.clear': 'Clear selection',
+  'selection.categorize': 'Categorize',
+  'selection.categorizeLabel': 'Categorize selected transactions',
+  'selection.flag': 'Flag',
+  'selection.flagLabel': 'Flag selected transactions',
+  'selection.more': 'More',
+  'selection.memoPrompt': 'Memo',
+  'selection.deleteConfirm': {
+    one: 'Delete {count} transaction?',
+    other: 'Delete {count} transactions?',
+  },
+} as const;

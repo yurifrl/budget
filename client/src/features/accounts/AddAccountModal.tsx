@@ -20,33 +20,35 @@ import { PersonPicker } from '@/features/people';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { KeyboardModalFrame } from '@/ui/KeyboardModalFrame';
 import { colors } from '@/ui/theme';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './i18n';
 
-const TYPE_GROUPS: { title: string; options: { value: AccountTypeRow; label: string }[] }[] = [
+const typeGroups = (): { title: string; options: { value: AccountTypeRow; label: string }[] }[] => [
   {
-    title: 'Cash',
+    title: t('add.group.cash'),
     options: [
-      { value: 'checking', label: 'Checking' },
-      { value: 'savings', label: 'Savings' },
-      { value: 'cash', label: 'Cash' },
+      { value: 'checking', label: t('accountType.checking') },
+      { value: 'savings', label: t('accountType.savings') },
+      { value: 'cash', label: t('accountType.cash') },
     ],
   },
   {
-    title: 'Credit',
+    title: t('add.group.credit'),
     options: [
-      { value: 'creditCard', label: 'Credit Card' },
-      { value: 'lineOfCredit', label: 'Line of Credit' },
+      { value: 'creditCard', label: t('accountType.creditCard') },
+      { value: 'lineOfCredit', label: t('add.type.lineOfCredit') },
     ],
   },
   {
-    title: 'Debt & Loans',
+    title: t('add.group.debt'),
     options: [
-      { value: 'otherLiability', label: 'Other Liability' },
-      { value: 'mortgage', label: 'Mortgage' },
-      { value: 'autoLoan', label: 'Auto Loan' },
-      { value: 'studentLoan', label: 'Student Loan' },
-      { value: 'personalLoan', label: 'Personal Loan' },
-      { value: 'medicalDebt', label: 'Medical Debt' },
-      { value: 'otherDebt', label: 'Other Debt' },
+      { value: 'otherLiability', label: t('add.type.otherLiability') },
+      { value: 'mortgage', label: t('add.type.mortgage') },
+      { value: 'autoLoan', label: t('add.type.autoLoan') },
+      { value: 'studentLoan', label: t('add.type.studentLoan') },
+      { value: 'personalLoan', label: t('add.type.personalLoan') },
+      { value: 'medicalDebt', label: t('add.type.medicalDebt') },
+      { value: 'otherDebt', label: t('add.type.otherDebt') },
     ],
   },
 ];
@@ -80,7 +82,7 @@ export function AddAccountModal({
   /** Shared validation + account creation for both completion paths. */
   const createReturningId = async (): Promise<string | null> => {
     if (!name.trim()) {
-      setError('account name is required');
+      setError(t('add.nameRequired'));
       return null;
     }
     const balance = parseMoney(balanceText || '0');
@@ -94,7 +96,7 @@ export function AddAccountModal({
       }).unwrap();
       return row.id;
     } catch (err) {
-      setError(apiErrorMessage(err, 'failed to create account'));
+      setError(apiErrorMessage(err, t('add.createFailed')));
       return null;
     }
   };
@@ -114,33 +116,33 @@ export function AddAccountModal({
       <KeyboardModalFrame onBackdropPress={onClose} cardStyle={styles.modal}>
         <ScrollView keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text style={styles.title}>Add Account</Text>
+            <Text style={styles.title}>{t('add.title')}</Text>
             <Pressable
               onPress={() => {
                 reset();
                 onClose();
               }}
-              accessibilityLabel="Close">
+              accessibilityLabel={tCommon('close')}>
               <Text style={styles.close}>✕</Text>
             </Pressable>
           </View>
 
-          <Text style={styles.label}>Account Name</Text>
+          <Text style={styles.label}>{t('add.nameLabel')}</Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="e.g. Checking"
+            placeholder={t('add.namePlaceholder')}
             placeholderTextColor={colors.faint}
             editable={!isLoading}
             autoFocus
           />
 
-          <Text style={styles.label}>Account Type</Text>
+          <Text style={styles.label}>{t('add.typeLabel')}</Text>
           <ScrollView style={styles.typeList} nestedScrollEnabled>
-            {TYPE_GROUPS.map((g) => (
+            {typeGroups().map((g) => (
               <View key={g.title}>
-                <Text style={styles.typeGroup}>{g.title.toUpperCase()}</Text>
+                <Text style={styles.typeGroup}>{g.title}</Text>
                 <View style={styles.typeRow}>
                   {g.options.map((o) => (
                     <Pressable
@@ -158,10 +160,10 @@ export function AddAccountModal({
             ))}
           </ScrollView>
 
-          <Text style={styles.label}>Person</Text>
+          <Text style={styles.label}>{t('add.person')}</Text>
           <PersonPicker budgetId={budgetId} value={userId} onChange={setUserId} disabled={isLoading} />
 
-          <Text style={styles.label}>Opening Balance</Text>
+          <Text style={styles.label}>{t('add.openingBalance')}</Text>
           <TextInput
             style={styles.input}
             value={balanceText}
@@ -181,10 +183,10 @@ export function AddAccountModal({
                 reset();
                 onClose();
               }}>
-              <Text style={styles.ghostText}>Cancel</Text>
+              <Text style={styles.ghostText}>{tCommon('cancel')}</Text>
             </Pressable>
             <Pressable style={styles.indigoBtn} disabled={isLoading} onPress={() => void create()}>
-              <Text style={styles.indigoText}>Create Account</Text>
+              <Text style={styles.indigoText}>{t('add.create')}</Text>
             </Pressable>
           </View>
         </ScrollView>

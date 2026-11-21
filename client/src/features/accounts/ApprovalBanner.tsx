@@ -8,6 +8,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius } from '@/ui/theme';
+import { t } from './i18n';
 
 export function ApprovalBanner({
   count,
@@ -23,24 +24,24 @@ export function ApprovalBanner({
 }) {
   return (
     <View style={styles.banner}>
-      <Text style={styles.icon} accessibilityLabel="Information">
+      <Text style={styles.icon} accessibilityLabel={t('banner.info')}>
         ⓘ
       </Text>
       <Text style={styles.text} numberOfLines={2}>
-        {count} new transaction{count === 1 ? '' : 's'} to approve or categorize.
+        {t('banner.text', { count })}
       </Text>
       <Pressable
         onPress={onView}
         style={styles.viewBtn}
         accessibilityRole="button"
-        accessibilityLabel={active ? 'Show all transactions' : 'View unapproved transactions'}>
-        <Text style={styles.viewText}>{active ? 'View all' : 'View'}</Text>
+        accessibilityLabel={active ? t('banner.showAllLabel') : t('banner.viewUnapprovedLabel')}>
+        <Text style={styles.viewText}>{active ? t('banner.viewAll') : t('banner.view')}</Text>
       </Pressable>
       <Pressable
         onPress={onDismiss}
         style={styles.dismiss}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss approval banner">
+        accessibilityLabel={t('banner.dismiss')}>
         <Text style={styles.dismissText}>✕</Text>
       </Pressable>
     </View>

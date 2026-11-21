@@ -17,6 +17,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import type { Budget, Transaction } from '@/domain/types';
 import { colors } from '@/ui/theme';
 import { InlineAddRow } from './register/InlineAddRow';
+import { t } from './i18n';
 
 interface ScheduledSectionProps {
   budget: Budget;
@@ -62,7 +63,7 @@ export function ScheduledSection({
   };
 
   return (
-    <View accessibilityLabel="Scheduled Transactions" style={style}>
+    <View accessibilityLabel={t('scheduled.title')} style={style}>
       <Pressable
         style={styles.header}
         accessibilityRole="button"
@@ -70,7 +71,7 @@ export function ScheduledSection({
         onPress={() => setOpen((o) => !o)}
       >
         <Ionicons name="calendar-outline" size={15} color={colors.muted} />
-        <Text style={styles.headerText}>Scheduled Transactions</Text>
+        <Text style={styles.headerText}>{t('scheduled.title')}</Text>
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={colors.muted} />
       </Pressable>
       {open
@@ -81,14 +82,14 @@ export function ScheduledSection({
               <View key={txn.id}>
                 <Pressable
                   style={[styles.row, checked && styles.rowSelected]}
-                  accessibilityLabel={`Scheduled transaction ${txn.payee || account?.name || ''}`}
+                  accessibilityLabel={t('scheduled.rowLabel', { name: txn.payee || account?.name || '' })}
                   onPress={() => openEditor(txn)}
                 >
                   <Pressable
                     style={styles.checkHit}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked }}
-                    accessibilityLabel={`Select scheduled transaction ${txn.payee || account?.name || ''}`}
+                    accessibilityLabel={t('scheduled.selectLabel', { name: txn.payee || account?.name || '' })}
                     onPress={() => toggle(txn.id)}
                   >
                     <View style={[styles.box, checked && styles.boxChecked]}>

@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 
 import { colors, radius } from '@/ui/theme';
+import { t } from './i18n';
 
 export function AccountsMoreMenu({
   onImport,
@@ -58,15 +59,15 @@ export function AccountsMoreMenu({
           style={styles.action}
           hitSlop={4}
           accessibilityRole="button"
-          accessibilityLabel="More actions"
-          accessibilityHint="File Import, Reconcile, Show Reconciled, Edit Account, Link Account">
+          accessibilityLabel={t('menu.moreActions')}
+          accessibilityHint={t('moreMenu.hint')}>
           <Text style={styles.moreDots}>⋯</Text>
         </Pressable>
       </View>
       <Modal transparent visible={menuOpen} animationType="none" onRequestClose={() => setMenuOpen(false)}>
         <Pressable
           style={styles.scrim}
-          accessibilityLabel="Close actions menu"
+          accessibilityLabel={t('moreMenu.closeLabel')}
           onPress={() => setMenuOpen(false)}
         />
         {anchor ? (
@@ -78,7 +79,7 @@ export function AccountsMoreMenu({
               }}
               style={styles.menuItem}
               accessibilityRole="menuitem">
-              <Text style={styles.menuItemText}>File Import</Text>
+              <Text style={styles.menuItemText}>{t('action.import')}</Text>
             </Pressable>
             {onReconcile ? (
               <Pressable
@@ -88,7 +89,7 @@ export function AccountsMoreMenu({
                 }}
                 style={styles.menuItem}
                 accessibilityRole="menuitem">
-                <Text style={styles.menuItemText}>Reconcile</Text>
+                <Text style={styles.menuItemText}>{t('action.reconcile')}</Text>
               </Pressable>
             ) : null}
             <Pressable
@@ -98,7 +99,7 @@ export function AccountsMoreMenu({
               }}
               style={styles.menuItem}
               accessibilityRole="menuitem">
-              <Text style={styles.menuItemText}>Show Reconciled</Text>
+              <Text style={styles.menuItemText}>{t('action.showReconciled')}</Text>
               <Text style={styles.menuCheck}>{showReconciled ? '✓' : ''}</Text>
             </Pressable>
             {onEditAccount ? (
@@ -109,7 +110,7 @@ export function AccountsMoreMenu({
                 }}
                 style={styles.menuItem}
                 accessibilityRole="menuitem">
-                <Text style={styles.menuItemText}>Edit Account</Text>
+                <Text style={styles.menuItemText}>{t('action.editAccount')}</Text>
               </Pressable>
             ) : null}
           </View>
