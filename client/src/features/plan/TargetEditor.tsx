@@ -17,9 +17,13 @@ import { GhostButton, IndigoButton, MoneyInput } from '@/ui/bits';
 import { DatePickerPopover } from '@/ui/dropdown/DatePickerPopover';
 import { barColor, colors, radius } from '@/ui/theme';
 import { useMoneyFormat } from '@/ui/moneyFormat';
-import { MONTH_ABBR, WEEKDAY_ABBR } from '@/domain/format';
+import { monthAbbr, weekdayAbbr } from '@/domain/format';
 import type { CategoryTarget, CategoryTargetConfig, Cents, FundingState, MonthKey, TargetKind } from '@/domain/types';
 import { neededBy } from '@/domain/targets';
+import { labels } from '@shared/i18n';
+import { tCommon } from '@shared/i18n/common';
+import { apiErrorMessage } from '@/platform/api/baseQuery';
+import { t } from './inspector/i18n';
 
 export interface TargetDraft {
   kind: TargetKind;
@@ -29,15 +33,18 @@ export interface TargetDraft {
   config: CategoryTargetConfig;
 }
 
-const KINDS: { key: TargetKind; label: string }[] = [
-  { key: 'weekly', label: 'Weekly' },
-  { key: 'monthly', label: 'Monthly' },
-  { key: 'yearly', label: 'Yearly' },
-  { key: 'custom', label: 'Custom' },
-];
+const KIND_KEYS: readonly TargetKind[] = ['weekly', 'monthly', 'yearly', 'custom'];
 
-const WEEKDAYS = WEEKDAY_ABBR;
-const MONTHS = MONTH_ABBR;
+const KIND_LABELS: Record<TargetKind, string> = labels(t, {
+  weekly: 'editor.kindWeekly',
+  monthly: 'editor.kindMonthly',
+  yearly: 'editor.kindYearly',
+  custom: 'editor.kindCustom',
+});
+
+/** Weekday / month chip labels in the active language (Sunday first, January first). */
+const weekdayLabels = (): string[] => Array.from({ length: 7 }, (_, i) => weekdayAbbr(i));
+const monthLabels = (): string[] => Array.from({ length: 12 }, (_, i) => monthAbbr(i + 1));
 
 /** Accepts calendar-picked or typed dates once committed as ISO (YYYY-MM-DD). */
 const BY_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -102,8 +109,8 @@ function NumberField({
     <TextInput
       accessibilityLabel={accessibilityLabel}
       value={String(value)}
-      onChangeText={(t) => {
-        const n = parseInt(t.replace(/\D/g, ''), 10);
+      onChangeText={(text) => {
+        const n = parseInt(text.replace(/\D/g, ''), 10);
         if (!Number.isNaN(n)) onChange(Math.max(1, n));
       }}
       keyboardType="number-pad"
@@ -159,7 +166,7 @@ export function TargetEditor({
       await onSave({ kind, amountCents: amount, snoozeMonth: target?.snoozeMonth ?? null, config });
       onSaved?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'failed to save target');
+      setError(e instanceof Error ? e.message : apiErrorMessage(e, t('editor.saveFailed')));
     } finally {
       setBusy(false);
     }
@@ -172,7 +179,7 @@ export function TargetEditor({
     try {
       await onDelete();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'failed to delete target');
+      setError(e instanceof Error ? e.message : apiErrorMessage(e, t('editor.deleteFailed')));
     } finally {
       setBusy(false);
     }
@@ -181,54 +188,54 @@ export function TargetEditor({
   return (
     <View>
       <View style={styles.kindRow}>
-        {KINDS.map((k) => (
+        {KIND_KEYS.map((k) => (
           <Pressable
-            key={k.key}
+            key={k}
             accessibilityRole="button"
-            accessibilityState={{ selected: kind === k.key }}
-            onPress={() => setKind(k.key)}
-            style={[styles.kindChip, kind === k.key && styles.kindChipActive]}>
-            <Text style={[styles.kindChipText, kind === k.key && styles.kindChipTextActive]}>
-              {k.label}
+            accessibilityState={{ selected: kind === k }}
+            onPress={() => setKind(k)}
+            style={[styles.kindChip, kind === k && styles.kindChipActive]}>
+            <Text style={[styles.kindChipText, kind === k && styles.kindChipTextActive]}>
+              {KIND_LABELS[k]}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      <Field label="I need">
+      <Field label={t('editor.need')}>
         <View style={styles.amountBox}>
           <MoneyInput cents={amount} onCommit={setAmount} />
         </View>
       </Field>
 
       {kind === 'weekly' ? (
-        <Field label="Every">
-          <ChipSelect options={WEEKDAYS} value={config.dayOfWeek ?? 1} onSelect={(i) => setConfig({ ...config, dayOfWeek: i })} />
+        <Field label={t('editor.every')}>
+          <ChipSelect options={weekdayLabels()} value={config.dayOfWeek ?? 1} onSelect={(i) => setConfig({ ...config, dayOfWeek: i })} />
         </Field>
       ) : null}
 
       {kind === 'monthly' ? (
-        <Field label="Every">
+        <Field label={t('editor.every')}>
           <NumberField
             value={config.repeatEvery ?? 1}
             onChange={(n) => setConfig({ ...config, repeatEvery: n })}
-            accessibilityLabel="Repeat every months"
+            accessibilityLabel={t('editor.repeatEveryLabel')}
             style={{ width: 56 }}
           />
-          <Text style={styles.fieldLabel}>months</Text>
+          <Text style={styles.fieldLabel}>{t('editor.monthsUnit', { count: config.repeatEvery ?? 1 })}</Text>
         </Field>
       ) : null}
 
       {kind === 'yearly' ? (
         <>
-          <Field label="Due month">
-            <ChipSelect options={MONTHS} value={(config.monthOfYear ?? 12) - 1} onSelect={(i) => setConfig({ ...config, monthOfYear: i + 1 })} />
+          <Field label={t('editor.dueMonth')}>
+            <ChipSelect options={monthLabels()} value={(config.monthOfYear ?? 12) - 1} onSelect={(i) => setConfig({ ...config, monthOfYear: i + 1 })} />
           </Field>
-          <Field label="Due day">
+          <Field label={t('editor.dueDay')}>
             <NumberField
               value={config.dayOfMonth ?? 1}
               onChange={(n) => setConfig({ ...config, dayOfMonth: n })}
-              accessibilityLabel="Due day of month"
+              accessibilityLabel={t('editor.dueDayLabel')}
               style={{ width: 56 }}
             />
           </Field>
@@ -236,14 +243,14 @@ export function TargetEditor({
       ) : null}
 
       {kind === 'custom' ? (
-        <Field label="By date">
+        <Field label={t('editor.byDate')}>
           <DatePickerPopover
-            accessibilityLabel="Target due date"
+            accessibilityLabel={t('editor.dueDateLabel')}
             containerStyle={{ flex: 1, minWidth: 120 }}
             value={byDateText}
-            onChangeText={(t) => {
-              setByDateText(t);
-              const iso = parseDateInput(t);
+            onChangeText={(text) => {
+              setByDateText(text);
+              const iso = parseDateInput(text);
               setConfig({ ...config, byDate: iso ?? undefined });
             }}
             onEscape={() => {
@@ -261,12 +268,12 @@ export function TargetEditor({
       <View style={styles.footerRow}>
         {onDelete ? (
           <Pressable accessibilityRole="button" onPress={remove} style={styles.deleteBtn}>
-            <Text style={styles.deleteText}>Delete</Text>
+            <Text style={styles.deleteText}>{tCommon('delete')}</Text>
           </Pressable>
         ) : null}
         <View style={{ flex: 1 }} />
         <GhostButton
-          label="Cancel"
+          label={tCommon('cancel')}
           onPress={() => {
             if (onCancel) onCancel();
             else if (target) {
@@ -278,7 +285,7 @@ export function TargetEditor({
           }}
         />
         <IndigoButton
-          label={busy ? 'Saving…' : 'Save Target'}
+          label={busy ? t('editor.saving') : t('editor.save')}
           onPress={save}
           style={amountInvalid || byDateInvalid ? styles.saveDisabled : undefined}
         />
@@ -286,7 +293,7 @@ export function TargetEditor({
 
       {amountInvalid || byDateInvalid ? (
         <Text style={styles.hint}>
-          {amountInvalid ? 'Enter an amount.' : 'Type a date (DD/MM/YYYY or 5, 5/9) or pick one from the calendar.'}
+          {amountInvalid ? t('editor.amountHint') : t('editor.dateHint')}
         </Text>
       ) : null}
       {error ? (
@@ -328,30 +335,40 @@ export function TargetSummary({
   const fraction = need > 0 ? Math.max(0, Math.min(1, assigned / need)) : assigned > 0 ? 1 : 0;
 
   const headline = (() => {
-    if (snoozed) return 'Target snoozed for this month';
-    const amt = formatMoney(target.amountCents);
+    if (snoozed) return t('summary.snoozedHeadline');
+    const amount = formatMoney(target.amountCents);
     switch (target.kind) {
       case 'weekly':
-        return `Set Aside ${amt} Every Week`;
+        return t('summary.weekly', { amount });
       case 'monthly':
-        return `Set Aside ${amt} Each Month`;
+        return t('summary.monthly', { amount });
       case 'yearly': {
         const m = target.config.monthOfYear ?? 12;
-        return `Save ${amt} by ${MONTHS[m - 1]} ${Math.floor(month / 100)}`;
+        return t('summary.yearly', { amount, month: monthAbbr(m), year: Math.floor(month / 100) });
       }
       case 'custom':
         return target.config.byDate
-          ? `Save ${amt} by ${target.config.byDate.split('-').reverse().join('/')}`
-          : `Save ${amt} by your target date`;
+          ? t('summary.customDate', { amount, date: target.config.byDate.split('-').reverse().join('/') })
+          : t('summary.customNoDate', { amount });
     }
   })();
 
   const guidance = (() => {
-    if (snoozed) return 'This month is skipped — later months resume the target.';
-    if (need <= 0) return assigned > 0 ? `${formatMoney(assigned)} assigned toward this target.` : 'Nothing needed this month.';
-    if (available < 0) return `Cover the ${formatMoney(-available)} overspending to stay on target.`;
-    if (assigned >= need) return `Target met for ${MONTHS[(month % 100) - 1]} — ${formatMoney(assigned)} assigned.`;
-    return `Assign ${formatMoney(need - assigned)} more to meet your target (${formatMoney(assigned)} of ${formatMoney(need)}).`;
+    if (snoozed) return t('summary.skipped');
+    if (need <= 0) {
+      return assigned > 0
+        ? t('summary.assignedToward', { amount: formatMoney(assigned) })
+        : t('summary.nothingNeeded');
+    }
+    if (available < 0) return t('summary.cover', { amount: formatMoney(-available) });
+    if (assigned >= need) {
+      return t('summary.met', { month: monthAbbr(month % 100), amount: formatMoney(assigned) });
+    }
+    return t('summary.assignMore', {
+      remaining: formatMoney(need - assigned),
+      assigned: formatMoney(assigned),
+      need: formatMoney(need),
+    });
   })();
 
   return (
@@ -361,7 +378,7 @@ export function TargetSummary({
         <View style={styles.summaryCopy}>
           <Text style={styles.summaryHeadline}>{headline}</Text>
           <Text style={styles.summarySub}>
-            {snoozed ? 'Snoozed' : 'By the End of the Month'}
+            {snoozed ? t('summary.snoozed') : t('summary.endOfMonth')}
           </Text>
         </View>
       </View>
@@ -369,14 +386,14 @@ export function TargetSummary({
       <View style={styles.summaryActions}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={snoozed ? 'Unsnooze target' : 'Snooze target for this month'}
+          accessibilityLabel={snoozed ? t('summary.unsnoozeLabel') : t('summary.snoozeButton')}
           disabled={busy}
           onPress={() => onToggleSnooze(!snoozed)}
           style={styles.summaryBtn}>
-          <Text style={styles.summaryBtnText}>{busy ? 'Saving…' : snoozed ? 'Unsnooze' : 'Snooze target for this month'}</Text>
+          <Text style={styles.summaryBtnText}>{busy ? t('editor.saving') : snoozed ? t('summary.unsnooze') : t('summary.snoozeButton')}</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Edit target" onPress={onEdit} style={styles.summaryBtn}>
-          <Text style={styles.summaryBtnText}>Edit Target</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('summary.editLabel')} onPress={onEdit} style={styles.summaryBtn}>
+          <Text style={styles.summaryBtnText}>{t('summary.edit')}</Text>
         </Pressable>
       </View>
     </View>

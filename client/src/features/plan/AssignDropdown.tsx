@@ -25,6 +25,8 @@ import { MoneyInput } from '@/ui/bits';
 import { useEscapeToClose } from '@/ui/escapeToClose';
 import { colors, radius } from '@/ui/theme';
 import { ToDropdown } from './MoveMoneySheet';
+import { tCommon } from '@shared/i18n/common';
+import { t } from './inspector/i18n';
 
 export type AssignTab = 'auto' | 'manual';
 
@@ -65,17 +67,17 @@ function ManualAssign({
         if (draft) dispatch(recordPlanEdit(newPlanEdit(draft)));
         onDone();
       })
-      .catch((err) => setError(apiErrorMessage(err, 'failed to assign')));
+      .catch((err) => setError(apiErrorMessage(err, t('manual.failed'))));
   }, [apply, budget, budgetId, dispatch, month, onDone, to, amount, formatMoney]);
 
   return (
     <View style={styles.manualBody}>
       <View style={styles.manualRow}>
-        <Text style={styles.manualLabel}>Assign:</Text>
+        <Text style={styles.manualLabel}>{t('manual.assign')}</Text>
         <MoneyInput cents={amount} onCommit={setAmount} quickMath style={styles.manualAmount} />
       </View>
       <View style={styles.manualRow}>
-        <Text style={styles.manualLabel}>To:</Text>
+        <Text style={styles.manualLabel}>{t('manual.to')}</Text>
         <View style={styles.manualToCell}>
           <ToDropdown
             categories={budget.categories}
@@ -90,16 +92,16 @@ function ManualAssign({
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.footer}>
-        <Pressable style={styles.footerBtn} onPress={onDone} accessibilityRole="button" accessibilityLabel="Cancel assign">
-          <Text style={styles.footerBtnText}>Cancel</Text>
+        <Pressable style={styles.footerBtn} onPress={onDone} accessibilityRole="button" accessibilityLabel={t('manual.cancelLabel')}>
+          <Text style={styles.footerBtnText}>{tCommon('cancel')}</Text>
         </Pressable>
         <Pressable
           style={[styles.footerAssign, !canAssign && styles.footerBtnDisabled]}
           onPress={canAssign ? onAssign : undefined}
           disabled={!canAssign}
           accessibilityRole="button"
-          accessibilityLabel="Assign amount">
-          <Text style={[styles.footerAssignText, !canAssign && styles.footerBtnDisabled]}>Assign</Text>
+          accessibilityLabel={t('manual.buttonLabel')}>
+          <Text style={[styles.footerAssignText, !canAssign && styles.footerBtnDisabled]}>{t('manual.button')}</Text>
         </Pressable>
       </View>
     </View>
@@ -131,15 +133,15 @@ export function AssignDropdownBody({
           style={[styles.tab, tab === 'auto' && styles.tabActive]}
           onPress={() => setTab('auto')}
           accessibilityRole="button"
-          accessibilityLabel="Auto-assign strategies tab">
-          <Text style={[styles.tabText, tab === 'auto' && styles.tabTextActive]}>⚡ Auto</Text>
+          accessibilityLabel={t('tab.autoLabel')}>
+          <Text style={[styles.tabText, tab === 'auto' && styles.tabTextActive]}>{t('tab.auto')}</Text>
         </Pressable>
         <Pressable
           style={[styles.tab, tab === 'manual' && styles.tabActive]}
           onPress={() => setTab('manual')}
           accessibilityRole="button"
-          accessibilityLabel="Manual assign tab">
-          <Text style={[styles.tabText, tab === 'manual' && styles.tabTextActive]}>Manually</Text>
+          accessibilityLabel={t('tab.manualLabel')}>
+          <Text style={[styles.tabText, tab === 'manual' && styles.tabTextActive]}>{t('tab.manual')}</Text>
         </Pressable>
       </View>
       {tab === 'auto' ? (
