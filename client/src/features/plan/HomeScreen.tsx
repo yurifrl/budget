@@ -81,7 +81,7 @@ export function BudgetHomeScreen() {
                 ? t('home.stillNeededByDay', {
                     name: c.name,
                     amount: formatMoney(f.gap),
-                    day: c.target.config.byDate.slice(8),
+                    day: Number(c.target.config.byDate.slice(8)),
                   })
                 : t('home.stillNeeded', { name: c.name, amount: formatMoney(f.gap) })}
             </Text>

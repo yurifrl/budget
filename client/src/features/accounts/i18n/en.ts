@@ -26,7 +26,7 @@ export default {
   },
 
   // More menu
-  'moreMenu.hint': 'File Import, Reconcile, Show Reconciled, Edit Account, Link Account',
+  'moreMenu.hint': 'File Import, Reconcile, Show Reconciled, Edit Account',
   'moreMenu.closeLabel': 'Close actions menu',
 
   // Edit account modal

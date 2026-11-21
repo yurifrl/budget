@@ -63,21 +63,24 @@ describe('saveErrorView', () => {
   test('invalid_input goes to the field the validator named', () => {
     expect(saveErrorView({ status: 400, message: 'clientId is invalid (Too big)', code: 'invalid_input' }).field).toBe('clientId');
     expect(saveErrorView({ status: 400, message: 'clientSecret is invalid (Too big)', code: 'invalid_input' }).field).toBe('clientSecret');
+    // Any other validator text is server English: the form shows its own sentence instead.
     expect(saveErrorView({ status: 400, message: 'request body must be valid JSON', code: 'invalid_input' })).toEqual({
       field: 'form',
-      message: 'request body must be valid JSON',
+      message: 'Check the client id and secret.',
     });
   });
   test('network failure and unknown errors are form-level', () => {
     expect(saveErrorView({ status: 'FETCH_ERROR', message: 'Network request failed' }).message).toContain('Could not reach');
-    expect(saveErrorView({ status: 500, message: 'boom', code: 'internal' })).toEqual({ field: 'form', message: 'boom' });
+    // Raw server text ('boom') never reaches the screen: the form's own sentence does.
+    expect(saveErrorView({ status: 500, message: 'boom', code: 'internal' })).toEqual({ field: 'form', message: 'Could not save your keys. Try again.' });
     expect(saveErrorView(null)).toEqual({ field: 'form', message: 'Could not save your keys. Try again.' });
   });
 });
 
 describe('deleteErrorMessage', () => {
-  test('server message, else a fallback', () => {
-    expect(deleteErrorMessage({ message: 'nope' })).toBe('nope');
+  test('a specific code gives its sentence, anything else the fallback (never raw server text)', () => {
+    expect(deleteErrorMessage({ status: 409, message: 'nope', code: 'connection_still_linked', params: { accounts: 'Nubank' } })).toContain('Nubank');
+    expect(deleteErrorMessage({ message: 'nope' })).toBe('Could not remove your keys. Try again.');
     expect(deleteErrorMessage(undefined)).toBe('Could not remove your keys. Try again.');
   });
 });

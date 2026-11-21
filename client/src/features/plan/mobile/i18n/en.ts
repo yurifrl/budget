@@ -13,7 +13,7 @@ export default {
   'home.assign': 'Assign',
   'home.currentGoal': 'Current Goal',
   'home.stillNeeded': '{name} — {amount} still needed.',
-  'home.stillNeededByDay': '{name} — {amount} still needed by the {day}th.',
+  'home.stillNeededByDay': '{name} — {amount} still needed by day {day}.',
   'home.allFunded': 'All targets funded for {name}. 🎉',
   'home.hint': 'Use Plan to assign money, Accounts for the register, Reflect for reports.',
   'home.managePayees': 'Manage Payees…',

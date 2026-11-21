@@ -59,12 +59,12 @@ export function DeleteBudgetModal({ target, onClose }: { target: BudgetRow; onCl
       <TextInput
         value={confirmText}
         onChangeText={setConfirmText}
-        placeholder={t('delete.placeholder')}
+        placeholder={t('delete.placeholder', { word: t('delete.word') })}
         placeholderTextColor={colors.faint}
         autoCapitalize="none"
         autoCorrect={false}
         style={s.input}
-        accessibilityLabel={t('delete.inputLabel')}
+        accessibilityLabel={t('delete.inputLabel', { word: t('delete.word') })}
         autoFocus
         onSubmitEditing={del}
       />

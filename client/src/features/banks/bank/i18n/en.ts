@@ -46,7 +46,7 @@ export default {
   'sheet.account.empty': 'No open budget accounts to link.',
   'sheet.bank.heading': 'Choose one bank account',
   'sheet.bank.helper': 'A budget account follows exactly one bank account. Tap one to select it, then confirm.',
-  'sheet.bank.reference': 'Your balance in syscd',
+  'sheet.bank.reference': 'Your balance in Budget',
   'sheet.bank.empty': 'No bank accounts available yet — connect a new bank first.',
 
   // Link / unlink actions

@@ -7,6 +7,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { tCommon } from '@shared/i18n/common';
+import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors } from '@/ui/theme';
 
 import { useListGrantsQuery, useRevokeGrantMutation } from '@/profile/api';
@@ -14,10 +15,11 @@ import type { ConnectedApp } from '@/profile/model';
 import { t } from './i18n';
 import { ui } from './ui';
 
-const fmt = (iso: string) => new Date(iso).toISOString().slice(0, 10);
-
 function AppRow({ app }: { app: ConnectedApp }) {
   const [revoke, { isLoading }] = useRevokeGrantMutation();
+  const { formatDate } = useMoneyFormat();
+  // The grant's UTC day, shown in the person's date format.
+  const fmt = (iso: string) => formatDate(new Date(iso).toISOString().slice(0, 10));
   const access = app.scopes.includes('write') ? t('apps.accessWrite') : t('apps.accessRead');
   const meta = app.last_used_at
     ? t('apps.metaUsed', { access, created: fmt(app.created_at), lastUsed: fmt(app.last_used_at), expires: fmt(app.expires_at) })

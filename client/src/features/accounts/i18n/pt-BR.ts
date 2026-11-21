@@ -29,7 +29,7 @@ const m: Translation<typeof en> = {
   },
 
   // More menu
-  'moreMenu.hint': 'Importar arquivo, Conciliar, Mostrar conciliadas, Editar conta, Vincular conta',
+  'moreMenu.hint': 'Importar arquivo, Conciliar, Mostrar conciliadas, Editar conta',
   'moreMenu.closeLabel': 'Fechar menu de ações',
 
   // Edit account modal

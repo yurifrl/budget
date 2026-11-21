@@ -63,8 +63,9 @@ const m: Translation<typeof en> = {
 
   'delete.title': 'Excluir permanentemente',
   'delete.note': 'Exclui "{name}" e todas as transações, contas, categorias e configurações dele. Isso não pode ser desfeito.',
-  'delete.placeholder': 'Digite "delete" para confirmar',
-  'delete.inputLabel': 'Digite delete para confirmar a exclusão permanente',
+  'delete.word': 'excluir',
+  'delete.placeholder': 'Digite "{word}" para confirmar',
+  'delete.inputLabel': 'Digite {word} para confirmar a exclusão permanente',
   'delete.confirm': 'Excluir para sempre',
   'delete.failed': 'Não foi possível excluir o orçamento.',
 

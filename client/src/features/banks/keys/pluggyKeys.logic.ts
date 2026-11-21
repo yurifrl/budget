@@ -85,17 +85,6 @@ export function apiErrorCode(error: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined;
 }
 
-/**
- * The translated sentence of a SPECIFIC API error code (`connection_paused`,
- * `own_keys_required`, ...), or undefined when the error has none (no code, or
- * a per-status one): the caller then falls back to its own sentence.
- */
-function specificApiMessage(error: unknown): string | undefined {
-  const marker = '';
-  const message = apiErrorMessage(error, marker);
-  return message === marker ? undefined : message;
-}
-
 /** Check before sending: both fields are required (the server trims too). */
 export function checkKeysInput(clientId: string, clientSecret: string): KeysFormError | null {
   if (clientId.trim() === '') return { field: 'clientId', message: t('form.clientIdRequired') };
@@ -120,21 +109,20 @@ export function saveErrorView(error: unknown): KeysFormError {
       };
     case 'invalid_input': {
       // The validator names the field first: "clientId is invalid (...)".
-      const message = serverMessage ?? t('form.inputFallback');
-      if (/^clientSecret\b/.test(message)) return { field: 'clientSecret', message: t('form.secretInvalid') };
-      if (/^clientId\b/.test(message)) return { field: 'clientId', message: t('form.clientIdInvalid') };
-      return { field: 'form', message };
+      const named = serverMessage ?? '';
+      if (/^clientSecret\b/.test(named)) return { field: 'clientSecret', message: t('form.secretInvalid') };
+      if (/^clientId\b/.test(named)) return { field: 'clientId', message: t('form.clientIdInvalid') };
+      return { field: 'form', message: t('form.inputFallback') };
     }
     default:
       if (e.status === 'FETCH_ERROR') return { field: 'form', message: t('form.unreachable') };
-      return { field: 'form', message: specificApiMessage(error) ?? serverMessage ?? t('form.saveFailed') };
+      return { field: 'form', message: apiErrorMessage(error, t('form.saveFailed')) };
   }
 }
 
 /** What a failed remove means (always a form-level message). */
 export function deleteErrorMessage(error: unknown): string {
-  const message = asApiError(error).message;
-  return specificApiMessage(error) ?? (typeof message === 'string' && message !== '' ? message : t('form.removeFailed'));
+  return apiErrorMessage(error, t('form.removeFailed'));
 }
 
 /**

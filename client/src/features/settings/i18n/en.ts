@@ -63,8 +63,9 @@ export default {
 
   'delete.title': 'Delete Permanently',
   'delete.note': 'Deletes "{name}" and every transaction, account, category and setting in it. This cannot be undone.',
-  'delete.placeholder': 'Type "delete" to confirm',
-  'delete.inputLabel': 'Type delete to confirm permanent deletion',
+  'delete.word': 'delete',
+  'delete.placeholder': 'Type "{word}" to confirm',
+  'delete.inputLabel': 'Type {word} to confirm permanent deletion',
   'delete.confirm': 'Delete Forever',
   'delete.failed': 'Could not delete the budget.',
 

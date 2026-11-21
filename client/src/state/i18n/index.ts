@@ -5,5 +5,5 @@ import ptBR from './pt-BR';
 export const t = defineMessages('state', en, {
   'pt-BR': ptBR,
 }, {
-  sameAsEnglish: ['edit.ageNow', 'edit.ageHours', 'edit.ageDays'],
+  sameAsEnglish: ['edit.ageHours', 'edit.ageDays'],
 });

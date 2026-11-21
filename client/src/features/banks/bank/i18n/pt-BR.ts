@@ -49,7 +49,7 @@ const m: Translation<typeof en> = {
   'sheet.account.empty': 'Não há contas abertas do orçamento para vincular.',
   'sheet.bank.heading': 'Escolha uma conta bancária',
   'sheet.bank.helper': 'Uma conta do orçamento acompanha exatamente uma conta bancária. Toque em uma para selecioná-la e depois confirme.',
-  'sheet.bank.reference': 'Seu saldo no syscd',
+  'sheet.bank.reference': 'Seu saldo no Budget',
   'sheet.bank.empty': 'Ainda não há contas bancárias disponíveis — conecte primeiro um novo banco.',
 
   // Link / unlink actions

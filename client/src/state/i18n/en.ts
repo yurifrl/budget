@@ -8,7 +8,7 @@ export default {
     one: '{strategy} · {count} category',
     other: '{strategy} · {count} categories',
   },
-  'edit.ageNow': 'agora',
+  'edit.ageNow': 'now',
   'edit.ageMinutes': '{count}m',
   'edit.ageHours': '{count}h',
   'edit.ageDays': '{count}d',
