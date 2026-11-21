@@ -6,6 +6,7 @@ export type SyncState =
   | 'queued_offline'
   | 'reconnect'
   | 'quota'
+  | 'paused'
   | 'error'
   | 'disconnected';
 
@@ -17,6 +18,8 @@ export function deriveSyncState(input: {
   schedulerDegraded: boolean;
 }): SyncState {
   if (input.status === 'disconnected') return 'disconnected';
+  // Paused wins over a queued/running run: that run will skip, nothing syncs.
+  if (input.status === 'paused') return 'paused';
   if (input.activeRun === 'running') return 'syncing';
   if (input.activeRun === 'queued') return input.schedulerDegraded ? 'queued_offline' : 'queued';
   switch (input.status) {

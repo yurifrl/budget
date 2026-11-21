@@ -12,6 +12,8 @@ describe('deriveSyncState (table)', () => {
     ['unauthorized', { status: 'unauthorized', activeRun: null, schedulerDegraded: false }, 'reconnect'],
     ['quota', { status: 'quota_exhausted', activeRun: null, schedulerDegraded: false }, 'quota'],
     ['error', { status: 'error', activeRun: null, schedulerDegraded: false }, 'error'],
+    ['paused', { status: 'paused', activeRun: null, schedulerDegraded: false }, 'paused'],
+    ['paused wins over a queued run (it will skip)', { status: 'paused', activeRun: 'queued', schedulerDegraded: false }, 'paused'],
     ['disconnected wins', { status: 'disconnected', activeRun: 'queued', schedulerDegraded: true }, 'disconnected'],
     ['queued on a broken connection still shows queued', { status: 'error', activeRun: 'queued', schedulerDegraded: false }, 'queued'],
   ];

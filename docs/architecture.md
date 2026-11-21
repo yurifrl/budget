@@ -127,6 +127,28 @@ start at `0100`). One image runs both the API and the worker
   focus, show/hide only); `/admin/features` (admin + first-party session)
   sets and clears them. Never called "flags": in the client a flag is a
   transaction colour.
+- **Bank key sets.** A person connects banks with their OWN Pluggy keys; the
+  installation's shared keys (`PLUGGY_*`) are only for people with feature
+  `shared-pluggy-key` on. Own keys: `public.connection_credentials` (migration
+  0104, one row per user and provider; client id in the clear, the secret as
+  AES-256-GCM ciphertext + nonce + key version, sealed by `core/secret-box.ts`
+  with the master key from `CREDENTIALS_ENCRYPTION_KEY`, which
+  `secrets-env.ts` requires in a cluster). Operations: `GET|PUT|DELETE
+  /connections/credentials` (the save checks the pair with the provider's
+  auth call; the read never returns the secret). Every connection records the
+  key set that created its item (`connections.key_source` 'shared' | 'own',
+  `key_client_id`), because a Pluggy item is reachable only with those
+  credentials. `connections/keys.ts` is the one place that picks a key set: a
+  new connection gets own keys if saved, else shared if the feature is on,
+  else 403 `own_keys_required`; an existing one always uses its own; register
+  probes which key set holds a new item before recording it.
+  `getAggregator(provider, credentials?)` builds the adapter on either. A
+  connection whose key set may not be used is `status = 'paused'` (never
+  deleted): `reconcileKeyAccess` sets and clears that wherever a connection is
+  used or shown (sync activity, sweep, connect-token, upstream, lists), so it
+  follows the feature with no hook on the admin toggle. Own-key connections
+  get no webhooks (sweep and manual sync only); the webhook route and its
+  shared secret are unchanged.
 - **Repeat-rule tick.** Still an in-process interval in the API
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.

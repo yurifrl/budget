@@ -9,7 +9,8 @@
 #                           yurifrl/budget repo (the public half is added to
 #                           the repo with `gh repo deploy-key add`)
 #
-# Random values (SESSION_SECRET, both DB passwords, the SSH key) are generated
+# Random values (SESSION_SECRET, CREDENTIALS_ENCRYPTION_KEY, both DB passwords,
+# the SSH key) are generated
 # here at run time and never printed or written to the repo. Account-bound
 # values (Google, Pluggy, allow-list) are created EMPTY: fill them in the
 # 1Password app afterwards (docs/MORNING.md says what goes where). Empty
@@ -18,6 +19,12 @@
 # (production). CLIENT_USER_ID is NOT created: the Pluggy env schema takes an
 # empty string literally (it would replace the `syscd-app` default with "");
 # add the field only to override that default.
+#
+# CREDENTIALS_ENCRYPTION_KEY (master key for users' own Pluggy secrets, 32
+# random bytes, base64) is generated for a NEW item only. An item that already
+# exists is skipped, so add the field to it by hand, value from
+# `openssl rand -base64 32`, and expose it to budget-api and budget-worker
+# through the ExternalSecret in home-systems (both need the same value).
 #
 # Idempotent: an item whose title already exists in the vault is left
 # untouched (skipped). If `op` cannot list the vault, or a title matches more
@@ -91,10 +98,12 @@ else
   # from `set -e` and store an empty secret.
   db_password="$(openssl rand -hex 24)"
   session_secret="$(openssl rand -base64 48 | tr -d '\n')"
-  [ -n "$db_password" ] && [ -n "$session_secret" ] || { echo "random generation failed" >&2; exit 1; }
+  credentials_key="$(openssl rand -base64 32 | tr -d '\n')"
+  [ -n "$db_password" ] && [ -n "$session_secret" ] && [ -n "$credentials_key" ] || { echo "random generation failed" >&2; exit 1; }
   export V_DB_PASSWORD="$db_password"
   export V_DATABASE_URL="postgres://${PG_USER}:${db_password}@${PG_HOST}/${PG_DB}"
   export V_SESSION_SECRET="$session_secret"
+  export V_CREDENTIALS_ENCRYPTION_KEY="$credentials_key"
   export V_PLUGGY_SANDBOX="false"
   temporal_password="$(openssl rand -hex 24)"
   [ -n "$temporal_password" ] || { echo "random generation failed" >&2; exit 1; }
@@ -106,12 +115,13 @@ else
   # PLUGGY_CLIENT_ID/SECRET, PLUGGY_WEBHOOK_SECRET, PLUGGY_ITEM_IDS,
   # OT_SERVICE_TOKEN (empty = lane disabled).
   create_item budget \
-    DB_PASSWORD DATABASE_URL SESSION_SECRET \
+    DB_PASSWORD DATABASE_URL SESSION_SECRET CREDENTIALS_ENCRYPTION_KEY \
     GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET AUTH_ALLOWED_EMAILS \
     PLUGGY_CLIENT_ID PLUGGY_CLIENT_SECRET PLUGGY_SANDBOX PLUGGY_WEBHOOK_SECRET \
     PLUGGY_ITEM_IDS OT_SERVICE_TOKEN \
     TEMPORAL_DB_PASSWORD ARGOCD_SSH_PRIVATE_KEY
   unset V_DB_PASSWORD V_DATABASE_URL V_SESSION_SECRET V_PLUGGY_SANDBOX db_password session_secret
+  unset V_CREDENTIALS_ENCRYPTION_KEY credentials_key
   unset V_TEMPORAL_DB_PASSWORD V_ARGOCD_SSH_PRIVATE_KEY temporal_password ssh_key
   new_item=1
 fi

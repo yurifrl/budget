@@ -18,7 +18,16 @@ export const linkedBySchema = z.object({
   avatar: z.object({ seed: z.string(), image_version: z.number().nullable() }),
 });
 
-export const connectionStatusSchema = z.enum(['connected', 'unauthorized', 'disconnected', 'error', 'quota_exhausted']);
+/**
+ * `paused`: the key set that created the connection may not be used by its
+ * owner right now (shared keys without the 'shared-pluggy-key' feature, or own
+ * keys that were removed or replaced). Nothing syncs; `status_message` says
+ * what the user must do. It resumes by itself when the key set is usable again.
+ */
+export const connectionStatusSchema = z.enum(['connected', 'unauthorized', 'disconnected', 'error', 'quota_exhausted', 'paused']);
+
+/** Which key set created the upstream item: the installation's shared keys or the owner's own. */
+export const connectionKeySourceSchema = z.enum(['shared', 'own']);
 
 export const connectionSchema = z.object({
   id,
@@ -30,6 +39,8 @@ export const connectionSchema = z.object({
   status_message: nullableString,
   /** 'sandbox' | 'production' as the adapter reports it; nullable text in the table. */
   environment: nullableString,
+  /** Key set the connection was created with; it can only ever be reached with that one. */
+  key_source: connectionKeySourceSchema,
   institution: nullableString,
   last_synced_at: nullableString,
   /** Per-bank sync-window override in days; null inherits the app-wide default. */
@@ -116,6 +127,7 @@ export const syncStateSchema = z.enum([
   'queued_offline',
   'reconnect',
   'quota',
+  'paused',
   'error',
   'disconnected',
 ]);
@@ -188,3 +200,15 @@ export const connectionSummarySchema = z.object({
 });
 
 export const connectionDeletedSchema = z.object({ ok: z.boolean() });
+
+/**
+ * The caller's own key set for a provider (GET/PUT /connections/credentials).
+ * The secret itself is never returned: `hasSecret` only says one is stored.
+ * `clientId` and `updatedAt` are null when the caller has saved no key set.
+ */
+export const connectionCredentialsSchema = z.object({
+  provider: z.string(),
+  clientId: nullableString,
+  hasSecret: z.boolean(),
+  updatedAt: nullableString,
+});

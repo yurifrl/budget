@@ -100,6 +100,42 @@ export function loadPluggyConfig(env: Record<string, string | undefined> = plugg
   };
 }
 
+/**
+ * The non-credential part of the env (base URL, sandbox switch). A user's own
+ * key set runs on these; the shared PLUGGY_CLIENT_ID / PLUGGY_CLIENT_SECRET
+ * are not needed for it.
+ */
+const PluggyOwnEnvSchema = PluggyEnvSchema.pick({ PLUGGY_BASE_URL: true, PLUGGY_SANDBOX: true, CLIENT_USER_ID: true });
+
+/** Empty-string values dropped, so a blank field in a secret store reads as unset. */
+const withoutBlanks = (env: Record<string, string | undefined>): Record<string, string | undefined> =>
+  Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined && v.trim() !== ''));
+
+/**
+ * Config for a user's OWN key set: their client id and secret, the
+ * installation's base URL and sandbox switch. Never `PLUGGY_ITEM_IDS` (those
+ * belong to the shared application). Blank env values count as unset here
+ * (the shared loader above still takes them literally: budget-hd3).
+ */
+export function loadPluggyOwnConfig(
+  credentials: { clientId: string; clientSecret: string },
+  env: Record<string, string | undefined> = pluggyEnv(),
+): PluggyConfig {
+  const parsed = PluggyOwnEnvSchema.safeParse(withoutBlanks(env));
+  if (!parsed.success) {
+    throw new PluggyConfigError(parsed.error.issues.map((i) => i.message));
+  }
+  const e = parsed.data;
+  return {
+    pluggyClientId: credentials.clientId,
+    pluggyClientSecret: credentials.clientSecret,
+    pluggyBaseUrl: e.PLUGGY_BASE_URL.replace(/\/+$/, ''),
+    sandbox: e.PLUGGY_SANDBOX,
+    itemIds: [],
+    clientUserId: e.CLIENT_USER_ID,
+  };
+}
+
 export class PluggyError extends Error {
   constructor(
     public readonly status: number,
@@ -183,6 +219,21 @@ export class PluggyClient {
       : this.now() + 2 * 60 * 60 * 1000;
     this.keyCache = { apiKey: parsed.apiKey, expiresAt: Number.isNaN(expiresAt) ? this.now() + 2 * 60 * 60 * 1000 : expiresAt };
     return parsed.apiKey;
+  }
+
+  /**
+   * Is the configured client id + secret pair accepted? One POST /auth, the
+   * cheapest call Pluggy has (200 = an API key, 401 = wrong pair; 400/403 are
+   * a malformed or disabled pair). Anything else (network, 5xx) is thrown.
+   */
+  async verifyCredentials(): Promise<boolean> {
+    try {
+      await this.fetchApiKey();
+      return true;
+    } catch (err) {
+      if (err instanceof PluggyError && (err.status === 400 || err.status === 401 || err.status === 403)) return false;
+      throw err;
+    }
   }
 
   private invalidateApiKey(): void {

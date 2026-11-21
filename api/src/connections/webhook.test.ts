@@ -33,6 +33,8 @@ const EXTERNAL_ITEM = 'webhook-test-item-1';
 const entry = (configured: boolean): AggregatorEntry => ({
   create: () => ({
     environment: 'production',
+    verifyCredentials: async () => true,
+    hasItem: async () => true,
     createConnectToken: async () => ({ token: 't', clientId: 'c', widgetUrl: 'https://w' }),
     listExternalAccounts: async () => [],
     fetchInstitution: async () => null,

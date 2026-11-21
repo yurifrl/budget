@@ -67,7 +67,7 @@ export const connectionsUpstream = defineOperation({
 export const connectionsConnectToken = defineOperation({
   name: 'connections_connect_token',
   description:
-    "Mint short-lived widget credentials for the provider's connect widget (in-app connect flow). connectorId preselects a bank; itemId re-authenticates an existing item instead of creating a duplicate.",
+    "Mint short-lived widget credentials for the provider's connect widget (in-app connect flow). connectorId preselects a bank; itemId re-authenticates an existing item instead of creating a duplicate. A new connection uses the caller's own key set when one is saved, else the installation's shared keys if the caller may use them, else 403 own_keys_required. A re-auth uses the key set the connection was created with.",
   input: z.object({
     provider: z.string().min(1),
     connectorId: z.number().int().optional(),
@@ -83,7 +83,7 @@ export const connectionsConnectToken = defineOperation({
 export const connectionsItemsRegister = defineOperation({
   name: 'connections_items_register',
   description:
-    'Register a bank item the provider widget just connected (provider + itemId) and discover its upstream accounts (same account shape as connections_upstream_list, amounts in milliunits). Part of the in-app connect flow; idempotent; 409 if another user owns the item.',
+    'Register a bank item the provider widget just connected (provider + itemId) and discover its upstream accounts (same account shape as connections_upstream_list, amounts in milliunits). Part of the in-app connect flow; idempotent; 409 if another user owns the item; 403 own_keys_required when the caller has no usable key set (see connections_connect_token).',
   input: z.object({ provider: z.string().min(1), itemId: z.string().min(1) }),
   output: connectionRegisteredSchema,
   method: 'POST',
@@ -106,7 +106,7 @@ export const connectionsGet = defineOperation({
 export const connectionsSyncStatus = defineOperation({
   name: 'connections_sync_status',
   description:
-    "Sync status of each of the current user's bank connections: `state` (connected | syncing | queued | queued_offline when the background scheduler is down | reconnect | quota | error | disconnected), last_synced_at, status_message (user-safe reason), the active run (queued/running) and the last finished run with its user_message. Top-level `scheduler_degraded` is true when the background scheduler is unreachable (syncs wait, nothing is lost).",
+    "Sync status of each of the current user's bank connections: `state` (connected | syncing | queued | queued_offline when the background scheduler is down | reconnect | quota | paused when the connection's key set may not be used, see status_message | error | disconnected), last_synced_at, status_message (user-safe reason), the active run (queued/running) and the last finished run with its user_message. Top-level `scheduler_degraded` is true when the background scheduler is unreachable (syncs wait, nothing is lost).",
   input: z.object({}),
   output: syncStatusSchema,
   method: 'GET',
