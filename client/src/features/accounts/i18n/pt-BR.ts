@@ -33,7 +33,7 @@ const m: Translation<typeof en> = {
   'moreMenu.closeLabel': 'Fechar menu de ações',
 
   // Edit account modal
-  'edit.closedBanner': 'Esta conta está fechada — os detalhes são somente leitura. Reabra-a para fazer alterações.',
+  'edit.closedBanner': 'Esta conta está encerrada — os detalhes são somente leitura. Reabra-a para fazer alterações.',
   'edit.sectionInfo': 'INFORMAÇÕES DA CONTA',
   'edit.nickname': 'Apelido da conta',
   'edit.nicknamePlaceholder': 'Apelido da conta',
@@ -45,7 +45,7 @@ const m: Translation<typeof en> = {
   'edit.sectionBank': 'CONEXÃO BANCÁRIA',
   'edit.reopen': 'Reabrir',
   'edit.deleting': 'Excluindo…',
-  'edit.closeAccount': 'Fechar conta',
+  'edit.closeAccount': 'Encerrar conta',
 
   // Add account modal
   'add.title': 'Adicionar conta',
@@ -99,7 +99,7 @@ const m: Translation<typeof en> = {
   'toolbar.viewOptions': 'Opções de exibição',
   'toolbar.closeViewMenu': 'Fechar menu de exibição',
   'toolbar.runningBalance': 'Saldo acumulado',
-  'toolbar.showClosedTxns': 'Mostrar transações de contas fechadas',
+  'toolbar.showClosedTxns': 'Mostrar transações de contas encerradas',
   'toolbar.from': 'De',
   'toolbar.to': 'Até',
   'toolbar.fromLabel': 'Filtrar a partir da data',

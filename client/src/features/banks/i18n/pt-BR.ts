@@ -41,7 +41,7 @@ const m: Translation<typeof en> = {
   'detail.header.category': 'CATEGORIA',
   'detail.header.memo': 'OBSERVAÇÃO',
   'detail.header.amount': 'VALOR',
-  'detail.header.balance': 'SALDO',
+  'detail.header.balance': 'SALDO ACUM.',
   'detail.header.cleared': 'C',
   'accountType.checking': 'Conta corrente',
   'accountType.savings': 'Poupança',

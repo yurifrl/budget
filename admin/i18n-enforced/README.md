@@ -21,7 +21,7 @@ never edit `eslint.config.js`. This README is ignored (only `.json` files count)
 Test files (`*.test.ts[x]`), `__fixtures__/` and `i18n/` directories are always
 skipped by the rule itself; do not list them.
 
-Add `i18n-enforced/<package-id>.json` once your files are converted (recipe and
-the full rule list: `docs/i18n.md`), then run `bunx eslint .` in `admin/`.
-Escape hatch for a string that must stay as written:
+`admin.json` already covers all of `src/**/*.{ts,tsx}`: a new file is enforced from
+its first line (recipe and the full rule list: `docs/i18n.md`). Escape hatch for a
+string that must stay as written:
 `// eslint-disable-next-line budget-i18n/no-untranslated-string -- <reason>`.
