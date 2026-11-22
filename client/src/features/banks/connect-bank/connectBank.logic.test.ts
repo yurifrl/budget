@@ -4,6 +4,7 @@ import type { ConnectionJson, UpstreamAccountJson } from '@/budget/data/connecti
 import {
   stepSuccessRoute,
   banksHint,
+  connectButtonLabel,
   connectionName,
   connectionSubline,
   initialFlowTarget,
@@ -86,6 +87,13 @@ describe('list', () => {
     const empty = 'No banks linked yet. Connect one to pull accounts and transactions.';
     expect(banksHint([])).toBe(empty);
     expect(banksHint([conn('disconnected')])).toBe(empty);
+  });
+
+  test('connectButtonLabel says "a bank" until one is listed', () => {
+    expect(connectButtonLabel([])).toBe('Connect a bank');
+    expect(connectButtonLabel([conn('disconnected')])).toBe('Connect a bank');
+    expect(connectButtonLabel([conn('unauthorized')])).toBe('Connect another bank');
+    expect(connectButtonLabel(rows)).toBe('Connect another bank');
   });
 });
 

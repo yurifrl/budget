@@ -32,6 +32,8 @@ export default {
 
   // Banks list and rows
   'list.none': 'No banks linked yet. Connect one to pull accounts and transactions.',
+  'list.connectFirst': 'Connect a bank',
+  'list.connectAnother': 'Connect another bank',
   'list.summary': { one: '{count} bank · {connected} connected', other: '{count} banks · {connected} connected' },
   'row.reauthAdded': 'Reconnect to refresh credentials · added {stamp}',
   'row.reauthSandbox': 'Reconnect to refresh credentials · sandbox',
