@@ -1,5 +1,15 @@
 # Changelog
 
+## v2026.11.22 2026-11-22 release
+
+### Changed
+
+- release: v2026.11.22
+- tasks: close budget-wm8x, budget-fgdr, budget-vdhs, budget-bxkt
+- fix(banks): Linked banks button says "Connect a bank" when no bank is listed
+- fix(banks): phone layout of Linked banks, bank pages and Your Pluggy keys on iOS
+
+
 ## v2026.11.21-01 2026-11-21 release
 
 ### Changed
