@@ -1,0 +1,412 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-gpqp",
+  "title": "i18n core: client domain, state, profile, platform",
+  "description": "",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-21T21:30:48.256Z",
+  "updated_at": "2026-11-21T23:47:06.390Z",
+  "started_at": null,
+  "closed_at": "2026-11-21T23:46:48.256Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-m2ve",
+  "sprint": null,
+  "labels": [],
+  "notes": "core slice converted: namespaces domain(49) state(10) profile(7); tsc/eslint/tests pass\nApproved by the owner in chat 2026-11-21. Already merged into main; verified on merged main: typecheck + lint pass, bun test shared 163 / client 1227 / admin 20 / api 1190 (compose PG :55432), 0 fail. Shipped with the i18n release (epic budget-m2ve).",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-gpqp",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-gpqp",
+    "changeset": {
+      "base": "e476c26d0cb0bc5e702750c8e19c6db4137e19a2",
+      "head": "23f63974d615c7335123179a7e0ac23fc8fbeae7",
+      "commits": [
+        {
+          "sha": "23f6397",
+          "subject": "i18n core: domain, state, profile catalogs (en + pt-BR), core manifest"
+        },
+        {
+          "sha": "eefda7e",
+          "subject": "Merge tk/budget-qdwd: i18n foundation (typed t() engine, lint rule, locale setting, docs/i18n.md)"
+        },
+        {
+          "sha": "2d92064",
+          "subject": "i18n: web language switch reloads, admin eslint + catalog test, CI/Taskfile, docs/i18n.md, AGENTS and architecture notes"
+        },
+        {
+          "sha": "4b0deea",
+          "subject": "i18n client: locale platform, boundary, Language row, format helpers, apiErrorMessage order, catalog test, lint config"
+        },
+        {
+          "sha": "6b45a27",
+          "subject": "i18n: budget-i18n/no-untranslated-string rule, manifest reader, tests"
+        },
+        {
+          "sha": "9f089c4",
+          "subject": "i18n: lint fix"
+        },
+        {
+          "sha": "1f53b1c",
+          "subject": "i18n: shared typed t() engine, common and errors catalogs"
+        }
+      ],
+      "files": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "status": "M"
+        },
+        {
+          "path": "AGENTS.md",
+          "status": "M"
+        },
+        {
+          "path": "Taskfile.yml",
+          "status": "M"
+        },
+        {
+          "path": "admin/bun.lock",
+          "status": "M"
+        },
+        {
+          "path": "admin/eslint.config.js",
+          "status": "A"
+        },
+        {
+          "path": "admin/i18n-enforced/README.md",
+          "status": "A"
+        },
+        {
+          "path": "admin/package.json",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/i18n.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/main.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/app.config.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/bun.lock",
+          "status": "M"
+        },
+        {
+          "path": "client/eslint.config.js",
+          "status": "M"
+        },
+        {
+          "path": "client/i18n-enforced/README.md",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/core.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/foundation.json",
+          "status": "A"
+        },
+        {
+          "path": "client/package.json",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/_layout.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/accountEdit.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/flagLabels.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/format.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/format.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/inlineAdd.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/overspendHints.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/people.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/planDrop.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/targets.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/DisplayPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/LanguageRow.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/i18n.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/locale/device.native.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/device.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/locale.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/locale.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/useLocale.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/storage/sessionToken.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/profile/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/profile/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/profile/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/profile/model.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/state/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/state/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/state/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/state/planEdits.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/state/useBudgetModel.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/i18n/rich.test.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/i18n/rich.tsx",
+          "status": "A"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/i18n.md",
+          "status": "A"
+        },
+        {
+          "path": "shared/README.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/eslint.config.js",
+          "status": "M"
+        },
+        {
+          "path": "shared/eslint/i18n-manifest.cjs",
+          "status": "A"
+        },
+        {
+          "path": "shared/eslint/i18n-rule.cjs",
+          "status": "A"
+        },
+        {
+          "path": "shared/eslint/i18n-rule.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/check.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/common/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/common/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/common/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/errors/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/index.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/plural.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/rich.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/types.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/tsconfig.json",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 3330,
+        "deletions": 101
+      }
+    },
+    "agent_session": "6bca92ff-b0dc-4453-9db2-52014fe2346f",
+    "finished_at": "2026-11-21T22:08:54.436Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 7,
+        "files": 79,
+        "additions": 3330,
+        "deletions": 101
+      },
+      "head": "23f63974d615c7335123179a7e0ac23fc8fbeae7",
+      "at": "2026-11-21T22:08:54.436Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

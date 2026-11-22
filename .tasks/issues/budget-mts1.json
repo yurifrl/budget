@@ -1,0 +1,496 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-mts1",
+  "title": "i18n API: stable error codes on user-reachable HttpErrors, message codes for stored server sentences, consent page",
+  "description": "",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-21T21:30:52.233Z",
+  "updated_at": "2026-11-21T23:52:40.386Z",
+  "started_at": null,
+  "closed_at": "2026-11-21T23:52:09.343Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-m2ve",
+  "sprint": null,
+  "labels": [],
+  "notes": "API i18n done: ErrorCode-typed HttpError + params, 46 new specific codes (en/pt-BR), status_message_code/user_message_code, OAuth consent page translated. api 1180->1188 pass 0 fail. e2e not run (no psql).\nApproved by the owner in chat 2026-11-21. Already merged into main; verified on merged main: typecheck + lint pass, bun test shared 163 / client 1227 / admin 20 / api 1190 (compose PG :55432), 0 fail. Shipped with the i18n release (epic budget-m2ve).",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-mts1",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-mts1",
+    "changeset": {
+      "base": "e476c26d0cb0bc5e702750c8e19c6db4137e19a2",
+      "head": "c7348c8145e1366f534b5f74cedb98d055bd2cab",
+      "commits": [
+        {
+          "sha": "c7348c8",
+          "subject": "i18n API: typed error codes with params, 44 specific codes in en/pt-BR, server-message codes, translated OAuth consent page"
+        },
+        {
+          "sha": "eefda7e",
+          "subject": "Merge tk/budget-qdwd: i18n foundation (typed t() engine, lint rule, locale setting, docs/i18n.md)"
+        },
+        {
+          "sha": "2d92064",
+          "subject": "i18n: web language switch reloads, admin eslint + catalog test, CI/Taskfile, docs/i18n.md, AGENTS and architecture notes"
+        },
+        {
+          "sha": "4b0deea",
+          "subject": "i18n client: locale platform, boundary, Language row, format helpers, apiErrorMessage order, catalog test, lint config"
+        },
+        {
+          "sha": "6b45a27",
+          "subject": "i18n: budget-i18n/no-untranslated-string rule, manifest reader, tests"
+        },
+        {
+          "sha": "9f089c4",
+          "subject": "i18n: lint fix"
+        },
+        {
+          "sha": "1f53b1c",
+          "subject": "i18n: shared typed t() engine, common and errors catalogs"
+        }
+      ],
+      "files": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "status": "M"
+        },
+        {
+          "path": "AGENTS.md",
+          "status": "M"
+        },
+        {
+          "path": "Taskfile.yml",
+          "status": "M"
+        },
+        {
+          "path": "admin/bun.lock",
+          "status": "M"
+        },
+        {
+          "path": "admin/eslint.config.js",
+          "status": "A"
+        },
+        {
+          "path": "admin/i18n-enforced/README.md",
+          "status": "A"
+        },
+        {
+          "path": "admin/package.json",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/i18n.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/main.tsx",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/assignments.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/categories.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/category-bundles.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/plan-auto-assign.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/repeat-rules.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/small-areas.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/keys.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/own-keys.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/server-messages.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/server-messages.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/validate.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/validate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/relay.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/user-messages.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/jobs/workflows/tracked.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/authorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/consent-page.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/i18n.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/oauth/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/oauth/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/oauth/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/access-routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/admin-users-routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/image.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/password-routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/password.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/app.config.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/bun.lock",
+          "status": "M"
+        },
+        {
+          "path": "client/eslint.config.js",
+          "status": "M"
+        },
+        {
+          "path": "client/i18n-enforced/README.md",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/foundation.json",
+          "status": "A"
+        },
+        {
+          "path": "client/package.json",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/_layout.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/format.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/format.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/pluggyKeys.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/DisplayPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/LanguageRow.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/i18n.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/locale/device.native.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/device.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/locale.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/locale.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/useLocale.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/i18n/rich.test.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/i18n/rich.tsx",
+          "status": "A"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/i18n.md",
+          "status": "A"
+        },
+        {
+          "path": "shared/README.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/eslint.config.js",
+          "status": "M"
+        },
+        {
+          "path": "shared/eslint/i18n-manifest.cjs",
+          "status": "A"
+        },
+        {
+          "path": "shared/eslint/i18n-rule.cjs",
+          "status": "A"
+        },
+        {
+          "path": "shared/eslint/i18n-rule.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/connections/credentials.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/check.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/common/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/common/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/common/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/errors/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/index.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/plural.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/rich.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/types.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/tsconfig.json",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 3682,
+        "deletions": 158
+      }
+    },
+    "agent_session": "6bca92ff-b0dc-4453-9db2-52014fe2346f",
+    "finished_at": "2026-11-21T22:17:08.452Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 7,
+        "files": 100,
+        "additions": 3682,
+        "deletions": 158
+      },
+      "head": "c7348c8145e1366f534b5f74cedb98d055bd2cab",
+      "at": "2026-11-21T22:17:08.452Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

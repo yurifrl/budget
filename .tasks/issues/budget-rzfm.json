@@ -1,0 +1,1840 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-rzfm",
+  "title": "i18n server text + system names shown in client (after conversions and API)",
+  "description": "",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-21T21:30:52.557Z",
+  "updated_at": "2026-11-21T23:53:13.477Z",
+  "started_at": null,
+  "closed_at": "2026-11-21T23:52:42.251Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-m2ve",
+  "sprint": null,
+  "labels": [],
+  "notes": "Decided by user 2026-11-21 (Inbox thread 'i18n: whole app'): translate the four stored system names (Starting Balance, Reconciliation Adjustment, Credit Card Payments, 'Transfer : <account>') on screen only, by exact name; DB unchanged; payee search must also match the translated name. Marker column is follow-up budget-uuqr, not this task. Locales confirmed: en + pt-BR.\nServer-text render sites left by banks slices: ConnectionSettingsScreen.tsx:200 (status_message) and :205 (humanizeConnectionError passthrough); connect-bank/ConnectionRow.tsx:116; keys/pluggyKeys.logic.ts:172,178 (status_message) and :96,110,117,123 (raw request error message, reads error.message itself instead of apiErrorMessage); model/syncRun.ts:67,73 (user_message). Spending slice already maps 'Reconciliation Adjustment' for display in its own catalog: fold into displaySystemName.\nPart 1: storedServerMessage helper (banks/model/serverMessage.ts) at 5 sites; apiErrorMessage in pluggyKeys/NameField/AvatarEditor/useBudgetModel. Part 2: domain/systemNames.ts displaySystemName + matchesSystemName, applied at render sites; tsc/eslint/bun test (1225) pass.\nApproved by the owner in chat 2026-11-21. Already merged into main; verified on merged main: typecheck + lint pass, bun test shared 163 / client 1227 / admin 20 / api 1190 (compose PG :55432), 0 fail. Shipped with the i18n release (epic budget-m2ve).",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-rzfm",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-rzfm",
+    "changeset": {
+      "base": "e476c26d0cb0bc5e702750c8e19c6db4137e19a2",
+      "head": "b2f9eccf1cb4735bc3e5f879adabbbed35601e47",
+      "commits": [
+        {
+          "sha": "b2f9ecc",
+          "subject": "Fix test typing"
+        },
+        {
+          "sha": "1964685",
+          "subject": "Translate system payee and category group names on screen (displaySystemName), search matches both names"
+        },
+        {
+          "sha": "2cb63cf",
+          "subject": "Translate stored bank sentences by code; route raw API error messages through apiErrorMessage"
+        },
+        {
+          "sha": "5217e92",
+          "subject": "Merge tk/budget-mts1: i18n API error codes, server message codes, consent page"
+        },
+        {
+          "sha": "c7348c8",
+          "subject": "i18n API: typed error codes with params, 44 specific codes in en/pt-BR, server-message codes, translated OAuth consent page"
+        },
+        {
+          "sha": "9124ef1",
+          "subject": "Merge tk/budget-z7hn: i18n import + backup"
+        },
+        {
+          "sha": "09a77c2",
+          "subject": "Merge tk/budget-wat4: i18n banks-core"
+        },
+        {
+          "sha": "35d291d",
+          "subject": "i18n: import and backup features (import, backup namespaces; pt-BR; manifest import-backup)"
+        },
+        {
+          "sha": "6d16ff9",
+          "subject": "i18n: banks-core slice (banks + banks.keys catalogs, manifest, Pluggy widget language)"
+        },
+        {
+          "sha": "dd08586",
+          "subject": "Merge tk/budget-vznu: i18n small features"
+        },
+        {
+          "sha": "be9bb3d",
+          "subject": "Merge tk/budget-ja7y: i18n ui+shell"
+        },
+        {
+          "sha": "253091b",
+          "subject": "Merge tk/budget-7dfl: i18n accounts-main"
+        },
+        {
+          "sha": "32969e0",
+          "subject": "i18n: convert home, reflect, spending, settings to catalogs (en + pt-BR)"
+        },
+        {
+          "sha": "918d15a",
+          "subject": "i18n: convert ui/ and shell/ to catalogs (ui, shell namespaces), manifest ui-shell"
+        },
+        {
+          "sha": "3f50c65",
+          "subject": "Merge tk/budget-sx0p: i18n admin"
+        },
+        {
+          "sha": "238945d",
+          "subject": "Merge tk/budget-mbuy: i18n auth+profile"
+        },
+        {
+          "sha": "b597b85",
+          "subject": "Merge tk/budget-uxyo: i18n accounts-register"
+        },
+        {
+          "sha": "62ba317",
+          "subject": "Merge tk/budget-gpqp: i18n core"
+        },
+        {
+          "sha": "2dbf4ff",
+          "subject": "i18n accounts-main: catalog (en + pt-BR), convert accounts screen, toolbar, header, modals, selection bar, reconcile"
+        },
+        {
+          "sha": "b9d6519",
+          "subject": "i18n admin: catalogs (admin shell, runs, features, users) en + pt-BR, language select, rich helper, manifest"
+        },
+        {
+          "sha": "dc97e31",
+          "subject": "i18n: convert features/auth and features/profile to catalogs (auth, profile.screen)"
+        },
+        {
+          "sha": "35da955",
+          "subject": "i18n: accounts register, accountEdit and addTransaction catalogs (en + pt-BR)"
+        },
+        {
+          "sha": "d822935",
+          "subject": "Merge tk/budget-a7dj: i18n plan-grid"
+        },
+        {
+          "sha": "23f6397",
+          "subject": "i18n core: domain, state, profile catalogs (en + pt-BR), core manifest"
+        },
+        {
+          "sha": "f1dbb75",
+          "subject": "Merge tk/budget-4ydu: i18n payees + people"
+        },
+        {
+          "sha": "0a952c3",
+          "subject": "i18n plan-grid: plan grid catalog (en + pt-BR), manifest, conversion of plan grid files"
+        },
+        {
+          "sha": "3114eab",
+          "subject": "Merge tk/budget-dlel: i18n banks-ui"
+        },
+        {
+          "sha": "f6fd35c",
+          "subject": "i18n: payees and people catalogs (en + pt-BR), manifest payees-people"
+        },
+        {
+          "sha": "0cc0a2b",
+          "subject": "Merge tk/budget-wpb2: i18n plan-mobile"
+        },
+        {
+          "sha": "0136fc4",
+          "subject": "i18n: banks bank + connect-bank slice (banks.bank, banks.connect catalogs, banks-ui manifest)"
+        },
+        {
+          "sha": "9c34f36",
+          "subject": "i18n: plan mobile slice (category detail, move money, assign numpad, home) en + pt-BR"
+        },
+        {
+          "sha": "a4b3e51",
+          "subject": "Merge tk/budget-hucr: i18n plan-inspector"
+        },
+        {
+          "sha": "128da43",
+          "subject": "i18n: plan inspector slice (TargetEditor, CategoryInspector, AutoAssignPanel, AssignDropdown, MonthSummary, CategoryPersonField)"
+        },
+        {
+          "sha": "eefda7e",
+          "subject": "Merge tk/budget-qdwd: i18n foundation (typed t() engine, lint rule, locale setting, docs/i18n.md)"
+        },
+        {
+          "sha": "2d92064",
+          "subject": "i18n: web language switch reloads, admin eslint + catalog test, CI/Taskfile, docs/i18n.md, AGENTS and architecture notes"
+        },
+        {
+          "sha": "4b0deea",
+          "subject": "i18n client: locale platform, boundary, Language row, format helpers, apiErrorMessage order, catalog test, lint config"
+        },
+        {
+          "sha": "6b45a27",
+          "subject": "i18n: budget-i18n/no-untranslated-string rule, manifest reader, tests"
+        },
+        {
+          "sha": "9f089c4",
+          "subject": "i18n: lint fix"
+        },
+        {
+          "sha": "1f53b1c",
+          "subject": "i18n: shared typed t() engine, common and errors catalogs"
+        }
+      ],
+      "files": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "status": "M"
+        },
+        {
+          "path": "AGENTS.md",
+          "status": "M"
+        },
+        {
+          "path": "Taskfile.yml",
+          "status": "M"
+        },
+        {
+          "path": "admin/bun.lock",
+          "status": "M"
+        },
+        {
+          "path": "admin/eslint.config.js",
+          "status": "A"
+        },
+        {
+          "path": "admin/i18n-enforced/README.md",
+          "status": "A"
+        },
+        {
+          "path": "admin/i18n-enforced/admin.json",
+          "status": "A"
+        },
+        {
+          "path": "admin/package.json",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/App.tsx",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/LanguageSelect.tsx",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/badge.tsx",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/featureControls.tsx",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/features.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/i18n.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/language.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/language.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/main.tsx",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/pages/Features.tsx",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/pages/RunDetail.tsx",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/pages/Runs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/pages/Users.tsx",
+          "status": "M"
+        },
+        {
+          "path": "admin/src/pages/features/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/pages/features/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/pages/features/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/pages/runs/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/pages/runs/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/pages/runs/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/pages/users/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/pages/users/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/pages/users/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/rich.tsx",
+          "status": "A"
+        },
+        {
+          "path": "admin/src/users.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/assignments.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/categories.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/category-bundles.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/members.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/plan-auto-assign.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/repeat-rules.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/small-areas.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/keys.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/own-keys.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/server-messages.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/server-messages.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/validate.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/validate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/relay.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/user-messages.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/jobs/workflows/tracked.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/authorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/consent-page.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/oauth/i18n.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/oauth/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/oauth/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/oauth/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/user/access-routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/admin-users-routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/image.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/password-routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/password.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/user/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/app.config.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/bun.lock",
+          "status": "M"
+        },
+        {
+          "path": "client/eslint.config.js",
+          "status": "M"
+        },
+        {
+          "path": "client/i18n-enforced/README.md",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/accounts-main.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/accounts-register.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/auth-profile.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/banks-core.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/banks-ui.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/core.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/foundation.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/import-backup.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/payees-people.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/plan-grid.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/plan-inspector.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/plan-mobile.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/small-features.json",
+          "status": "A"
+        },
+        {
+          "path": "client/i18n-enforced/ui-shell.json",
+          "status": "A"
+        },
+        {
+          "path": "client/package.json",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/_layout.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/accountEdit.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/flagLabels.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/format.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/format.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/inlineAdd.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/overspendHints.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/people.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/planDrop.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/systemNames.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/systemNames.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/targets.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountEditModal.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountHeader.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountsMoreMenu.ios.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountsMoreMenu.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountsToolbar.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AddAccountModal.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AddTransactionSheet.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/ApprovalBanner.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/ReconcilePanels.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/RegisterRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/ScheduledSection.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/SelectionBar.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/accountEdit/BankConnectionSection.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/accountEdit/CloseAccountConfirm.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/accountEdit/DeleteAccountConfirm.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/accountEdit/accountEdit.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/accountEdit/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/accountEdit/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/accountEdit/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/accountEdit/useAccountEdit.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/Keypad.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/SheetFields.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/SheetPicker.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/useAddTransaction.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/reconcile.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/InlineAddRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/InlineConvPanel.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/InlineRepeatFooter.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/InlineSplitPanel.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/PayeeMenuBody.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/TxnMenuKebab.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/TxnMenuTrigger.ios.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/TxnRowMenu.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/TxnRowMenuPanels.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/register/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/register/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/register/payeeDropdown.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/payeeDropdown.systemNames.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/register/txnRowMenu.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/txnRowMenuShared.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/useInlineAdd.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/useReconcileSession.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/useRegisterSelection.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/LandingPage.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/PasswordForms.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/landing.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/nativeAuth.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/password.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/signIn.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/usePasswordSignIn.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/useSignIn.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/backup/ExportImportScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/backup/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/backup/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/backup/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/backup/importScope.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/backup/transfer/locale.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/backup/transfer/transfer.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/ConnectBankScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/ConnectBankWidget.native.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/ConnectBankWidget.web.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/ConnectionSettingsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/LinkedAccountDetailScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/LinkedBy.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/PluggyKeysScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/AccountTab.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/BankBalanceCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/CreditBillCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/LinkOptionCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/LinkPicker.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/LinkSheets.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/OverviewTab.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/SettingsPanel.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/UnlinkConfirm.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/bank/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/bank/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/bank/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/bank/useAccountLink.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/ConnectFlowView.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/ConnectionRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/ConnectionRowButtons.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/SyncWindowControl.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/UpstreamAccountsList.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/connectBank.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/connectionRowMenuShared.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/useConnectFlow.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/useConnectionActions.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/useSyncRunner.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/keys/PausedNotice.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/PluggyKeysCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/PluggyKeysHelp.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/keys/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/keys/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/keys/pluggyKeys.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/pluggyKeys.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/usePluggyKeys.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/bankPage.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/banksI18n.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/model/connections.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/linkPicker.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/serverMessage.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/model/serverMessage.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/home/BudgetCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/home/CreateBudgetForm.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/home/HomeScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/home/PeopleSheet.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/home/home.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/home/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/home/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/home/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/home/useHome.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/ImportScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/flow/MappingSection.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/flow/ReviewSection.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/flow/cells.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/flow/importFlow.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/flow/parserMessages.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/import/flow/parserMessages.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/import/flow/useImportFlow.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/import/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/import/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/DefaultCategoryPicker.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/ManagePayeesScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/MergePrompt.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/PayeeDetailPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/PayeeListPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/PayeeTxnsPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/payees.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/payees.systemNames.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/usePayeeAdmin.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/people/PeoplePane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/people/PersonFilterBar.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/people/PersonPicker.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/people/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/people/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/people/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/plan/AssignDropdown.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/AutoAssignPanel.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/BundleMenus.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/BundleRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/CategoryInspector.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/CategoryPersonField.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/HomeScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/MobileAssignNumpad.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/MobileCategoryDetail.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/MobileMoveMoney.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/MonthSummary.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/MoveMoneySheet.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/PlanCategoryRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/PlanGroupHeader.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/PlanListFooter.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/PlanMenus.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/PlanRowCells.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/PlanScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/PlanToolbar.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/PlanTopbar.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/RowMenu.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/TargetEditor.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/plan/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/plan/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/plan/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/plan/inspector/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/plan/inspector/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/plan/inspector/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/plan/mobile/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/plan/mobile/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/plan/mobile/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/plan/useBundleActions.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/AvatarEditor.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/ChangePasswordCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/ConnectedAppsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/MeAvatarButton.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/NameField.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/ProfileScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/profile/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/profile/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/reflect/ReflectScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/reflect/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/reflect/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/reflect/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/AccountPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/BudgetEditPanes.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/BudgetManageSection.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/DeleteBudgetModal.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/DisplayPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/FlagsPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/FreshStartPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/LanguageRow.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/NewBudgetPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/OpenBudgetPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/PlanSettingsPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/SettingsRootPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/ShortcutsPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/settings/panes.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/settings.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/spending/SpendingScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/spending/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/spending/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/spending/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/i18n.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/locale/device.native.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/device.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/locale.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/locale.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/locale/useLocale.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/storage/sessionToken.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/profile/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/profile/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/profile/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/profile/model.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/BudgetLayout.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/SettingsMenu.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/shell/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/shell/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetRail.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/RailAccounts.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/state/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/state/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/state/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/state/planEdits.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/state/useBudgetModel.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/BalanceFormulaRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/ClearedBadge.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/KeyboardModalFrame.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/PersonFace.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/avatar/AvatarStack.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/categoryPick.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/combobox.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/dropdown/AccountDropdown.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/dropdown/CategoryDropdown.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/dropdown/DatePickerPopover.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/i18n/rich.test.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/i18n/rich.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/primitives/BigMoneyInput.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/MoneyInput.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/Pill.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/moneyDraft.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/text/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/text/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/text/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/i18n.md",
+          "status": "A"
+        },
+        {
+          "path": "shared/README.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/eslint.config.js",
+          "status": "M"
+        },
+        {
+          "path": "shared/eslint/i18n-manifest.cjs",
+          "status": "A"
+        },
+        {
+          "path": "shared/eslint/i18n-rule.cjs",
+          "status": "A"
+        },
+        {
+          "path": "shared/eslint/i18n-rule.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/connections/credentials.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/check.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/common/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/common/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/common/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/errors/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/index.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/plural.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/rich.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/i18n/types.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/tsconfig.json",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 10953,
+        "deletions": 2135
+      }
+    },
+    "agent_session": "6bca92ff-b0dc-4453-9db2-52014fe2346f",
+    "finished_at": "2026-11-21T22:30:23.541Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 39,
+        "files": 404,
+        "additions": 10953,
+        "deletions": 2135
+      },
+      "head": "b2f9eccf1cb4735bc3e5f879adabbbed35601e47",
+      "at": "2026-11-21T22:30:23.541Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

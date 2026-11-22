@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-fgdr",
+  "title": "Linked banks: button says 'Connect another bank' when no bank is linked yet",
+  "description": "",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-22T00:13:00.348Z",
+  "updated_at": "2026-11-22T02:20:08.928Z",
+  "started_at": null,
+  "closed_at": "2026-11-22T02:19:59.429Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Approved by user (all approved, go on). Merged to main. Bank list button: 'Connect a bank' / 'Conectar um banco' when no bank is listed, else 'Connect another bank'; connectButtonLabel in connectBank.logic.ts with tests. Post-merge: typecheck, lint, shared 163, client 1233 pass.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-fgdr",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-fgdr",
+    "changeset": {
+      "base": "e301090651a20fa9e2886978d0f08b93dfbee840",
+      "head": "4ed8712b020221a924afeea0a4db5fa77d306c0e",
+      "commits": [
+        {
+          "sha": "4ed8712",
+          "subject": "fix(banks): Linked banks button says \"Connect a bank\" when no bank is listed"
+        }
+      ],
+      "files": [
+        {
+          "path": "client/src/features/banks/ConnectBankScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/connectBank.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/connectBank.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 23,
+        "deletions": 5
+      }
+    },
+    "agent_session": "d9a92018-be65-42df-83d8-3631e206fb8b",
+    "finished_at": "2026-11-22T02:18:51.331Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 7,
+        "additions": 23,
+        "deletions": 5
+      },
+      "head": "4ed8712b020221a924afeea0a4db5fa77d306c0e",
+      "at": "2026-11-22T02:18:51.331Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

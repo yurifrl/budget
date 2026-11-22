@@ -1,0 +1,1 @@
+{"issue_id":"budget-xtkr","action":"save","at":"2026-11-21T23:34:17.841Z","actor":null,"data":{"status":"open","title":"i18n: numbers built with toFixed shown to the person ignore the decimal-separator pref (accounts.register conv.rate toFixed(4), Reflect 'Change +1.5%' toFixed(1)); add a variable-decimals number formatter to domain/format.ts"}}

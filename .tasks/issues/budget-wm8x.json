@@ -4,30 +4,242 @@
   "id": "budget-wm8x",
   "title": "iOS screenshots for own Pluggy keys screens (budget-4ji): needs a tappable simulator (Simulator.app, idb or Appium)",
   "description": "",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-21T16:07:56.435Z",
-  "updated_at": "2026-11-21T16:07:56.435Z",
+  "updated_at": "2026-11-22T02:17:09.597Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-22T02:16:56.104Z",
   "due_at": null,
   "defer_until": null,
   "parent": null,
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Setup: iPhone 17 Pro sim (iOS 26.5) + Expo Go, Metro :8091 from the worktree, API :3100 auth-off on db budgetnew_wm8x (compose Postgres :55432, migrations+seed), CREDENTIALS_ENCRYPTION_KEY set, PLUGGY_BASE_URL -> fake Pluggy :3191 (POST /auth accepts only demo-client-id/demo-secret). Shared-pluggy-key feature off for dev user. Taps and typing via idb (fb-idb + idb-companion), navigation via exp://127.0.0.1:8091/--/<route> deep links. Paused banks seeded in SQL: Nubank (key_source shared) and Itau (key_source own, key_client_id old-client-id); the API paused both on list. The blue gear at top right in every shot is Expo Go's own dev-tools button, not the app.\nEvidence (after fix): ev-cffb3f keys screen empty; ev-112a80 same, scrolled to the help and the 5-connection limit; ev-a001ac wrong pair rejected under the secret field (red border + message), submitted with ONE tap while the keyboard was up; ev-6433bf keys saved, client id shown, secret 'Saved (hidden)'; ev-fbd705 no keys + no shared key: tapping Connect on Linked banks lands on Your Pluggy keys with the connect banner; ev-8baad1 paused banks on the list (shared-key Nubank notice); ev-ca2e19 list scrolled to the own-key Itau notice; ev-c3cb37 Nubank page paused notice (shared keys); ev-88c62f Itau page paused notice (own keys no longer saved); ev-8d7ed1 empty Linked banks with Connect button uncovered.\nBugs found on iOS and fixed in 74531fe (before shots): ev-047f5e '+ Transaction' FAB covered 'Connect another bank' (and the keys help text): the phone shell now hides it on /connect-bank, /connection, /pluggy-keys (rail.logic showsTransactionFab + test). ev-3dd57f Linked banks phone row squeezed the paused notice into the narrow name column, truncating 'Nuba...' and hiding 'Itau' entirely: notice now spans the card under the row on phone, unclamped, pill wraps (connectBank.logic rowNoticeSlot + test). ev-1febad with the keyboard up the first tap on Save keys only dismissed the keyboard: ScrollView keyboardShouldPersistTaps=handled. Checks: client tsc OK, eslint OK, bun test 1232 pass 0 fail.\nCleanup: Metro, API and fake Pluggy stopped, db budgetnew_wm8x dropped, simulator shut down, leases released. budget-postgres-1 (:55432) was already running before this task and was left up. Follow-ups filed: budget-vdhs (relaunching Expo Go loses the active budget, so every deep link first needed a tap on the budget), budget-fgdr (copy nit seen in ev-8d7ed1). Branch synced onto main; fix commit is now c82a4d5; client tsc/eslint/bun test (1232 pass) re-run after sync.\nApproved by user. Merged to main as e301090. Five iOS screenshot sets captured in the simulator (ev-cffb3f, ev-112a80, ev-a001ac, ev-6433bf, ev-fbd705, ev-8baad1, ev-ca2e19, ev-c3cb37, ev-88c62f, ev-8d7ed1); fixed FAB covering the bank screens, paused notice squeezing bank rows, and the lost first tap on Save keys (c82a4d5). client tsc/eslint/bun test 1232 pass.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
-  "attachments": [],
+  "branch": "tk/budget-wm8x",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-wm8x",
+    "changeset": {
+      "base": "69c6d43e5ecb49561464b7bb749dc2d4191821c1",
+      "head": "c82a4d541ee360dd6e7991b2000e48d32c14c787",
+      "commits": [
+        {
+          "sha": "c82a4d5",
+          "subject": "fix(banks): phone layout of Linked banks, bank pages and Your Pluggy keys on iOS"
+        }
+      ],
+      "files": [
+        {
+          "path": "client/src/features/banks/PluggyKeysScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/ConnectionRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/connectBank.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/connectBank.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/screenStyles.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/BudgetLayout.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 78,
+        "deletions": 14
+      }
+    },
+    "agent_session": "d9a92018-be65-42df-83d8-3631e206fb8b",
+    "finished_at": "2026-11-22T00:13:01.082Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 8,
+        "additions": 78,
+        "deletions": 14
+      },
+      "head": "c82a4d541ee360dd6e7991b2000e48d32c14c787",
+      "at": "2026-11-22T00:13:01.082Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-047f5e",
+      "name": "ios-before-bank-list-empty-fab-overlap.png",
+      "mime": "image/png",
+      "size": 254487,
+      "sha256": "8f5248a6d0d006d4f2c08214a081ff96a7b53fb557adbab24b2698a5667e5e7f",
+      "metadata": {
+        "evidence_kind": "before"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-1febad",
+      "name": "ios-before-save-tap-swallowed-by-keyboard.png",
+      "mime": "image/png",
+      "size": 363514,
+      "sha256": "1ad59a4e90be71d744be04695f09efa0887e4e4d3e9092d87b85baabd03d1a09",
+      "metadata": {
+        "evidence_kind": "before"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-3dd57f",
+      "name": "ios-before-paused-bank-list.png",
+      "mime": "image/png",
+      "size": 413232,
+      "sha256": "8d23ba772dedf525fc76f4db3efd785198c50a716f426a475de5c27f3247c68f",
+      "metadata": {
+        "evidence_kind": "before"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-cffb3f",
+      "name": "ios-keys-empty.png",
+      "mime": "image/png",
+      "size": 320922,
+      "sha256": "0b871a96a7d86e4218f88e715a5d4f87ad7f276ddf945a539efc8300bb85e266",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-112a80",
+      "name": "ios-keys-empty-help-bottom.png",
+      "mime": "image/png",
+      "size": 333435,
+      "sha256": "7096826c93d415de2ed945b325b5ba0c528b1984547cc1fc44eb373f0d37b9e8",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a001ac",
+      "name": "ios-keys-invalid-credentials.png",
+      "mime": "image/png",
+      "size": 443162,
+      "sha256": "ea82b6d71e058f20f0bac80f76072f5406142747ce7b7d6aaaa9f3bec63d7cbd",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-6433bf",
+      "name": "ios-keys-saved.png",
+      "mime": "image/png",
+      "size": 351359,
+      "sha256": "3a99fe95adad27e59d8e81a99bb500980a2fa8bbeb3aa7efbcbb8a17fd045d03",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-fbd705",
+      "name": "ios-connect-redirects-to-keys.png",
+      "mime": "image/png",
+      "size": 318821,
+      "sha256": "d9db59bda5b79eeb1a15678506fd235cd65ff36bdda125d8d106e0d700549da8",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-8baad1",
+      "name": "ios-paused-bank-list.png",
+      "mime": "image/png",
+      "size": 372989,
+      "sha256": "d272f406f4474f3c1ecd2ff3b87b13c424d116cda5d3b63645f00d2b7bccbeec",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ca2e19",
+      "name": "ios-paused-bank-list-own-key.png",
+      "mime": "image/png",
+      "size": 362896,
+      "sha256": "d83bd0457650365a0703cf02f0f15b3c8cc3f157dcb8d82a045ef978e04497ce",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c3cb37",
+      "name": "ios-paused-bank-page-shared.png",
+      "mime": "image/png",
+      "size": 312801,
+      "sha256": "3bfb447d9af8fa08c4a79783f4a85691740e1c02e90177fd14546b8804936484",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-88c62f",
+      "name": "ios-paused-bank-page-own-key.png",
+      "mime": "image/png",
+      "size": 296599,
+      "sha256": "a8a340cdafc51e33fd3613ed216c306341b4510241cbac500b24d81e31a6be01",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-8d7ed1",
+      "name": "ios-bank-list-empty-no-fab.png",
+      "mime": "image/png",
+      "size": 196953,
+      "sha256": "13fc6a801b78dbb8d2acc339e9ae898e4279ba53ece1fa13b993829cdaf75c81",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    }
+  ],
   "dependencies": [],
   "dependency_count": 0,
   "dependent_count": 0,
