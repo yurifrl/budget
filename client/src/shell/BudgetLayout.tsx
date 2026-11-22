@@ -17,7 +17,7 @@
  * (features/settings) — one portal menu, nothing paints over it.
  */
 
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, usePathname, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,7 +39,7 @@ import { budgetMenuPanes } from '@/features/settings';
 import { t } from './i18n';
 import { BudgetRail } from './rail/BudgetRail';
 import { BudgetTabs } from './rail/BudgetTabs';
-import { shellGate } from './rail/rail.logic';
+import { shellGate, showsTransactionFab } from './rail/rail.logic';
 import { IconSymbol } from '@/ui/icon-symbol';
 import { ShellContext, type BudgetShellState } from './context';
 
@@ -99,6 +99,7 @@ function BudgetShell({ budgetId }: { budgetId: string }) {
   const isPhone = media['max-md'];
   const isDesktop = media.lg;
   const isTablet = !isPhone && !isDesktop;
+  const pathname = usePathname();
 
   const insets = useSafeAreaInsets();
   // ☰/⋯ sit below the status bar / notch; screens pad past that whole row.
@@ -236,7 +237,7 @@ function BudgetShell({ budgetId }: { budgetId: string }) {
         numpad panel is open it slides down out of the keypad's corner and
         collapses to the round ＋ — mounted the whole time, slides back up as
         the pill on close. */}
-        {isPhone ? (
+        {isPhone && showsTransactionFab(pathname) ? (
           <Animated.View style={[styles.fab, { transform: [{ translateY: fabShift }] }]}>
             <Pressable
               style={[styles.fabPill, numpadOpen && styles.fabPillParked]}

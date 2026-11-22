@@ -11,7 +11,7 @@ import { PausedNotice } from '../keys/PausedNotice';
 import { LinkedBy } from '../LinkedBy';
 import { Sparkline } from '@/ui/Sparkline';
 import { colors } from '@/ui/theme';
-import { connectionName, connectionSubline, linkedAccountCount } from './connectBank.logic';
+import { connectionName, connectionSubline, linkedAccountCount, rowNoticeSlot } from './connectBank.logic';
 import { ConnectionRowButtons } from './ConnectionRowButtons';
 import { ConnectionRowMenu } from './ConnectionRowMenu';
 import { t } from './i18n';
@@ -67,6 +67,16 @@ export function ConnectionRow({
   const reauth = requiresReauth(row.status);
   const spark = connectionSparkData(row.id, accounts, transactions);
   const linkedCount = linkedAccountCount(up);
+  const noticeSlot = rowNoticeSlot(wide);
+  const notice =
+    row.status === 'paused' ? (
+      // Under the row (phone) it has the card's width: the full text, unclamped.
+      <PausedNotice row={row} compact={noticeSlot === 'meta'} onOpenKeys={onOpenKeys} />
+    ) : row.status_message && row.status !== 'connected' ? (
+      <Text style={styles.connSub} numberOfLines={2}>
+        {storedServerMessage(row.status_message, row.status_message_code)}
+      </Text>
+    ) : null;
   return (
     // iOS: long-press opens the system context menu over the row;
     // web/Android: the wrapper is a no-op, the kebab below opens
@@ -99,7 +109,7 @@ export function ConnectionRow({
           <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
         </View>
         <View style={styles.connMeta}>
-          <View style={styles.nameLine}>
+          <View style={[styles.nameLine, !wide && styles.nameLineWrap]}>
             <Text style={styles.connName} numberOfLines={1}>
               {name}
             </Text>
@@ -110,13 +120,7 @@ export function ConnectionRow({
           <Text style={styles.connSub} numberOfLines={1}>
             {connectionSubline(row, reauth)}
           </Text>
-          {row.status === 'paused' ? (
-            <PausedNotice row={row} compact onOpenKeys={onOpenKeys} />
-          ) : row.status_message && row.status !== 'connected' ? (
-            <Text style={styles.connSub} numberOfLines={2}>
-              {storedServerMessage(row.status_message, row.status_message_code)}
-            </Text>
-          ) : null}
+          {noticeSlot === 'meta' ? notice : null}
           <LinkedBy linkedBy={row.linked_by} />
         </View>
         {/* Activity sparkline + balance only where a link exists. */}
@@ -137,6 +141,7 @@ export function ConnectionRow({
           onEdit={onSettings}
         />
       </View>
+      {noticeSlot === 'below' && notice ? <View style={styles.rowNoticeBelow}>{notice}</View> : null}
       {up == null ? null : <UpstreamAccountsList up={up} accounts={accounts} />}
       </Pressable>
     </ConnectionRowMenu>

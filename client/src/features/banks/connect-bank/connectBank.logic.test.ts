@@ -8,6 +8,7 @@ import {
   connectionSubline,
   initialFlowTarget,
   linkedAccountCount,
+  rowNoticeSlot,
   visibleConnections,
   widgetStep,
 } from './connectBank.logic';
@@ -126,5 +127,15 @@ describe('stepSuccessRoute', () => {
     for (const kind of ['closed', 'refresh', 'oauth', 'ignore'] as const) {
       expect(stepSuccessRoute({ kind })).toBeNull();
     }
+  });
+});
+
+describe('rowNoticeSlot', () => {
+  test('wide rows keep the notice in the name column', () => {
+    expect(rowNoticeSlot(true)).toBe('meta');
+  });
+
+  test('phone rows put it under the row, where it has the card width', () => {
+    expect(rowNoticeSlot(false)).toBe('below');
   });
 });

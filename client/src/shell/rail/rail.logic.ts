@@ -105,3 +105,16 @@ export function shellGate(s: {
   if (s.budgets === undefined && !s.isError) return 'loading';
   return 'home';
 }
+
+/**
+ * Bank setup pages (Linked banks, a bank's page, Your Pluggy keys): no
+ * transaction is entered there, and on a phone the floating "＋ Transaction"
+ * pill sat on their bottom actions ("Connect another bank") and help text.
+ */
+const NO_TRANSACTION_FAB_ROUTES: readonly string[] = ['/connect-bank', '/connection', '/pluggy-keys'];
+
+/** Whether the phone shell shows its "＋ Transaction" FAB on this route. */
+export function showsTransactionFab(pathname: string): boolean {
+  const path = pathname.replace(/[?#].*$/, '').replace(/\/+$/, '');
+  return !NO_TRANSACTION_FAB_ROUTES.includes(path);
+}

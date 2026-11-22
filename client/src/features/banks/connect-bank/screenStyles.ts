@@ -56,6 +56,10 @@ export const styles = StyleSheet.create({
   },
   avatarText: { color: colors.indigo3, fontSize: 15, fontWeight: '700' },
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
+  /** Phone: the status pill drops under a name it would otherwise squeeze out. */
+  nameLineWrap: { flexWrap: 'wrap', rowGap: 4 },
+  /** Phone: a row's notice spans the card under the row, not the narrow name column. */
+  rowNoticeBelow: { paddingHorizontal: 12, paddingBottom: 12, marginTop: -4 },
   connBalance: { color: colors.text, fontSize: 14, fontWeight: '700', marginLeft: 'auto', flexShrink: 0 },
   reportBanner: {
     backgroundColor: colors.greenPillBg,

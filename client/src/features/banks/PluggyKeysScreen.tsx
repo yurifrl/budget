@@ -31,7 +31,9 @@ export function PluggyKeysScreen() {
 
   return (
     <View style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* "handled": with the keyboard up, the first tap on Save keys (or Close,
+      or a help link) acts instead of only dismissing the keyboard (iOS). */}
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.head}>
           <Text style={styles.title}>{t('keys.title')}</Text>
           <GhostButton label={tCommon('close')} onPress={back} />
