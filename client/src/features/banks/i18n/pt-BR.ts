@@ -7,7 +7,6 @@ const m: Translation<typeof en> = {
   'list.keysButton': 'Suas chaves do Pluggy',
   'list.working': 'Processando…',
   'list.checking': 'Verificando…',
-  'list.connectAnother': 'Conectar outro banco',
   'list.bankRemoved': 'Banco removido — o histórico importado continua no seu orçamento.',
 
   // ConnectionSettingsScreen: the bank's page

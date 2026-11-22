@@ -31,7 +31,7 @@ import {
 import { selectActiveBudgetId } from '@/state/ui';
 import { colors } from '@/ui/theme';
 import { GhostButton, IndigoButton } from '@/ui/bits';
-import { banksHint, visibleConnections } from './connect-bank/connectBank.logic';
+import { banksHint, connectButtonLabel, visibleConnections } from './connect-bank/connectBank.logic';
 import { ConnectFlowView } from './connect-bank/ConnectFlowView';
 import { ConnectionRow } from './connect-bank/ConnectionRow';
 import { styles } from './connect-bank/screenStyles';
@@ -77,7 +77,7 @@ export function ConnectBankScreen() {
   const gate = useConnectGate();
   const openKeys = useCallback(() => router.push(PLUGGY_KEYS_ROUTE as Href), [router]);
 
-  /** "Connect another bank": the widget, or the keys screen when no key set may be used. */
+  /** "Connect a bank" / "Connect another bank": the widget, or the keys screen when no key set may be used. */
   const connectNew = useCallback(() => {
     if (gate === 'wait') return;
     if (gate === 'needs_keys') {
@@ -173,7 +173,7 @@ export function ConnectBankScreen() {
             ))}
           </ScrollView>
           <IndigoButton
-            label={tokenLoading || busy ? t('list.working') : gate === 'wait' ? t('list.checking') : t('list.connectAnother')}
+            label={tokenLoading || busy ? t('list.working') : gate === 'wait' ? t('list.checking') : connectButtonLabel(connections)}
             style={styles.connectBtn}
             onPress={tokenLoading || busy || gate === 'wait' ? undefined : connectNew}
           />

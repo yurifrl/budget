@@ -4,7 +4,6 @@ export default {
   'list.keysButton': 'Your Pluggy keys',
   'list.working': 'Working…',
   'list.checking': 'Checking…',
-  'list.connectAnother': 'Connect another bank',
   'list.bankRemoved': 'Bank removed — its imported history stays in your budget.',
 
   // ConnectionSettingsScreen: the bank's page

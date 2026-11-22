@@ -35,6 +35,8 @@ const m: Translation<typeof en> = {
 
   // Banks list and rows
   'list.none': 'Nenhum banco conectado ainda. Conecte um para trazer contas e transações.',
+  'list.connectFirst': 'Conectar um banco',
+  'list.connectAnother': 'Conectar outro banco',
   'list.summary': { one: '{count} banco · conectados: {connected}', other: '{count} bancos · conectados: {connected}' },
   'row.reauthAdded': 'Reconecte para atualizar as credenciais · adicionado {stamp}',
   'row.reauthSandbox': 'Reconecte para atualizar as credenciais · sandbox',

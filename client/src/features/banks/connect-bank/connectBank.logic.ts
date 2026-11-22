@@ -78,6 +78,14 @@ export function banksHint(connections: readonly Pick<ConnectionJson, 'status'>[]
 }
 
 /**
+ * The main button's label: "Connect a bank" while nothing is listed (no
+ * connections, or only disconnected ones), "Connect another bank" otherwise.
+ */
+export function connectButtonLabel(connections: readonly Pick<ConnectionJson, 'status'>[]): string {
+  return visibleConnections(connections).length === 0 ? t('list.connectFirst') : t('list.connectAnother');
+}
+
+/**
  * Where a row's notice (paused-bank guidance, a stored server message) goes:
  * in the name column on a wide row; under the whole row on a phone, where that
  * column (between the avatar, the balance and the row buttons) is a few words
