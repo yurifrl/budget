@@ -77,6 +77,16 @@ export function banksHint(connections: readonly Pick<ConnectionJson, 'status'>[]
   return visible === 0 ? t('list.none') : t('list.summary', { count: visible, connected });
 }
 
+/**
+ * Where a row's notice (paused-bank guidance, a stored server message) goes:
+ * in the name column on a wide row; under the whole row on a phone, where that
+ * column (between the avatar, the balance and the row buttons) is a few words
+ * wide and the notice squeezed the bank's name out.
+ */
+export function rowNoticeSlot(wide: boolean): 'meta' | 'below' {
+  return wide ? 'meta' : 'below';
+}
+
 /** A bank's display name: the institution, else the provider. */
 export function connectionName(row: Pick<ConnectionJson, 'institution' | 'provider'>): string {
   return row.institution ?? row.provider;

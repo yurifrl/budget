@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { AccountRow } from '@/budget/data/rows';
-import { railAccountBalance, railSections, railSectionTotal, shellGate } from './rail.logic';
+import { railAccountBalance, railSections, railSectionTotal, shellGate, showsTransactionFab } from './rail.logic';
 
 const acc = (id: string, account_group: AccountRow['account_group'], type: AccountRow['type']) => ({ id, account_group, type });
 
@@ -114,5 +114,23 @@ describe('shellGate', () => {
 
   test('a failed list goes home, where the error and a retry are shown', () => {
     expect(gate({ activeId: 'b1', budgets: undefined, isError: true })).toBe('home');
+  });
+});
+
+describe('showsTransactionFab', () => {
+  test('budget pages keep the FAB', () => {
+    for (const p of ['/overview', '/plan', '/spending', '/accounts', '/reflect', '/payees']) {
+      expect(showsTransactionFab(p)).toBe(true);
+    }
+  });
+
+  test('bank setup pages hide it (it covered "Connect another bank")', () => {
+    for (const p of ['/connect-bank', '/connection', '/pluggy-keys', '/pluggy-keys/', '/pluggy-keys?reason=connect']) {
+      expect(showsTransactionFab(p)).toBe(false);
+    }
+  });
+
+  test('only exact routes match, not prefixes', () => {
+    expect(showsTransactionFab('/connection-history')).toBe(true);
   });
 });
