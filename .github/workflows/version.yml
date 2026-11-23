@@ -1,5 +1,7 @@
-# Release marker: validate `api/VERSION` and cut the `v<VERSION>` tag the
-# Release workflow builds and deploys from.
+# Server release marker: validate `api/VERSION` and cut the `v<VERSION>` tag
+# the Release workflow builds and deploys from (web, api, admin images + k8s
+# pin). The iOS app is released separately from client/VERSION by
+# app-release.yml (tag app-v<VERSION>); nothing here reads client/VERSION.
 #
 # `task release` bumps api/VERSION and pushes main; this workflow validates the
 # value, generates release notes (scripts/release-changelog.ts via OpenRouter

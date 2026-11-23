@@ -156,7 +156,7 @@ GitHub's REST API has no endpoint for this.
 cd ~/Workdir/Yuri/budget/client
 bunx eas-cli login
 bunx eas-cli init                 # creates the EAS project for slug `budget`, owner yurifrl
-bunx eas-cli build:configure      # creates eas.json (release.yml uses profile `production`)
+bunx eas-cli build:configure      # creates eas.json (app-release.yml uses profile `production`)
 ```
 
 - Put the printed projectId into `client/app.config.ts` `extra.eas.projectId`
@@ -166,6 +166,9 @@ bunx eas-cli build:configure      # creates eas.json (release.yml uses profile `
 - `gh secret set EXPO_APPLE_APP_SPECIFIC_PASSWORD --repo yurifrl/budget`
   (appleid.apple.com > App-Specific Passwords).
 - `gh variable set EAS_ENABLED --body true --repo yurifrl/budget`.
+- Since 2026-11-23 the app ships on its own: `task release:app` (bumps
+  `client/VERSION`, `app-release.yml` builds and submits). `task release`
+  never submits the app.
 - App Store Connect: new app, bundle id `live.syscd.budget` (register the
   identifier at developer.apple.com first, or let `eas build` do it), name
   "Budget". Android / Play: not now (decision D7); the package is also

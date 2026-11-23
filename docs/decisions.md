@@ -301,7 +301,7 @@ unchanged; this is a move, not a refactor.
 
 ```
 client/
-  VERSION                 app release version (YYYY.MM.DD[-NN]), read by app.config.ts
+  VERSION                 iOS app release version (YYYY.MM.DD[-NN]), read by app.config.ts
   rn-web-events.d.ts      onContextMenu on ViewProps (desktop-web right-click menus)
   src/
     app/                  routes only
@@ -1822,3 +1822,34 @@ The client screen for own keys (the next task; the client only got the
 `paused` labels so existing screens keep working), admin changes, a rate-limit
 queue per credential, key rotation tooling.
 
+## Separate server and iOS app releases (budget-vnma, 2026-11-23)
+
+Why: `task release` bumped `api/VERSION` and `client/VERSION` in lockstep and
+`release.yml` ran the EAS build + App Store submit in the same run as the
+images (gated only by `EAS_ENABLED`, which is on). Every server hotfix (the
+migration 0106 fix among them) therefore also built and submitted the iOS
+app. The two now ship independently.
+
+- Server release = web + api + admin images + the `k8s/values.yaml` pin.
+  Version `api/VERSION`, tag `v<VERSION>`, reported by `/health`. `task
+  release` bumps only that file; `version.yml` tags and dispatches
+  `release.yml`, which no longer has an app job. CHANGELOG.md sections and
+  the "latest" GitHub release stay server-only (`release-changelog.ts` reads
+  `v20*` tags and drops `release: app-v` commits).
+- iOS app release = `client/VERSION`, its own `YYYY.MM.DD[-NN]` sequence, tag
+  `app-v<VERSION>` (release.yml's `v*` tag trigger does not match it),
+  workflow `app-release.yml` (push to main changing `client/VERSION`, or
+  `workflow_dispatch` to rebuild), EAS build + submit still gated by
+  `vars.EAS_ENABLED`. `task release:app` bumps only that file. GitHub release
+  `app-v<VERSION>`, `--latest=false`, notes generated from the previous app
+  tag.
+- `scripts/release-bump.ts` takes the target (`api|client`) and writes only
+  that file (`scripts/release-bump.test.ts`; `task test` runs it).
+- The web image is built from `client/` but ships with the server release, so
+  it shows the server version: `Dockerfile.web` passes `api/VERSION` as
+  `WEB_RELEASE_VERSION`, which `app.config.ts` prefers over `client/VERSION`.
+  EAS never sets it, so the iOS app shows its own version. Nothing requires
+  the two files to be equal.
+- Rejected: one version with an "app too" flag. The App Store marketing
+  version only needs to move when the app changes, and a flag on a shared
+  version keeps the two coupled.

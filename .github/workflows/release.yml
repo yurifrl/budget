@@ -1,4 +1,7 @@
-# Build + publish a release for an existing version marker.
+# Server release: build + publish the web, api and admin images for an
+# existing version marker and roll the cluster. The iOS app is NOT part of this
+# workflow: it has its own version (client/VERSION), tag (app-v<VERSION>) and
+# workflow (app-release.yml); see docs/decisions.md 2026-11-23.
 #
 # Triggers: version.yml's workflow_dispatch after it cuts the v<VERSION> tag,
 # a direct `v*` tag push (rescue path: builds that exact tag), or a manual
@@ -10,21 +13,17 @@
 #             fail fast on a malformed value.
 #   images  - build and push the web, api and admin Docker images to GHCR
 #             (linux/amd64 + linux/arm64; tags: latest, <version>, sha).
-#   app     - OPTIONAL, disabled by default: EAS build + store submit. Runs
-#             only when the repo variable EAS_ENABLED is 'true' (the EAS
-#             project does not exist yet). Not a dependency of deploy.
 #   deploy  - pin <version> in k8s/values.yaml on main (ArgoCD rolls the
 #             Deployments from it; budget-worker takes the budget-api tag)
 #             and create the idempotent GitHub release.
 #
-# Repo variables:  EAS_ENABLED ('true' enables the app job)
-# Repo secrets:    EXPO_TOKEN, EXPO_APPLE_APP_SPECIFIC_PASSWORD (app job only)
-#                  GITHUB_TOKEN is provided by Actions.
+# Repo secrets:    GITHUB_TOKEN is provided by Actions.
 name: Release
 
 on:
   push:
     tags:
+      # Server tags only: `v2026.11.23`. App tags (`app-v...`) do not match.
       - 'v*'
   workflow_dispatch:
     inputs:
@@ -130,60 +129,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
           sbom: false
-
-  app:
-    name: EAS build and submit (optional)
-    needs: resolve
-    # Disabled until the EAS project exists: set the repo variable
-    # EAS_ENABLED=true (and the secrets below) to turn it on.
-    if: ${{ vars.EAS_ENABLED == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    defaults:
-      run:
-        working-directory: client
-    # Job-level auth: every eas step must see EXPO_TOKEN itself.
-    env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-    steps:
-      # Checkout first: the job's default working-directory (client/) does
-      # not exist until the repo is checked out.
-      - uses: actions/checkout@v7
-
-      - name: Verify EXPO_TOKEN secret exists
-        run: |
-          if [ -z "$EXPO_TOKEN" ]; then
-            echo "::error::Secret EXPO_TOKEN is not set. Create a Personal access token at https://expo.dev/settings/access-tokens, then: gh secret set EXPO_TOKEN --repo $GITHUB_REPOSITORY"
-            exit 1
-          fi
-
-      - name: Read Bun version from mise.toml
-        id: bun
-        working-directory: .
-        run: echo "version=$(sed -n 's/^bun *= *"\(.*\)"/\1/p' mise.toml)" >> "$GITHUB_OUTPUT"
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ steps.bun.outputs.version }}
-
-      # Every eas command evaluates app.config.ts on the runner, which needs
-      # node_modules (and shared/node_modules for the zod link).
-      - name: Install shared, then client
-        run: |
-          (cd ../shared && bun install --frozen-lockfile)
-          bun install --frozen-lockfile
-
-      - uses: expo/expo-github-action@v9
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Build production iOS in EAS (waits for completion)
-        run: eas build --platform ios --profile production --non-interactive
-
-      - name: Submit latest build to App Store Connect
-        run: eas submit --platform ios --latest --profile production --non-interactive
-        env:
-          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
 
   deploy:
     name: Deploy (ArgoCD rollout)

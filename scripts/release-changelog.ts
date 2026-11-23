@@ -1,8 +1,8 @@
 /**
  * Release changelog: generate the CHANGELOG.md section for one release.
  *
- * Input is the commit range from the previous `vYYYY.MM.DD[-NN]` tag to
- * HEAD. When OPENROUTER_API_KEY is set, an LLM condenses the commits into
+ * Server releases only. Input is the commit range from the previous
+ * `vYYYY.MM.DD[-NN]` tag to HEAD (iOS app tags `app-v...` are ignored). When OPENROUTER_API_KEY is set, an LLM condenses the commits into
  * a title plus user-facing bullets; without it (or on any API failure) a
  * plain commit-list section is emitted instead, so the release pipeline
  * never blocks on the AI. `--dry` prints the section without touching
@@ -50,7 +50,7 @@ const commits = execSync(`git log ${range} --no-merges --pretty=%s`, { encoding:
   .slice(0, MAX_COMMITS);
 
 /** Commit subjects the changelog must not surface (bookkeeping noise). */
-const NOISE = /^(chore\(task\)|chore: bump version|docs: release notes|deploy: images)/;
+const NOISE = /^(chore\(task\)|chore: bump version|docs: release notes|deploy: images|release: app-v)/;
 
 async function aiSection(): Promise<string | undefined> {
   const key = process.env.OPENROUTER_API_KEY;

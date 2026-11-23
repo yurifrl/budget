@@ -1,0 +1,164 @@
+# iOS app release: its own version, tag and pipeline, separate from the server
+# release (version.yml + release.yml build the web/api/admin images and roll
+# the cluster; they never build or submit the app). See docs/decisions.md
+# 2026-11-23.
+#
+# Version source: client/VERSION (YYYY.MM.DD[-NN], an independent sequence from
+# api/VERSION; client/app.config.ts turns it into the iOS marketing version).
+# Tag: app-v<VERSION> (release.yml's `v*` tag trigger does not match it).
+#
+# Triggers:
+#   push to main that changes client/VERSION (`task release:app`): validate,
+#     tag app-v<VERSION> on that commit, EAS build + App Store submit, create
+#     the GitHub release (not marked latest: "latest" stays the server one).
+#     An existing tag means the version is already released: nothing runs.
+#   workflow_dispatch: rebuild + resubmit the current client/VERSION (tags it
+#     first if the tag is missing). For a new store build, bump with
+#     `task release:app` instead: App Store Connect rejects a marketing
+#     version that is already approved.
+#
+# Repo variables:  EAS_ENABLED ('true' runs the build/submit job; otherwise
+#                  the run only tags)
+# Repo secrets:    EXPO_TOKEN, EXPO_APPLE_APP_SPECIFIC_PASSWORD
+#                  GITHUB_TOKEN is provided by Actions.
+name: App release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - client/VERSION
+  workflow_dispatch:
+
+concurrency:
+  group: app-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Tag app-v<VERSION>
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build: ${{ steps.check.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read version from client/VERSION
+        id: version
+        run: |
+          version="$(tr -d '[:space:]' < client/VERSION)"
+          if ! [[ "$version" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]{2})?$ ]]; then
+            echo "::error::client/VERSION must be YYYY.MM.DD[-NN], got '$version'"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether tag exists on remote
+        id: check
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/app-v${VERSION}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+              echo "build=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              echo "app-v${VERSION} is already released, skipping the build"
+            fi
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push app tag
+        if: steps.check.outputs.exists == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git tag "app-v${VERSION}" "$GITHUB_SHA"
+          git push origin "refs/tags/app-v${VERSION}"
+
+  build:
+    name: EAS build and submit (iOS)
+    needs: tag
+    # EAS_ENABLED gates the store pipeline (set the secrets below first).
+    if: ${{ vars.EAS_ENABLED == 'true' && needs.tag.outputs.build == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: client
+    # Job-level auth: every eas step must see EXPO_TOKEN itself.
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      VERSION: ${{ needs.tag.outputs.version }}
+    steps:
+      # Checkout first: the job's default working-directory (client/) does
+      # not exist until the repo is checked out. Build the tagged commit.
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/app-v${{ needs.tag.outputs.version }}
+          fetch-depth: 0
+
+      - name: Verify EXPO_TOKEN secret exists
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Secret EXPO_TOKEN is not set. Create a Personal access token at https://expo.dev/settings/access-tokens, then: gh secret set EXPO_TOKEN --repo $GITHUB_REPOSITORY"
+            exit 1
+          fi
+
+      - name: Read Bun version from mise.toml
+        id: bun
+        working-directory: .
+        run: echo "version=$(sed -n 's/^bun *= *"\(.*\)"/\1/p' mise.toml)" >> "$GITHUB_OUTPUT"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ steps.bun.outputs.version }}
+
+      # Every eas command evaluates app.config.ts on the runner, which needs
+      # node_modules (and shared/node_modules for the zod link).
+      - name: Install shared, then client
+        run: |
+          (cd ../shared && bun install --frozen-lockfile)
+          bun install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build production iOS in EAS (waits for completion)
+        run: eas build --platform ios --profile production --non-interactive
+
+      - name: Submit latest build to App Store Connect
+        run: eas submit --platform ios --latest --profile production --non-interactive
+        env:
+          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
+
+      - name: Create GitHub release
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Idempotent (dispatch re-runs). Notes: commits since the previous
+        # app-v tag; never marked latest, so the server release keeps that.
+        run: |
+          if gh release view "app-v$VERSION" >/dev/null 2>&1; then
+            echo "Release app-v$VERSION already exists, skipping"
+            exit 0
+          fi
+          prev="$(git tag -l 'app-v20*' --sort=-creatordate | grep -vx "app-v${VERSION}" | head -n1 || true)"
+          if [ -n "$prev" ]; then
+            gh release create "app-v$VERSION" --title "iOS app v$VERSION" --latest=false \
+              --generate-notes --notes-start-tag "$prev"
+          else
+            gh release create "app-v$VERSION" --title "iOS app v$VERSION" --latest=false --generate-notes
+          fi

@@ -16,8 +16,16 @@ declare const __dirname: string;
  */
 const VERSION_PATTERN = /^\d{4}\.\d{2}\.\d{2}(-\d{2})?$/;
 
+/**
+ * `WEB_RELEASE_VERSION` overrides `client/VERSION` for the web export only:
+ * the web image ships with the server release, so deploy/Dockerfile.web sets
+ * it to `api/VERSION` and the menu shows the server version on web. Native
+ * builds (EAS) never set it, so the iOS app keeps its own `client/VERSION`.
+ */
 function readAppVersion(): string {
-  const version = fs.readFileSync(path.join(__dirname, 'VERSION'), 'utf8').trim();
+  const version = (
+    process.env.WEB_RELEASE_VERSION || fs.readFileSync(path.join(__dirname, 'VERSION'), 'utf8')
+  ).trim();
   if (!VERSION_PATTERN.test(version))
     throw new Error(`VERSION must be YYYY.MM.DD[-NN] (e.g. 2026.11.07 or 2026.11.07-01), got "${version}"`);
   return version;

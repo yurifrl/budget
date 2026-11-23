@@ -5,7 +5,8 @@
 # values source of the budget Application: a changed tag deep-merges over the
 # chart's `latest` fallback, sync updates the Deployments, and the pods roll.
 # Pushing a new api/VERSION is therefore the whole release+deploy flow, with no
-# manual cluster steps.
+# manual cluster steps. client/VERSION (the iOS app, app-release.yml) never
+# touches this file.
 #
 # Keys are Deployment names (chart `deployments[].name`); values are image
 # tags (no `v` prefix, matching what CI pushes to GHCR).
