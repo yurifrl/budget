@@ -1,5 +1,14 @@
 # Changelog
 
+## v2026.11.23-03 2026-11-23 release
+
+### Changed
+
+- release: v2026.11.23-03
+- tasks: close budget-n363
+- fix(migrations): 0106 without budgets FK, robust to orphan/NULL-budget/duplicate rows
+
+
 ## v2026.11.23-02 2026-11-23 release
 
 ### Changed
