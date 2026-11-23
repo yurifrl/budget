@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 
@@ -108,32 +108,38 @@ export function TxnRowMenu({
 
   const { left: cardLeft, top: cardTop } = menuCardPosition({ x: anchor.x, y: anchor.y }, { w: winW, h: winH }, cardSize);
 
+  // In a transparent Modal (a portal on web): the backdrop then covers the
+  // whole window, so the page-coordinate anchor lands where the press was
+  // even with the desktop rail beside the register, and the card sits above
+  // the phone shell's "+ Transaction" FAB and tab bar.
   return (
-    <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t('menu.closeLabel')}>
-      {/* Swallow clicks so item presses don't bubble to the backdrop. */}
-      <Pressable
-        onPress={(e) => e.stopPropagation()}
-        onLayout={(e) =>
-          setCardSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
-        }
-        style={[styles.card, { left: cardLeft, top: cardTop }]}>
-        {subLabel ? (
-          <Pressable
-            style={styles.titleRow}
-            onPress={() => setPanel('main')}
-            accessibilityLabel={t('menu.backLabel')}>
-            <Ionicons name="chevron-back" size={13} color={colors.muted} />
-            <Text style={styles.title}>{subLabel}</Text>
-          </Pressable>
-        ) : null}
-        {panel === 'main' ? <MainPanel sections={mainSections} onItem={(key) => mainActions[key]()} /> : null}
-        {panel === 'match' ? <MatchPanel candidates={candidates} matched={matched} onMatch={match} /> : null}
-        {panel === 'repeat' ? <RepeatPanel onPick={makeRepeat} /> : null}
-        {panel === 'flag' ? <FlagPanel flagLabels={flagLabels} onPick={setFlag} /> : null}
-        {panel === 'category' ? <CategoryPanel budget={budget} onPick={categorize} /> : null}
-        {panel === 'move' ? <MovePanel targets={moveTargets} onPick={moveTo} /> : null}
+    <Modal transparent visible animationType="none" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t('menu.closeLabel')}>
+        {/* Swallow clicks so item presses don't bubble to the backdrop. */}
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          onLayout={(e) =>
+            setCardSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
+          }
+          style={[styles.card, { left: cardLeft, top: cardTop }]}>
+          {subLabel ? (
+            <Pressable
+              style={styles.titleRow}
+              onPress={() => setPanel('main')}
+              accessibilityLabel={t('menu.backLabel')}>
+              <Ionicons name="chevron-back" size={13} color={colors.muted} />
+              <Text style={styles.title}>{subLabel}</Text>
+            </Pressable>
+          ) : null}
+          {panel === 'main' ? <MainPanel sections={mainSections} onItem={(key) => mainActions[key]()} /> : null}
+          {panel === 'match' ? <MatchPanel candidates={candidates} matched={matched} onMatch={match} /> : null}
+          {panel === 'repeat' ? <RepeatPanel onPick={makeRepeat} /> : null}
+          {panel === 'flag' ? <FlagPanel flagLabels={flagLabels} onPick={setFlag} /> : null}
+          {panel === 'category' ? <CategoryPanel budget={budget} onPick={categorize} /> : null}
+          {panel === 'move' ? <MovePanel targets={moveTargets} onPick={moveTo} /> : null}
+        </Pressable>
       </Pressable>
-    </Pressable>
+    </Modal>
   );
 }
 

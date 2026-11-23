@@ -72,6 +72,13 @@ function DetailBody({ data, phone, onBack }: { data: TransactionDetails; phone: 
   const payee = displaySystemName(txn.payee_name ?? '') || t('screen.noPayee');
   const flag = txn.flag_color ? displayFlagLabel(flagLabels, txn.flag_color as FlagColor) : null;
   const imp = data.import;
+  // Beside the title on wide screens; under it on a phone, where a long
+  // amount would squeeze the payee to a few characters per line.
+  const amount = (
+    <Text style={[styles.amount, txn.amount < 0 ? styles.amountOut : styles.amountIn]} selectable>
+      {formatMilli(fmt, txn.amount)}
+    </Text>
+  );
 
   return (
     <>
@@ -84,12 +91,11 @@ function DetailBody({ data, phone, onBack }: { data: TransactionDetails; phone: 
           <Text style={styles.title} numberOfLines={2} selectable>
             {payee}
           </Text>
+          {phone ? amount : null}
           <Text style={styles.subtitle}>{[fmt.formatDateLong(txn.date), txn.account_name].join(' · ')}</Text>
           {txn.deleted ? <Text style={styles.badge}>{t('screen.deleted')}</Text> : null}
         </View>
-        <Text style={[styles.amount, txn.amount < 0 ? styles.amountOut : styles.amountIn]}>
-          {formatMilli(fmt, txn.amount)}
-        </Text>
+        {phone ? null : amount}
       </View>
 
       <Section title={t('section.details')}>

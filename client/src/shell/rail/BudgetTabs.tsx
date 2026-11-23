@@ -13,6 +13,10 @@ import { t } from '../i18n';
 export function BudgetTabs({ isPhone }: { isPhone: boolean }) {
   return (
     <Tabs
+      // router.back() from a pushed page (transaction, linked account,
+      // import) returns to the route it was opened from, with its params
+      // (e.g. /accounts?account=…), not to the first tab (Overview).
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.indigo2,
