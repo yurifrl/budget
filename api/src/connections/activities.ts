@@ -77,19 +77,27 @@ function activityContext(): Context | null {
 }
 const beat = (detail?: unknown): void => activityContext()?.heartbeat(detail);
 
+/**
+ * Runs `fn` while heartbeating on a timer, for the whole sync: upstream pulls
+ * (~90s per account), the phase-2 row loop, card-payment pairing and COMMIT.
+ * The timer is always cleared, on success and on error.
+ */
+export async function withHeartbeat<T>(
+  fn: () => Promise<T>,
+  heartbeat: () => void = () => beat(),
+  everyMs: number = HEARTBEAT_EVERY_MS,
+): Promise<T> {
+  const timer = setInterval(heartbeat, everyMs);
+  try {
+    return await fn();
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 type Tracked = <T>(runId: string, body: (ctx: JobContext) => Promise<T>) => Promise<T>;
 
 export function createConnectionsActivities(db: Pool, trackedAttempt: Tracked) {
-  /** Runs `fn` while heartbeating on a timer (the pull itself can take ~90s per account). */
-  async function withHeartbeat<T>(fn: () => Promise<T>): Promise<T> {
-    const timer = setInterval(() => beat(), HEARTBEAT_EVERY_MS);
-    try {
-      return await fn();
-    } finally {
-      clearInterval(timer);
-    }
-  }
-
   return {
     /** The sync itself: item preflight, pull, all-or-nothing write, status bookkeeping. */
     async connectionsSyncWork(args: { runId: string; connectionId: string; mode: SyncMode }): Promise<Record<string, unknown>> {
@@ -121,7 +129,7 @@ export function createConnectionsActivities(db: Pool, trackedAttempt: Tracked) {
               connectionId: row.id,
               aggregator,
               ignoreWatermark: args.mode === 'reimport',
-              onProgress: () => beat('account'),
+              onProgress: () => beat('progress'), // per account and per row; the SDK throttles sends
               // Cancel before phase 2 commits: the throw rolls the transaction back.
               beforeCommit: () => activityContext()?.cancellationSignal.throwIfAborted(),
             });
