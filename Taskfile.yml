@@ -57,6 +57,7 @@ tasks:
       - task: test:api
       - cd client && bun test
       - cd admin && bun test
+      - cd scripts && bun test
 
   test:api:
     desc: bun test in api only, with the DB-backed suites required (no silent skips)
@@ -142,7 +143,7 @@ tasks:
       - docker build -f deploy/Dockerfile.admin -t budget-admin:dev .
 
   release:
-    desc: Bump api/VERSION and client/VERSION in lockstep (UTC date; -NN suffix for same-day re-releases), commit and push to main. CI tags, builds the web/api/admin images, pins k8s/values.yaml and creates the GitHub release
+    desc: Server release. Bump ONLY api/VERSION (UTC date; -NN suffix for same-day re-releases), commit and push to main. CI (version.yml -> release.yml) tags v<VERSION>, builds the web/api/admin images, pins k8s/values.yaml and creates the GitHub release. Never touches the iOS app (see release:app)
     cmds:
       - |
         branch="$(git rev-parse --abbrev-ref HEAD)"
@@ -150,7 +151,21 @@ tasks:
           echo "task release must run on main (HEAD is '$branch', merge first)" >&2
           exit 1
         fi
-      - bun scripts/release-bump.ts
-      - git add api/VERSION client/VERSION
-      - 'git commit -m "release: v$(cat api/VERSION)" -- api/VERSION client/VERSION'
+      - bun scripts/release-bump.ts api
+      - git add api/VERSION
+      - 'git commit -m "release: v$(cat api/VERSION)" -- api/VERSION'
+      - git push origin HEAD:main
+
+  release:app:
+    desc: iOS app release. Bump ONLY client/VERSION (its own YYYY.MM.DD[-NN] sequence), commit and push to main. CI (app-release.yml) tags app-v<VERSION>, runs the EAS production iOS build and submits it to App Store Connect (when the repo variable EAS_ENABLED is 'true'). Does not build images or deploy the server
+    cmds:
+      - |
+        branch="$(git rev-parse --abbrev-ref HEAD)"
+        if [ "$branch" != "main" ]; then
+          echo "task release:app must run on main (HEAD is '$branch', merge first)" >&2
+          exit 1
+        fi
+      - bun scripts/release-bump.ts client
+      - git add client/VERSION
+      - 'git commit -m "release: app-v$(cat client/VERSION)" -- client/VERSION'
       - git push origin HEAD:main

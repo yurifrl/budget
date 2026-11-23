@@ -35,7 +35,8 @@ task test:e2e     # api e2e without Temporal (scripts/e2e-api.sh)
 task deps         # Postgres (reuse :5432 or compose :55432) + Temporal :57233
 task run          # api :3100, worker, admin :5191, web :8091 (after `task deps`)
 task admin:build  # admin production build
-task release      # bump api/VERSION + client/VERSION, push main (CI does the rest)
+task release      # server: bump api/VERSION only, push main (CI: web/api/admin images + k8s pin)
+task release:app  # iOS app: bump client/VERSION only, push main (CI: EAS build + App Store submit)
 ```
 
 Docker images (context = repo root): `deploy/Dockerfile.{web,api,admin}`. On

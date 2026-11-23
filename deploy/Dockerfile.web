@@ -30,9 +30,16 @@ COPY client client
 ARG EXPO_PUBLIC_API_URL=https://budget-api.syscd.live
 ENV EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL
 
+# The web image ships with the SERVER release (tag v<api/VERSION>), not the
+# iOS app release (client/VERSION, its own sequence). app.config.ts takes
+# WEB_RELEASE_VERSION over client/VERSION, so the web menu shows the server
+# version. Copied as a single file so only a version bump busts this layer.
+COPY api/VERSION /tmp/server-VERSION
+
 # `expo export` exits on its own here; no `timeout ... || true` wrapper. If a
 # future SDK hangs on exit, fail the build instead of masking a bad export.
-RUN cd client && bunx expo export --platform web --output-dir dist \
+RUN cd client && WEB_RELEASE_VERSION="$(cat /tmp/server-VERSION)" \
+      bunx expo export --platform web --output-dir dist \
     && test -f dist/index.html
 
 # ---- Serve stage --------------------------------------------------------------

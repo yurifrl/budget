@@ -1,19 +1,28 @@
 /**
- * Release bump: move `api/VERSION` (the release source: image tags, /health) and
- * `client/VERSION` (read by client/app.config.ts) in lockstep to the next version (today when
- * older, the next same-day `-NN` suffix otherwise, the day after only when the
- * suffix is exhausted). Pattern: `YYYY.MM.DD[-NN]`.
+ * Release bump: move ONE release target's VERSION file to the next version
+ * (today when older, the next same-day `-NN` suffix otherwise, the day after
+ * only when the suffix is exhausted). Pattern: `YYYY.MM.DD[-NN]`.
  *
- * Committing and pushing is the caller's job (`task release`): a push of a
- * changed api/VERSION triggers `.github/workflows/version.yml`, which tags it
- * and dispatches `release.yml`.
+ * Targets (independent sequences, see docs/decisions.md 2026-11-23):
+ *   api    -> `api/VERSION`: the server release (web, api, admin images, the
+ *             k8s pin, /health, tag `v<VERSION>`). `task release`.
+ *   client -> `client/VERSION`: the iOS app release (EAS build + App Store
+ *             submit, tag `app-v<VERSION>`). `task release:app`.
  *
- * Zero dependencies: `bun scripts/release-bump.ts` runs with nothing installed.
+ * Committing and pushing is the caller's job: a push of a changed api/VERSION
+ * triggers `.github/workflows/version.yml` (tags it, dispatches release.yml);
+ * a push of a changed client/VERSION triggers `.github/workflows/app-release.yml`.
+ *
+ * Zero dependencies: `bun scripts/release-bump.ts api|client` runs with
+ * nothing installed.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 
 export const APP_VERSION_PATTERN = /^\d{4}\.\d{2}\.\d{2}(-\d{2})?$/;
+
+export const RELEASE_TARGETS = ['api', 'client'] as const;
+export type ReleaseTarget = (typeof RELEASE_TARGETS)[number];
 
 export function nextAppVersion(current: string, now: Date = new Date()): string {
   if (!APP_VERSION_PATTERN.test(current)) {
@@ -28,9 +37,25 @@ export function nextAppVersion(current: string, now: Date = new Date()): string 
   return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10).replaceAll('-', '.');
 }
 
+export function parseTarget(arg: string | undefined): ReleaseTarget {
+  if (arg && (RELEASE_TARGETS as readonly string[]).includes(arg)) return arg as ReleaseTarget;
+  throw new Error(`usage: bun scripts/release-bump.ts ${RELEASE_TARGETS.join('|')} (got ${arg ?? 'nothing'})`);
+}
+
+/** Bump `<root>/<target>/VERSION` in place and return the new version. Touches no other file. */
+export function bumpTarget(root: string, target: ReleaseTarget, now: Date = new Date()): string {
+  const file = path.join(root, target, 'VERSION');
+  const next = nextAppVersion(fs.readFileSync(file, 'utf8').trim(), now);
+  fs.writeFileSync(file, `${next}\n`);
+  return next;
+}
+
 if (import.meta.main) {
-  const root = path.join(import.meta.dir, '..');
-  const next = nextAppVersion(fs.readFileSync(path.join(root, 'api', 'VERSION'), 'utf8').trim());
-  for (const dir of ['api', 'client']) fs.writeFileSync(path.join(root, dir, 'VERSION'), `${next}\n`);
-  console.log(next);
+  try {
+    const target = parseTarget(process.argv[2]);
+    console.log(bumpTarget(path.join(import.meta.dir, '..'), target));
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
 }
