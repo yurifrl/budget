@@ -1,9 +1,10 @@
 /**
- * The bank import is idempotent (budget-1iym): the shadow key
- * (provider, external_transaction_id) is global, so a bank id already imported
- * anywhere (deleted by the user, tombstoned by a sync, or living in another
- * account after an unlink + relink) is skipped and counted, never inserted
- * twice; one bad row rolls back alone and the rest of the sync commits.
+ * The bank import is idempotent (budget-1iym): within a budget the shadow key
+ * (budget, provider, external_transaction_id) is unique, so a bank id already
+ * imported in the budget (deleted by the user, tombstoned by a sync, or living
+ * in another account after an unlink + relink) is skipped and counted, never
+ * inserted twice; one bad row rolls back alone and the rest of the sync
+ * commits. Other budgets import their own copy (sync-per-budget.test.ts).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
@@ -16,10 +17,8 @@ import type { AggregatedTransaction, BankAggregator } from './types';
 const PROVIDER = 'testprovider-idempotent';
 const userId = crypto.randomUUID();
 const budgetId = crypto.randomUUID();
-const otherBudgetId = crypto.randomUUID();
 const oldAccountId = crypto.randomUUID();
 const newAccountId = crypto.randomUUID();
-const otherBudgetAccountId = crypto.randomUUID();
 const EXTERNAL_ACCOUNT = 'up-acc-idem-1';
 const EXTERNAL_ITEM = 'up-item-idem-1';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -91,7 +90,7 @@ const expectLedgerConsistent = async (accountId: string) => {
 };
 
 async function cleanup() {
-  await pool.query('DELETE FROM public.budgets WHERE id = ANY($1)', [[budgetId, otherBudgetId]]);
+  await pool.query('DELETE FROM public.budgets WHERE id = ANY($1)', [[budgetId]]);
   await pool.query('DELETE FROM public.connections WHERE provider = $1', [PROVIDER]);
   await pool.query('DELETE FROM public.users WHERE id = $1', [userId]);
 }
@@ -103,19 +102,16 @@ beforeAll(async () => {
     `INSERT INTO public.users (id, google_sub, email, role, status) VALUES ($1, $2, 'sync-idem@syscd.local', 'user', 'active')`,
     [userId, userId],
   );
-  await pool.query('INSERT INTO public.budgets (id, name, owner_user_id) VALUES ($1, $2, $3), ($4, $5, $3)', [
+  await pool.query('INSERT INTO public.budgets (id, name, owner_user_id) VALUES ($1, $2, $3)', [
     budgetId,
     'sync-idempotent',
     userId,
-    otherBudgetId,
-    'sync-idempotent-other',
   ]);
   await pool.query(
     `INSERT INTO public.accounts (id, budget_id, name, type, account_group) VALUES
        ($1, $2, 'Itaú conta (old)', 'checking', 'CASH'),
-       ($3, $2, 'Itaú conta', 'checking', 'CASH'),
-       ($4, $5, 'Elsewhere', 'checking', 'CASH')`,
-    [oldAccountId, budgetId, newAccountId, otherBudgetAccountId, otherBudgetId],
+       ($3, $2, 'Itaú conta', 'checking', 'CASH')`,
+    [oldAccountId, budgetId, newAccountId],
   );
   const conn = await store.upsertConnection({
     userId,
@@ -175,22 +171,9 @@ describe.skipIf(!dbReady)('connections sync is idempotent', () => {
     await expectLedgerConsistent(oldAccountId);
   });
 
-  test('rows of an old unlinked account stay there when the bank account is relinked elsewhere', async () => {
-    // A row of this bank account that ended up in another budget's account.
+  test('rows of an old unlinked account stay there when the bank account is relinked in the same budget', async () => {
     upstream = [up('i1'), up('i2'), up('i3'), up('i4')];
     await sync(); // i4 imported into the old account
-    const [i4] = await rowsFor('i4');
-    await pool.query('UPDATE public.transactions SET account_id = $2, budget_id = $3 WHERE id = $1', [
-      i4!.id,
-      otherBudgetAccountId,
-      otherBudgetId,
-    ]);
-    // Move its balance along with it (uncleared, as imported).
-    await pool.query('UPDATE public.accounts SET uncleared_balance = uncleared_balance - $2 WHERE id = $1', [oldAccountId, i4!.amount]);
-    await pool.query('UPDATE public.accounts SET uncleared_balance = uncleared_balance + $2 WHERE id = $1', [
-      otherBudgetAccountId,
-      i4!.amount,
-    ]);
 
     // Unlink the old account (rows and shadows stay) and link the new one.
     await link(newAccountId);
@@ -201,13 +184,10 @@ describe.skipIf(!dbReady)('connections sync is idempotent', () => {
       added: 1,
       skipped_deleted: 2,
       skipped_other_account: 2,
-      skipped_accounts: [
-        { account_id: oldAccountId, name: 'Itaú conta (old)', count: 1 },
-        { account_id: otherBudgetAccountId, name: null, count: 1 },
-      ],
+      skipped_accounts: [{ account_id: oldAccountId, name: 'Itaú conta (old)', count: 2 }],
     });
     expect((await rowsFor('i3')).map((r) => [r.account_id, r.deleted])).toEqual([[oldAccountId, false]]);
-    expect((await rowsFor('i4')).map((r) => r.account_id)).toEqual([otherBudgetAccountId]);
+    expect((await rowsFor('i4')).map((r) => r.account_id)).toEqual([oldAccountId]);
     expect((await rowsFor('i5')).map((r) => r.account_id)).toEqual([newAccountId]);
 
     // Again: i5 is now a duplicate, the rest still skipped.

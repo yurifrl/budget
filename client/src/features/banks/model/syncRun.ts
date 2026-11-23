@@ -83,7 +83,7 @@ export function describeSyncOutcome(
 
 /**
  * What the last finished run left out, one line each: bank ids already
- * imported into another account (per account), ones deleted before (they stay
+ * imported into another account of this budget (per account), ones deleted before (they stay
  * deleted), and rows that failed to import. Empty for runs without skips,
  * and for older runs whose result has no such fields.
  */
@@ -91,13 +91,12 @@ export function syncSkipLines(run: SyncRunJson | null | undefined): string[] {
   const result = run?.status === 'succeeded' ? run.result : null;
   if (!result) return [];
   const lines: string[] = [];
-  let otherBudget = 0;
   for (const skipped of result.skipped_accounts ?? []) {
-    if (skipped.count <= 0) continue;
-    if (skipped.name == null) otherBudget += skipped.count;
-    else lines.push(t('syncRun.skippedOtherAccount', { count: skipped.count, account: skipped.name }));
+    // A null name only appears in runs recorded before bank ids were scoped
+    // per budget (it meant another budget's account): not shown.
+    if (skipped.count <= 0 || skipped.name == null) continue;
+    lines.push(t('syncRun.skippedOtherAccount', { count: skipped.count, account: skipped.name }));
   }
-  if (otherBudget > 0) lines.push(t('syncRun.skippedOtherBudget', { count: otherBudget }));
   if ((result.skipped_deleted ?? 0) > 0) lines.push(t('syncRun.skippedDeleted', { count: result.skipped_deleted ?? 0 }));
   if ((result.failed ?? 0) > 0) lines.push(t('syncRun.failedRows', { count: result.failed ?? 0 }));
   return lines;

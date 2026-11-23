@@ -97,7 +97,7 @@ describe('view helpers', () => {
 });
 
 describe('syncSkipLines', () => {
-  test('one line per account, then other budgets, deleted and failed', () => {
+  test('one line per account, then deleted and failed; older null-name entries are not shown', () => {
     const r = run({
       status: 'succeeded',
       result: {
@@ -114,7 +114,6 @@ describe('syncSkipLines', () => {
     });
     expect(syncSkipLines(r)).toEqual([
       '97 skipped: already imported in “Itaú conta (old)”',
-      '3 skipped: already imported in another budget',
       '3 skipped: they were deleted before and stay deleted',
       '1 bank transaction could not be imported',
     ]);

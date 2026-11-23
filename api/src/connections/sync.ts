@@ -15,9 +15,11 @@
  * blocked. All writes of one account batch commit in a single server-side
  * transaction, so a partial failure cannot leave balance caches half-moved.
  * Each row runs under its own SAVEPOINT: an unexpected per-row error rolls
- * back that row only (counted in `failed`). A bank id already imported
- * anywhere (deleted, or into another account) is skipped and counted, never
- * inserted twice: re-running a sync is always a no-op.
+ * back that row only (counted in `failed`). Bank-id identity is per budget:
+ * a bank id already imported in the same budget (deleted, or into another
+ * account of that budget) is skipped and counted, never inserted twice, so
+ * re-running a sync is always a no-op. Budgets are isolated: every budget
+ * whose account links the upstream account imports its own copy.
  *
  * Every write into budget's tables (payees, imported rows, refreshes,
  * tombstones, balance deltas, card-payment pairing) goes through budget's
@@ -43,9 +45,9 @@ export interface SyncResult {
   duplicates: number;
   /** Bank ids imported before and since deleted (by the user or a sync tombstone): they stay deleted. */
   skipped_deleted: number;
-  /** Bank ids already imported into another budget account (e.g. an unlinked one): they stay there. */
+  /** Bank ids already imported into another account of the same budget (e.g. an unlinked one): they stay there. */
   skipped_other_account: number;
-  /** Where the `skipped_other_account` rows live; `name` is null when that account is in another budget. */
+  /** Where the `skipped_other_account` rows live (always accounts of the same budget). */
   skipped_accounts: SkippedAccount[];
   /** Rows that failed unexpectedly; each rolled back alone, the rest committed. */
   failed: number;
@@ -55,7 +57,7 @@ export interface SyncResult {
 
 export interface SkippedAccount {
   account_id: string;
-  name: string | null;
+  name: string;
   count: number;
 }
 
@@ -80,36 +82,41 @@ export const emptySyncResult = (): SyncResult => ({
   failures: [],
 });
 
-/** Where a bank id was imported before, whatever its state. */
+/** Where a bank id was imported before in this budget, whatever its state. */
 interface PriorImport {
   transaction_id: string;
   account_id: string;
-  budget_id: string;
   account_name: string;
   deleted: boolean;
 }
 
-/** The row a bank id was imported as, in any account, deleted or not (the shadow key is global). */
+/**
+ * The row a bank id was imported as in this budget, in any of its accounts,
+ * deleted or not (the shadow key is unique per budget). Other budgets are
+ * never looked at: each imports its own copy.
+ */
 async function findImportedBankId(
   pg: Queryable,
+  budgetId: string,
   provider: string,
   externalId: string,
 ): Promise<PriorImport | undefined> {
   const found = await pg.query<PriorImport>(
-    `SELECT t.id AS transaction_id, t.account_id, ac.budget_id, ac.name AS account_name, t.deleted
+    `SELECT t.id AS transaction_id, t.account_id, ac.name AS account_name, t.deleted
      FROM public.connection_transactions s
      JOIN public.transactions t ON t.id = s.transaction_id
      JOIN public.accounts ac ON ac.id = t.account_id
-     WHERE s.provider = $1 AND s.external_transaction_id = $2`,
-    [provider, externalId],
+     WHERE s.budget_id = $1 AND s.provider = $2 AND s.external_transaction_id = $3`,
+    [budgetId, provider, externalId],
   );
   return found.rows[0];
 }
 
 /**
- * Count a bank id that is already imported. Deleted wins (it stays deleted
- * wherever it lives); a live row elsewhere stays in its account; a live row
- * in this account that the import-id lookup missed is left alone (blocked).
+ * Count a bank id that is already imported in this budget. Deleted wins (it
+ * stays deleted); a live row in another account of the budget stays there; a
+ * live row in this account that the import-id lookup missed is left alone
+ * (blocked).
  */
 function recordSkip(result: SyncResult, prior: PriorImport, acc: LinkedAccountRow): void {
   if (prior.deleted) {
@@ -124,12 +131,7 @@ function recordSkip(result: SyncResult, prior: PriorImport, acc: LinkedAccountRo
   const entry = result.skipped_accounts.find((a) => a.account_id === prior.account_id);
   if (entry) entry.count += 1;
   else
-    result.skipped_accounts.push({
-      account_id: prior.account_id,
-      // Another budget's account name is not this budget's to show.
-      name: prior.budget_id === acc.budget_id ? prior.account_name : null,
-      count: 1,
-    });
+    result.skipped_accounts.push({ account_id: prior.account_id, name: prior.account_name, count: 1 });
 }
 
 function recordFailure(result: SyncResult, externalId: string, err: unknown): void {
@@ -438,10 +440,11 @@ async function syncOnce(
           ).rows[0];
 
           if (!existing) {
-            // The shadow key (provider, bank id) is global: a bank id already
-            // imported anywhere (deleted, or into another account) is skipped,
-            // never inserted twice.
-            const prior = await findImportedBankId(pg, row.provider, txn.externalId);
+            // The shadow key (budget, provider, bank id) is per budget: a bank
+            // id already imported in this budget (deleted, or into another of
+            // its accounts) is skipped, never inserted twice. Another budget's
+            // copy is not a conflict.
+            const prior = await findImportedBankId(pg, acc.budget_id, row.provider, txn.externalId);
             if (prior) {
               recordSkip(result, prior, acc);
               continue;
@@ -465,11 +468,12 @@ async function syncOnce(
             });
             await pg.query(
               `INSERT INTO connection_transactions
-                 (transaction_id, provider, external_transaction_id, last_synced_payload, blocked,
+                 (transaction_id, budget_id, provider, external_transaction_id, last_synced_payload, blocked,
                   raw_payload, raw_received_at)
-               VALUES ($1, $2, $3, $4, false, $5, now())`,
+               VALUES ($1, $2, $3, $4, $5, false, $6, now())`,
               [
                 insertedId,
+                acc.budget_id,
                 row.provider,
                 txn.externalId,
                 JSON.stringify({ date: txn.date.slice(0, 10), amount: milli, memo: '', payee: payee.name }),
