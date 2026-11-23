@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-qerr",
+  "title": "Hotfix: full-history bank sync dies on Temporal heartbeat timeout",
+  "description": "",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-23T21:49:51.333Z",
+  "updated_at": "2026-11-23T21:59:00.967Z",
+  "started_at": null,
+  "closed_at": "2026-11-23T21:58:54.829Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Per-row onProgress in phase 2 + tombstones + before linkCardPayments; withHeartbeat exported/tested; sync activity startToClose 10m->30m (heartbeat 30s); phase timings logged; matchCardPayments bucketed by amount. api tsc/eslint clean, bun test 1216 pass 0 fail (compose PG :55432).\nlanded outside tk close at f26562c (branch tk/budget-qerr merged into main by hand)\nMerged to main: per-row onProgress + whole-sync heartbeat timer, card-payment matching grouped by amount (likely event-loop stall), sync activity startToClose 30m, phase timing logs. api 1216 pass. Itaú attempt 2 finished 967 added just before a 2nd heartbeat timeout. Shipped via server-only release.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-qerr",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-qerr",
+    "changeset": {
+      "base": "c48de0c56f2e5b70790b86789e119e3c206fa99e",
+      "head": "c969e43ec32c83b4f03fe903303c725e738de405",
+      "commits": [
+        {
+          "sha": "c969e43",
+          "subject": "fix(connections): heartbeat per row during sync, 30m sync timeout, phase timings"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/src/budget/domain/card-payments.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/activities.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-heartbeat.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/workflows.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 181,
+        "deletions": 15
+      }
+    },
+    "agent_session": "94d8c355-bfc6-4d80-9a93-ada452eed78f",
+    "finished_at": "2026-11-23T21:53:58.290Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 5,
+        "additions": 181,
+        "deletions": 15
+      },
+      "head": "c969e43ec32c83b4f03fe903303c725e738de405",
+      "at": "2026-11-23T21:53:58.290Z"
+    },
+    "landedOutside": {
+      "commit": "f26562c06b0d0d0b50a53265a3174eeea667201b",
+      "branchHead": "c969e43ec32c83b4f03fe903303c725e738de405",
+      "baseBranch": "main",
+      "at": "2026-11-23T21:58:54.805Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

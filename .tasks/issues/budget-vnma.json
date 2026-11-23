@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-vnma",
+  "title": "Split releases: server (web+api+admin images) and iOS app have separate deploys and versions",
+  "description": "",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-23T21:53:27.767Z",
+  "updated_at": "2026-11-23T21:59:09.779Z",
+  "started_at": null,
+  "closed_at": "2026-11-23T21:59:02.113Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Split done: task release -> api/VERSION only (v tag, release.yml w/o app job); task release:app -> client/VERSION only (app-v tag, app-release.yml, EAS gated). Web shows api/VERSION via WEB_RELEASE_VERSION. Validation: scripts tests 7/7, client tsc+tests 1246 pass, eslint app.config, expo config override check, YAML parse all workflows (actionlint unavailable), task --list shows release + release:app.\nlanded outside tk close at 020b7ba (branch tk/budget-vnma merged into main by hand)\nMerged to main: task release bumps only api/VERSION (web+api+admin images, k8s pin, tag v*); task release:app bumps only client/VERSION -> app-release.yml (tag app-v*, EAS build+submit gated by EAS_ENABLED). Web shows server version via WEB_RELEASE_VERSION. Docs + decisions updated. scripts 7 pass, client 1246 pass.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-vnma",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-vnma",
+    "changeset": {
+      "base": "c48de0c56f2e5b70790b86789e119e3c206fa99e",
+      "head": "469bb2899a7c701f9db665448165554f94a1d4bb",
+      "commits": [
+        {
+          "sha": "469bb28",
+          "subject": "release: split server and iOS app releases"
+        }
+      ],
+      "files": [
+        {
+          "path": ".github/workflows/app-release.yml",
+          "status": "A"
+        },
+        {
+          "path": ".github/workflows/release.yml",
+          "status": "M"
+        },
+        {
+          "path": ".github/workflows/version.yml",
+          "status": "M"
+        },
+        {
+          "path": "AGENTS.md",
+          "status": "M"
+        },
+        {
+          "path": "Taskfile.yml",
+          "status": "M"
+        },
+        {
+          "path": "client/app.config.ts",
+          "status": "M"
+        },
+        {
+          "path": "deploy/Dockerfile.web",
+          "status": "M"
+        },
+        {
+          "path": "docs/MORNING.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "k8s/values.yaml",
+          "status": "M"
+        },
+        {
+          "path": "scripts/release-bump.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "scripts/release-bump.ts",
+          "status": "M"
+        },
+        {
+          "path": "scripts/release-changelog.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 369,
+        "deletions": 95
+      }
+    },
+    "agent_session": "split-releases-budget-vnma",
+    "finished_at": "2026-11-23T21:57:45.984Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 14,
+        "additions": 369,
+        "deletions": 95
+      },
+      "head": "469bb2899a7c701f9db665448165554f94a1d4bb",
+      "at": "2026-11-23T21:57:45.984Z"
+    },
+    "landedOutside": {
+      "commit": "020b7bafc66e5d36c0ab53776c0ae5c0401bbfb0",
+      "branchHead": "469bb2899a7c701f9db665448165554f94a1d4bb",
+      "baseBranch": "main",
+      "at": "2026-11-23T21:59:02.097Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}
