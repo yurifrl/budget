@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-mwp0",
+  "title": "Bank import is isolated per budget: the same bank transaction imports into every budget that links the account",
+  "description": "After budget-1iym (v2026.11.23) the Itaú sync shows '967 skipped: already imported in another budget'. Budgets are isolated: the same connection feeding accounts in two budgets must import into both. Root cause: connection_transactions unique (provider, external_transaction_id) is global (0014_connections.sql:72) and findImportedBankId in api/src/connections/sync.ts searches every budget.",
+  "status": "ready-to-review",
+  "priority": 0,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-23T20:32:26.576Z",
+  "updated_at": "2026-11-23T20:48:04.657Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "syscd-app (main e992160) has no code reading/writing connection_transactions (connections removed in its 4d5cde2), so 0106 drops the global unique (provider, external_transaction_id) and adds connection_transactions.budget_id (backfill, NOT NULL, BEFORE INSERT trigger fills it from transactions) + unique index (budget_id, provider, external_transaction_id). sync.ts: findImportedBankId scoped to acc.budget_id; skipped_accounts always same-budget, named. skippedOtherBudget string + client branch removed (old null-name entries hidden). New DB tests in api/src/connections/sync-per-budget.test.ts; sync-idempotent updated. Note: accounts_link_unique allows one budget account per (connection, upstream account) at a time, so the production case is a relink into another budget; tests cover that plus two connections sharing bank ids. tsc/eslint/bun test green in shared/api/client.",
+  "design": null,
+  "acceptance_criteria": "Bank-id identity scoped to the budget: skip only when the id exists (live or deleted) in the SAME budget; another budget imports its own copy. Unique key per budget (provider, external id, budget) with backfill; syscd-app shares this DB and inserts connection_transactions, so the change must not break it (check its code). Skip banner never says 'another budget' again. Tests: two budgets linking the same upstream account both import; same-budget deleted/other-account skip still works; re-run is a no-op. All packages green.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-mwp0",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-mwp0",
+    "changeset": {
+      "base": "ffb24fd68faf122225475b51f27bb511334026d4",
+      "baseBranch": "main"
+    },
+    "agent_session": "94d8c355-bfc6-4d80-9a93-ada452eed78f",
+    "finished_at": "2026-11-23T20:48:03.814Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 10,
+        "additions": 339,
+        "deletions": 78
+      },
+      "head": "8d04e548d5b28db5faa7bbeb9a66bed644f870b9",
+      "at": "2026-11-23T20:48:03.814Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-0559cf",
+      "name": "CleanShot 2026-11-23 at 17.30.48.png",
+      "mime": "image/png",
+      "size": 5893,
+      "sha256": "65f8db112c85f97891abec3cc36aced638876e8df353c7df8f3801d28cf4d784",
+      "metadata": {
+        "evidence_kind": "before"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-92a568",
+      "name": "budget-mwp0-validation.log",
+      "mime": "application/octet-stream",
+      "size": 1830,
+      "sha256": "1a74f13cedc6637ee4d904a3032d7777f765f23b81c7af0e822e9b6da71a102a",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}
