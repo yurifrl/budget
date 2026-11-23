@@ -4,22 +4,22 @@
   "id": "budget-mwp0",
   "title": "Bank import is isolated per budget: the same bank transaction imports into every budget that links the account",
   "description": "After budget-1iym (v2026.11.23) the Itaú sync shows '967 skipped: already imported in another budget'. Budgets are isolated: the same connection feeding accounts in two budgets must import into both. Root cause: connection_transactions unique (provider, external_transaction_id) is global (0014_connections.sql:72) and findImportedBankId in api/src/connections/sync.ts searches every budget.",
-  "status": "ready-to-review",
+  "status": "closed",
   "priority": 0,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-23T20:32:26.576Z",
-  "updated_at": "2026-11-23T20:48:04.657Z",
+  "updated_at": "2026-11-23T21:01:07.858Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-23T21:00:43.207Z",
   "due_at": null,
   "defer_until": null,
   "parent": null,
   "sprint": null,
   "labels": [],
-  "notes": "syscd-app (main e992160) has no code reading/writing connection_transactions (connections removed in its 4d5cde2), so 0106 drops the global unique (provider, external_transaction_id) and adds connection_transactions.budget_id (backfill, NOT NULL, BEFORE INSERT trigger fills it from transactions) + unique index (budget_id, provider, external_transaction_id). sync.ts: findImportedBankId scoped to acc.budget_id; skipped_accounts always same-budget, named. skippedOtherBudget string + client branch removed (old null-name entries hidden). New DB tests in api/src/connections/sync-per-budget.test.ts; sync-idempotent updated. Note: accounts_link_unique allows one budget account per (connection, upstream account) at a time, so the production case is a relink into another budget; tests cover that plus two connections sharing bank ids. tsc/eslint/bun test green in shared/api/client.",
+  "notes": "syscd-app (main e992160) has no code reading/writing connection_transactions (connections removed in its 4d5cde2), so 0106 drops the global unique (provider, external_transaction_id) and adds connection_transactions.budget_id (backfill, NOT NULL, BEFORE INSERT trigger fills it from transactions) + unique index (budget_id, provider, external_transaction_id). sync.ts: findImportedBankId scoped to acc.budget_id; skipped_accounts always same-budget, named. skippedOtherBudget string + client branch removed (old null-name entries hidden). New DB tests in api/src/connections/sync-per-budget.test.ts; sync-idempotent updated. Note: accounts_link_unique allows one budget account per (connection, upstream account) at a time, so the production case is a relink into another budget; tests cover that plus two connections sharing bank ids. tsc/eslint/bun test green in shared/api/client.\nlanded outside tk close at 34af37a (branch tk/budget-mwp0 merged into main by hand)\nMerged to main and released in v2026.11.23-02 (branch 8d04e54): bank-id identity per budget; migration 0106 adds connection_transactions.budget_id (backfill, NOT NULL, fill trigger), drops global unique, adds unique (budget_id, provider, external_transaction_id); 'another budget' skip removed. shared 167, api 1212, client 1246 pass. User approved merge+deploy.",
   "design": null,
   "acceptance_criteria": "Bank-id identity scoped to the budget: skip only when the id exists (live or deleted) in the SAME budget; another budget imports its own copy. Unique key per budget (provider, external id, budget) with backfill; syscd-app shares this DB and inserts connection_transactions, so the change must not break it (check its code). Skip banner never says 'another budget' again. Tests: two budgets linking the same upstream account both import; same-budget deleted/other-account skip still works; re-run is a no-op. All packages green.",
   "estimated_minutes": null,
@@ -30,7 +30,59 @@
     "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-mwp0",
     "changeset": {
       "base": "ffb24fd68faf122225475b51f27bb511334026d4",
-      "baseBranch": "main"
+      "head": "8d04e548d5b28db5faa7bbeb9a66bed644f870b9",
+      "commits": [
+        {
+          "sha": "8d04e54",
+          "subject": "connections: bank-id identity is per budget; the same bank transaction imports into every budget that links it (budget-mwp0)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0106_connection_transactions_per_budget.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-idempotent.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-per-budget.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 339,
+        "deletions": 78
+      }
     },
     "agent_session": "94d8c355-bfc6-4d80-9a93-ada452eed78f",
     "finished_at": "2026-11-23T20:48:03.814Z",
@@ -44,6 +96,17 @@
       },
       "head": "8d04e548d5b28db5faa7bbeb9a66bed644f870b9",
       "at": "2026-11-23T20:48:03.814Z"
+    },
+    "landedOutside": {
+      "commit": "34af37a4aceda36e49a06e38c85fae331e724ec6",
+      "branchHead": "8d04e548d5b28db5faa7bbeb9a66bed644f870b9",
+      "baseBranch": "main",
+      "at": "2026-11-23T21:00:43.188Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
     }
   },
   "attachments": [

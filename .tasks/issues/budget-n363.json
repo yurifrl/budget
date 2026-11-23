@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-n363",
+  "title": "Hotfix: migration 0106 fails in prod on budget_id FK (orphan transactions)",
+  "description": "",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-23T21:12:23.026Z",
+  "updated_at": "2026-11-23T21:19:21.461Z",
+  "started_at": null,
+  "closed_at": "2026-11-23T21:19:15.727Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "landed outside tk close at 240ac4f (branch tk/budget-n363 merged into main by hand)\nMerged to main: 0106 edited in place without budgets FK (prod failed on orphan transactions; migration rolled back), plus NULL-budget/duplicate cleanup on shadow rows only; migrate-0106 upgrade test reproduces the prod error. api 1213 pass. Released to restore prod api/worker.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-n363",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-n363",
+    "changeset": {
+      "base": "1b79a97300af8b42d177ea85bd9deda337ab2427",
+      "head": "a46070a8f8d9d795a168d871e662dcbecf63a387",
+      "commits": [
+        {
+          "sha": "a46070a",
+          "subject": "fix(migrations): 0106 without budgets FK, robust to orphan/NULL-budget/duplicate rows"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0106_connection_transactions_per_budget.sql",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate-0106.test.ts",
+          "status": "A"
+        }
+      ],
+      "counts": {
+        "additions": 101,
+        "deletions": 1
+      }
+    },
+    "agent_session": "budget-n363-hotfix-agent",
+    "finished_at": "2026-11-23T21:16:41.958Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 2,
+        "additions": 101,
+        "deletions": 1
+      },
+      "head": "a46070a8f8d9d795a168d871e662dcbecf63a387",
+      "at": "2026-11-23T21:16:41.958Z"
+    },
+    "landedOutside": {
+      "commit": "240ac4f88bfcfbb149ae27216291019f2df47237",
+      "branchHead": "a46070a8f8d9d795a168d871e662dcbecf63a387",
+      "baseBranch": "main",
+      "at": "2026-11-23T21:19:15.711Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

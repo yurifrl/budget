@@ -1,0 +1,6 @@
+{"issue_id":"budget-n363","action":"save","at":"2026-11-23T21:12:23.030Z","actor":null,"data":{"status":"open","title":"Hotfix: migration 0106 fails in prod on budget_id FK (orphan transactions)"}}
+{"issue_id":"budget-n363","action":"save","at":"2026-11-23T21:12:28.175Z","actor":null,"data":{"status":"open","title":"Hotfix: migration 0106 fails in prod on budget_id FK (orphan transactions)"}}
+{"issue_id":"budget-n363","action":"save","at":"2026-11-23T21:16:43.204Z","actor":null,"data":{"status":"ready-to-review","title":"Hotfix: migration 0106 fails in prod on budget_id FK (orphan transactions)"}}
+{"issue_id":"budget-n363","action":"save","at":"2026-11-23T21:19:15.726Z","actor":null,"data":{"status":"ready-to-review","title":"Hotfix: migration 0106 fails in prod on budget_id FK (orphan transactions)"}}
+{"issue_id":"budget-n363","action":"save","at":"2026-11-23T21:19:15.780Z","actor":null,"data":{"status":"closed","title":"Hotfix: migration 0106 fails in prod on budget_id FK (orphan transactions)"}}
+{"issue_id":"budget-n363","action":"save","at":"2026-11-23T21:19:21.462Z","actor":null,"data":{"status":"closed","title":"Hotfix: migration 0106 fails in prod on budget_id FK (orphan transactions)"}}
