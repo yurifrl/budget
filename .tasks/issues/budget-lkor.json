@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-lkor",
+  "title": "Save the full raw provider payload for every bank-imported transaction",
+  "description": "Pluggy mapping (api/src/connections/adapters/pluggy/index.ts toAggregatedTransaction) keeps only id/account/description/amount/date/cleared; everything else (installments, merchant, PIX/payment data, card metadata, raw status, category, descriptionRaw...) is dropped.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-23T16:59:19.212Z",
+  "updated_at": "2026-11-23T18:58:08.529Z",
+  "started_at": null,
+  "closed_at": "2026-11-23T18:57:59.842Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Implemented: AggregatedTransaction.raw (Pluggy passes the passthrough object through), migration 0105_connection_transaction_raw.sql (connection_transactions.raw_payload jsonb, raw_received_at timestamptz) + MIGRATION_SIGNATURES, sync writes raw on insert and refreshes it on every pull of a shadowed row (blocked/duplicate/updated) without touching updated_at or user fields, getImportMetadata(db, transactionId) in connections/ledger-reads.ts exported from the barrel for budget-hebq. tsc/eslint clean, api bun test 1194 pass 0 fail. Note: :5432 rejects postgres:postgres here, tests ran on compose :55432 (BUDGET_TEST_PG_BASE); test DB dropped.\nIncluded in tk/budget-1iym (rebased on hebq): raw refresh moved inside 1iym's per-row SAVEPOINT; all package tests pass on the combined branch (c186f6f).\nlanded outside tk close at c225004 (branch tk/budget-lkor merged into main by hand)\nMerged to main (c225004): migration 0105 raw_payload/raw_received_at on connection_transactions, Pluggy raw passed through the port, written on insert and refreshed every pull; getImportMetadata. api 1207 pass on combined tip. User approved merge+deploy.",
+  "design": null,
+  "acceptance_criteria": "Additive migration storing the raw provider transaction JSON per imported row; the adapter passes the raw object through the port; sync writes it on insert and refreshes it on every pull (rows imported before get it on their next sync). Tests.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-lkor",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-lkor",
+    "changeset": {
+      "base": "544ed27c094d55a98af60ba8af5ab9126228e6f9",
+      "head": "c2250040730dff9c6d44e2640279f551fbccfc36",
+      "commits": [
+        {
+          "sha": "c225004",
+          "subject": "connections: save the raw provider payload for every bank-imported transaction (budget-lkor)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0105_connection_transaction_raw.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/ledger-reads.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-card-payments.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-currency.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-payees.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 206,
+        "deletions": 3
+      }
+    },
+    "agent_session": "94d8c355-bfc6-4d80-9a93-ada452eed78f",
+    "finished_at": "2026-11-23T17:05:01.217Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 13,
+        "additions": 206,
+        "deletions": 3
+      },
+      "head": "c2250040730dff9c6d44e2640279f551fbccfc36",
+      "at": "2026-11-23T17:05:01.217Z"
+    },
+    "landedOutside": {
+      "commit": "c2250040730dff9c6d44e2640279f551fbccfc36",
+      "branchHead": "c2250040730dff9c6d44e2640279f551fbccfc36",
+      "baseBranch": "main",
+      "at": "2026-11-23T18:57:59.502Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-dca30a",
+      "name": "budget-lkor-validation.txt",
+      "mime": "text/plain",
+      "size": 554,
+      "sha256": "871cfedb89d3640216f2afe6dea5479e03f569c488e408f50b3c8571c5b8d580",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 1,
+  "comments": [],
+  "comment_count": 0
+}

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-4anw",
+  "title": "Balance check after every sync: compare bank balance vs budget balance per linked account, suggest a fix or a reconciliation adjustment",
+  "description": "Mock: /tmp/budget-mock/conflicts-mock.html sections 4-6. Cards compare against open bill. Build on client/src/features/accounts/ReconcilePanels.tsx.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-23T16:59:19.793Z",
+  "updated_at": "2026-11-23T16:59:22.537Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": null,
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": null,
+  "metadata": {},
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-8a2b02",
+      "name": "conflicts-mock.html",
+      "mime": "application/octet-stream",
+      "size": 23759,
+      "sha256": "30de1caff0ae1fb0a0e4e1ac000f35c0d3593e315f8b575421b300f82450b3cb",
+      "metadata": {
+        "evidence_kind": "mock"
+      }
+    }
+  ],
+  "dependencies": [
+    {
+      "issue_id": "budget-4anw",
+      "depends_on_id": "budget-1iym",
+      "type": "blocks",
+      "created_at": "2026-11-23T16:59:20.668Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 1,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

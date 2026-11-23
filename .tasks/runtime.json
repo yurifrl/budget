@@ -2,11 +2,11 @@
   {
     "id": "web",
     "kind": "web",
-    "pid": 74266,
+    "pid": 30966,
     "port": 21579,
     "host": "127.0.0.1",
     "url": "http://localhost:21579",
     "workspace": "/Users/yuri/Workdir/Yuri/budget",
-    "startedAt": "2026-11-21T23:37:43.209Z"
+    "startedAt": "2026-11-22T06:19:59.269Z"
   }
 ]

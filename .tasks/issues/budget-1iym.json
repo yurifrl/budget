@@ -1,0 +1,351 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-1iym",
+  "title": "Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash",
+  "description": "Itaú connection c4189214 fails every sync: duplicate key on connection_transactions (provider, external_transaction_id). api/src/connections/sync.ts looks up existing rows only by account_id + import_id + NOT deleted, but the shadow unique key is global. A row deleted (by the user or by the sync's tombstone sweep) or living in another account (unlinked/relinked) makes the INSERT fail and the whole transaction rolls back.",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-23T16:59:18.920Z",
+  "updated_at": "2026-11-23T18:59:02.830Z",
+  "started_at": null,
+  "closed_at": "2026-11-23T18:58:39.642Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Implemented: global (provider, bank id) lookup incl. deleted before insert -> skipped_deleted / skipped_other_account (+ skipped_accounts with name when same budget); SAVEPOINT per row -> failed + failures (job log only, stripped from sync-status); bank page (ConnectionSettingsScreen) shows a yellow line per reason from last_run.result (en + pt-BR). Tests: api 1195 pass (incl. 5 new in sync-idempotent.test.ts), shared 163, client 1235; tsc + eslint clean in api/shared/client, admin tsc clean. Test DB on compose :55432 (5432 rejects postgres:postgres), dropped after.\nRebased onto tk/budget-hebq (which contains lkor); tip c186f6f. sync.ts conflict resolved: lkor's raw_payload/raw_received_at in the connection_transactions INSERT, and the raw refresh UPDATE for existing shadowed rows now runs inside the row's SAVEPOINT before the blocked/duplicate decision; skipped rows (deleted/other account) get no raw write. Test fixups: sync-idempotent.test.ts up() gains raw, sync.test.ts duplicate-refresh test expects emptySyncResult(). All four packages: tsc, eslint, bun test pass (api 1207 pass with BUDGET_REQUIRE_TEST_DB=1 on :55432). Skip banner checked at 375/390/768/1400 with long and unbroken account names: wraps, no overflow, no fix needed (evidence ev-d6a478, ev-34294a).\nlanded outside tk close at c186f6f (branch tk/budget-1iym merged into main by hand)\nMerged to main (c186f6f): sync skips bank ids already imported anywhere (deleted/other account), per-row SAVEPOINT, skip banner on bank page (ev-d6a478 ev-34294a), 5 regression tests. Rebased on lkor+hebq; shared 167, api 1207, client 1246, admin 20 pass.",
+  "design": null,
+  "acceptance_criteria": "Lookup by (provider, external id) across all accounts incl. deleted; found => skip (deleted stays deleted, row in another account stays there), counted as skipped with a reason. A per-row failure is recorded and does not abort the run. Skip counts + reasons shown on the bank page (i18n en + pt-BR). Regression tests: user-deleted row, sync-tombstoned row, row in an old unlinked account, re-running the same sync twice is a no-op.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-1iym",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-1iym",
+    "changeset": {
+      "base": "544ed27c094d55a98af60ba8af5ab9126228e6f9",
+      "head": "c186f6f0128ecfceb812248029a7ea65aabf6d0b",
+      "commits": [
+        {
+          "sha": "c186f6f",
+          "subject": "connections: bank sync is idempotent; skip bank ids already imported anywhere"
+        },
+        {
+          "sha": "d1bf887",
+          "subject": "transactions: row menu in a Modal (no rail offset, above the phone FAB), back returns to the register, amount under the payee on a phone (budget-hebq)"
+        },
+        {
+          "sha": "d3e8613",
+          "subject": "transactions: detail page with import info and the bank's raw data, opened from the row menu (budget-hebq)"
+        },
+        {
+          "sha": "c225004",
+          "subject": "connections: save the raw provider payload for every bank-imported transaction (budget-lkor)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0105_connection_transaction_raw.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transaction-details.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/activities.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/ledger-reads.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-card-payments.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-currency.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-idempotent.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-payees.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/(budget)/transaction.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/TxnMenuTrigger.ios.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/TxnRowMenu.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/txnRowMenu.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/txnRowMenu.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/txnRowMenuShared.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/DetailSections.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/RawDataTree.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/TransactionDetailScreen.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/styles.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/transactionDetail.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/transactionDetail.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/banks/ConnectionSettingsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/clipboard/copyText.native.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/clipboard/copyText.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transactions.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 2118,
+        "deletions": 142
+      }
+    },
+    "agent_session": "94d8c355-bfc6-4d80-9a93-ada452eed78f",
+    "finished_at": "2026-11-23T17:10:03.361Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 11,
+        "additions": 613,
+        "deletions": 101
+      },
+      "head": "1b6f9bc9f4c9e265c2d6f192129de489e6cc2309",
+      "at": "2026-11-23T17:10:03.361Z"
+    },
+    "landedOutside": {
+      "commit": "c186f6f0128ecfceb812248029a7ea65aabf6d0b",
+      "branchHead": "c186f6f0128ecfceb812248029a7ea65aabf6d0b",
+      "baseBranch": "main",
+      "at": "2026-11-23T18:58:39.007Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-9b9eff",
+      "name": "sync-regression-tests.txt",
+      "mime": "text/plain",
+      "size": 1473,
+      "sha256": "56c95762a6b7d75fa7df566725f9ecb7d8236c903da919fe437c8a32c7072f4e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-1fd42f",
+      "name": "validate-all.txt",
+      "mime": "text/plain",
+      "size": 260,
+      "sha256": "f73c4c4df44b6b83d6859084b23acc4e550d93fb2d1906c628f3c265d5c6f6da",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d6a478",
+      "name": "1iym-skip-banner-375.png",
+      "mime": "image/png",
+      "size": 75842,
+      "sha256": "4aa68747311efb07a4c04e36ce667dd8f89a1d8c228865e377b9216141094c47",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-34294a",
+      "name": "1iym-skip-banner-1400.png",
+      "mime": "image/png",
+      "size": 132525,
+      "sha256": "d0b0dbf146ac61b6a887037cf45d248d569c12b2853b0adec0d97bda7fdc3015",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 1,
+  "comments": [],
+  "comment_count": 0
+}

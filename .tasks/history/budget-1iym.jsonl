@@ -1,0 +1,11 @@
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T16:59:18.921Z","actor":null,"data":{"status":"open","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T17:00:05.331Z","actor":null,"data":{"status":"open","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T17:09:56.801Z","actor":null,"data":{"status":"open","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T17:09:57.591Z","actor":null,"data":{"status":"open","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T17:09:57.947Z","actor":null,"data":{"status":"open","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T17:10:04.225Z","actor":null,"data":{"status":"ready-to-review","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T18:53:46.679Z","actor":null,"data":{"status":"ready-to-review","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T18:56:40.229Z","actor":null,"data":{"status":"ready-to-review","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T18:58:39.033Z","actor":null,"data":{"status":"ready-to-review","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T18:58:39.776Z","actor":null,"data":{"status":"closed","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}
+{"issue_id":"budget-1iym","action":"save","at":"2026-11-23T18:59:02.833Z","actor":null,"data":{"status":"closed","title":"Bank sync is idempotent: a bank id already imported anywhere is skipped, never a crash"}}

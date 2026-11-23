@@ -1,0 +1,412 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-hebq",
+  "title": "Transaction detail page with its own URL, opened from the row menu 'Details' item, showing all metadata",
+  "description": "New read endpoint returning one transaction with its import info (bank id, provider, connection, account, sync state: imported/edited/blocked, last synced payload, first/last seen) and the full raw provider payload. Client: a detail screen at its own route (e.g. /transaction?id=...), reachable from a new 'Details' item in the transaction row's context menu (Approve/Reject/... menu), deep-linkable, works for manual rows too (shows what exists).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-23T16:59:19.505Z",
+  "updated_at": "2026-11-23T18:58:37.185Z",
+  "started_at": null,
+  "closed_at": "2026-11-23T18:58:10.478Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Endpoint budget_transactions_get GET /transactions/:id?budget_id=; page /transaction?id=; Details item in row menu (web TxnRowMenu + iOS ContextMenu). Tests: shared 167, api 1202 (compose PG :55432), client 1244 pass; tsc + eslint clean in all three. Web screenshots attached (menu, detail, bank data tree, hand-entered). iOS not run.\nMobile check (375/390/768/1400, web): detail page has no horizontal scroll, bank data tree wraps long keys/values, Copy buttons reachable. Fixed in d1bf887 on tk/budget-hebq: (1) row menu now renders in a transparent Modal: on desktop the card was offset by the rail width and clipped at the right edge, on a phone the '+ Transaction' FAB covered Details/Delete; (2) BudgetTabs backBehavior=history: the detail page's back button went to Overview instead of the register (also fixes import's 'back to where you came from'); (3) on a phone the header amount sits under the payee (a long amount squeezed the title). Evidence before ev-85d5a8 ev-a3b86a ev-5481f7, after ev-45a38f ev-e35453 ev-50d59a ev-4ab25b. client tsc/eslint/bun test pass.\nlanded outside tk close at d1bf887 (branch tk/budget-hebq merged into main by hand)\nMerged to main (d3e8613, d1bf887): /transaction?id= detail page (Details, Import, Bank data tree, Last synced fields), Details item in row menu (web+iOS), mobile pass at 375/390/768/1400 (evidence ev-45a38f ev-e35453 ev-50d59a ev-4ab25b), row menu in Modal fixes rail-offset clipping + FAB overlap. All packages green.",
+  "design": null,
+  "acceptance_criteria": "Route deep-links; Details item in the row menu on web + iOS; known fields formatted (money via useMoneyFormat, dates), every raw field shown (nested JSON readable, copyable); budget-scoped access (access.test sample, catalog-outputs sample); strings via t() en + pt-BR.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-hebq",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-hebq",
+    "changeset": {
+      "base": "544ed27c094d55a98af60ba8af5ab9126228e6f9",
+      "head": "d1bf887e4f295304ea1a62e1c2e3816879417523",
+      "commits": [
+        {
+          "sha": "d1bf887",
+          "subject": "transactions: row menu in a Modal (no rail offset, above the phone FAB), back returns to the register, amount under the payee on a phone (budget-hebq)"
+        },
+        {
+          "sha": "d3e8613",
+          "subject": "transactions: detail page with import info and the bank's raw data, opened from the row menu (budget-hebq)"
+        },
+        {
+          "sha": "c225004",
+          "subject": "connections: save the raw provider payload for every bank-imported transaction (budget-lkor)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0105_connection_transaction_raw.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transaction-details.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/ledger-reads.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-card-payments.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-currency.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-payees.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/(budget)/transaction.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/TxnMenuTrigger.ios.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/TxnRowMenu.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/txnRowMenu.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/txnRowMenu.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/txnRowMenuShared.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/DetailSections.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/RawDataTree.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/TransactionDetailScreen.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/styles.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/transactionDetail.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/accounts/transactionDetail/transactionDetail.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/clipboard/copyText.native.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/platform/clipboard/copyText.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transactions.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transactions.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 1504,
+        "deletions": 43
+      }
+    },
+    "agent_session": "94d8c355-bfc6-4d80-9a93-ada452eed78f",
+    "finished_at": "2026-11-23T17:24:05.741Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 2,
+        "files": 46,
+        "additions": 1463,
+        "deletions": 18
+      },
+      "head": "d3e8613a4dad0cf8d76bb2dfca6ca61ee9e884d8",
+      "at": "2026-11-23T17:24:05.741Z"
+    },
+    "landedOutside": {
+      "commit": "d1bf887e4f295304ea1a62e1c2e3816879417523",
+      "branchHead": "d1bf887e4f295304ea1a62e1c2e3816879417523",
+      "baseBranch": "main",
+      "at": "2026-11-23T18:58:10.160Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-0e8ae8",
+      "name": "row-menu.png",
+      "mime": "image/png",
+      "size": 32515,
+      "sha256": "98a6cb0f927b66bcb7dfb60b9100a05bbaf62aa0ae5fb37ace676556fc4c4364",
+      "metadata": {
+        "evidence_kind": "before"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-250237",
+      "name": "hebq-ev-menu.png",
+      "mime": "image/png",
+      "size": 134740,
+      "sha256": "8975b5fd00949c1f38a6949ae3bf93df5497602f1e4036a31e5bb27dd6d7192b",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-09e0ef",
+      "name": "hebq-ev-detail.png",
+      "mime": "image/png",
+      "size": 101876,
+      "sha256": "4223e12b769fdc63229b6e81520b783fcd65199e01306de07398a8977362f053",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-99129b",
+      "name": "hebq-ev-detail-bankdata.png",
+      "mime": "image/png",
+      "size": 113981,
+      "sha256": "e602dcd95299893ae2870df414d7339bb0e62f765e3a99c7be600b52f996a950",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-5f78cc",
+      "name": "hebq-ev-detail-manual.png",
+      "mime": "image/png",
+      "size": 68370,
+      "sha256": "09a04bc7e5f7489859229e8d1b28f37493abdb2693ca4a481be5dc9ee2d6aedd",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-85d5a8",
+      "name": "hebq-rowmenu-375-before.png",
+      "mime": "image/png",
+      "size": 73418,
+      "sha256": "d9ec6bbfde9f734ce418d24ae4a20168125d89b8f76a941774e3f96f000bb757",
+      "metadata": {
+        "evidence_kind": "before"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a3b86a",
+      "name": "hebq-rowmenu-1400-before.png",
+      "mime": "image/png",
+      "size": 187856,
+      "sha256": "68d6df3845283c194de4107107719aa1a77a6c21635b15d6249b0b235c88f9f8",
+      "metadata": {
+        "evidence_kind": "before"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-5481f7",
+      "name": "hebq-header-375-before.png",
+      "mime": "image/png",
+      "size": 64785,
+      "sha256": "c921a6f170a1e092ef6d845621c7c07de7cd02a28cfaa6e54f89c1bc0762becb",
+      "metadata": {
+        "evidence_kind": "before"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-45a38f",
+      "name": "hebq-rowmenu-375-after.png",
+      "mime": "image/png",
+      "size": 70666,
+      "sha256": "3060252845b5c976b5e1429d74c95c2d2adba9be63faf6b14c0c26b723dae943",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-e35453",
+      "name": "hebq-rowmenu-1400-after.png",
+      "mime": "image/png",
+      "size": 202425,
+      "sha256": "a97816fc9de0245fd20c9efbeec42072263f174f05335be7c6fdd7798b8d0be4",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-50d59a",
+      "name": "hebq-header-375-after.png",
+      "mime": "image/png",
+      "size": 67781,
+      "sha256": "edbb9bf949521d5c5d7c25870f01492dfc1f94cfb56d37000960280f11e8b23a",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-4ab25b",
+      "name": "hebq-bankdata-375.png",
+      "mime": "image/png",
+      "size": 79372,
+      "sha256": "e386eaa577c896077f5a0f01520883dac093dea95fcaf0a5a0477a8d6c3d16b4",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    }
+  ],
+  "dependencies": [
+    {
+      "issue_id": "budget-hebq",
+      "depends_on_id": "budget-lkor",
+      "type": "blocks",
+      "created_at": "2026-11-23T16:59:20.397Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 1,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

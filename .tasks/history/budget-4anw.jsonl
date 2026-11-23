@@ -1,0 +1,3 @@
+{"issue_id":"budget-4anw","action":"save","at":"2026-11-23T16:59:19.793Z","actor":null,"data":{"status":"open","title":"Balance check after every sync: compare bank balance vs budget balance per linked account, suggest a fix or a reconciliation adjustment"}}
+{"issue_id":"budget-4anw","action":"dependency_added","at":"2026-11-23T16:59:20.685Z","actor":"yuri","data":{"target":"budget-1iym","type":"blocks"}}
+{"issue_id":"budget-4anw","action":"save","at":"2026-11-23T16:59:22.570Z","actor":null,"data":{"status":"open","title":"Balance check after every sync: compare bank balance vs budget balance per linked account, suggest a fix or a reconciliation adjustment"}}
