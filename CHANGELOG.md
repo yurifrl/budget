@@ -1,5 +1,17 @@
 # Changelog
 
+## v2026.11.23 2026-11-23 release
+
+### Changed
+
+- release: v2026.11.23
+- tasks: close budget-lkor, budget-hebq, budget-1iym
+- connections: bank sync is idempotent; skip bank ids already imported anywhere
+- transactions: row menu in a Modal (no rail offset, above the phone FAB), back returns to the register, amount under the payee on a phone (budget-hebq)
+- transactions: detail page with import info and the bank's raw data, opened from the row menu (budget-hebq)
+- connections: save the raw provider payload for every bank-imported transaction (budget-lkor)
+
+
 ## v2026.11.22 2026-11-22 release
 
 ### Changed
