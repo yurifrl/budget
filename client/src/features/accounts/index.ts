@@ -3,3 +3,4 @@ export { AccountEditModal } from './AccountEditModal';
 export { AddAccountModal } from './AddAccountModal';
 export { AddTransactionSheet } from './AddTransactionSheet';
 export { AccountsScreen } from './AccountsScreen';
+export { TransactionDetailScreen } from './transactionDetail/TransactionDetailScreen';

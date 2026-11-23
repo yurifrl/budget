@@ -55,6 +55,7 @@ const m: Translation<typeof en> = {
   'menu.categorize': 'Categorizar',
   'menu.moveToAccount': 'Mover para a conta',
   'menu.export': 'Exportar 1 transação',
+  'menu.details': 'Detalhes',
   'menu.noFlag': 'Sem marcador',
   'menu.noFlagTitleCase': 'Sem marcador',
   'menu.uncategorized': 'Sem categoria',

@@ -14,6 +14,7 @@
 import { connectionsApi } from './api/connections';
 
 export type { BudgetScope } from './api/base';
+export type { TransactionDetails } from './api/register';
 export {
   targetsByCategoryFromRows,
   type BudgetMember,
@@ -42,6 +43,7 @@ export const {
   useSetCategoriesBundleMutation,
   useGetAccountsQuery,
   useGetTransactionsQuery,
+  useGetTransactionDetailsQuery,
   useGetAssignmentsQuery,
   useGetMonthNotesQuery,
   useGetPayeesQuery,

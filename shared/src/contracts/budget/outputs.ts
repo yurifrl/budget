@@ -316,6 +316,54 @@ export const transactionRowSchema = z.object({
   deleted: z.boolean(),
 });
 
+/** A split leg on the detail read, with its category's name. */
+export const transactionDetailSubSchema = subTransactionRowSchema.extend({ category_name: nullableString });
+
+/** One transaction on the detail read: the register row plus the names of what it points at. */
+export const transactionDetailSchema = transactionRowSchema.extend({
+  /** `YYYY-MM-DD`. */
+  date: z.string(),
+  payee_name: nullableString,
+  category_name: nullableString,
+  account_name: z.string(),
+  subtransactions: z.array(transactionDetailSubSchema),
+});
+
+/**
+ * Sync state of a bank-imported row: `imported` = the bank sync keeps it up to
+ * date; `edited` = the person changed it, so the sync leaves it alone (the
+ * shadow row is blocked).
+ */
+export const transactionImportStateSchema = z.enum(['imported', 'edited']);
+
+/** What the bank sent for one imported transaction. */
+export const transactionImportSchema = z.object({
+  /** Aggregator that imported the row (e.g. `pluggy`). */
+  provider: z.string(),
+  /** The provider's own id for the transaction (`import_id` is `<provider>:` + this). */
+  bank_transaction_id: z.string(),
+  /** Bank connection of the row's account; null once the account was unlinked. */
+  connection_id: id.nullable(),
+  /** Institution name stored on the account; null when unknown or unlinked. */
+  bank_name: nullableString,
+  state: transactionImportStateSchema,
+  /** The engine-owned fields (date, amount, memo, payee) as last written by the sync. */
+  last_synced_payload: z.record(z.string(), z.unknown()),
+  /** The provider's full transaction object as last received; null for rows not re-synced since it was recorded. */
+  raw: z.record(z.string(), z.unknown()).nullable(),
+  /** When `raw` was last written (ISO timestamp); null when it never was. */
+  raw_received_at: timestamp.nullable(),
+  /** Last time the sync changed the shadow row (ISO timestamp). */
+  updated_at: timestamp,
+});
+
+/** Answer of the transaction detail read: the row and, for bank-imported rows, its import record. */
+export const transactionDetailsSchema = z.object({
+  transaction: transactionDetailSchema,
+  /** Null for a row entered by hand (or from a file import). */
+  import: transactionImportSchema.nullable(),
+});
+
 export const bulkImportResultSchema = z.object({ imported: z.number(), duplicates: z.number() });
 
 export const repeatRuleRowSchema = z.object({

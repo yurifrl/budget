@@ -58,6 +58,7 @@ export default {
   'menu.categorize': 'Categorize',
   'menu.moveToAccount': 'Move to Account',
   'menu.export': 'Export 1 Transaction',
+  'menu.details': 'Details',
   'menu.noFlag': 'No flag',
   'menu.noFlagTitleCase': 'No Flag',
   'menu.uncategorized': 'Uncategorized',

@@ -29,6 +29,7 @@ export type MainItemKey =
   | 'categorize'
   | 'move'
   | 'export'
+  | 'details'
   | 'delete';
 
 /** One row of the main menu (YNAB's modal-list item). */
@@ -144,6 +145,8 @@ export function mainMenuSections(
         disabled: ctx.moveTargetCount === 0 || busy,
       },
       { key: 'export', icon: 'download-outline', label: t('menu.export') },
+      // Opens the transaction's own page (/transaction?id=…): every field and the bank's raw data.
+      { key: 'details', icon: 'information-circle-outline', label: t('menu.details') },
     ],
     [{ key: 'delete', icon: 'trash-outline', label: tCommon('delete'), kbd: ['delete'], danger: true }],
   ];

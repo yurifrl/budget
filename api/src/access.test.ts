@@ -165,6 +165,7 @@ const samples: Record<string, Record<string, unknown>> = {
   budget_payees_transactions: { id: V.payee, budget_id: A.budget },
   budget_repeat_rules_delete: { id: V.rule, budget_id: A.budget },
   budget_transactions_delete: { id: V.txn, budget_id: A.budget },
+  budget_transactions_get: { id: V.txn, budget_id: A.budget },
   budget_transactions_update: { id: V.txn, budget_id: A.budget, patch: { memo: 'pwned' } },
 };
 

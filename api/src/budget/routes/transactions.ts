@@ -8,6 +8,7 @@ import {
   transactionsBulk,
   transactionsCreate,
   transactionsDelete,
+  transactionsGet,
   transactionsList,
   transactionsUpdate,
 } from '@shared/contracts/budget';
@@ -26,6 +27,7 @@ import { linkCardPayments } from '../domain/card-payments';
 import { deleteMirror, insertMirror, resolveTransferPeer, syncMirror } from '../domain/transfers';
 import { advanceOccurrence } from '../domain/repeat-schedule';
 import { applyRules } from '@shared/domain/payees';
+import { getImportMetadata } from '../../connections';
 import { budgetRouter } from '../router';
 import { findAccountInBudget } from '../store/accounts';
 import { categoryInBudget } from '../store/categories';
@@ -116,6 +118,34 @@ export const operations = [
       byTxn.set(row.transaction_id, list);
     }
     return rows.map((t) => ({ ...t, subtransactions: byTxn.get(t.id) ?? [] }));
+  }),
+
+  // Detail read: the row is re-scoped by budget_id in SQL before its import
+  // record (keyed by transaction id only) is read.
+  implement(transactionsGet, async (_c, { id, budget_id: budgetId }) => {
+    const row = await txnStore.getTransactionDetailInBudget(pool, id, budgetId);
+    if (!row) throw new HttpError(404, 'transaction not found');
+    const [subtransactions, meta] = await Promise.all([
+      txnStore.listTransactionSubtransactions(pool, id, budgetId),
+      getImportMetadata(pool, id),
+    ]);
+    const { account_connection_id: connectionId, account_institution: bankName, ...transaction } = row;
+    return {
+      transaction: { ...transaction, subtransactions },
+      import: meta
+        ? {
+            provider: meta.provider,
+            bank_transaction_id: meta.externalTransactionId,
+            connection_id: connectionId,
+            bank_name: bankName,
+            state: meta.blocked ? ('edited' as const) : ('imported' as const),
+            last_synced_payload: meta.lastSyncedPayload,
+            raw: meta.raw,
+            raw_received_at: meta.rawReceivedAt?.toISOString() ?? null,
+            updated_at: meta.updatedAt.toISOString(),
+          }
+        : null,
+    };
   }),
 
   implement(transactionsCreate, (_c, { budget_id, txn, subtransactions }) =>

@@ -25,7 +25,7 @@ describe('mainMenuSections', () => {
       ['clear', 'unclear'],
       ['match', 'unmatch'],
       ['duplicate', 'repeat', 'flag', 'memo', 'categorize'],
-      ['move', 'export'],
+      ['move', 'export', 'details'],
       ['delete'],
     ]);
   });
@@ -44,6 +44,7 @@ describe('mainMenuSections', () => {
       ['Categorize', 'pricetag-outline', '', true, false],
       ['Move to Account', 'swap-horizontal', '', true, false],
       ['Export 1 Transaction', 'download-outline', '', false, false],
+      ['Details', 'information-circle-outline', '', false, false],
       ['Delete', 'trash-outline', 'delete', false, true],
     ]);
   });

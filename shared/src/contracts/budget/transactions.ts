@@ -11,7 +11,7 @@ import {
   subTxnListSchema,
   uuidSchema,
 } from './schemas';
-import { bulkImportResultSchema, noContent, transactionRowSchema } from './outputs';
+import { bulkImportResultSchema, noContent, transactionDetailsSchema, transactionRowSchema } from './outputs';
 
 /**
  * Account balance deltas are always derived by the server from the stored
@@ -27,6 +27,18 @@ export const transactionsList = defineOperation({
   output: z.array(transactionRowSchema),
   method: 'GET',
   path: '/transactions',
+  kind: 'read',
+  expose: EXPOSE_ALL,
+});
+
+export const transactionsGet = defineOperation({
+  name: 'budget_transactions_get',
+  description:
+    "One transaction of a budget with everything known about it (also soft-deleted rows): the register row with payee, category and account names and its split legs, plus `import` for a bank-imported row (provider, the bank's transaction id, connection, bank name, sync state imported/edited, the last synced fields and the provider's full raw transaction object; null for a row entered by hand). `amount` fields are signed milliunits (1/1000 of the currency unit, 12.34 = 12340; negative = money out).",
+  input: z.object({ id: uuidSchema, budget_id: budgetId }),
+  output: transactionDetailsSchema,
+  method: 'GET',
+  path: '/transactions/:id',
   kind: 'read',
   expose: EXPOSE_ALL,
 });

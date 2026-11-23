@@ -5,13 +5,17 @@
  */
 import type { z } from '@shared/zod';
 import { contractRequest } from '@shared/contract-request';
-import { accountsCreate, accountsDelete, accountsList, accountsReconcile, accountsUpdate, repeatRulesCreate, repeatRulesDelete, transactionsBulk, transactionsCreate, transactionsDelete, transactionsList, transactionsUpdate } from '@shared/contracts/budget';
+import { accountsCreate, accountsDelete, accountsList, accountsReconcile, accountsUpdate, repeatRulesCreate, repeatRulesDelete, transactionsBulk, transactionsCreate, transactionsDelete, transactionsGet, transactionsList, transactionsUpdate } from '@shared/contracts/budget';
+import type { OperationOutput } from '@shared/operation-contract';
 import type { Cents, RepeatFrequency } from '../../domain/types';
 import { centsToMilli, type ImportTxnWire, snakeSubTxn, snakeTxn, snakeTxnPatch, type SubTxnInput, type TransactionInput } from '../mapping';
 import type { AccountRow, AccountTypeRow, RepeatRuleRow, TransactionRow } from '../rows';
 import { type BudgetScope, scopedList } from './base';
 import type { SubWire } from './types';
 import { payeesApi } from './payees';
+
+/** Answer of the transaction detail read (`budget_transactions_get`). */
+export type TransactionDetails = OperationOutput<typeof transactionsGet>;
 
 export const registerApi = payeesApi.injectEndpoints({
   endpoints: (b) => ({
@@ -22,6 +26,12 @@ export const registerApi = payeesApi.injectEndpoints({
 
     getTransactions: b.query<TransactionRow[], BudgetScope>({
       query: scopedList(transactionsList),
+      providesTags: (_r, _e, { budgetId }) => [{ type: 'Transactions', id: budgetId }],
+    }),
+
+    /** One transaction with its import record and the bank's raw data (the transaction page). */
+    getTransactionDetails: b.query<TransactionDetails, BudgetScope & { id: string }>({
+      query: ({ budgetId, id }) => contractRequest(transactionsGet, { id, budget_id: budgetId }),
       providesTags: (_r, _e, { budgetId }) => [{ type: 'Transactions', id: budgetId }],
     }),
 

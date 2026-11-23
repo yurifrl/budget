@@ -95,7 +95,7 @@ app.route('/', featuresRoutes());
 const op = makeOpCaller(app, contracts);
 
 /** Ids captured while seeding, used to build each read's sample input. */
-const seeded = { account: '', card: '', category: '', payee: '', connection: '' };
+const seeded = { account: '', card: '', category: '', payee: '', connection: '', importedTxn: '' };
 
 async function ok(name: string, input: Record<string, unknown>) {
   const res = await op(name, input);
@@ -190,6 +190,11 @@ beforeAll(async () => {
   seeded.connection = conn.id;
   await ok('budget_accounts_update', { id: card.id, budget_id: B, link: { connectionId: conn.id, externalAccountId: EXT_ACC } });
   await syncConnectionTransactions({ userId: user.id, connectionId: conn.id, aggregator, ignoreWatermark: true });
+  const importedRow = await pool.query<{ id: string }>(
+    `SELECT t.id FROM transactions t JOIN connection_transactions ct ON ct.transaction_id = t.id WHERE t.account_id = $1`,
+    [card.id],
+  );
+  seeded.importedTxn = importedRow.rows[0]!.id;
 
   // Features: a value for everyone and one user override, so the admin list validates real rows.
   // The user's own value is ON: the connection above runs on the shared keys and must stay usable
@@ -221,6 +226,8 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     budget_bundles_list: { budget_id: B },
     budget_accounts_list: { budget_id: B },
     budget_transactions_list: { budget_id: B },
+    // The bank-imported row, so the import record (raw payload included) is validated too.
+    budget_transactions_get: { id: seeded.importedTxn, budget_id: B },
     budget_assignments_list: { budget_id: B },
     budget_month_notes_list: { budget_id: B },
     budget_payees_list: { budget_id: B },

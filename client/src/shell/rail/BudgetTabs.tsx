@@ -110,6 +110,14 @@ export function BudgetTabs({ isPhone }: { isPhone: boolean }) {
           tabBarItemStyle: { display: 'none' },
         }}
       />
+      {/* Transaction page: pushed with ?id=<transaction id> (row menu Details), never a tab. */}
+      <Tabs.Screen
+        name="transaction"
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
       {/* Linked-account detail: pushed with ?account=<id>, never a tab. */}
       <Tabs.Screen
         name="linked-account"

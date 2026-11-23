@@ -130,6 +130,12 @@ describe('contract-derived requests', () => {
     expect(c.url).toBe(`${BASE}/payees/p-1/transactions?budget_id=b-1&limit=50&offset=0`);
   });
 
+  test('getTransactionDetails: GET /transactions/:id with budget_id in the query', async () => {
+    const c = await run(() => budgetApi.endpoints.getTransactionDetails.initiate({ budgetId: 'b-1', id: 't-1' }));
+    expect(c.method).toBe('GET');
+    expect(c.url).toBe(`${BASE}/transactions/t-1?budget_id=b-1`);
+  });
+
   test('getConnectionTransactions: first page has no cursor; limit 50 in the query', async () => {
     const c = await run(() =>
       budgetApi.endpoints.getConnectionTransactions.initiate({ id: 'c-1', accountId: 'a-1' }),
@@ -289,7 +295,7 @@ describe('the split slice is still one api', () => {
   test('one reducer path, the same tag types, every endpoint reachable from budgetApi', () => {
     expect(budgetApi.reducerPath).toBe('budgetApi');
     const endpoints = Object.keys(budgetApi.endpoints);
-    expect(endpoints).toHaveLength(85);
+    expect(endpoints).toHaveLength(86);
     for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget']) {
       expect(endpoints).toContain(name);
     }

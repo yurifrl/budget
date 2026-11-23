@@ -68,6 +68,7 @@ export function TxnMenuTrigger({
     match,
     unmatch,
     exportCsv,
+    openDetails,
     candidates,
     moveTargets,
     busy,
@@ -221,6 +222,11 @@ export function TxnMenuTrigger({
             label={t('menu.export')}
             systemImage="square.and.arrow.up"
             onPress={() => void exportCsv()}
+          />
+          <Button
+            label={t('menu.details')}
+            systemImage="info.circle"
+            onPress={openDetails}
           />
           <Button
             label={tCommon('delete')}

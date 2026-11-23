@@ -3,7 +3,7 @@
  * YNAB's row menu (checked live against app.ynab.com): Approve / Reject,
  * Mark as Cleared / Mark as Uncleared, Match / Unmatch, Duplicate, Make
  * Repeating, Flag, Memo…, Categorize, Move to Account, Export 1 Transaction,
- * Delete — each row with a leading icon and YNAB's shortcut chips (A ·
+ * Details (ours: the transaction's own page), Delete — each row with a leading icon and YNAB's shortcut chips (A ·
  * shift R · C · M · shift U · shift D · shift T · delete), sections split by
  * hairline dividers. Every action is wired to a real mutation. Presentation
  * mirrors PlanScreen's RowMenu: full-screen backdrop + anchored card,
@@ -60,6 +60,7 @@ export function TxnRowMenu({
     match,
     unmatch,
     exportCsv,
+    openDetails,
     busy,
     candidates,
     matched,
@@ -101,6 +102,7 @@ export function TxnRowMenu({
     categorize: () => setPanel('category'),
     move: () => setPanel('move'),
     export: exportCsv,
+    details: openDetails,
     delete: doDelete,
   };
 

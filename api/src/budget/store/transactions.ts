@@ -256,3 +256,54 @@ export async function transactionInBudget(db: Queryable, id: string, budgetId: s
   const r = await db.query('SELECT 1 FROM transactions WHERE id = $1 AND budget_id = $2', [id, budgetId]);
   return r.rowCount !== 0;
 }
+
+/** A transaction with the names of its payee, category and account, and the account's bank link. */
+export interface TransactionDetailRow extends Record<string, unknown> {
+  id: string;
+  date: string;
+  payee_name: string | null;
+  category_name: string | null;
+  account_name: string;
+  /** The account's bank connection (budget's own column); null when not linked. */
+  account_connection_id: string | null;
+  /** Institution name stored on the account. */
+  account_institution: string | null;
+}
+
+/**
+ * One transaction of `budgetId` (live or soft-deleted) for the detail read,
+ * re-scoped by budget: another budget's id is indistinguishable from a bogus one.
+ */
+export async function getTransactionDetailInBudget(
+  db: Queryable,
+  id: string,
+  budgetId: string,
+): Promise<TransactionDetailRow | undefined> {
+  const r = await db.query<TransactionDetailRow>(
+    // The second `date` (plain YYYY-MM-DD) overrides t.date in the row object.
+    `SELECT t.*, to_char(t.date, 'YYYY-MM-DD') AS date,
+            p.name AS payee_name, c.name AS category_name, a.name AS account_name,
+            a.connection_id AS account_connection_id, a.institution AS account_institution
+     FROM transactions t
+     JOIN accounts a ON a.id = t.account_id AND a.budget_id = t.budget_id
+     LEFT JOIN payees p ON p.id = t.payee_id
+     LEFT JOIN categories c ON c.id = t.category_id
+     WHERE t.id = $1 AND t.budget_id = $2`,
+    [id, budgetId],
+  );
+  return r.rows[0];
+}
+
+/** Live split legs of one transaction of `budgetId`, with category names. */
+export async function listTransactionSubtransactions(db: Queryable, transactionId: string, budgetId: string) {
+  const r = await db.query(
+    `SELECT s.id, s.transaction_id, s.amount, s.memo, s.payee_id, s.category_id,
+            s.transfer_account_id, s.transfer_transaction_id, s.deleted, c.name AS category_name
+     FROM subtransactions s
+     LEFT JOIN categories c ON c.id = s.category_id
+     WHERE s.transaction_id = $1 AND s.budget_id = $2 AND s.deleted = false
+     ORDER BY s.created_at, s.id`,
+    [transactionId, budgetId],
+  );
+  return r.rows;
+}

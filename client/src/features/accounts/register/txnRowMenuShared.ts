@@ -7,6 +7,7 @@
  */
 
 import { useMemo } from "react";
+import { useRouter } from "expo-router";
 
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -98,8 +99,8 @@ async function shareCsvFile(name: string, csv: string): Promise<void> {
 /**
  * Every YNAB row-menu action for one transaction, shared by the desktop
  * popover and the native SwiftUI trigger: approve/reject, cleared flips,
- * match/unmatch, duplicate, make repeating, flag, categorize, move, export
- * and delete — each closing via `onClose` after the mutation settles.
+ * match/unmatch, duplicate, make repeating, flag, categorize, move, export,
+ * details and delete — each closing via `onClose` after the mutation settles.
  */
 export function useTxnRowMenuActions({
   txn,
@@ -117,6 +118,7 @@ export function useTxnRowMenuActions({
   const [updateTransaction] = useUpdateTransactionMutation();
   const [deleteTransaction, deleteState] = useDeleteTransactionMutation();
   const [addRepeatRule, repeatState] = useAddRepeatRuleMutation();
+  const router = useRouter();
 
   const candidates = useMemo(() => matchCandidates(txn, budget), [txn, budget]);
   const matched = txn.matchedTransactionId
@@ -285,6 +287,12 @@ export function useTxnRowMenuActions({
     onClose();
   };
 
+  // Details: the transaction's own page, deep-linkable (/transaction?id=…).
+  const openDetails = () => {
+    onClose();
+    router.push({ pathname: "/transaction", params: { id: txn.id } });
+  };
+
   const moveTargets = budget.accounts.filter((a) => a.id !== txn.accountId);
   const busy = deleteState.isLoading || repeatState.isLoading;
 
@@ -301,6 +309,7 @@ export function useTxnRowMenuActions({
     match,
     unmatch,
     exportCsv,
+    openDetails,
     candidates,
     matched,
     moveTargets,
