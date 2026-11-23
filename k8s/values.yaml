@@ -10,9 +10,9 @@
 # Keys are Deployment names (chart `deployments[].name`); values are image
 # tags (no `v` prefix, matching what CI pushes to GHCR).
 imageTags:
-  budget-web: 2026.11.23-02
-  budget-api: 2026.11.23-02
+  budget-web: 2026.11.23-03
+  budget-api: 2026.11.23-03
   # Same image as the API (bun src/worker.ts); pinned to the API tag by release.yml.
-  budget-worker: 2026.11.23-02
+  budget-worker: 2026.11.23-03
   # Admin SPA (deploy/Dockerfile.admin).
-  budget-admin: 2026.11.23-02
+  budget-admin: 2026.11.23-03
