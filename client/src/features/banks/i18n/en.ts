@@ -104,10 +104,6 @@ export default {
     one: '{count} skipped: already imported in “{account}”',
     other: '{count} skipped: already imported in “{account}”',
   },
-  'syncRun.skippedOtherBudget': {
-    one: '{count} skipped: already imported in another budget',
-    other: '{count} skipped: already imported in another budget',
-  },
   'syncRun.skippedDeleted': {
     one: '{count} skipped: it was deleted before and stays deleted',
     other: '{count} skipped: they were deleted before and stay deleted',

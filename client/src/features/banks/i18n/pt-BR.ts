@@ -111,10 +111,6 @@ const m: Translation<typeof en> = {
     one: '{count} ignorada: já importada em “{account}”',
     other: '{count} ignoradas: já importadas em “{account}”',
   },
-  'syncRun.skippedOtherBudget': {
-    one: '{count} ignorada: já importada em outro orçamento',
-    other: '{count} ignoradas: já importadas em outro orçamento',
-  },
   'syncRun.skippedDeleted': {
     one: '{count} ignorada: foi excluída antes e continua excluída',
     other: '{count} ignoradas: foram excluídas antes e continuam excluídas',
