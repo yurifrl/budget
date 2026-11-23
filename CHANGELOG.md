@@ -1,5 +1,13 @@
 # Changelog
 
+## v2026.11.23-01 2026-11-23 release
+
+### Changed
+
+- release: v2026.11.23-01
+- tasks: close budget-mwp0
+
+
 ## v2026.11.23 2026-11-23 release
 
 ### Changed
