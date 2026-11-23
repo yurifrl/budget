@@ -305,7 +305,7 @@ export async function syncConnectionTransactions(input: {
   ignoreWatermark?: boolean;
   /** Per-account upstream pull timeout (test seam; defaults to UPSTREAM_TIMEOUT_MS). */
   upstreamTimeoutMs?: number;
-  /** Called between accounts (job heartbeat). */
+  /** Called between accounts and per upstream row in phase 2 (job heartbeat; keep it cheap). */
   onProgress?: () => void;
   /**
    * Cancellation point: runs before phase 2 opens its transaction and again
@@ -361,7 +361,11 @@ async function syncOnce(
 
   const timeoutMs = input.upstreamTimeoutMs ?? UPSTREAM_TIMEOUT_MS;
   const fetched = new Map<string, FetchedAccount>();
+  // Phase timings, logged once per pass so a slow sync is diagnosable from logs.
+  const startedAt = Date.now();
+  const timings: Record<string, unknown> = { pull_ms: {} as Record<string, number> };
   for (const acc of linked) {
+    const pullStart = Date.now();
     const upstream = await withTimeout(
       aggregator.listTransactions(acc.external_account_id, {
         ...(from != null ? { from } : {}),
@@ -371,12 +375,15 @@ async function syncOnce(
       `upstream listTransactions(${acc.external_account_id})`,
     );
     fetched.set(acc.id, { acc, transactions: upstream.transactions, complete: !upstream.hasMore });
+    (timings.pull_ms as Record<string, number>)[acc.external_account_id] = Date.now() - pullStart;
     input.onProgress?.();
   }
   const currencies = await upstreamCurrencies(aggregator, row.external_id, linked, timeoutMs);
   await input.beforeCommit?.();
 
   // ---- Phase 2: short write transaction ---------------------------------
+  let rowsStart = Date.now();
+  let rowCount = 0;
   const pg = await pool.connect();
   try {
     await pg.query('BEGIN');
@@ -397,6 +404,7 @@ async function syncOnce(
 
     // Only accounts we actually pulled (links may have changed meanwhile).
     const stillLinked = (await pg.query<LinkedAccountRow>(linkedSql, [row.id])).rows;
+    rowsStart = Date.now();
 
     for (const { id } of stillLinked) {
       const pulled = fetched.get(id);
@@ -415,6 +423,8 @@ async function syncOnce(
       const deltas: AccountDeltas = { cleared_delta: 0, uncleared_delta: 0 };
 
       for (const txn of upstream.transactions) {
+        input.onProgress?.();
+        rowCount += 1;
         // One SAVEPOINT per row: an unexpected failure rolls back that row
         // alone (counted in `failed`), the rest of the batch still commits.
         // Every upstream id is in `seen`, so the sweep never touches a
@@ -587,6 +597,7 @@ async function syncOnce(
         )
       ).rows : [];
       for (const trackedRow of tracked) {
+        input.onProgress?.();
         if (seen.has(trackedRow.external_transaction_id)) continue;
         await ledger.tombstoneTransaction(pg, trackedRow.id);
         const bucket = trackedRow.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';
@@ -605,11 +616,17 @@ async function syncOnce(
       }
     }
 
+    timings.rows = rowCount;
+    timings.rows_ms = Date.now() - rowsStart;
+
     // Pair imported card-statement payments (cash outflow + card inflow) as
     // transfers; idempotent, so it also backfills rows imported earlier.
+    const linkStart = Date.now();
     for (const budgetId of new Set(stillLinked.filter((a) => fetched.has(a.id)).map((a) => a.budget_id))) {
+      input.onProgress?.();
       await ledger.linkCardPayments(pg, budgetId);
     }
+    timings.link_card_payments_ms = Date.now() - linkStart;
 
     await pg.query(
       'UPDATE public.connections SET last_synced_at = now(), updated_at = now() WHERE id = $1',
@@ -617,7 +634,11 @@ async function syncOnce(
     );
 
     await input.beforeCommit?.();
+    const commitStart = Date.now();
     await pg.query('COMMIT');
+    timings.commit_ms = Date.now() - commitStart;
+    timings.total_ms = Date.now() - startedAt;
+    console.info(`Connections sync ${row.id}: timings ${JSON.stringify(timings)}`);
     if (result.skipped_deleted + result.skipped_other_account + result.failed > 0) {
       console.warn(
         `Connections sync ${row.id}: skipped ${result.skipped_deleted} deleted and ${result.skipped_other_account} imported into another account; ${result.failed} failed`,
@@ -625,6 +646,10 @@ async function syncOnce(
     }
     return result;
   } catch (err) {
+    timings.rows = rowCount;
+    timings.rows_ms ??= Date.now() - rowsStart;
+    timings.total_ms = Date.now() - startedAt;
+    console.warn(`Connections sync ${row.id}: rolled back; timings so far ${JSON.stringify(timings)}`);
     await pg.query('ROLLBACK');
     throw err;
   } finally {

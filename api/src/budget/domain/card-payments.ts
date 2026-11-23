@@ -65,12 +65,26 @@ export function matchCardPayments(rows: readonly PaymentRow[]): { outflowId: str
     o.budgetId === i.budgetId &&
     -o.amount === i.amount &&
     daysApart(o.date, i.date) <= MAX_PAYMENT_DAYS_APART;
+  // Bucket by absolute amount so a full-history budget is not scanned
+  // pairwise (fits() requires equal amounts anyway).
+  const byAmount = (list: PaymentRow[]) => {
+    const m = new Map<number, PaymentRow[]>();
+    for (const r of list) {
+      const k = Math.abs(r.amount);
+      const bucket = m.get(k);
+      if (bucket) bucket.push(r);
+      else m.set(k, [r]);
+    }
+    return m;
+  };
+  const inflowsByAmount = byAmount(inflows);
+  const outflowsByAmount = byAmount(outflows);
   const pairs: { outflowId: string; inflowId: string }[] = [];
   for (const o of outflows) {
-    const candidates = inflows.filter((i) => fits(o, i));
+    const candidates = (inflowsByAmount.get(-o.amount) ?? []).filter((i) => fits(o, i));
     if (candidates.length !== 1) continue;
     const [i] = candidates;
-    if (outflows.filter((o2) => fits(o2, i)).length !== 1) continue;
+    if ((outflowsByAmount.get(i.amount) ?? []).filter((o2) => fits(o2, i)).length !== 1) continue;
     pairs.push({ outflowId: o.id, inflowId: i.id });
   }
   return pairs;

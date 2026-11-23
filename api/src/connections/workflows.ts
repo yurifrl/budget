@@ -43,7 +43,9 @@ export async function connectionsSync(args: JobArgs): Promise<unknown> {
   const queue = `${workflowInfo().taskQueue}${PLUGGY_QUEUE_SUFFIX}`;
   const provider = proxyActivities<ConnectionsActivities>({
     taskQueue: queue,
-    startToCloseTimeout: '10 minutes',
+    // A first full-history import (a few thousand rows) must fit one attempt;
+    // liveness is the heartbeat (timer + per-row progress), not this bound.
+    startToCloseTimeout: '30 minutes',
     heartbeatTimeout: '30 seconds',
     retry: { initialInterval: '30 seconds', backoffCoefficient: 2, maximumInterval: '15 minutes', maximumAttempts: 5 },
   });
