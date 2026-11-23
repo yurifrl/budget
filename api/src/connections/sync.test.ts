@@ -14,7 +14,7 @@ import { HttpError } from '../core/validate';
 import { getImportMetadata } from './ledger-reads';
 import * as store from './store';
 import { effectiveSyncWindowDays } from './settings';
-import { pullFrom, refreshConnection, syncConnectionTransactions } from './sync';
+import { emptySyncResult, pullFrom, refreshConnection, syncConnectionTransactions } from './sync';
 import type { AggregatedTransaction, BankAggregator, ConnectTokenInput } from './types';
 
 const PROVIDER = 'testprovider';
@@ -260,7 +260,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
       connectionId: await connId(),
       aggregator: fakeAggregator([upTx1(), upTx2()]),
     });
-    expect(result).toEqual({ added: 0, updated: 0, deleted: 0, blocked: 0, duplicates: 2 });
+    expect(result).toEqual({ ...emptySyncResult(), duplicates: 2 });
     expect(await accountBalances()).toEqual(before);
   });
 
@@ -275,7 +275,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
       connectionId: await connId(),
       aggregator: fakeAggregator([richer, upTx2()]),
     });
-    expect(result).toEqual({ added: 0, updated: 0, deleted: 0, blocked: 0, duplicates: 2 });
+    expect(result).toEqual({ ...emptySyncResult(), duplicates: 2 });
     const meta = await getImportMetadata(pool, t1!.id);
     expect(meta!.raw).toEqual(richer.raw);
     expect(meta!.rawReceivedAt!.getTime()).toBeGreaterThanOrEqual(metaBefore!.rawReceivedAt!.getTime());

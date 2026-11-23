@@ -99,6 +99,23 @@ export default {
   'syncRun.reimport.cancelled': 'Re-import was cancelled.',
   'syncRun.reimport.completeNothing': 'Re-import complete — nothing new',
   'syncRun.reimport.completeCounts': 'Re-import complete — {added} added · {updated} updated · {deleted} removed',
+  // model/syncRun.ts syncSkipLines: what the last finished sync left out
+  'syncRun.skippedOtherAccount': {
+    one: '{count} skipped: already imported in “{account}”',
+    other: '{count} skipped: already imported in “{account}”',
+  },
+  'syncRun.skippedOtherBudget': {
+    one: '{count} skipped: already imported in another budget',
+    other: '{count} skipped: already imported in another budget',
+  },
+  'syncRun.skippedDeleted': {
+    one: '{count} skipped: it was deleted before and stays deleted',
+    other: '{count} skipped: they were deleted before and stay deleted',
+  },
+  'syncRun.failedRows': {
+    one: '{count} bank transaction could not be imported',
+    other: '{count} bank transactions could not be imported',
+  },
 
   // model/linkPicker.ts
   'picker.creditToCash': 'This is a credit card, but the budget account is a cash account',

@@ -93,12 +93,27 @@ export const connectionRegisteredSchema = z.object({ connection: connectionSchem
 /** POST /connections/connect-token — widget credentials (token is short-lived, frontend-only). */
 export const connectTokenSchema = z.object({ token: z.string(), clientId: nullableString, widgetUrl: nullableString });
 
+/** Where bank ids skipped as "already imported into another account" live; `name` is null for an account in another budget. */
+export const syncSkippedAccountSchema = z.object({
+  account_id: id,
+  name: nullableString,
+  count: z.number(),
+});
+
 export const syncCountsSchema = z.object({
   added: z.number(),
   updated: z.number(),
   deleted: z.number(),
   blocked: z.number(),
   duplicates: z.number(),
+  /** Bank transactions imported before and since deleted (by the user or by a sync): left deleted, not re-imported. */
+  skipped_deleted: z.number(),
+  /** Bank transactions already imported into another budget account (e.g. one unlinked earlier): left there. */
+  skipped_other_account: z.number(),
+  /** Per account, where the `skipped_other_account` rows live. */
+  skipped_accounts: z.array(syncSkippedAccountSchema),
+  /** Bank transactions that failed to import (each rolled back alone; the rest of the sync committed). */
+  failed: z.number(),
 });
 
 /** One background sync run (job ledger row, user-safe fields only). */

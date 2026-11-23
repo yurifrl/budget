@@ -14,6 +14,10 @@
  * blocked and left authoritative, upstream-deleted rows are tombstoned unless
  * blocked. All writes of one account batch commit in a single server-side
  * transaction, so a partial failure cannot leave balance caches half-moved.
+ * Each row runs under its own SAVEPOINT: an unexpected per-row error rolls
+ * back that row only (counted in `failed`). A bank id already imported
+ * anywhere (deleted, or into another account) is skipped and counted, never
+ * inserted twice: re-running a sync is always a no-op.
  *
  * Every write into budget's tables (payees, imported rows, refreshes,
  * tombstones, balance deltas, card-payment pairing) goes through budget's
@@ -21,7 +25,7 @@
  * table `connection_transactions` is this feature's own.
  */
 
-import { pool } from '../core/db';
+import { pool, type Queryable } from '../core/db';
 import { ledger } from '../budget';
 import { HttpError } from '../core/validate';
 import { getConnectionByUser, setConnectionInstitution, withLinkedBy, type ConnectionRow, type ConnectionWithLinker } from './store';
@@ -37,6 +41,102 @@ export interface SyncResult {
   blocked: number;
   /** Engine-owned rows already matching upstream — the idempotent no-ops. */
   duplicates: number;
+  /** Bank ids imported before and since deleted (by the user or a sync tombstone): they stay deleted. */
+  skipped_deleted: number;
+  /** Bank ids already imported into another budget account (e.g. an unlinked one): they stay there. */
+  skipped_other_account: number;
+  /** Where the `skipped_other_account` rows live; `name` is null when that account is in another budget. */
+  skipped_accounts: SkippedAccount[];
+  /** Rows that failed unexpectedly; each rolled back alone, the rest committed. */
+  failed: number;
+  /** The first failures (capped at MAX_RECORDED_FAILURES), for the job log. Not user-facing. */
+  failures: SyncFailure[];
+}
+
+export interface SkippedAccount {
+  account_id: string;
+  name: string | null;
+  count: number;
+}
+
+export interface SyncFailure {
+  external_id: string;
+  reason: string;
+}
+
+const MAX_RECORDED_FAILURES = 20;
+const MAX_REASON_LENGTH = 300;
+
+export const emptySyncResult = (): SyncResult => ({
+  added: 0,
+  updated: 0,
+  deleted: 0,
+  blocked: 0,
+  duplicates: 0,
+  skipped_deleted: 0,
+  skipped_other_account: 0,
+  skipped_accounts: [],
+  failed: 0,
+  failures: [],
+});
+
+/** Where a bank id was imported before, whatever its state. */
+interface PriorImport {
+  transaction_id: string;
+  account_id: string;
+  budget_id: string;
+  account_name: string;
+  deleted: boolean;
+}
+
+/** The row a bank id was imported as, in any account, deleted or not (the shadow key is global). */
+async function findImportedBankId(
+  pg: Queryable,
+  provider: string,
+  externalId: string,
+): Promise<PriorImport | undefined> {
+  const found = await pg.query<PriorImport>(
+    `SELECT t.id AS transaction_id, t.account_id, ac.budget_id, ac.name AS account_name, t.deleted
+     FROM public.connection_transactions s
+     JOIN public.transactions t ON t.id = s.transaction_id
+     JOIN public.accounts ac ON ac.id = t.account_id
+     WHERE s.provider = $1 AND s.external_transaction_id = $2`,
+    [provider, externalId],
+  );
+  return found.rows[0];
+}
+
+/**
+ * Count a bank id that is already imported. Deleted wins (it stays deleted
+ * wherever it lives); a live row elsewhere stays in its account; a live row
+ * in this account that the import-id lookup missed is left alone (blocked).
+ */
+function recordSkip(result: SyncResult, prior: PriorImport, acc: LinkedAccountRow): void {
+  if (prior.deleted) {
+    result.skipped_deleted += 1;
+    return;
+  }
+  if (prior.account_id === acc.id) {
+    result.blocked += 1;
+    return;
+  }
+  result.skipped_other_account += 1;
+  const entry = result.skipped_accounts.find((a) => a.account_id === prior.account_id);
+  if (entry) entry.count += 1;
+  else
+    result.skipped_accounts.push({
+      account_id: prior.account_id,
+      // Another budget's account name is not this budget's to show.
+      name: prior.budget_id === acc.budget_id ? prior.account_name : null,
+      count: 1,
+    });
+}
+
+function recordFailure(result: SyncResult, externalId: string, err: unknown): void {
+  result.failed += 1;
+  const reason = (err instanceof Error ? err.message : String(err)).slice(0, MAX_REASON_LENGTH);
+  if (result.failures.length < MAX_RECORDED_FAILURES) result.failures.push({ external_id: externalId, reason });
+  console.warn(`Connections sync: bank transaction ${externalId} failed to import: ${reason}`);
 }
 
 /** Fields the sync engine owns, in the stored-payload compare shape. */
@@ -279,7 +379,7 @@ async function syncOnce(
   try {
     await pg.query('BEGIN');
 
-    const result: SyncResult = { added: 0, updated: 0, deleted: 0, blocked: 0, duplicates: 0 };
+    const result = emptySyncResult();
 
     // Lock the connection row so concurrent syncs cannot double-write, then
     // re-check: if another sync committed since our snapshot, our upstream
@@ -309,120 +409,151 @@ async function syncOnce(
 
       input.onProgress?.();
       // Budget's ledger API: rename rules + create-or-find, cached per batch.
-      const resolver = ledger.createImportPayeeResolver(pg, acc.budget_id);
+      let resolver = ledger.createImportPayeeResolver(pg, acc.budget_id);
       const deltas: AccountDeltas = { cleared_delta: 0, uncleared_delta: 0 };
 
       for (const txn of upstream.transactions) {
-        const milli = txn.amount;
-        const importId = `${row.provider}:${txn.externalId}`;
-        const existing = (
-          await pg.query<ExistingTxnRow>(
-            `SELECT t.id, t.date::text AS date, t.amount, t.memo, t.cleared,
-                    p.name AS payee_name,
-                    s.blocked AS shadow_blocked, s.last_synced_payload AS shadow_payload
-             FROM public.transactions t
-             LEFT JOIN public.connection_transactions s ON s.transaction_id = t.id
-             LEFT JOIN public.payees p ON p.id = t.payee_id
-             WHERE t.account_id = $1 AND t.import_id = $2 AND NOT t.deleted`,
-            [acc.id, importId],
-          )
-        ).rows[0];
+        // One SAVEPOINT per row: an unexpected failure rolls back that row
+        // alone (counted in `failed`), the rest of the batch still commits.
+        // Every upstream id is in `seen`, so the sweep never touches a
+        // skipped or failed row's target.
+        const before = { result: structuredClone(result), deltas: { ...deltas } };
+        await pg.query('SAVEPOINT sync_row');
+        // False only while a failed row's rollback itself fails (the outer catch then aborts the run).
+        let savepointUsable = true;
+        try {
+          const milli = txn.amount;
+          const importId = `${row.provider}:${txn.externalId}`;
+          const existing = (
+            await pg.query<ExistingTxnRow>(
+              `SELECT t.id, t.date::text AS date, t.amount, t.memo, t.cleared,
+                      p.name AS payee_name,
+                      s.blocked AS shadow_blocked, s.last_synced_payload AS shadow_payload
+               FROM public.transactions t
+               LEFT JOIN public.connection_transactions s ON s.transaction_id = t.id
+               LEFT JOIN public.payees p ON p.id = t.payee_id
+               WHERE t.account_id = $1 AND t.import_id = $2 AND NOT t.deleted`,
+              [acc.id, importId],
+            )
+          ).rows[0];
 
-        if (!existing) {
-          // Fresh import — bank-confirmed rows land cleared (the user-visible
-          // "synced" semantic); unapproved, uncategorized (the review flow
-          // owns categorization). The shadow stores the date-only form the
-          // read-back path (`t.date::text`) compares against — a raw upstream
-          // timestamp would mismatch itself on the very next pull.
-          const cleared = txn.cleared ? 'cleared' : 'uncleared';
-          const payee = await resolver.resolve(txn.description);
-          const insertedId = await ledger.insertImportedTransaction(pg, {
-            budgetId: acc.budget_id,
-            accountId: acc.id,
+          if (!existing) {
+            // The shadow key (provider, bank id) is global: a bank id already
+            // imported anywhere (deleted, or into another account) is skipped,
+            // never inserted twice.
+            const prior = await findImportedBankId(pg, row.provider, txn.externalId);
+            if (prior) {
+              recordSkip(result, prior, acc);
+              continue;
+            }
+            // Fresh import — bank-confirmed rows land cleared (the user-visible
+            // "synced" semantic); unapproved, uncategorized (the review flow
+            // owns categorization). The shadow stores the date-only form the
+            // read-back path (`t.date::text`) compares against — a raw upstream
+            // timestamp would mismatch itself on the very next pull.
+            const cleared = txn.cleared ? 'cleared' : 'uncleared';
+            const payee = await resolver.resolve(txn.description);
+            const insertedId = await ledger.insertImportedTransaction(pg, {
+              budgetId: acc.budget_id,
+              accountId: acc.id,
+              date: txn.date.slice(0, 10),
+              amount: milli,
+              payeeId: payee.id,
+              importId,
+              importPayeeName: payee.name || null,
+              cleared,
+            });
+            await pg.query(
+              `INSERT INTO connection_transactions
+                 (transaction_id, provider, external_transaction_id, last_synced_payload, blocked,
+                  raw_payload, raw_received_at)
+               VALUES ($1, $2, $3, $4, false, $5, now())`,
+              [
+                insertedId,
+                row.provider,
+                txn.externalId,
+                JSON.stringify({ date: txn.date.slice(0, 10), amount: milli, memo: '', payee: payee.name }),
+                JSON.stringify(txn.raw),
+              ],
+            );
+            result.added += 1;
+            deltas[cleared === 'cleared' ? 'cleared_delta' : 'uncleared_delta'] += milli;
+            continue;
+          }
+
+          // Metadata only: refresh the provider's raw object on every pull of a
+          // shadowed row, whatever the engine decides below (blocked, duplicate,
+          // updated). Inside the row's savepoint, so a failed row rolls it back
+          // too. Never touches user-visible fields or updated_at. Skipped bank
+          // ids (deleted, or imported into another account) get no raw write.
+          if (existing.shadow_payload != null) {
+            await pg.query(
+              'UPDATE connection_transactions SET raw_payload = $2, raw_received_at = now() WHERE transaction_id = $1',
+              [existing.id, JSON.stringify(txn.raw)],
+            );
+          }
+
+          if (existing.shadow_blocked || existing.shadow_payload == null) {
+            // User-modified engine rows stay frozen; rows without a shadow
+            // record (e.g. statement import sharing the import id) were never
+            // engine-owned — never touch either kind.
+            result.blocked += 1;
+            continue;
+          }
+
+          const current = payloadFromRow(existing);
+          if (!samePayload(current, existing.shadow_payload)) {
+            await pg.query(
+              'UPDATE connection_transactions SET blocked = true, updated_at = now() WHERE transaction_id = $1',
+              [existing.id],
+            );
+            result.blocked += 1;
+            continue;
+          }
+
+          const upstreamPayee = await resolver.resolve(txn.description);
+          // The ledger's read-back form is date-only (`t.date::text`); compare
+          // like with like so unchanged upstream rows stay duplicates.
+          const upstreamPayload: OwnedPayload = {
             date: txn.date.slice(0, 10),
             amount: milli,
-            payeeId: payee.id,
-            importId,
-            importPayeeName: payee.name || null,
-            cleared,
+            memo: '',
+            payee: upstreamPayee.name,
+          };
+          if (samePayload(current, upstreamPayload)) {
+            result.duplicates += 1;
+            continue;
+          }
+
+          // Upstream changed a row the user left untouched → refresh the owned
+          // fields; cleared/approved state is preserved.
+          await ledger.refreshImportedTransaction(pg, existing.id, {
+            date: txn.date.slice(0, 10),
+            amount: milli,
+            payeeId: upstreamPayee.id,
+            importPayeeName: upstreamPayee.name || null,
           });
           await pg.query(
-            `INSERT INTO connection_transactions
-               (transaction_id, provider, external_transaction_id, last_synced_payload, blocked,
-                raw_payload, raw_received_at)
-             VALUES ($1, $2, $3, $4, false, $5, now())`,
-            [
-              insertedId,
-              row.provider,
-              txn.externalId,
-              JSON.stringify({ date: txn.date.slice(0, 10), amount: milli, memo: '', payee: payee.name }),
-              JSON.stringify(txn.raw),
-            ],
+            `UPDATE connection_transactions
+             SET last_synced_payload = $2, updated_at = now()
+             WHERE transaction_id = $1`,
+            [existing.id, JSON.stringify(upstreamPayload)],
           );
-          result.added += 1;
-          deltas[cleared === 'cleared' ? 'cleared_delta' : 'uncleared_delta'] += milli;
-          continue;
+          result.updated += 1;
+          const bucket = existing.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';
+          deltas[bucket] += milli - Number(existing.amount);
+        } catch (err) {
+          savepointUsable = false;
+          await pg.query('ROLLBACK TO SAVEPOINT sync_row');
+          savepointUsable = true;
+          Object.assign(result, before.result);
+          Object.assign(deltas, before.deltas);
+          // The rollback may have undone a payee the resolver cached.
+          resolver = ledger.createImportPayeeResolver(pg, acc.budget_id);
+          recordFailure(result, txn.externalId, err);
+        } finally {
+          if (savepointUsable) await pg.query('RELEASE SAVEPOINT sync_row');
         }
-
-        // Metadata only: refresh the provider's raw object on every pull of a
-        // shadowed row, whatever the engine decides below (blocked, duplicate,
-        // updated). Never touches user-visible fields or updated_at.
-        if (existing.shadow_payload != null) {
-          await pg.query(
-            'UPDATE connection_transactions SET raw_payload = $2, raw_received_at = now() WHERE transaction_id = $1',
-            [existing.id, JSON.stringify(txn.raw)],
-          );
-        }
-
-        if (existing.shadow_blocked || existing.shadow_payload == null) {
-          // User-modified engine rows stay frozen; rows without a shadow
-          // record (e.g. statement import sharing the import id) were never
-          // engine-owned — never touch either kind.
-          result.blocked += 1;
-          continue;
-        }
-
-        const current = payloadFromRow(existing);
-        if (!samePayload(current, existing.shadow_payload)) {
-          await pg.query(
-            'UPDATE connection_transactions SET blocked = true, updated_at = now() WHERE transaction_id = $1',
-            [existing.id],
-          );
-          result.blocked += 1;
-          continue;
-        }
-
-        const upstreamPayee = await resolver.resolve(txn.description);
-        // The ledger's read-back form is date-only (`t.date::text`); compare
-        // like with like so unchanged upstream rows stay duplicates.
-        const upstreamPayload: OwnedPayload = {
-          date: txn.date.slice(0, 10),
-          amount: milli,
-          memo: '',
-          payee: upstreamPayee.name,
-        };
-        if (samePayload(current, upstreamPayload)) {
-          result.duplicates += 1;
-          continue;
-        }
-
-        // Upstream changed a row the user left untouched → refresh the owned
-        // fields; cleared/approved state is preserved.
-        await ledger.refreshImportedTransaction(pg, existing.id, {
-          date: txn.date.slice(0, 10),
-          amount: milli,
-          payeeId: upstreamPayee.id,
-          importPayeeName: upstreamPayee.name || null,
-        });
-        await pg.query(
-          `UPDATE connection_transactions
-           SET last_synced_payload = $2, updated_at = now()
-           WHERE transaction_id = $1`,
-          [existing.id, JSON.stringify(upstreamPayload)],
-        );
-        result.updated += 1;
-        const bucket = existing.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';
-        deltas[bucket] += milli - Number(existing.amount);
       }
 
       // Missing-upstream deletes: engine-owned, unblocked rows within the
@@ -483,6 +614,11 @@ async function syncOnce(
 
     await input.beforeCommit?.();
     await pg.query('COMMIT');
+    if (result.skipped_deleted + result.skipped_other_account + result.failed > 0) {
+      console.warn(
+        `Connections sync ${row.id}: skipped ${result.skipped_deleted} deleted and ${result.skipped_other_account} imported into another account; ${result.failed} failed`,
+      );
+    }
     return result;
   } catch (err) {
     await pg.query('ROLLBACK');

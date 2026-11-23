@@ -127,6 +127,15 @@ export function createConnectionsActivities(db: Pool, trackedAttempt: Tracked) {
             });
             await setConnectionStatus(row.id, 'connected', null);
             await ctx.log('info', 'sync finished', { ...transactions });
+            if (transactions.skipped_deleted + transactions.skipped_other_account + transactions.failed > 0) {
+              await ctx.log('warn', 'some bank transactions were not imported', {
+                skipped_deleted: transactions.skipped_deleted,
+                skipped_other_account: transactions.skipped_other_account,
+                skipped_accounts: transactions.skipped_accounts,
+                failed: transactions.failed,
+                failures: transactions.failures,
+              });
+            }
             return { ...transactions };
           });
         } catch (err) {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { ConnectionSyncStatusJson, SyncRunJson, SyncState, SyncStatusJson } from '@/budget/data/connections';
-import { awaitSyncRun, describeSyncOutcome, schedulerBanner, syncStateView } from './syncRun';
+import { awaitSyncRun, describeSyncOutcome, schedulerBanner, syncSkipLines, syncStateView } from './syncRun';
 
 const run = (over: Partial<SyncRunJson> = {}): SyncRunJson => ({
   id: 'r1',
@@ -93,5 +93,37 @@ describe('view helpers', () => {
     expect(schedulerBanner({ scheduler_degraded: false })).toBeNull();
     expect(schedulerBanner(undefined)).toBeNull();
     expect(schedulerBanner({ scheduler_degraded: true })).toContain('offline');
+  });
+});
+
+describe('syncSkipLines', () => {
+  test('one line per account, then other budgets, deleted and failed', () => {
+    const r = run({
+      status: 'succeeded',
+      result: {
+        added: 1,
+        skipped_other_account: 100,
+        skipped_accounts: [
+          { account_id: 'a1', name: 'Itaú conta (old)', count: 97 },
+          { account_id: 'a2', name: null, count: 2 },
+          { account_id: 'a3', name: null, count: 1 },
+        ],
+        skipped_deleted: 3,
+        failed: 1,
+      },
+    });
+    expect(syncSkipLines(r)).toEqual([
+      '97 skipped: already imported in “Itaú conta (old)”',
+      '3 skipped: already imported in another budget',
+      '3 skipped: they were deleted before and stay deleted',
+      '1 bank transaction could not be imported',
+    ]);
+  });
+
+  test('nothing for clean, older, unfinished or failed runs', () => {
+    expect(syncSkipLines(run({ status: 'succeeded', result: { added: 2, skipped_deleted: 0, failed: 0, skipped_accounts: [] } }))).toEqual([]);
+    expect(syncSkipLines(run({ status: 'succeeded', result: { added: 2 } }))).toEqual([]);
+    expect(syncSkipLines(run({ status: 'failed', result: { skipped_deleted: 3 } }))).toEqual([]);
+    expect(syncSkipLines(null)).toEqual([]);
   });
 });

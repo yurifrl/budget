@@ -597,9 +597,16 @@ const runJson = (run: JobRun) => ({
   finished_at: run.finished_at,
   user_message: run.user_message,
   user_message_code: serverMessageCode(run.user_message),
-  /** Sync counts (added/updated/deleted/…) on success; user-safe by construction. */
-  result: run.result ?? null,
+  /** Sync counts (added/updated/deleted/skipped…) on success; per-row failure reasons stay in the job log. */
+  result: userSafeResult(run.result),
 });
+
+/** The run result minus `failures` (raw error text for the job ledger, not for users). */
+function userSafeResult(result: JobRun['result']): JobRun['result'] {
+  if (result == null || typeof result !== 'object') return result ?? null;
+  const { failures: _failures, ...rest } = result as Record<string, unknown>;
+  return rest;
+}
 
 /**
  * Shared by sync and reimport: ownership check, then enqueue (or join) the

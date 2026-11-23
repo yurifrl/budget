@@ -106,6 +106,23 @@ const m: Translation<typeof en> = {
   'syncRun.reimport.completeNothing': 'Reimportação concluída — nada de novo',
   'syncRun.reimport.completeCounts':
     'Reimportação concluída — {added} adicionadas · {updated} atualizadas · {deleted} removidas',
+  // model/syncRun.ts syncSkipLines: what the last finished sync left out
+  'syncRun.skippedOtherAccount': {
+    one: '{count} ignorada: já importada em “{account}”',
+    other: '{count} ignoradas: já importadas em “{account}”',
+  },
+  'syncRun.skippedOtherBudget': {
+    one: '{count} ignorada: já importada em outro orçamento',
+    other: '{count} ignoradas: já importadas em outro orçamento',
+  },
+  'syncRun.skippedDeleted': {
+    one: '{count} ignorada: foi excluída antes e continua excluída',
+    other: '{count} ignoradas: foram excluídas antes e continuam excluídas',
+  },
+  'syncRun.failedRows': {
+    one: '{count} transação do banco não pôde ser importada',
+    other: '{count} transações do banco não puderam ser importadas',
+  },
 
   // model/linkPicker.ts
   'picker.creditToCash': 'Este é um cartão de crédito, mas a conta do orçamento é uma conta de dinheiro',

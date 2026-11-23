@@ -40,7 +40,7 @@ import { PLUGGY_KEYS_ROUTE } from './keys/pluggyKeys.logic';
 import { useConnectionActions } from './connect-bank/useConnectionActions';
 import { useSyncStatus } from './connect-bank/useSyncStatus';
 import { storedServerMessage } from './model/serverMessage';
-import { canRequestSync, syncStateView } from './model/syncRun';
+import { canRequestSync, syncSkipLines, syncStateView } from './model/syncRun';
 import { useBudgetShell } from '@/shell/context';
 import { t } from './i18n';
 
@@ -123,6 +123,7 @@ export function ConnectionSettingsScreen() {
   const view = syncEntry ? syncStateView(syncEntry.state) : connectionStatusView(connection.status);
   const connected = canRequestSync(connection.status);
   const syncing = actions.syncingId === connection.id || syncEntry?.state === 'syncing';
+  const skipLines = syncSkipLines(syncEntry?.last_run);
   const summary = summaryQuery.data;
   const linkedCount = summary?.accounts.length ?? 0;
   const activeAccount = tab === OVERVIEW ? null : (summary?.accounts.find((a) => a.accountId === tab) ?? null);
@@ -209,6 +210,15 @@ export function ConnectionSettingsScreen() {
           {report ? (
             <View style={styles.reportBanner}>
               <Text style={styles.reportText}>{report}</Text>
+            </View>
+          ) : null}
+          {skipLines.length > 0 ? (
+            <View style={styles.skipBanner}>
+              {skipLines.map((line) => (
+                <Text key={line} style={styles.skipText}>
+                  {line}
+                </Text>
+              ))}
             </View>
           ) : null}
 
@@ -312,6 +322,8 @@ const styles = StyleSheet.create({
   bannerText: { color: colors.redFg, fontSize: 13 },
   reportBanner: { backgroundColor: colors.greenPillBg, borderRadius: radius.sm, padding: 10 },
   reportText: { color: colors.greenPillFg, fontSize: 13, fontWeight: '600' },
+  skipBanner: { backgroundColor: colors.yellowPillBg, borderRadius: radius.sm, padding: 10, gap: 2 },
+  skipText: { color: colors.yellowPillFg, fontSize: 13 },
   tabsScroll: { flexGrow: 0, flexShrink: 0 },
   tabs: { gap: 8, paddingVertical: 2 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border2, backgroundColor: colors.card },
