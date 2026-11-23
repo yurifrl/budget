@@ -219,6 +219,8 @@ export function toAggregatedTransaction(txn: Transaction, accountType: ExternalA
     cleared: status != null && (CLEARED_BY_PROVIDER[status] ?? false),
     date: txn.date,
     currencyCode: null,
+    // The parsed object is `.passthrough()`, so every upstream field survives.
+    raw: { ...txn },
   };
 }
 

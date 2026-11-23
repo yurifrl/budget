@@ -140,6 +140,7 @@ describe('adapter: transaction mapping', () => {
         cleared: true,
         date: '2026-01-05',
         currencyCode: null,
+        raw: { id: 'tx1', accountId: 'ac1', amount: -12.5, date: '2026-01-05', description: ' coffee ', status: 'POSTED' },
       },
       {
         externalId: 'tx2',
@@ -149,6 +150,7 @@ describe('adapter: transaction mapping', () => {
         cleared: false,
         date: '2026-01-06',
         currencyCode: null,
+        raw: { id: 'tx2', accountId: 'ac1', amount: 3, date: '2026-01-06', description: '', status: 'PENDING' },
       },
       {
         externalId: 'tx3',
@@ -158,6 +160,7 @@ describe('adapter: transaction mapping', () => {
         cleared: false,
         date: '2026-01-07',
         currencyCode: null,
+        raw: { id: 'tx3', accountId: 'ac1', amount: 0.005, date: '2026-01-07', status: null },
       },
     ]);
   });
@@ -189,6 +192,45 @@ describe('adapter: transaction mapping', () => {
     expect(toAggregatedTransaction(txn('BALANCED')).cleared).toBe(true);
     expect(toAggregatedTransaction(txn('pending')).cleared).toBe(false);
     expect(toAggregatedTransaction(txn()).cleared).toBe(false);
+  });
+
+  it('keeps every upstream field verbatim in `raw` (installments, merchant, PIX, ...)', async () => {
+    const upstreamTxn = {
+      id: 'tx-rich',
+      accountId: 'ac2',
+      amount: 150.25,
+      amountInAccountCurrency: 150.25,
+      balance: -900.1,
+      currencyCode: 'BRL',
+      date: '2026-03-10T15:04:05.000Z',
+      description: 'LOJA X 02/06',
+      descriptionRaw: 'LOJA X PARC 02/06 SAO PAULO',
+      status: 'POSTED',
+      type: 'DEBIT',
+      category: 'Shopping',
+      categoryId: '08000000',
+      providerCode: 'abc123',
+      operationType: 'PIX',
+      merchant: { name: 'Loja X', businessName: 'Loja X Ltda', cnpj: '00.000.000/0001-00', category: 'retail' },
+      paymentData: { payer: { name: 'Me' }, receiver: { name: 'Loja X' }, paymentMethod: 'PIX', referenceNumber: 'E123' },
+      creditCardMetadata: { installmentNumber: 2, totalInstallments: 6, totalAmount: 901.5, purchaseDate: '2026-02-10', billId: 'b1' },
+      createdAt: '2026-03-10T16:00:00.000Z',
+      updatedAt: '2026-03-11T08:00:00.000Z',
+    };
+    const { fetchImpl } = makeFetch((url) => {
+      if (url.pathname === '/auth') return authJson();
+      if (url.pathname === '/accounts/ac2') return { json: { id: 'ac2', itemId: 'it1', type: 'CREDIT' } };
+      if (url.pathname === '/v2/transactions') return { json: { results: [upstreamTxn], nextPage: null } };
+      throw new Error(`unexpected ${url.pathname}`);
+    });
+    const pull = await makeAggregator(fetchImpl).listTransactions('ac2', { from: '2026-03-01', to: '2026-03-31' });
+    expect(pull.transactions).toHaveLength(1);
+    const [mapped] = pull.transactions;
+    expect(mapped?.raw).toEqual(upstreamTxn);
+    // The normalized fields still follow the port contract (credit sign flip).
+    expect(mapped?.amount).toBe(-150250);
+    // `raw` is a copy: mutating it cannot alter the normalized fields' source.
+    expect(toAggregatedTransaction(upstreamTxn).raw).not.toBe(upstreamTxn);
   });
 });
 

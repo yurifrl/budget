@@ -29,6 +29,7 @@ const txn = (acc: string, id: string, cents: number, description: string): Aggre
   cleared: true,
   date: today(),
   currencyCode: null,
+  raw: { id },
 });
 const aggregator = {
   environment: 'production',

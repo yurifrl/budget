@@ -64,6 +64,7 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0102_password_login.sql': ['table:public.user_passwords', 'table:public.auth_login_throttle'],
   '0103_feature_overrides.sql': 'table:public.feature_overrides',
   '0104_own_pluggy_keys.sql': ['table:public.connection_credentials', 'column:public.connections.key_source', 'column:public.connections.key_client_id', 'column:public.connections.paused_from'],
+  '0105_connection_transaction_raw.sql': ['column:public.connection_transactions.raw_payload', 'column:public.connection_transactions.raw_received_at'],
 };
 
 /**

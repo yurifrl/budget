@@ -40,6 +40,7 @@ const txn = (externalAccountId: string): AggregatedTransaction => ({
   date: today(),
   currencyCode: null,
   cleared: false,
+  raw: { id: `${externalAccountId}-tx` },
 });
 const aggregator = {
   environment: 'production',

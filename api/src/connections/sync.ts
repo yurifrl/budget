@@ -348,18 +348,30 @@ async function syncOnce(
           });
           await pg.query(
             `INSERT INTO connection_transactions
-               (transaction_id, provider, external_transaction_id, last_synced_payload, blocked)
-             VALUES ($1, $2, $3, $4, false)`,
+               (transaction_id, provider, external_transaction_id, last_synced_payload, blocked,
+                raw_payload, raw_received_at)
+             VALUES ($1, $2, $3, $4, false, $5, now())`,
             [
               insertedId,
               row.provider,
               txn.externalId,
               JSON.stringify({ date: txn.date.slice(0, 10), amount: milli, memo: '', payee: payee.name }),
+              JSON.stringify(txn.raw),
             ],
           );
           result.added += 1;
           deltas[cleared === 'cleared' ? 'cleared_delta' : 'uncleared_delta'] += milli;
           continue;
+        }
+
+        // Metadata only: refresh the provider's raw object on every pull of a
+        // shadowed row, whatever the engine decides below (blocked, duplicate,
+        // updated). Never touches user-visible fields or updated_at.
+        if (existing.shadow_payload != null) {
+          await pg.query(
+            'UPDATE connection_transactions SET raw_payload = $2, raw_received_at = now() WHERE transaction_id = $1',
+            [existing.id, JSON.stringify(txn.raw)],
+          );
         }
 
         if (existing.shadow_blocked || existing.shadow_payload == null) {

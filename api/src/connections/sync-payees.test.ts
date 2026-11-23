@@ -50,6 +50,7 @@ const up = (externalId: string, description: string, amount = -10000): Aggregate
   date: today(),
   currencyCode: 'BRL',
   cleared: false,
+  raw: { id: externalId },
 });
 
 let connectionId = '';

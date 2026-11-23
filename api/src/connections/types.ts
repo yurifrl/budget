@@ -110,6 +110,14 @@ export type AggregatedTransaction = {
   /** ISO date (YYYY-MM-DD) or full ISO timestamp, as reported upstream. */
   date: string;
   currencyCode: string | null;
+  /**
+   * The provider's transaction object exactly as received (every field,
+   * including those this port does not model: raw description, status,
+   * category, merchant, payment/PIX data, card installments...). Stored
+   * verbatim as metadata (`connection_transactions.raw_payload`); the sync
+   * engine never derives user-visible fields from it.
+   */
+  raw: Record<string, unknown>;
 };
 
 /**

@@ -66,6 +66,7 @@ const imported: AggregatedTransaction = {
   cleared: true,
   date: today,
   currencyCode: null,
+  raw: { id: 'catalog-outputs-tx-1' },
 };
 const aggregator = {
   environment: 'production',

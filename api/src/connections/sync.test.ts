@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { pool } from '../core/db';
 import { HttpError } from '../core/validate';
+import { getImportMetadata } from './ledger-reads';
 import * as store from './store';
 import { effectiveSyncWindowDays } from './settings';
 import { pullFrom, refreshConnection, syncConnectionTransactions } from './sync';
@@ -198,6 +199,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
     date: today(),
     currencyCode: 'BRL',
     cleared: false,
+    raw: { id: 'up-sync-tx-1', description: 'Coffee Shop', status: 'PENDING' },
   });
   const upTx2 = (): AggregatedTransaction => ({
     externalId: 'up-sync-tx-2',
@@ -207,6 +209,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
     date: today(),
     currencyCode: 'BRL',
     cleared: false,
+    raw: { id: 'up-sync-tx-2' },
   });
 
   test('initial pull inserts uncleared rows, ledger entries, and bumps cached balance', async () => {
@@ -234,6 +237,16 @@ describe.skipIf(!dbReady)('connections sync', () => {
     expect(shadow!.blocked).toBe(false);
     expect(shadow!.external_transaction_id).toBe('up-sync-tx-1');
 
+    // The provider's raw object is stored verbatim next to the shadow.
+    const meta = await getImportMetadata(pool, t1!.id);
+    expect(meta).toMatchObject({
+      provider: PROVIDER,
+      externalTransactionId: 'up-sync-tx-1',
+      raw: upTx1().raw,
+      blocked: false,
+    });
+    expect(meta!.rawReceivedAt).toBeInstanceOf(Date);
+
     const balances = await accountBalances();
     // -35.50 + 1000.00 → signed cents × 10 in the cached milliunit balance.
     expect(balances.uncleared_balance).toBe((-3550 + 100000) * 10);
@@ -249,6 +262,40 @@ describe.skipIf(!dbReady)('connections sync', () => {
     });
     expect(result).toEqual({ added: 0, updated: 0, deleted: 0, blocked: 0, duplicates: 2 });
     expect(await accountBalances()).toEqual(before);
+  });
+
+  test('a re-pull refreshes the raw payload of a duplicate row and nothing else', async () => {
+    if (!dbReady) return;
+    const t1 = await txnRow('up-sync-tx-1');
+    const metaBefore = await getImportMetadata(pool, t1!.id);
+    const richer = upTx1();
+    richer.raw = { ...richer.raw, status: 'POSTED', merchant: { name: 'Coffee Co' } };
+    const result = await syncConnectionTransactions({
+      userId,
+      connectionId: await connId(),
+      aggregator: fakeAggregator([richer, upTx2()]),
+    });
+    expect(result).toEqual({ added: 0, updated: 0, deleted: 0, blocked: 0, duplicates: 2 });
+    const meta = await getImportMetadata(pool, t1!.id);
+    expect(meta!.raw).toEqual(richer.raw);
+    expect(meta!.rawReceivedAt!.getTime()).toBeGreaterThanOrEqual(metaBefore!.rawReceivedAt!.getTime());
+    // Engine-owned bookkeeping is untouched by a metadata refresh.
+    expect(meta!.updatedAt).toEqual(metaBefore!.updatedAt);
+    expect(meta!.lastSyncedPayload).toEqual(metaBefore!.lastSyncedPayload);
+    expect(await txnRow('up-sync-tx-1')).toEqual(t1);
+  });
+
+  test('rows imported before raw payloads existed get one on their next sync', async () => {
+    if (!dbReady) return;
+    const t2 = await txnRow('up-sync-tx-2');
+    await pool.query(
+      'UPDATE public.connection_transactions SET raw_payload = NULL, raw_received_at = NULL WHERE transaction_id = $1',
+      [t2!.id],
+    );
+    await syncConnectionTransactions({ userId, connectionId: await connId(), aggregator: fakeAggregator([upTx1(), upTx2()]) });
+    const meta = await getImportMetadata(pool, t2!.id);
+    expect(meta!.raw).toEqual(upTx2().raw);
+    expect(meta!.rawReceivedAt).toBeInstanceOf(Date);
   });
 
   test('refreshConnection stamps the watermark and pulls incrementally', async () => {
@@ -322,6 +369,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
       date: '2026-11-05T03:00:00.000Z',
       currencyCode: 'BRL',
       cleared: true,
+      raw: { id: 'up-sync-tx-posted-1' },
     };
     // The pull carries the shared fixtures too — upstream rows absent from
     // the payload are swept as tombstones, so this test must not omit them.
@@ -368,6 +416,25 @@ describe.skipIf(!dbReady)('connections sync', () => {
     expect(fresh!.amount).toBe(t1!.amount);
     const shadow = await shadowRow(t1!.id);
     expect(shadow!.blocked).toBe(true);
+  });
+
+  test('a blocked row still gets its raw payload refreshed, user fields untouched', async () => {
+    if (!dbReady) return;
+    const t1 = await txnRow('up-sync-tx-1');
+    const changed = upTx1();
+    changed.amount = -1; // would be an update if the row were not blocked
+    changed.raw = { ...changed.raw, descriptionRaw: 'COFFEE SHOP SAO PAULO', status: 'POSTED' };
+    const result = await syncConnectionTransactions({
+      userId,
+      connectionId: await connId(),
+      aggregator: fakeAggregator([changed, upTx2()]),
+    });
+    expect(result.blocked).toBe(1);
+    expect(result.updated).toBe(0);
+    expect(await txnRow('up-sync-tx-1')).toEqual(t1);
+    const meta = await getImportMetadata(pool, t1!.id);
+    expect(meta!.blocked).toBe(true);
+    expect(meta!.raw).toEqual(changed.raw);
   });
 
   test('blocked rows are never tombstoned by upstream deletes', async () => {
@@ -432,6 +499,7 @@ describe.skipIf(!dbReady)('connections sync: transaction scope and sweep complet
     date: today(),
     currencyCode: 'BRL',
     cleared: false,
+    raw: { id },
   });
   const salary = () => mk('up-sync-tx-2', 100000);
   const pa1 = () => mk('up-scope-1', -1000);
@@ -614,6 +682,7 @@ describe.skipIf(!dbReady)('connections sync: budget revision', () => {
           date: today(),
           currencyCode: 'BRL',
           cleared: false,
+          raw: { id: 'up-sync-tx-revision' },
         },
       ]),
     });

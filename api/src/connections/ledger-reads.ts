@@ -45,3 +45,50 @@ export async function blockImportShadows(db: Queryable, transactionIds: readonly
     [transactionIds],
   );
 }
+
+/** What the bank sent for one imported transaction (see `getImportMetadata`). */
+export type ImportMetadata = {
+  provider: string;
+  externalTransactionId: string;
+  /** The provider's transaction object as last received; null until the row's next sync. */
+  raw: Record<string, unknown> | null;
+  /** When `raw` was last written; null when it never was. */
+  rawReceivedAt: Date | null;
+  /** The engine-owned fields as last written (date, amount, memo, payee). */
+  lastSyncedPayload: Record<string, unknown>;
+  blocked: boolean;
+  updatedAt: Date;
+};
+
+/**
+ * The sync shadow of `transactionId` with the provider's raw payload, or
+ * undefined for a transaction the bank sync never imported. Not scoped: the
+ * caller authorises the transaction (by budget) first.
+ */
+export async function getImportMetadata(db: Queryable, transactionId: string): Promise<ImportMetadata | undefined> {
+  const r = await db.query<{
+    provider: string;
+    external_transaction_id: string;
+    raw_payload: Record<string, unknown> | null;
+    raw_received_at: Date | null;
+    last_synced_payload: Record<string, unknown>;
+    blocked: boolean;
+    updated_at: Date;
+  }>(
+    `SELECT provider, external_transaction_id, raw_payload, raw_received_at,
+            last_synced_payload, blocked, updated_at
+     FROM connection_transactions WHERE transaction_id = $1`,
+    [transactionId],
+  );
+  const row = r.rows[0];
+  if (!row) return undefined;
+  return {
+    provider: row.provider,
+    externalTransactionId: row.external_transaction_id,
+    raw: row.raw_payload,
+    rawReceivedAt: row.raw_received_at,
+    lastSyncedPayload: row.last_synced_payload,
+    blocked: row.blocked,
+    updatedAt: row.updated_at,
+  };
+}
