@@ -36,7 +36,7 @@ import {
   type AiKeyFormError,
   type AiKeysScreenMode,
 } from './aiKeys.logic';
-import { aiKeyFormReducer, effectiveModel, initialAiKeyForm, modelToken } from './aiKeyForm.logic';
+import { aiKeyFormReducer, effectiveModel, initialAiKeyForm, modelToken, shouldListModels } from './aiKeyForm.logic';
 import { t } from './i18n';
 
 /** Detection is a local, cheap guess; debounce while the key is typed or pasted. */
@@ -165,8 +165,18 @@ export function useAiKeys(): AiKeysState {
   // Models of the candidate key: only once detection has settled for the
   // current key, after a pause, and aborting the previous request in cleanup.
   useEffect(() => {
+    if (
+      !shouldListModels({
+        provider: form.provider,
+        key: form.key,
+        detecting: form.detecting,
+        modelsFor: form.modelsFor,
+      })
+    ) {
+      return;
+    }
     const token = modelToken(form.provider, form.key);
-    if (token === null || form.detecting || form.modelsFor === token) return;
+    if (token === null) return;
     const provider = form.provider;
     if (provider === null) return;
     const trimmed = form.key.trim();

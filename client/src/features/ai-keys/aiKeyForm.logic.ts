@@ -88,6 +88,16 @@ export function effectiveModel(state: AiKeyFormState): string | null {
   return null;
 }
 
+/**
+ * Whether the current key+provider pair still needs its model list. False
+ * while detection is still running (the key may not be finished) and once the
+ * list for this exact pair is in hand.
+ */
+export function shouldListModels(state: Pick<AiKeyFormState, 'provider' | 'key' | 'detecting' | 'modelsFor'>): boolean {
+  const token = modelToken(state.provider, state.key);
+  return token !== null && !state.detecting && state.modelsFor !== token;
+}
+
 /** Everything a new key or provider invalidates: list, pick, list error, attempt token. */
 function clearedPair(state: AiKeyFormState): Pick<AiKeyFormState, 'models' | 'modelsFor' | 'modelsLoading' | 'modelsError' | 'model' | 'modelQuery' | 'attemptedToken'> {
   return { models: [], modelsFor: null, modelsLoading: false, modelsError: null, model: null, modelQuery: '', attemptedToken: null };

@@ -13,6 +13,7 @@ import {
   effectiveModel,
   initialAiKeyForm,
   modelToken,
+  shouldListModels,
   type AiKeyFormEvent,
   type AiKeyFormState,
 } from './aiKeyForm.logic';
@@ -47,6 +48,28 @@ describe('modelToken', () => {
     expect(modelToken(null, KEY)).toBeNull();
     expect(modelToken('openai', 'short')).toBeNull();
     expect(modelToken('openai', `  ${KEY}  `)).toBe(TOKEN);
+  });
+});
+
+describe('shouldListModels', () => {
+  test('waits for a plausible key and settled detection, and never repeats a listed pair', () => {
+    expect(shouldListModels(initialAiKeyForm())).toBe(false);
+    const short = aiKeyFormReducer(initialAiKeyForm(), { type: 'keyEdited', key: 'short' });
+    expect(shouldListModels(short)).toBe(false);
+    const noProvider = aiKeyFormReducer(initialAiKeyForm(), { type: 'keyEdited', key: KEY });
+    expect(shouldListModels(noProvider)).toBe(false);
+    const detecting = aiKeyFormReducer(
+      aiKeyFormReducer(noProvider, { type: 'detected', provider: 'openai' }),
+      { type: 'detectStarted' },
+    );
+    expect(shouldListModels(detecting)).toBe(false);
+    const ready = aiKeyFormReducer(noProvider, { type: 'detected', provider: 'openai' });
+    expect(shouldListModels(ready)).toBe(true);
+    const listed = aiKeyFormReducer(
+      aiKeyFormReducer(ready, { type: 'modelsStarted', token: TOKEN }),
+      { type: 'modelsLoaded', token: TOKEN, models: MODELS },
+    );
+    expect(shouldListModels(listed)).toBe(false);
   });
 });
 
