@@ -2,7 +2,7 @@
  * Contabilizei statement source — the PJ bank account's CSV export
  * (`<account>_<DDMMMYYYY>_<DDMMMYYYY>.csv`), zero-config. The file has no
  * provider id column, so rows carry a deterministic YNAB-fallback id
- * (`contabilizei:<date>:<signedMilli>:<n>` — date + amount + payee + ordinal)
+ * (`contabilizei:<date>:<signedMilli>:<n>` — date + amount + ordinal)
  * and the bulk endpoint dedupes re-imports on it like any other source.
  */
 
@@ -67,9 +67,9 @@ export function parseContabilizeiCsv(text: string): ContabilizeiParseResult {
   const inflowCol = idxOf(header, /^entrada$/i);
   const outflowCol = idxOf(header, /^saída$/i);
 
-  // Occurrence count per (date, signed amount, lower-cased payee): the
-  // ordinal keeps ids unique for identical same-day rows, and the payee
-  // stays out of the id string so renaming it never changes the id.
+  // Occurrence count per (date, signed amount): the ordinal keeps ids
+  // unique for same-day equal-amount rows whatever the payee, and the
+  // payee appears nowhere in the id, so renaming it never changes the id.
   const occurrence = new Map<string, number>();
 
   for (let i = headerIdx + 1; i < raw.length; i++) {
@@ -90,7 +90,10 @@ export function parseContabilizeiCsv(text: string): ContabilizeiParseResult {
     }
     const payee = cell(cells, payeeCol).trim();
     const signedMilli = (inflow - outflow) * 10;
-    const key = `${date}:${signedMilli}:${payee.toLowerCase()}`;
+    // Key WITHOUT the payee: two same-day rows with the same amount but
+    // different payees must still get :1 and :2, or their identical ids
+    // would make the server's dedupe silently drop the second row.
+    const key = `${date}:${signedMilli}`;
     const n = (occurrence.get(key) ?? 0) + 1;
     occurrence.set(key, n);
     rows.push({

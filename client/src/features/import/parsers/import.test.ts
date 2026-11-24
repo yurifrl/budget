@@ -524,6 +524,22 @@ describe("parseContabilizeiCsv", () => {
     ]);
   });
 
+  it("numbers same-day equal-amount rows with different payees :1 and :2", () => {
+    // The payee is not in the occurrence key: same (date, amount) with
+    // different payees still gets distinct ids, or the server's dedupe
+    // would silently drop the second row.
+    const result = parseContabilizeiCsv(
+      "Data,Categoria,Lan\u00e7amento,Descri\u00e7\u00e3o,Entrada,Sa\u00edda,Saldo do dia\r\n" +
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,YURI FREIRE LIMA,-,"R$ 1,00","-R$ 1,00"\r\n' +
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,NSX BRASIL S.A.,-,"R$ 1,00","-R$ 1,00"\r\n',
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.rows.map((r) => [r.payee, r.importId])).toEqual([
+      ["YURI FREIRE LIMA", "contabilizei:2026-10-15:-1000:1"],
+      ["NSX BRASIL S.A.", "contabilizei:2026-10-15:-1000:2"],
+    ]);
+  });
+
   it("rejects rows with both sides empty or both set", () => {
     const result = parseContabilizeiCsv(
       "Data,Categoria,Lan\u00e7amento,Descri\u00e7\u00e3o,Entrada,Sa\u00edda,Saldo do dia\r\n" +
