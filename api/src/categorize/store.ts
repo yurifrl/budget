@@ -16,8 +16,8 @@ import { transferOverview } from '../budget';
 import type { CategorizeFailureKind } from './errors';
 import { CATEGORIZE_MAX_ATTEMPTS } from './jobspec';
 
-/** Where a suggestion came from. 'payee_rule' answers first; 'ai' is the model. */
-export type SuggestionSource = 'payee_rule' | 'ai';
+/** Where a suggestion came from. 'payee_rule' answers first; 'ai' is the model; 'manual' records a person's choice on accept. */
+export type SuggestionSource = 'payee_rule' | 'ai' | 'manual';
 export type SuggestionStatus = 'pending' | 'accepted' | 'dismissed';
 
 /**
@@ -103,38 +103,49 @@ const text = (value: unknown, { mask = false }: { mask?: boolean } = {}): string
   return mask ? maskFreeText(trimmed) : trimmed;
 };
 
+/** Raw string of a bank field: trimmed, never capped or masked (the OWNER's data). */
+const plain = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+
+type FieldReader = (value: unknown, options?: { mask?: boolean }) => string | undefined;
+
 /**
- * The provider payload is reduced to facts a classifier may use and the
- * queue's merchant panel shows. `amountMilliunits` picks the PIX counterparty:
- * the receiver for money out, the payer for money in.
+ * The provider payload reduced to the facts a classifier (or the merchant
+ * panel) may use. `read` decides whether strings are model-safe (capped,
+ * free text masked) or the user's own values. `amountMilliunits` picks the PIX
+ * counterparty: the receiver for money out, the payer for money in.
  */
-export function bankFacts(raw: Record<string, unknown> | null, amountMilliunits: number): BankFacts | null {
+function readBankFacts(
+  raw: Record<string, unknown> | null,
+  amountMilliunits: number,
+  read: FieldReader,
+): BankFacts | null {
   if (!raw) return null;
   const merchant = record(raw.merchant);
   const payment = record(raw.paymentData);
   const card = record(raw.creditCardMetadata);
-  const payerName = text(record(payment?.payer)?.name);
-  const receiverName = text(record(payment?.receiver)?.name);
+  const payerName = read(record(payment?.payer)?.name);
+  const receiverName = read(record(payment?.receiver)?.name);
   const facts: BankFacts = {
-    description_raw: text(raw.descriptionRaw, { mask: true }),
-    category: text(raw.category),
-    category_id: text(raw.categoryId),
-    operation_type: text(raw.operationType),
-    status: text(raw.status),
-    type: text(raw.type),
+    description_raw: read(raw.descriptionRaw, { mask: true }),
+    category: read(raw.category),
+    category_id: read(raw.categoryId),
+    operation_type: read(raw.operationType),
+    status: read(raw.status),
+    type: read(raw.type),
     merchant: merchant
       ? {
-          name: text(merchant.name),
-          legal_name: text(merchant.businessName),
-          cnpj: text(merchant.cnpj),
-          category: text(merchant.category),
-          cnae: text(merchant.cnae),
+          name: read(merchant.name),
+          legal_name: read(merchant.businessName),
+          cnpj: read(merchant.cnpj),
+          category: read(merchant.category),
+          cnae: read(merchant.cnae),
         }
       : undefined,
     payment: payment
       ? {
-          method: text(payment.paymentMethod),
-          reason: text(payment.reason, { mask: true }),
+          method: read(payment.paymentMethod),
+          reason: read(payment.reason, { mask: true }),
           counterparty_name: amountMilliunits < 0 ? receiverName : payerName,
         }
       : undefined,
@@ -143,7 +154,7 @@ export function bankFacts(raw: Record<string, unknown> | null, amountMilliunits:
           installment_number: int(card.installmentNumber),
           total_installments: int(card.totalInstallments),
           payee_mcc: int(card.payeeMCC),
-          purchase_date: text(card.purchaseDate)?.slice(0, 10),
+          purchase_date: read(card.purchaseDate)?.slice(0, 10),
         }
       : undefined,
   };
@@ -153,6 +164,48 @@ export function bankFacts(raw: Record<string, unknown> | null, amountMilliunits:
     if (value && Object.values(value).every((v) => v === undefined)) delete facts[key];
   }
   return Object.values(facts).every((v) => v === undefined) ? null : facts;
+}
+
+/** MODEL-FACING: capped and (for free bank text) masked. Never for a user response. */
+export function bankFacts(raw: Record<string, unknown> | null, amountMilliunits: number): BankFacts | null {
+  return readBankFacts(raw, amountMilliunits, text);
+}
+
+/** USER-FACING: the owner's own bank data, unmasked and untruncated. */
+export function userBankFacts(raw: Record<string, unknown> | null, amountMilliunits: number): BankFacts | null {
+  return readBankFacts(raw, amountMilliunits, plain);
+}
+
+/** The facts the merchant panel shows; all null when the bank sent none. */
+export type MerchantPanel = {
+  name: string | null;
+  legal_name: string | null;
+  cnpj: string | null;
+  business_category: string | null;
+  operation_type: string | null;
+  counterparty_name: string | null;
+};
+
+/**
+ * USER-FACING merchant panel: same extraction as the model's bankFacts, but
+ * no masking or caps. A record is kept only when at least one field exists.
+ */
+export function merchantPanel(
+  raw: Record<string, unknown> | null,
+  amountMilliunits: number,
+): { raw_bank_description: string | null; merchant: MerchantPanel | null } {
+  const facts = userBankFacts(raw, amountMilliunits);
+  const merchant = facts?.merchant;
+  const panel: MerchantPanel = {
+    name: merchant?.name ?? null,
+    legal_name: merchant?.legal_name ?? null,
+    cnpj: merchant?.cnpj ?? null,
+    business_category: merchant?.category ?? null,
+    operation_type: facts?.operation_type ?? null,
+    counterparty_name: facts?.payment?.counterparty_name ?? null,
+  };
+  const any = Object.values(panel).some((value) => value !== null);
+  return { raw_bank_description: facts?.description_raw ?? null, merchant: any ? panel : null };
 }
 
 /** The budget owner: the person whose AI key a run uses. Null when no such budget (or no owner). */
@@ -194,12 +247,9 @@ export async function runActorForBudget(db: Queryable, budgetId: string): Promis
  * suggestions, and rows whose recorded attempt says "no suggestion" (same
  * payee/memo) or "failed" (still backing off / out of attempts).
  *
- * Args: $1 budget, $2 force, $3 pending transfer ids, $4 max failed attempts.
+ * Args (run query): $1 budget, $2 pending transfer ids, $3 force, $4 max
+ * failed attempts.
  */
-const CANDIDATE_FROM = `
-  from public.transactions t
-  join public.accounts a on a.id = t.account_id and a.budget_id = t.budget_id
-  left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id`;
 
 /**
  * The payee+memo fingerprint of an attempt, the SAME expression the attempts
@@ -208,7 +258,17 @@ const CANDIDATE_FROM = `
  */
 const ATTEMPT_FINGERPRINT = `md5(coalesce(t.payee_id::text, '') || '|' || coalesce(p.name, t.import_payee_name, '') || '|' || coalesce(t.memo, ''))`;
 
-const CANDIDATE_WHERE = `
+/**
+ * The register's "needs a category" rule (shared with the run), WITHOUT the
+ * run's own bookkeeping. Args: $1 budget, $2 pending transfer ids. A run adds
+ * its attempt/suggestion skips; the queue uses this base to show those rows.
+ */
+export const NEEDS_CATEGORY_FROM = `
+  from public.transactions t
+  join public.accounts a on a.id = t.account_id and a.budget_id = t.budget_id
+  left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id`;
+
+export const NEEDS_CATEGORY_WHERE = `
   where t.budget_id = $1
     and t.deleted = false
     and t.category_id is null
@@ -240,9 +300,21 @@ const CANDIDATE_WHERE = `
       )
     )
     and not exists (select 1 from public.subtransactions s where s.transaction_id = t.id and s.deleted = false)
-    and not (t.id = any($3::uuid[]))
+    and not (t.id = any($2::uuid[]))`;
+
+/**
+ * The run adds: skip rows with any suggestion, and rows whose attempt says
+ * no-suggestion (same payee/memo fingerprint) or failed (still backing off /
+ * out of attempts). Args: $3 force, $4 max failed attempts.
+ */
+const CANDIDATE_FROM = NEEDS_CATEGORY_FROM;
+const CANDIDATE_WHERE = `${NEEDS_CATEGORY_WHERE}
     and (
-      $2::boolean
+      $3::boolean
+      or not exists (select 1 from public.category_suggestions cs where cs.transaction_id = t.id)
+    )
+    and (
+      $3::boolean
       or not exists (
         select 1 from public.categorize_attempts ca
          where ca.transaction_id = t.id
@@ -253,11 +325,10 @@ const CANDIDATE_WHERE = `
                       or ca.last_attempt_at > now() - least(interval '10 minutes' * power(2::float8, ca.attempts - 1), interval '6 hours')))
            )
       )
-    )
-    and ($2::boolean or not exists (select 1 from public.category_suggestions cs where cs.transaction_id = t.id))`;
+    )`;
 
 /** The ids the app's transfer plan marks pending for this budget (register `transferPending`). */
-async function pendingTransferIds(db: Queryable, budgetId: string): Promise<string[]> {
+export async function pendingTransferIds(db: Queryable, budgetId: string): Promise<string[]> {
   return [...(await transferOverview(db, budgetId)).pending.keys()];
 }
 
@@ -268,7 +339,7 @@ export async function candidateWindow(
   force: boolean,
 ): Promise<{ count: number; newest: CandidateCursor | null }> {
   const pending = await pendingTransferIds(db, budgetId);
-  const args = [budgetId, force, pending, CATEGORIZE_MAX_ATTEMPTS];
+  const args = [budgetId, pending, force, CATEGORIZE_MAX_ATTEMPTS];
   const count = await db.query<{ n: number }>(
     `select count(*)::int as n ${CANDIDATE_FROM} ${CANDIDATE_WHERE}`,
     args,
@@ -296,7 +367,7 @@ export async function listCandidates(
   params: { snapshot: CandidateCursor; cursor: CandidateCursor | null; limit: number; force: boolean },
 ): Promise<Candidate[]> {
   const pending = await pendingTransferIds(db, budgetId);
-  const args: unknown[] = [budgetId, params.force, pending, CATEGORIZE_MAX_ATTEMPTS, params.snapshot.date, params.snapshot.id];
+  const args: unknown[] = [budgetId, pending, params.force, CATEGORIZE_MAX_ATTEMPTS, params.snapshot.date, params.snapshot.id];
   let keyset = '';
   if (params.cursor) {
     args.push(params.cursor.date, params.cursor.id);
@@ -578,15 +649,8 @@ export async function listAttempts(
       limit $${limitAt} offset $${offsetAt}`,
     [...args, options.limit, options.offset],
   );
-  return {
-    rows: rows.map((row) => ({
-      ...row,
-      payee: row.payee === null ? null : cap(row.payee),
-      account_name: cap(row.account_name, MAX_NAME_CHARS),
-      memo: row.memo === null ? null : cap(row.memo),
-    })),
-    total: total.rows[0]?.n ?? 0,
-  };
+  // USER-FACING: the owner's own text, never capped or masked.
+  return { rows, total: total.rows[0]?.n ?? 0 };
 }
 
 /**
@@ -694,9 +758,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * categories and groups and deleted accounts are filtered here as well as at
  * write time, so an old row can never surface through a later hide.
  *
- * The caller (the HTTP layer) checks budget ACCESS: this query is scoped by
- * `budgetId` only. A non-uuid `transactionId` is a validation error, not a
- * driver error, because callers pass it through from a path parameter.
+ * USER-FACING: the owner's own text is returned as stored (never masked or
+ * capped). The caller (the HTTP layer) checks budget ACCESS: this query is
+ * scoped by `budgetId` only. A non-uuid `transactionId` is a validation error,
+ * not a driver error, because callers pass it through from a parameter.
  */
 export async function listSuggestions(
   db: Queryable,
@@ -743,16 +808,51 @@ export async function listSuggestions(
       limit $${limitAt} offset $${offsetAt}`,
     [...args, options.limit, options.offset],
   );
+  // USER-FACING: the owner's own text and bank data, never capped or masked.
+  // (The model never calls this; its reads are capped in listCandidates /
+  // getAgentTransaction / the tools.)
   return {
     rows: rows.map(({ raw_payload, ...row }) => ({
       ...row,
-      category_name: cap(row.category_name, MAX_NAME_CHARS),
-      group_name: cap(row.group_name, MAX_NAME_CHARS),
-      account_name: cap(row.account_name, MAX_NAME_CHARS),
-      payee: row.payee === null ? null : cap(row.payee),
-      memo: row.memo === null ? null : cap(row.memo),
-      bank: bankFacts(raw_payload, row.amount_milliunits),
+      bank: userBankFacts(raw_payload, row.amount_milliunits),
     })),
     total: total.rows[0]?.n ?? 0,
   };
+}
+
+/**
+ * Persist a run's progress so categorize_run_status can poll it without
+ * talking to Temporal. Written by the prepare activity (total, done 0) and by
+ * the chunk activity as it advances; `done` only grows. The row dies with its
+ * job run (foreign key cascade).
+ */
+export async function recordRunProgress(
+  db: Queryable,
+  runId: string,
+  budgetId: string,
+  done: number,
+  total: number,
+): Promise<void> {
+  await db.query(
+    `insert into public.categorize_run_progress (run_id, budget_id, done, total)
+     values ($1, $2, $3, $4)
+     on conflict (run_id) do update
+       set budget_id = excluded.budget_id,
+           done = greatest(public.categorize_run_progress.done, excluded.done),
+           total = greatest(public.categorize_run_progress.total, excluded.total),
+           updated_at = now()`,
+    [runId, budgetId, done, total],
+  );
+}
+
+/** The last recorded progress of a run, or null before its prepare activity. */
+export async function readRunProgress(
+  db: Queryable,
+  runId: string,
+): Promise<{ done: number; total: number } | null> {
+  const { rows } = await db.query<{ done: number; total: number }>(
+    'select done, total from public.categorize_run_progress where run_id = $1',
+    [runId],
+  );
+  return rows[0] ?? null;
 }

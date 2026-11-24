@@ -17,6 +17,7 @@ import { dbReady } from './core/test-gate';
 import { makeOpCaller } from './core/test-op';
 import { httpOnError } from './core/validate';
 import budget from './budget';
+import categorize from './categorize/router';
 import ai from './ai';
 import connections from './connections';
 import { featuresRoutes } from './features';
@@ -118,6 +119,7 @@ app.use('*', (c, next) => {
 app.route('/connections', connections);
 app.route('/ai', ai);
 app.route('/', budget);
+app.route('/categorize', categorize);
 app.route('/', featuresRoutes());
 const op = makeOpCaller(app, contracts);
 
@@ -262,6 +264,9 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     budget_bundles_list: { budget_id: B },
     budget_accounts_list: { budget_id: B },
     budget_transactions_list: { budget_id: B },
+    categorize_queue_list: { budget_id: B, limit: 10 },
+    categorize_run_status: { budget_id: B },
+    categorize_settings_get: { budget_id: B },
     // The bank-imported row, so the import record (raw payload included) is validated too.
     budget_transactions_get: { id: seeded.importedTxn, budget_id: B },
     budget_assignments_list: { budget_id: B },

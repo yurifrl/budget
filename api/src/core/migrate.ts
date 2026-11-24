@@ -72,6 +72,8 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0110_category_suggestions.sql': 'table:public.category_suggestions',
   '0111_category_suggestions_category_idx.sql': 'index:public.category_suggestions_category_idx',
   '0112_categorize_attempts.sql': 'table:public.categorize_attempts',
+  '0113_categorize_settings.sql': 'table:public.categorize_settings',
+  '0114_categorize_run_progress.sql': 'table:public.categorize_run_progress',
 };
 
 /**

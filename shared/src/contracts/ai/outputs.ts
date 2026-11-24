@@ -46,6 +46,20 @@ export const aiCredentialStatusSchema = z.object({
   effective: aiKeySourceSchema.nullable(),
 });
 
+/**
+ * Why a key resolution failed. Kept here (not only in the API) because the
+ * Categorize page's status carries it to the client to choose its empty state.
+ */
+export const AI_KEY_PROBLEMS = [
+  'own_key_required',
+  'shared_key_missing',
+  'shared_model_missing',
+  'encryption_missing',
+  'unreadable',
+] as const;
+export const aiKeyProblemSchema = z.enum(AI_KEY_PROBLEMS);
+export type AiKeyProblemId = (typeof AI_KEY_PROBLEMS)[number];
+
 export const aiCredentialDeletedSchema = z.object({ deleted: z.boolean() });
 
 /** Detection is a best guess from the key's shape; null = unknown, the caller picks. */

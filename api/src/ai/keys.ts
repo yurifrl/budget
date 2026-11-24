@@ -16,6 +16,7 @@ import {
   AI_SHARED_KEY_MISSING,
   AI_SHARED_MODEL_MISSING,
   isAiProviderId,
+  type AiKeyProblemId,
   type AiProviderId,
 } from '@shared/contracts/ai';
 
@@ -67,18 +68,12 @@ export async function openOwnKey(row: store.AiCredentialRow): Promise<string> {
 /** May this user use the installation's shared AI key? Read from the database on every call. */
 export const sharedAiAllowed = (db: Queryable, userId: string): Promise<boolean> => isEnabled(db, 'shared-ai-key', userId);
 
-/** Why no AI key could be resolved. */
-export type AiKeyProblem =
-  /** No own key and the shared key is not available to this user. */
-  | 'own_key_required'
-  /** Feature on, but the server has no valid shared key configured. */
-  | 'shared_key_missing'
-  /** Feature on and a shared key configured, but no model chosen for it. */
-  | 'shared_model_missing'
-  /** No master key here: own keys cannot be sealed or opened. */
-  | 'encryption_missing'
-  /** The stored secret does not open (master key changed, wrong row). */
-  | 'unreadable';
+/**
+ * Why no AI key could be resolved. The closed list lives in
+ * shared/src/contracts/ai/outputs.ts because categorize_run_status carries it
+ * to the client; this alias keeps the API's name.
+ */
+export type AiKeyProblem = AiKeyProblemId;
 
 export type AiKeyResolution = { ok: true; key: ResolvedAiKey } | { ok: false; problem: AiKeyProblem };
 
