@@ -45,8 +45,12 @@ export type ConnectionRow = {
   updated_at: Date;
 };
 
-/** A connection plus who linked it (the owner's name/email/avatar). */
-export type ConnectionWithLinker = ConnectionRow & { linked_by: PersonRef | null };
+/**
+ * A connection plus who linked it (the owner's name/email/avatar), and
+ * whether a linked account's history import is still in progress (a resume
+ * point in connection_account_backfill, migration 0107).
+ */
+export type ConnectionWithLinker = ConnectionRow & { linked_by: PersonRef | null; history_loading: boolean };
 
 const CONNECTION_COLUMNS =
   'id, user_id, provider, external_id, client_user_id, status, status_message, environment, key_source, key_client_id, institution, ' +
@@ -116,9 +120,15 @@ export async function upsertConnection(input: {
 }
 
 /** Same columns, qualified for the `c` (connections) / `u` (owner) join. */
-const LINKED_SELECT = `${CONNECTION_COLUMNS.split(', ').map((col) => `c.${col}`).join(', ')}, ${personRefSql('u')}`;
+const LINKED_SELECT =
+  `${CONNECTION_COLUMNS.split(', ').map((col) => `c.${col}`).join(', ')}, ${personRefSql('u')}, ` +
+  `exists (select 1 from public.connection_account_backfill b
+           join public.accounts a on a.id = b.account_id
+           where a.connection_id = c.id and not a.deleted) as history_loading`;
 
-const withLinker = (row: ConnectionRow & PersonRefRow): ConnectionWithLinker => {
+type LinkedRow = ConnectionRow & PersonRefRow & { history_loading: boolean };
+
+const withLinker = (row: LinkedRow): ConnectionWithLinker => {
   const { ref_user_id, ref_name, ref_email, avatar_seed, avatar_image_version, ...connection } = row;
   return {
     ...connection,
@@ -128,7 +138,7 @@ const withLinker = (row: ConnectionRow & PersonRefRow): ConnectionWithLinker => 
 
 /** All connections (newest first) for a user, each with its `linked_by` person. */
 export async function listConnectionsByUser(userId: string): Promise<ConnectionWithLinker[]> {
-  const rows = await pool.query<ConnectionRow & PersonRefRow>(
+  const rows = await pool.query<LinkedRow>(
     `select ${LINKED_SELECT}
      from public.connections c
      join public.users u on u.id = c.user_id
@@ -141,7 +151,7 @@ export async function listConnectionsByUser(userId: string): Promise<ConnectionW
 
 /** One connection scoped to its owner — cross-user ids surface as null. */
 export async function getConnectionByUser(userId: string, id: string): Promise<ConnectionWithLinker | null> {
-  const row = await pool.query<ConnectionRow & PersonRefRow>(
+  const row = await pool.query<LinkedRow>(
     `select ${LINKED_SELECT}
      from public.connections c
      join public.users u on u.id = c.user_id
@@ -154,7 +164,7 @@ export async function getConnectionByUser(userId: string, id: string): Promise<C
 /** Attach `linked_by` to a row a write just returned (one fetch; the row exists). */
 export async function withLinkedBy(row: ConnectionRow): Promise<ConnectionWithLinker> {
   const fetched = await getConnectionByUser(row.user_id, row.id);
-  return fetched ?? { ...row, linked_by: null };
+  return fetched ?? { ...row, linked_by: null, history_loading: false };
 }
 
 /** Stamp the institution discovered at register time. */

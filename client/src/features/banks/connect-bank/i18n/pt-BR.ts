@@ -41,6 +41,7 @@ const m: Translation<typeof en> = {
   'row.reauthAdded': 'Reconecte para atualizar as credenciais · adicionado {stamp}',
   'row.reauthSandbox': 'Reconecte para atualizar as credenciais · sandbox',
   'row.lastSync': 'Última sincronização: {stamp}',
+  'row.historyLoading': 'Importando o histórico mais antigo — continua nas próximas sincronizações.',
   'row.lastSyncSandbox': 'Última sincronização: {stamp} · sandbox',
   'row.lastAdded': 'Última sincronização: adicionado {stamp}',
   'row.lastAddedSandbox': 'Última sincronização: adicionado {stamp} · sandbox',

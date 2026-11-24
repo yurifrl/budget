@@ -17,6 +17,7 @@ const m: Translation<typeof en> = {
   'page.lastSync': 'Última sincronização: {stamp}',
   'page.lastSyncSandbox': 'Última sincronização: {stamp} · sandbox',
   'page.added': 'Última sincronização: adicionado em {stamp}',
+  'page.historyLoading': 'Importando o histórico mais antigo — continua nas próximas sincronizações.',
   'page.addedSandbox': 'Última sincronização: adicionado em {stamp} · sandbox',
   'page.syncNow': 'Sincronizar agora',
   'page.syncing': 'Sincronizando…',

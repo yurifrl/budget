@@ -66,6 +66,7 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0104_own_pluggy_keys.sql': ['table:public.connection_credentials', 'column:public.connections.key_source', 'column:public.connections.key_client_id', 'column:public.connections.paused_from'],
   '0105_connection_transaction_raw.sql': ['column:public.connection_transactions.raw_payload', 'column:public.connection_transactions.raw_received_at'],
   '0106_connection_transactions_per_budget.sql': ['column:public.connection_transactions.budget_id', 'index:public.connection_transactions_budget_key'],
+  '0107_connection_account_backfill.sql': 'table:public.connection_account_backfill',
 };
 
 /**

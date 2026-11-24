@@ -202,6 +202,11 @@ export function ConnectionSettingsScreen() {
               <Text style={styles.bannerText}>{storedServerMessage(connection.status_message, connection.status_message_code)}</Text>
             </View>
           ) : null}
+          {connection.history_loading ? (
+            <View style={styles.reportBanner}>
+              <Text style={styles.reportText}>{t('page.historyLoading')}</Text>
+            </View>
+          ) : null}
           {error ? (
             <View style={styles.banner}>
               <Text style={styles.bannerText}>{humanizeConnectionError(error)}</Text>

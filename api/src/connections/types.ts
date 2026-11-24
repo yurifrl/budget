@@ -174,6 +174,33 @@ export type ListTransactionsInput = {
    * loop on `hasMore` — re-pull the window on the next sync cycle.
    */
   page?: number;
+  /**
+   * Soft cap on rows collected by this pull. Cursor-based providers stop after
+   * the page that reaches it (whole pages are kept, so `cursor` resumes right
+   * after the last row returned) and report `hasMore`.
+   */
+  maxResults?: number;
+  /**
+   * Continue from a `cursor` an earlier pull returned (older pages only).
+   * When the provider no longer accepts it, the adapter walks again from the
+   * newest page; `to` then bounds what is collected.
+   */
+  cursor?: string;
+  /** Called after every upstream page (job heartbeat; keep it cheap). */
+  onPage?: () => void;
+};
+
+/** One bounded pull of an upstream account's transactions. */
+export type TransactionPull = {
+  transactions: AggregatedTransaction[];
+  /** True when the window [from, to] was not provably exhausted (cap or page valve hit). */
+  hasMore: boolean;
+  /** Opaque continuation for the next (older) page when `hasMore`; null/absent when the provider gave none. */
+  cursor?: string | null;
+  /** Upstream pages fetched (diagnostics). */
+  pages?: number;
+  /** Oldest date (YYYY-MM-DD) among the upstream rows seen, in or out of the window; null when none. */
+  oldestDate?: string | null;
 };
 
 /**
@@ -206,13 +233,10 @@ export interface BankAggregator {
 
   /**
    * Pull transactions for one upstream account. Returns a bounded pull with
-   * `hasMore` signalling that more exists beyond the adapter's pull cap (the
-   * next sync cycle re-pulls the window — see ListTransactionsInput.page).
+   * `hasMore` signalling that more exists beyond the pull cap; `cursor`, when
+   * given, lets a later sync continue with the older pages.
    */
-  listTransactions(
-    externalAccountId: string,
-    input?: ListTransactionsInput,
-  ): Promise<{ transactions: AggregatedTransaction[]; hasMore: boolean }>;
+  listTransactions(externalAccountId: string, input?: ListTransactionsInput): Promise<TransactionPull>;
 
   /** Remove the connection upstream. Idempotent: already-gone is not an error. */
   deleteConnection(externalItemId: string): Promise<void>;

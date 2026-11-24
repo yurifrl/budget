@@ -14,6 +14,7 @@ export default {
   'page.lastSync': 'Last sync: {stamp}',
   'page.lastSyncSandbox': 'Last sync: {stamp} · sandbox',
   'page.added': 'Last sync: added {stamp}',
+  'page.historyLoading': 'Importing older history — it continues with the next syncs.',
   'page.addedSandbox': 'Last sync: added {stamp} · sandbox',
   'page.syncNow': 'Sync now',
   'page.syncing': 'Syncing…',
