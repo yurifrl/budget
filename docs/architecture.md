@@ -149,6 +149,19 @@ start at `0100`). One image runs both the API and the worker
   follows the feature with no hook on the admin toggle. Own-key connections
   get no webhooks (sweep and manual sync only); the webhook route and its
   shared secret are unchanged.
+- **AI keys.** Category suggestions run on an AI provider key: the person's own
+  (`public.ai_credentials`, migration 0107, one row per user, the secret is
+  AES-256-GCM ciphertext sealed by `core/secret-box.ts` like bank keys) or the
+  installation's shared key when feature `shared-ai-key` is on for them
+  (`AI_SHARED_API_KEY` + `AI_SHARED_PROVIDER`; the model is the
+  `app_settings.aiSharedModel` admin setting, falling back to
+  `AI_SHARED_MODEL`). Own wins; with neither, 403 `own_ai_key_required` (no
+  paused state). `api/src/ai/` is the provider port (`chat` with tool calls and
+  structured output, `listModels`) plus five adapters — OpenRouter, Anthropic,
+  OpenAI, Z.ai, DeepSeek — with the provider guessed from the key shape and
+  overridable. Operations: `GET|PUT|DELETE /ai/credentials`,
+  `GET /ai/credentials/test`, `POST /ai/provider-detect`, `POST /ai/models`;
+  the key is never returned.
 - **Repeat-rule tick.** Still an in-process interval in the API
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.

@@ -24,6 +24,7 @@ import {
 import { createLedgerActivities } from './jobs/activities';
 import { configureJobs, createTemporalClient, startRelay } from './jobs';
 import { startWorkerHost } from './jobs/worker-host';
+import { configureAiEnv } from './ai';
 
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled rejection:', reason);
@@ -38,6 +39,7 @@ const instanceId = process.env.JOBS_INSTANCE_ID || 'budget-local';
 const workerId = `${hostname()}:${process.pid}`;
 
 configurePluggyEnv(process.env);
+configureAiEnv(process.env);
 // Same master key as the API: the sync activities decrypt users' own provider secrets.
 configureSecretsFromEnv(process.env);
 await runMigrations();

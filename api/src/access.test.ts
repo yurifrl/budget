@@ -628,6 +628,12 @@ const byBudgetId = budgetContracts.filter((c) => c.expose.api && hasBudgetId(c))
  * passes.
  */
 const notBudgetAddressed: Record<string, string> = {
+  ai_credentials_delete: "deletes the caller's own AI key: keyed by the session user, no id to pass",
+  ai_credentials_get: "status of the caller's own AI key; never the secret",
+  ai_credentials_save: "saves the caller's own AI key: keyed by the session user, no id to pass",
+  ai_credentials_test: "checks the caller's own AI key (or the shared one), no budget data",
+  ai_models_list: "lists models for the caller's own/shared AI key; no budget data",
+  ai_provider_detect: 'shape-only provider guess; reads no stored data',
   budget_list: "lists only budgets the caller owns or is a member of (asserted below)",
   budget_create: 'creates a new budget owned by the caller',
   connections_connect_token: "mints a widget token bound to the caller's own user id",
@@ -908,9 +914,9 @@ describe.skipIf(!dbReady)('D: two people, every budget operation', () => {
       acting = attacker;
       const mine = await send('features_mine', {});
       expect(mine.status).toBe(200);
-      expect(await mine.json()).toEqual({ features: { [key]: false } });
+      expect(await mine.json()).toEqual({ features: { [key]: false, 'shared-ai-key': false } });
       acting = victim;
-      expect(await (await send('features_mine', {})).json()).toEqual({ features: { [key]: true } });
+      expect(await (await send('features_mine', {})).json()).toEqual({ features: { [key]: true, 'shared-ai-key': false } });
     } finally {
       await pool.query('DELETE FROM public.feature_overrides WHERE feature_key = $1', [key]);
       configureAuth(before);

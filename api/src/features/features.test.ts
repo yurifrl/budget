@@ -24,6 +24,7 @@ const ADMIN_ORIGIN = 'https://admin.test';
 const SVC_TOKEN = 'svc-token-for-features-tests-0123456789';
 const D = '@featurestest.test';
 const KEY: FeatureKey = 'shared-pluggy-key'; // default off
+const DEFAULTS = { 'shared-pluggy-key': false, 'shared-ai-key': false } as const;
 const RETIRED = 'features-test-retired-key';
 
 const dbTest = test.skipIf(!dbReady);
@@ -116,7 +117,7 @@ describe('isEnabled (database)', () => {
   dbTest('nothing stored: the default in code', async () => {
     expect(await isEnabled(pool, KEY, ann.id)).toBe(false);
     expect(await isEnabled(pool, KEY, null)).toBe(false);
-    expect(await evaluateFeatures(pool, ann.id)).toEqual({ [KEY]: false });
+    expect(await evaluateFeatures(pool, ann.id)).toEqual(DEFAULTS);
   });
 
   dbTest('the everyone value beats the default, for every user and for no user', async () => {
@@ -137,8 +138,8 @@ describe('isEnabled (database)', () => {
     await setUserValue(pool, KEY, ann.id, true, admin.id);
     expect(await isEnabled(pool, KEY, ann.id)).toBe(true);
     expect(await isEnabled(pool, KEY, bob.id)).toBe(false);
-    expect(await evaluateFeatures(pool, ann.id)).toEqual({ [KEY]: true });
-    expect(await evaluateFeatures(pool, bob.id)).toEqual({ [KEY]: false });
+    expect(await evaluateFeatures(pool, ann.id)).toEqual({ ...DEFAULTS, [KEY]: true });
+    expect(await evaluateFeatures(pool, bob.id)).toEqual(DEFAULTS);
   });
 
   dbTest('a user override applies with no everyone value too', async () => {
@@ -169,9 +170,9 @@ describe('isEnabled (database)', () => {
 
   dbTest('a stored key that is no longer in the list is ignored', async () => {
     await pool.query(`insert into public.feature_overrides (feature_key, user_id, value) values ($1, null, true), ($1, $2, true)`, [RETIRED, ann.id]);
-    expect(await evaluateFeatures(pool, ann.id)).toEqual({ [KEY]: false });
+    expect(await evaluateFeatures(pool, ann.id)).toEqual(DEFAULTS);
     const mine = await send('GET', '/features', ann.cookie);
-    expect(mine.json).toEqual({ features: { [KEY]: false } });
+    expect(mine.json).toEqual({ features: DEFAULTS });
     const list = await send('GET', '/admin/features', admin.cookie);
     expect(list.json.map((f: { key: string }) => f.key)).toEqual(FEATURES.map((f) => f.key));
     expect(JSON.stringify(list.json)).not.toContain(RETIRED);
@@ -192,14 +193,14 @@ describe('GET /features', () => {
   dbTest('a signed-in user gets their own evaluated values, never cached', async () => {
     const before = await send('GET', '/features', ann.cookie);
     expect(before.status).toBe(200);
-    expect(myFeaturesSchema.parse(before.json)).toEqual({ features: { [KEY]: false } });
+    expect(myFeaturesSchema.parse(before.json)).toEqual({ features: DEFAULTS });
     expect(before.res.headers.get('cache-control')).toBe('no-store');
 
     await setEveryoneValue(pool, KEY, true, admin.id);
     await setUserValue(pool, KEY, bob.id, false, admin.id);
-    expect((await send('GET', '/features', ann.cookie)).json).toEqual({ features: { [KEY]: true } });
-    expect((await send('GET', '/features', bob.cookie)).json).toEqual({ features: { [KEY]: false } });
-    expect((await send('GET', '/features', admin.cookie)).json).toEqual({ features: { [KEY]: true } });
+    expect((await send('GET', '/features', ann.cookie)).json).toEqual({ features: { ...DEFAULTS, [KEY]: true } });
+    expect((await send('GET', '/features', bob.cookie)).json).toEqual({ features: DEFAULTS });
+    expect((await send('GET', '/features', admin.cookie)).json).toEqual({ features: { ...DEFAULTS, [KEY]: true } });
   });
 
   dbTest('signed out: 401', async () => {
