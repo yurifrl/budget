@@ -1,4 +1,4 @@
--- 0107 · AI keys (category suggestions). Additive only: one NEW table, which
+-- 0109 · AI keys (category suggestions). Additive only: one NEW table, which
 --   the running syscd-app (sharing this database) never names.
 --
 --   public.ai_credentials: one AI provider key per user, for the "Categorize"

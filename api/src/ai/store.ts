@@ -1,5 +1,5 @@
 /**
- * AI persistence (migration 0107). One row per user: their own AI key, sealed
+ * AI persistence (migration 0109). One row per user: their own AI key, sealed
  * by core/secret-box, plus the provider and the model they picked. Functions
  * take a Queryable; the secret never appears in this module's SELECTs beyond
  * the ciphertext columns.

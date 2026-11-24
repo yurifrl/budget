@@ -150,7 +150,7 @@ start at `0100`). One image runs both the API and the worker
   get no webhooks (sweep and manual sync only); the webhook route and its
   shared secret are unchanged.
 - **AI keys.** Category suggestions run on an AI provider key: the person's own
-  (`public.ai_credentials`, migration 0107, one row per user, the secret is
+  (`public.ai_credentials`, migration 0109, one row per user, the secret is
   AES-256-GCM ciphertext sealed by `core/secret-box.ts` like bank keys) or the
   installation's shared key when feature `shared-ai-key` is on for them
   (`AI_SHARED_API_KEY` + `AI_SHARED_PROVIDER`; the model is the
