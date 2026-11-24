@@ -1,5 +1,44 @@
 # Changelog
 
+## v2026.11.24-01 2026-11-24 release
+
+### Changed
+
+- release: v2026.11.24-01
+- refactor(client): Contabilizei rows rely on server import ids
+- fix(client): Contabilizei import ids unique across payees
+- feat(client): import Contabilizei statement CSV
+- fix(client): close review 2 on the AI key screen
+- test(client): gate the AI model list on settled detection
+- refactor(client): AI keys review fixes (sequencing, reducer, shared cards)
+- refactor(client): align AI key screen with the final ai contracts
+- fix(client): handle ai_key_forbidden and keys saved without a model
+- fix(client): keep AI key detection from restarting mid-request; show removal notice
+- feat(client): AI key screen (save, detect provider, pick model, test, remove)
+- fix(ai): third review round for the provider layer (budget-ucyr)
+- fix(ai): second review round for the provider layer (budget-ucyr)
+- fix(ai): harden the provider layer before the categorizer (budget-ucyr)
+- chore(ai): renumber the AI credentials migration to 0109
+- fix(ai): harden key checks, Anthropic tool loops and provider isolation (budget-q8kf)
+- feat(ai): AI provider layer for category suggestions (budget-q8kf)
+
+
+## v2026.11.24 2026-11-24 release
+
+### Changed
+
+- release: v2026.11.24
+- tasks: close budget-u5yt, budget-lubt, budget-mit6
+- docs: transfer matcher decisions (budget-mit6)
+- feat(transfers): phone layouts for the popover and payees, review polish
+- feat(transfers): register suggestions, popover, review list with bulk link, payee transfer rules (client)
+- feat(transfers): match transfers between own accounts, suggestions, payee transfer rules (api + contracts)
+- fix(installments): no selection checkbox on derived installment rows in Scheduled
+- fix(installments): phone Scheduled row stacks the purchase name over fraction and date
+- feat(installments): derive upcoming card installments; skip phantom pending after anticipation
+- connections: full history import with resume, 30-day daily pulls (budget-u5yt)
+
+
 ## v2026.11.23-04 2026-11-23 release
 
 ### Changed

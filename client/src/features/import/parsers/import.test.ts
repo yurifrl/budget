@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import * as XLSX from "xlsx";
 import {
+  detectContabilizeiCsv,
   detectNubankLayout,
   parseCsv,
   parseImportDate,
@@ -11,12 +12,35 @@ import {
   parseItauExtratoXls,
   parseItauFaturaXls,
   parseNubankCsv,
+  parseContabilizeiCsv,
   parseStatementFile,
 } from "./index";
 import type { CsvMapping } from "./index";
 
 /** Wrap text for the binary-aware dispatcher (XLS parsers never see it). */
 const stmt = (text: string) => ({ bytes: new Uint8Array(), text });
+
+/**
+ * Byte-exact inline copy of a Contabilizei PJ export
+ * (31132424_01OUT2026_31OUT2026.csv): UTF-8 BOM, CRLF line endings, NBSP
+ * after "R$" inside the quoted money cells, a bare `-` for the empty side.
+ */
+const CONTABILIZEI_SAMPLE =
+  "\uFEFF" +
+  [
+    'Data,Categoria,Lançamento,Descrição,Entrada,Saída,Saldo do dia',
+    '05/10/2026,Pessoa Jurídica,PIX,YURI FREIRE LIMA,-,"R$\u00A010.000,00","-R$\u00A010.000,00"',
+    '06/10/2026,Pessoa Jurídica,PIX,YURI FREIRE LIMA,-,"R$\u00A040.000,00","-R$\u00A040.000,00"',
+    '13/10/2026,Pessoa Jurídica,PIX,YURI FREIRE LIMA,-,"R$\u00A05.200,00","-R$\u00A05.200,00"',
+    '14/10/2026,Pessoa Jurídica,PIX,YURI FREIRE LIMA,-,"R$\u00A0300,00","-R$\u00A0300,00"',
+    '15/10/2026,Pessoa Jurídica,Outros,Compra Pré-Pago Visa Nacional,-,"R$\u00A0395,00","-R$\u00A05.045,00"',
+    '15/10/2026,Pessoa Jurídica,PIX,YURI FREIRE LIMA,-,"R$\u00A02.500,00","-R$\u00A05.045,00"',
+    '15/10/2026,Pessoa Jurídica,PIX,YURI FREIRE LIMA,-,"R$\u00A02.150,00","-R$\u00A05.045,00"',
+    '20/10/2026,Pessoa Jurídica,Pagamento,DARF Unificado,-,"R$\u00A0178,31","-R$\u00A0178,31"',
+    '25/10/2026,Pessoa Jurídica,PIX,Yuri freire lima,-,"R$\u00A0800,00","-R$\u00A0800,00"',
+    '29/10/2026,Pessoa Jurídica,PIX,NSX BRASIL S.A.,"R$\u00A02.500,00",-,"R$\u00A073.460,41"',
+    '29/10/2026,Pessoa Jurídica,PIX,NSX BRASIL S.A.,"R$\u00A070.960,41",-,"R$\u00A073.460,41"',
+  ].join("\r\n");
 
 describe("parseCsv", () => {
   it("splits plain rows", () => {
@@ -342,6 +366,17 @@ describe("parseStatementFile", () => {
     expect(result.rows).toEqual([]);
     expect(result.errors).toEqual(["OFX/QFX format is no longer supported — export the statement as XLS or TXT from Itaú instead"]);
   });
+
+  it("routes the Contabilizei CSV to its own source (right payee, id-less rows)", () => {
+    const result = parseStatementFile("31132424_01OUT2026_31OUT2026.csv", stmt(CONTABILIZEI_SAMPLE));
+    expect(result.errors).toEqual([]);
+    expect(result.rows).toHaveLength(11);
+    expect(result.rows[0]).toMatchObject({ payee: "YURI FREIRE LIMA" });
+    // The transaction type must not win the payee column (generic parser).
+    expect(result.rows.every((r) => r.payee !== "PIX")).toBe(true);
+    // No client import id: the server's YNAB fallback key dedupes re-imports.
+    expect(result.rows.every((r) => "importId" in r === false)).toBe(true);
+  });
 });
 
 describe("parseMappedCsv", () => {
@@ -412,7 +447,7 @@ describe("parseNubankCsv", () => {
     ]);
   });
 
-  it("parses fatura rows with positive amounts as charges", () => {
+  it("parses fatura rows with inverted amounts", () => {
     const result = parseNubankCsv("date,amount,id,title\n2025-06-27,10.00,xyz,Netflix\n", "fatura");
     expect(result.rows).toEqual([
       {
@@ -424,5 +459,71 @@ describe("parseNubankCsv", () => {
         importId: "nubank:xyz:2025-06-27:-10000",
       },
     ]);
+  });
+});
+
+describe("detectContabilizeiCsv", () => {
+  it("detects the Contabilizei header (BOM, accents, Saldo do dia)", () => {
+    expect(detectContabilizeiCsv(CONTABILIZEI_SAMPLE)).toBe(true);
+    expect(detectContabilizeiCsv("Data,Categoria,Lan\u00e7amento,Descri\u00e7\u00e3o,Entrada,Sa\u00edda,Saldo do dia\n")).toBe(true);
+  });
+
+  it("rejects Nubank, YNAB and generic layouts", () => {
+    expect(detectContabilizeiCsv("Data,Valor,Identificador,Descri\u00e7\u00e3o\n")).toBe(false);
+    expect(detectContabilizeiCsv("date,amount,id,title\n")).toBe(false);
+    expect(detectContabilizeiCsv("Date,Payee,Category,Memo,Outflow,Inflow\n")).toBe(false);
+    expect(detectContabilizeiCsv("Data;Benefici\u00e1rio;Observa\u00e7\u00e3o;Valor\n01/07/2026;Padaria;compra;-25,90\n")).toBe(false);
+    expect(detectContabilizeiCsv("")).toBe(false);
+  });
+});
+
+describe("parseContabilizeiCsv", () => {
+  it("parses the sample export (BOM, CRLF, NBSP, '-' cells)", () => {
+    const result = parseContabilizeiCsv(CONTABILIZEI_SAMPLE);
+    expect(result.errors).toEqual([]);
+    expect(result.rows).toHaveLength(11);
+    expect(result.skipped).toBe(0);
+    expect(result.rows[0]).toEqual({
+      date: "2026-10-05",
+      payee: "YURI FREIRE LIMA",
+      memo: "PIX",
+      outflowCents: 1_000_000,
+      inflowCents: 0,
+    });
+    expect(result.rows.find((r) => r.payee === "DARF Unificado")).toEqual({
+      date: "2026-10-20",
+      payee: "DARF Unificado",
+      memo: "Pagamento",
+      outflowCents: 17831,
+      inflowCents: 0,
+    });
+    const nsx = result.rows.filter((r) => r.payee === "NSX BRASIL S.A.");
+    expect(nsx.map((r) => r.inflowCents)).toEqual([250000, 7096041]);
+  });
+
+  it("nets negative cells into the opposite side (never negative cents)", () => {
+    const result = parseContabilizeiCsv(
+      "Data,Categoria,Lan\u00e7amento,Descri\u00e7\u00e3o,Entrada,Sa\u00edda,Saldo do dia\r\n" +
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,Refund,"-R$ 5,00",-,-\r\n' +
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,Charge,-,"-R$ 5,00",-\r\n',
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.rows).toEqual([
+      { date: "2026-10-15", payee: "Refund", memo: "PIX", outflowCents: 500, inflowCents: 0 },
+      { date: "2026-10-15", payee: "Charge", memo: "PIX", outflowCents: 0, inflowCents: 500 },
+    ]);
+  });
+
+  it("nets both-sides-set rows; reports net-zero and both-empty rows", () => {
+    const result = parseContabilizeiCsv(
+      "Data,Categoria,Lan\u00e7amento,Descri\u00e7\u00e3o,Entrada,Sa\u00edda,Saldo do dia\r\n" +
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,X,-,-,-\r\n' +
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,X,"R$ 2,00","R$ 2,00",-\r\n' +
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,X,"R$ 3,00","R$ 1,00",-\r\n',
+    );
+    expect(result.rows).toEqual([
+      { date: "2026-10-15", payee: "X", memo: "PIX", outflowCents: 0, inflowCents: 200 },
+    ]);
+    expect(result.errors).toEqual(["line 2: no readable amount", "line 3: amount is zero"]);
   });
 });
