@@ -57,6 +57,10 @@ export class AnthropicProvider implements AiProvider {
     // 2026-10-21 rejects temperature/top_p/top_k with a 400 even at defaults.
     if (request.tools?.length) {
       body.tools = request.tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.parameters }));
+      // Anthropic's tool-result loop expects the same `tools` on every turn
+      // ("Send the request with the same tools as the first request", handle
+      // tool calls doc). Disallowing a new call keeps the final answer textual.
+      if (request.toolChoice === 'none') body.tool_choice = { type: 'none' };
     }
     if (request.jsonSchema) body.output_config = { format: { type: 'json_schema', schema: request.jsonSchema.schema } };
     const json = await requestJson({

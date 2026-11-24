@@ -67,7 +67,14 @@ const worker = startWorkerHost({
   // (shared across pods, enforced server-side) never throttles ledger writes.
   activityQueues: [
     { taskQueue: `${taskQueue}${PLUGGY_QUEUE_SUFFIX}`, maxTaskQueueActivitiesPerSecond: PLUGGY_ACTIVITIES_PER_SECOND },
-    { taskQueue: `${taskQueue}${AI_QUEUE_SUFFIX}`, maxTaskQueueActivitiesPerSecond: AI_ACTIVITIES_PER_SECOND },
+    {
+      taskQueue: `${taskQueue}${AI_QUEUE_SUFFIX}`,
+      maxTaskQueueActivitiesPerSecond: AI_ACTIVITIES_PER_SECOND,
+      // One chunk at a time per worker: model calls are serialized per key
+      // (categorize/key-lock.ts), so a second concurrent chunk would only
+      // wait on the lock while holding an activity slot and its deadline.
+      maxConcurrentActivityTaskExecutions: 1,
+    },
   ],
   onConnected: async () => {
     await temporal.ensureRetentionSchedule();

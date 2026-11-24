@@ -2,10 +2,15 @@
  * Fake AI provider for tests: every provider id resolves to one adapter that
  * records the request and the key it was built with, then delegates to the
  * test's handler. No HTTP, no real key.
+ *
+ * Tests install it with `setProviders` from `../../ai/providers` (a deliberate
+ * deep import: the swap hands out the decrypted key, so it is not on the AI
+ * barrel).
  */
 import { AI_PROVIDERS, type AiProviderId } from '@shared/contracts/ai';
 
-import type { AiChatRequest, AiChatResult, ProviderEntry } from '../ai';
+import type { AiChatRequest, AiChatResult } from '../../ai';
+import type { ProviderEntry } from '../../ai/providers';
 
 export type FakeCall = { request: AiChatRequest; apiKey: string };
 

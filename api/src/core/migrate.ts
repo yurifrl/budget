@@ -70,6 +70,7 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0108_transfer_suggestions.sql': ['column:public.payees.transfer_rule', 'table:public.transfer_marks', 'table:public.transfer_links'],
   '0109_ai_credentials.sql': 'table:public.ai_credentials',
   '0110_category_suggestions.sql': 'table:public.category_suggestions',
+  '0111_category_suggestions_category_idx.sql': 'index:public.category_suggestions_category_idx',
 };
 
 /**

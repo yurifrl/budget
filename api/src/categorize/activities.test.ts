@@ -1,16 +1,16 @@
 /**
- * The activity failure translation: each AiProviderError kind maps onto the
- * Temporal retry policy the workflow relies on (auth/permanent non-retryable,
- * rate limits with the provider's own delay, everything else retryable), and
- * no provider text or key reaches the ledger.
+ * The activity boundary: failure translation into the Temporal retry policy,
+ * the heartbeat payload as resume state, and the ledger fields a failure may
+ * carry (kind + Postgres code, never a message or provider text).
  */
 import { describe, expect, test } from 'bun:test';
 import { ApplicationFailure } from '@temporalio/activity';
 import { CancelledFailure } from '@temporalio/common';
 
-import { CategorizeError } from './errors';
-import { toActivityFailure } from './activities';
+import { CategorizeError, failureForProviderError } from './errors';
+import { failureLogFields, readProgress, toActivityFailure } from './activities';
 import { MAX_RATE_LIMIT_DELAY_MS } from './jobspec';
+import { AiProviderError } from '../ai';
 
 const none = { input: 0, output: 0 };
 
@@ -56,5 +56,62 @@ describe('activity failure translation', () => {
   test('cancellation passes through untouched', () => {
     const cancelled = new CancelledFailure('cancelled');
     expect(toActivityFailure(cancelled)).toBe(cancelled);
+  });
+});
+
+describe('per-transaction vs account-level provider errors', () => {
+  test('400/413/422 are request-scoped; other 4xx stay permanent', () => {
+    for (const status of [400, 413, 422]) {
+      expect(failureForProviderError(new AiProviderError('permanent', 'x', status), none).kind).toBe('request');
+    }
+    for (const status of [402, 403, 404, 409]) {
+      expect(failureForProviderError(new AiProviderError('permanent', 'x', status), none).kind).toBe('permanent');
+    }
+    expect(failureForProviderError(new AiProviderError('permanent', 'x'), none).kind).toBe('permanent');
+    expect(failureForProviderError(new AiProviderError('auth', 'x', 401), none).kind).toBe('auth');
+    expect(failureForProviderError(new AiProviderError('rate_limited', 'x', 429), none).kind).toBe('rate_limited');
+  });
+});
+
+describe('ledger fields for a failure', () => {
+  test('a categorize failure logs its kind only', () => {
+    expect(failureLogFields(new CategorizeError('auth', none))).toEqual({ kind: 'auth' });
+  });
+
+  test('an unexpected driver error logs its code, never its message', () => {
+    const pgError = Object.assign(new Error('invalid input syntax for type uuid: "txn_1"'), { code: '22P02' });
+    expect(failureLogFields(pgError)).toEqual({ kind: 'internal', pg_code: '22P02' });
+    expect(JSON.stringify(failureLogFields(pgError))).not.toContain('txn_1');
+  });
+
+  test('an unknown error without a code logs only internal', () => {
+    expect(failureLogFields(new Error('sk-secret 123'))).toEqual({ kind: 'internal' });
+  });
+});
+
+describe('heartbeat details as resume state', () => {
+  const progress = {
+    examined: 2,
+    total: 10,
+    cursor: { date: '2026-11-02', id: '5f0f0a6e-1f5b-4a63-9a63-8c1f6f2d4a01' },
+    suggested: 1,
+    rule: 1,
+    empty: 0,
+    skipped: 0,
+    failed: 0,
+    failedIds: [],
+    inputTokens: 30,
+    outputTokens: 12,
+  };
+
+  test('a complete payload is accepted unchanged', () => {
+    expect(readProgress(progress)).toEqual(progress);
+    expect(readProgress(null)).toBeNull();
+  });
+
+  test('a malformed payload is ignored (fresh start), not trusted', () => {
+    expect(readProgress({ examined: '2' })).toBeNull();
+    expect(readProgress({ ...progress, failedIds: [1] })).toBeNull();
+    expect(readProgress({ ...progress, cursor: { date: 1, id: 2 } })).toBeNull();
   });
 });

@@ -389,3 +389,51 @@ describe('provider error mapping', () => {
     });
   });
 });
+
+describe('OpenAI-compatible tool_choice on the final answer turn', () => {
+  test('openai: tools stay declared and tool_choice none disallows a new call', async () => {
+    const baseUrl = stub(() =>
+      chatReply({ content: '{"suggestions":[]}' }),
+    );
+    const provider = createProvider('openai', 'sk-test-123', { baseUrl });
+    await provider.chat({
+      model: 'gpt-test',
+      messages: [
+        { role: 'user', content: 'categorize this' },
+        { role: 'assistant', content: null, toolCalls: [{ id: 'call_1', name: 'list_categories', arguments: {} }] },
+        { role: 'tool', toolCallId: 'call_1', content: '{"groups":[]}' },
+        { role: 'user', content: 'answer now' },
+      ],
+      tools: [{ name: 'list_categories', description: 'List categories', parameters: { type: 'object' } }],
+      toolChoice: 'none',
+      jsonSchema: { name: 'category_suggestions', schema: { type: 'object' } },
+      maxTokens: 1024,
+    });
+    expect(captured[0]!.body).toMatchObject({
+      max_completion_tokens: 1024,
+      tools: [{ type: 'function', function: { name: 'list_categories' } }],
+      tool_choice: 'none',
+    });
+  });
+
+  test('zai: its OpenAPI documents only auto, so tools stay and tool_choice is omitted', async () => {
+    const baseUrl = stub(() => chatReply({ content: '{"suggestions":[]}' }));
+    const provider = createProvider('zai', 'sk-zai-123', { baseUrl });
+    await provider.chat({
+      model: 'glm-test',
+      messages: [
+        { role: 'user', content: 'categorize this' },
+        { role: 'assistant', content: null, toolCalls: [{ id: 'call_1', name: 'list_categories', arguments: {} }] },
+        { role: 'tool', toolCallId: 'call_1', content: '{"groups":[]}' },
+        { role: 'user', content: 'answer now' },
+      ],
+      tools: [{ name: 'list_categories', description: 'List categories', parameters: { type: 'object' } }],
+      toolChoice: 'none',
+      jsonSchema: { name: 'category_suggestions', schema: { type: 'object' } },
+      maxTokens: 1024,
+    });
+    const body = captured[0]!.body;
+    expect(body).toMatchObject({ max_tokens: 1024, tools: [{ type: 'function', function: { name: 'list_categories' } }] });
+    expect(body).not.toHaveProperty('tool_choice');
+  });
+});

@@ -6,21 +6,35 @@
  * The activity is the boundary that owns Temporal specifics:
  *  - cancellation aborts the in-flight provider call through an AbortSignal;
  *  - a timer heartbeats during long model calls (a chat call can outlive the
- *    heartbeat timeout; heartbeats must continue while it is awaited);
+ *    heartbeat timeout; heartbeats must continue while it is awaited), and the
+ *    heartbeat payload doubles as the chunk's resume state: a retried attempt
+ *    continues after the last *finished* transaction, so finished work is
+ *    never paid for twice;
  *  - per-transaction failures stay inside ./chunk.ts; auth/permanent/rate/
  *    transient failures become ApplicationFailures whose `type` the workflow
  *    turns into a user-safe run message.
  *
  * Nothing here returns or logs a key, and no error text from a provider is
- * kept: results carry counts and ids, failures fixed sentences.
+ * kept: results carry counts and ids, failures fixed sentences. For an
+ * unexpected error only its database error CODE (22P02, 23505 …) is logged,
+ * never its message.
  */
 import { ApplicationFailure, CancelledFailure, Context } from '@temporalio/activity';
 import type { Pool } from 'pg';
 
+import { z } from '@shared/zod';
+
 import type { JobContext } from '../jobs';
-import { runChunk, prepareRun, type ChunkOutcome, type ChunkProgress, type PrepareOutcome } from './chunk';
+import {
+  runChunk,
+  prepareRun,
+  type ChunkOutcome,
+  type ChunkProgress,
+  type PrepareOutcome,
+} from './chunk';
 import { CategorizeError } from './errors';
 import { DEFAULT_RATE_LIMIT_DELAY_MS, MAX_RATE_LIMIT_DELAY_MS } from './jobspec';
+import type { CandidateCursor } from './store';
 
 const HEARTBEAT_EVERY_MS = 10_000;
 
@@ -28,12 +42,16 @@ type Tracked = <T>(runId: string, body: (ctx: JobContext) => Promise<T>) => Prom
 
 /** The activity contract the workflow proxies (shipped in the Temporal signature). */
 export interface CategorizeActivities {
-  categorizePrepare(args: { runId: string; budgetId: string }): Promise<PrepareOutcome>;
+  categorizePrepare(args: { runId: string; budgetId: string; force: boolean }): Promise<PrepareOutcome>;
   categorizeChunk(args: {
     runId: string;
     budgetId: string;
-    offset: number;
+    force: boolean;
     limit: number;
+    cursor: CandidateCursor | null;
+    snapshot: CandidateCursor;
+    /** Run-level examined count before this chunk, for the ledger log. */
+    doneBefore: number;
     total: number;
   }): Promise<ChunkOutcome>;
 }
@@ -61,12 +79,46 @@ export function toActivityFailure(error: unknown): Error {
   return ApplicationFailure.create({ message: 'categorize activity failed', type: 'AiTransient' });
 }
 
+const cursorSchema = z.object({ date: z.string(), id: z.string() });
+const progressSchema = z.object({
+  examined: z.number().int().min(0),
+  total: z.number().int().min(0),
+  cursor: cursorSchema.nullable(),
+  suggested: z.number().int().min(0),
+  rule: z.number().int().min(0),
+  empty: z.number().int().min(0),
+  skipped: z.number().int().min(0),
+  failed: z.number().int().min(0),
+  failedIds: z.array(z.string()),
+  inputTokens: z.number().int().min(0),
+  outputTokens: z.number().int().min(0),
+});
+
+/** The heartbeat payload of a previous attempt, or null (fresh or malformed). */
+export function readProgress(details: unknown): ChunkProgress | null {
+  const parsed = progressSchema.safeParse(details);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
+ * What a failure may put in the ledger: its kind, plus the Postgres error code
+ * when it is a driver error. Codes are diagnostics, not content (22P02 is not
+ * a key); messages are never logged.
+ */
+export function failureLogFields(error: unknown): { kind: string; pg_code?: string } {
+  if (error instanceof CategorizeError) return { kind: error.kind };
+  if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') {
+    return { kind: 'internal', pg_code: error.code };
+  }
+  return { kind: 'internal' };
+}
+
 export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): CategorizeActivities {
   return {
-    /** Key availability and the candidate count; no provider call, no key in the result. */
-    async categorizePrepare(args: { runId: string; budgetId: string }): Promise<PrepareOutcome> {
+    /** Key availability and the candidate window; no provider call, no key in the result. */
+    async categorizePrepare(args: { runId: string; budgetId: string; force: boolean }): Promise<PrepareOutcome> {
       return trackedAttempt(args.runId, async (ctx) => {
-        const result = await prepareRun(db, args.budgetId);
+        const result = await prepareRun(db, args.budgetId, args.force);
         if ('problem' in result) {
           if (result.problem === 'budget_missing') {
             throw ApplicationFailure.create({ message: 'budget no longer exists', type: 'BudgetMissing', nonRetryable: true });
@@ -74,29 +126,37 @@ export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): C
           await ctx.log('warn', 'categorize run has no usable AI key', { problem: result.problem });
           return { problem: result.problem };
         }
-        await ctx.log('info', 'categorize run prepared', { total: result.total });
-        return { total: result.total };
+        await ctx.log('info', 'categorize run prepared', { total: result.total, remaining: result.remaining });
+        return result;
       });
     },
 
-    /** Classify the next window of transactions. Returns counts/ids only. */
+    /** Classify the next window of transactions. Returns counts/ids/cursor only. */
     async categorizeChunk(args: {
       runId: string;
       budgetId: string;
-      offset: number;
+      force: boolean;
       limit: number;
+      cursor: CandidateCursor | null;
+      snapshot: CandidateCursor;
+      doneBefore: number;
       total: number;
     }): Promise<ChunkOutcome> {
       return trackedAttempt(args.runId, async (ctx) => {
         const abort = new AbortController();
         // Cancel the in-flight provider call when Temporal cancels the activity.
         void Context.current().cancelled.catch(() => abort.abort());
-        let progress: ChunkProgress = {
-          done: args.offset,
+        const resumed = readProgress(Context.current().info.heartbeatDetails);
+        let progress: ChunkProgress = resumed ?? {
+          examined: 0,
           total: args.total,
+          cursor: args.cursor,
           suggested: 0,
           rule: 0,
+          empty: 0,
+          skipped: 0,
           failed: 0,
+          failedIds: [],
           inputTokens: 0,
           outputTokens: 0,
         };
@@ -112,9 +172,13 @@ export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): C
         try {
           const result = await runChunk(db, {
             budgetId: args.budgetId,
-            offset: args.offset,
-            limit: args.limit,
+            force: args.force,
+            snapshot: args.snapshot,
+            cursor: resumed?.cursor ?? args.cursor,
+            // A retried attempt only has the part it did not finish left.
+            limit: Math.max(0, args.limit - (resumed?.examined ?? 0)),
             total: args.total,
+            resume: resumed ?? undefined,
             signal: abort.signal,
             onProgress: (next) => {
               progress = { ...next };
@@ -125,13 +189,16 @@ export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): C
             if (result.problem === 'budget_missing') {
               throw ApplicationFailure.create({ message: 'budget no longer exists', type: 'BudgetMissing', nonRetryable: true });
             }
-            await ctx.log('warn', 'categorize run lost its AI key mid-run', { problem: result.problem, done: progress.done });
+            await ctx.log('warn', 'categorize run lost its AI key mid-run', {
+              problem: result.problem,
+              done: args.doneBefore + progress.examined,
+            });
             return result;
           }
-          progress = { ...progress, done: args.offset + result.examined };
           await ctx.log('info', 'categorize chunk done', {
-            done: progress.done,
+            done: args.doneBefore + result.examined,
             total: args.total,
+            examined: result.examined,
             suggested: result.suggested,
             rule: result.rule,
             empty: result.empty,
@@ -144,13 +211,13 @@ export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): C
         } catch (error) {
           // A stopped chunk keeps its last heartbeat totals in the ledger too:
           // billed tokens so far are reported even when the run fails or is
-          // retried. Counts only; no provider text and no key.
+          // retried. Counts and codes only; no provider text and no key.
           await ctx.log('warn', 'categorize chunk stopped', {
-            done: progress.done,
+            done: args.doneBefore + progress.examined,
             total: args.total,
             input_tokens: progress.inputTokens,
             output_tokens: progress.outputTokens,
-            kind: error instanceof CategorizeError ? error.kind : 'internal',
+            ...failureLogFields(error),
           });
           throw toActivityFailure(error);
         } finally {

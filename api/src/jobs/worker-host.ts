@@ -14,9 +14,16 @@ export interface WorkerHostOptions {
   /**
    * Extra activity-only workers on other task queues (e.g. a rate-limited
    * queue for provider calls). `maxTaskQueueActivitiesPerSecond` is enforced by
-   * the server per queue, so it holds across all pods.
+   * the server per queue, so it holds across all pods;
+   * `maxConcurrentActivityTaskExecutions` bounds how many of that queue's
+   * activities ONE worker runs at once (the `-ai` queue uses 1 so a provider
+   * key never sees two calls from this process in parallel).
    */
-  activityQueues?: Array<{ taskQueue: string; maxTaskQueueActivitiesPerSecond?: number }>;
+  activityQueues?: Array<{
+    taskQueue: string;
+    maxTaskQueueActivitiesPerSecond?: number;
+    maxConcurrentActivityTaskExecutions?: number;
+  }>;
   /** Called after each successful (re)connect, e.g. to ensure schedules. Failures are logged, not fatal. */
   onConnected?: () => Promise<void>;
   log?: (msg: string) => void;
@@ -63,6 +70,9 @@ export function startWorkerHost(opts: WorkerHostOptions): { stop(): Promise<void
               activities: opts.activities,
               ...(q.maxTaskQueueActivitiesPerSecond !== undefined
                 ? { maxTaskQueueActivitiesPerSecond: q.maxTaskQueueActivitiesPerSecond }
+                : {}),
+              ...(q.maxConcurrentActivityTaskExecutions !== undefined
+                ? { maxConcurrentActivityTaskExecutions: q.maxConcurrentActivityTaskExecutions }
                 : {}),
             }),
           ),

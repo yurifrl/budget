@@ -103,6 +103,7 @@ export default {
   person_edits_own_name: 'A person who has signed in changes their own name in their profile.',
   owner_cannot_be_removed: 'The owner of the budget cannot be removed.',
   invalid_backup: 'This backup file is not valid, so nothing was restored.',
+  invalid_transaction_id: 'That transaction id is not valid.',
   server_reconnect_bank: 'Reconnect your bank.',
   server_quota_exhausted: 'The bank limit was reached. Data resumes next month.',
   server_rate_limited: 'The bank is limiting requests right now. We will try again shortly.',

@@ -1,16 +1,22 @@
 /**
- * One chunk of a categorize run: pick the next window of uncategorized
- * transactions of ONE budget, answer the existing payee rule first, send only
- * the rest to the model, and write the suggestions. Runs inside a Temporal
- * activity (./activities.ts); the workflow only sees counts and ids.
+ * One chunk of a categorize run: pick the next window of transactions of ONE
+ * budget, answer the existing payee rule first, send only the rest to the
+ * model, and write the suggestions. Runs inside a Temporal activity
+ * (./activities.ts); the workflow only sees counts, ids and a cursor.
  *
- * Failure policy is here, by AiProviderError kind (see ./errors.ts):
+ * Failure policy is here, by CategorizeError kind (see ./errors.ts):
  *  - timeout      retried once for that transaction, then counted failed and
  *                 the chunk continues (a timed-out generation may be billed).
  *  - bad_response counted failed, chunk continues.
- *  - auth, permanent       thrown → the activity fails the run (non-retryable).
- *  - rate_limited, transient thrown → the activity is retried by Temporal
- *                 (rate limits honor the provider's retry-after).
+ *  - request      the provider refused THIS request (400/413/422): counted
+ *                 failed, chunk continues.
+ *  - budget       the transaction spent its token cap: counted failed.
+ *  - rate_limited waited out once for the transaction (up to
+ *                 IN_CHUNK_RATE_LIMIT_WAIT_MS, provider delay otherwise), then
+ *                 thrown → the activity is retried by Temporal with the
+ *                 provider's retry-after.
+ *  - auth, permanent (account-level), transient → thrown → activity retry /
+ *                 non-retryable stop of the run.
  * One failing transaction never fails the chunk.
  */
 import { CancelledFailure } from '@temporalio/common';
@@ -21,20 +27,36 @@ import { suggestedCategoryForPayee } from '../budget';
 import type { Queryable } from '../core/db';
 import { classifyTransaction, type ClassifyRequest, type ClassifyResult } from './agent';
 import { CategorizeError } from './errors';
+import {
+  CATEGORIZE_RUN_LIMIT,
+  DEFAULT_RATE_LIMIT_DELAY_MS,
+  IN_CHUNK_RATE_LIMIT_WAIT_MS,
+} from './jobspec';
+import { withKeyLock } from './key-lock';
 import type { CategorizeSkipProblem } from './messages';
 import * as store from './store';
 import { createTools } from './tools';
 
-export type PrepareOutcome = { total: number } | { problem: CategorizeSkipProblem };
+export type PrepareOutcome =
+  | { total: number; remaining: number; snapshot: store.CandidateCursor | null }
+  | { problem: CategorizeSkipProblem };
 /** What prepare reports for a budget that no longer exists (the activity fails the run). */
 export type PrepareResult = PrepareOutcome | { problem: 'budget_missing' };
 
+/** Heartbeat payload of a chunk; also the resume state a retried attempt starts from. */
 export type ChunkProgress = {
-  done: number;
+  /** Candidates this chunk examined, including a previous attempt's share. */
+  examined: number;
+  /** Run total from prepare (already capped). */
   total: number;
+  /** Last processed candidate, for the keyset and for resuming. */
+  cursor: store.CandidateCursor | null;
   suggested: number;
   rule: number;
+  empty: number;
+  skipped: number;
   failed: number;
+  failedIds: string[];
   inputTokens: number;
   outputTokens: number;
 };
@@ -43,6 +65,7 @@ export type ChunkOutcome =
   | { problem: CategorizeSkipProblem }
   | {
       examined: number;
+      nextCursor: store.CandidateCursor | null;
       suggested: number;
       rule: number;
       empty: number;
@@ -58,111 +81,211 @@ export type ChunkResult = ChunkOutcome | { problem: 'budget_missing' };
 
 export type ChunkParams = {
   budgetId: string;
-  offset: number;
+  /** Snapshot bound captured at prepare: rows newer than this are another run's. */
+  snapshot: store.CandidateCursor;
+  /** Where this chunk starts (the run's cursor); a resume overrides it. */
+  cursor: store.CandidateCursor | null;
   limit: number;
-  /** Candidate count from prepare, for the heartbeat's done/total. */
+  /** Re-classify transactions that already have suggestions. */
+  force: boolean;
+  /** Run total from prepare, for the heartbeat's done/total. */
   total: number;
+  /** Resume state from a previous attempt's heartbeat, if any. */
+  resume?: ChunkProgress;
   signal?: AbortSignal;
-  /** Sync hook after every transaction (the activity mirrors it into heartbeats). */
+  /** Mirrors progress after every transaction and every billed call. */
   onProgress?: (progress: ChunkProgress) => void;
 };
 
-/** Resolve the owner's key (no provider call) and count what a run would classify. */
-export async function prepareRun(db: Queryable, budgetId: string): Promise<PrepareResult> {
-  const owner = await store.budgetOwner(db, budgetId);
+const emptyProgress = (total: number, cursor: store.CandidateCursor | null): ChunkProgress => ({
+  examined: 0,
+  total,
+  cursor,
+  suggested: 0,
+  rule: 0,
+  empty: 0,
+  skipped: 0,
+  failed: 0,
+  failedIds: [],
+  inputTokens: 0,
+  outputTokens: 0,
+});
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Resolve the run's actor and key (no provider call) and count what a run
+ * would classify. `limit` is CATEGORIZE_RUN_LIMIT in production; tests use a
+ * small value to exercise the cap without a hundred fixtures.
+ */
+export async function prepareRun(
+  db: Queryable,
+  budgetId: string,
+  force: boolean,
+  limit: number = CATEGORIZE_RUN_LIMIT,
+): Promise<PrepareResult> {
+  const owner = await store.runActorForBudget(db, budgetId);
   if (!owner) return { problem: 'budget_missing' };
   const resolved = await resolveAiKey(db, owner);
   if (!resolved.ok) return { problem: resolved.problem };
   if (!resolved.key.model) return { problem: 'no_model' };
-  return { total: await store.countCandidates(db, budgetId) };
+  const window = await store.candidateWindow(db, budgetId, force);
+  const total = Math.min(window.count, limit);
+  return { total, remaining: window.count - total, snapshot: total > 0 ? window.newest : null };
 }
 
 /**
  * Classify one transaction, retrying a timeout at most once. Returns a
- * per-transaction failure for timeout/bad_response; rethrows auth/permanent/
- * rate_limited/transient for the activity's run-level policy. Every attempt's
- * usage is added through `addUsage` so billed tokens are counted even when the
- * transaction fails.
+ * per-transaction failure for timeout/bad_response/request/budget; rethrows
+ * auth/permanent/rate_limited/transient for the chunk's run-level policy.
+ * Every attempt's usage is added through `addUsage` (which returns the running
+ * total) so billed tokens are counted even when the transaction fails.
  */
 async function classifyWithPolicy(
   request: ClassifyRequest,
   signal: AbortSignal | undefined,
-  addUsage: (usage: AiTokenUsage) => void,
-): Promise<{ ok: true; result: ClassifyResult } | { ok: false; failure: 'timeout' | 'bad_response' }> {
-  for (let attempt = 1; ; attempt++) {
+  addUsage: (usage: AiTokenUsage) => AiTokenUsage,
+): Promise<
+  { ok: true; result: ClassifyResult } | { ok: false; failure: 'timeout' | 'bad_response' | 'request' | 'budget' }
+> {
+  // One budget for the whole transaction — timeout and rate-limit retries
+  // included — so the call/token caps are per transaction and usage is
+  // reported once, as deltas of the cumulative total.
+  const budget = { calls: 0, tokens: { input: 0, output: 0 } };
+  let reported: AiTokenUsage = { input: 0, output: 0 };
+  const report = (total: AiTokenUsage): void => {
+    addUsage({ input: total.input - reported.input, output: total.output - reported.output });
+    reported = { input: total.input, output: total.output };
+  };
+  let timeouts = 0;
+  let rateLimits = 0;
+  for (;;) {
     try {
-      return { ok: true, result: await classifyTransaction(request) };
+      const result = await classifyTransaction({ ...request, budget });
+      report(result.usage);
+      return { ok: true, result };
     } catch (error) {
       if (!(error instanceof CategorizeError)) throw error;
-      addUsage(error.usage);
+      report(error.usage);
       // A caller abort surfaces as the adapter's `timeout`; it is not a
       // per-transaction failure and must not be retried.
       if (signal?.aborted) throw new CancelledFailure('categorize run cancelled');
-      if (error.kind === 'timeout' && attempt === 1) continue;
-      if (error.kind === 'timeout' || error.kind === 'bad_response') return { ok: false, failure: error.kind };
+      if (error.kind === 'timeout' && timeouts === 0) {
+        timeouts++;
+        continue;
+      }
+      if (error.kind === 'rate_limited' && rateLimits === 0) {
+        rateLimits++;
+        const wait = Math.min(error.retryAfterMs ?? DEFAULT_RATE_LIMIT_DELAY_MS, IN_CHUNK_RATE_LIMIT_WAIT_MS);
+        await sleep(wait);
+        if (signal?.aborted) throw new CancelledFailure('categorize run cancelled');
+        continue;
+      }
+      if (error.kind === 'timeout' || error.kind === 'bad_response' || error.kind === 'request' || error.kind === 'budget') {
+        return { ok: false, failure: error.kind };
+      }
       throw error;
     }
   }
 }
 
-/** Run one chunk. Returns counts/ids only; the run-level failure policy lives in the caller. */
+/** Run one chunk. Returns counts/ids/cursor only; the run-level failure policy lives in the caller. */
 export async function runChunk(pool: Pool, params: ChunkParams): Promise<ChunkResult> {
-  const owner = await store.budgetOwner(pool, params.budgetId);
+  const owner = await store.runActorForBudget(pool, params.budgetId);
   if (!owner) return { problem: 'budget_missing' };
   const resolved = await resolveAiKey(pool, owner);
   if (!resolved.ok) return { problem: resolved.problem };
   const key = resolved.key;
-  if (!key.model) return { problem: 'no_model' };
+  const model = key.model;
+  if (!model) return { problem: 'no_model' };
 
-  const candidates = await store.listCandidates(pool, params.budgetId, params.offset, params.limit);
+  const progress: ChunkProgress = params.resume
+    ? { ...params.resume, total: params.total, failedIds: [...params.resume.failedIds] }
+    : emptyProgress(params.total, params.cursor);
+  let cursor = progress.cursor;
+  const report = (): void => {
+    params.onProgress?.(progress);
+  };
+  const usage: AiTokenUsage = { input: progress.inputTokens, output: progress.outputTokens };
+  const addUsage = (spent: AiTokenUsage): AiTokenUsage => {
+    usage.input += spent.input;
+    usage.output += spent.output;
+    progress.inputTokens = usage.input;
+    progress.outputTokens = usage.output;
+    report();
+    return usage;
+  };
+
+  // A retried attempt that already finished its share has nothing left to do.
+  if (params.limit <= 0) {
+    return {
+      examined: progress.examined,
+      nextCursor: cursor,
+      suggested: progress.suggested,
+      rule: progress.rule,
+      empty: progress.empty,
+      skipped: progress.skipped,
+      failed: progress.failed,
+      failedIds: progress.failedIds,
+      usage,
+    };
+  }
+
+  const candidates = await store.listCandidates(pool, params.budgetId, {
+    snapshot: params.snapshot,
+    cursor,
+    limit: params.limit,
+    force: params.force,
+  });
   const choices = await store.listCategoryChoices(pool, params.budgetId);
   const allowedCategoryIds = new Set(choices.map((choice) => choice.id));
   const tools = createTools(pool, params.budgetId);
   const provider = providerFor(key);
 
-  const usage: AiTokenUsage = { input: 0, output: 0 };
-  const addUsage = (spent: AiTokenUsage): void => {
-    usage.input += spent.input;
-    usage.output += spent.output;
-  };
-  const progress: ChunkProgress = { done: params.offset, total: params.total, suggested: 0, rule: 0, failed: 0, inputTokens: 0, outputTokens: 0 };
-  const report = (): void => {
-    progress.inputTokens = usage.input;
-    progress.outputTokens = usage.output;
-    params.onProgress?.(progress);
-  };
-
-  const counts = { suggested: 0, rule: 0, empty: 0, skipped: 0, failed: 0, failedIds: [] as string[] };
-  for (const [index, transaction] of candidates.entries()) {
+  for (const transaction of candidates) {
     if (params.signal?.aborted) throw new CancelledFailure('categorize run cancelled');
 
+    // A forced re-run includes rows with suggestions, but never a transaction
+    // a person already decided: no model call, no overwrite.
+    if (params.force && (await store.hasDecidedSuggestion(pool, transaction.id))) {
+      progress.skipped++;
+      cursor = { date: transaction.date, id: transaction.id };
+      progress.cursor = cursor;
+      progress.examined++;
+      report();
+      continue;
+    }
+
     // The existing payee rule answers first; only the rest reaches the model.
+    // Its category must still be visible (the rule filters deleted, not
+    // hidden); otherwise the model gets the transaction like any other.
     const ruleCategory = await suggestedCategoryForPayee(pool, params.budgetId, transaction.payee_id);
     let written = false;
-    if (ruleCategory) {
+    if (ruleCategory && allowedCategoryIds.has(ruleCategory)) {
       written = await store.replaceSuggestions(pool, params.budgetId, transaction.id, [
         { categoryId: ruleCategory, confidence: 1, reason: null, source: 'payee_rule', provider: null, model: null },
       ]);
-      if (written) counts.rule++;
+      if (written) progress.rule++;
     } else {
-      const outcome = await classifyWithPolicy(
-        {
-          provider,
-          model: key.model,
-          transaction,
-          tools,
-          allowedCategoryIds,
-          signal: params.signal,
-        },
-        params.signal,
-        addUsage,
+      const outcome = await withKeyLock(owner, () =>
+        classifyWithPolicy(
+          {
+            provider,
+            model,
+            transaction,
+            tools,
+            allowedCategoryIds,
+            signal: params.signal,
+          },
+          params.signal,
+          addUsage,
+        ),
       );
       if (params.signal?.aborted) throw new CancelledFailure('categorize run cancelled');
       if (!outcome.ok) {
-        counts.failed++;
-        counts.failedIds.push(transaction.id);
+        progress.failed++;
+        progress.failedIds.push(transaction.id);
       } else {
-        addUsage(outcome.result.usage);
         written = await store.replaceSuggestions(
           pool,
           params.budgetId,
@@ -177,18 +300,27 @@ export async function runChunk(pool: Pool, params: ChunkParams): Promise<ChunkRe
           })),
         );
         if (written) {
-          if (outcome.result.suggestions.length > 0) counts.suggested++;
-          else counts.empty++;
+          if (outcome.result.suggestions.length > 0) progress.suggested++;
+          else progress.empty++;
         }
       }
     }
-    if (!written) counts.skipped++;
-    progress.done = params.offset + index + 1;
-    progress.suggested = counts.suggested;
-    progress.rule = counts.rule;
-    progress.failed = counts.failed;
+    if (!written) progress.skipped++;
+    cursor = { date: transaction.date, id: transaction.id };
+    progress.cursor = cursor;
+    progress.examined++;
     report();
   }
 
-  return { examined: candidates.length, ...counts, usage };
+  return {
+    examined: progress.examined,
+    nextCursor: cursor,
+    suggested: progress.suggested,
+    rule: progress.rule,
+    empty: progress.empty,
+    skipped: progress.skipped,
+    failed: progress.failed,
+    failedIds: progress.failedIds,
+    usage,
+  };
 }

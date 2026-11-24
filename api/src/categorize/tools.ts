@@ -4,9 +4,10 @@
  * id in the WHERE clause: a transaction, payee or category of another budget is
  * never returned, whatever id the model asks for.
  *
- * Arguments come from the model: they are untrusted and validated per tool.
- * A bad argument answers a JSON `{ error }` the model can retry, it never
- * throws into the loop.
+ * Arguments come from the model: they are untrusted and validated per tool,
+ * and ids must be uuids before they reach a uuid column. EVERY failure — bad
+ * argument, not found, database error — becomes a JSON `{ error }` the model
+ * can react to; nothing throws out of `execute` into the conversation loop.
  */
 import { z } from '@shared/zod';
 
@@ -32,7 +33,7 @@ export const TOOL_DEFINITIONS: readonly AiTool[] = [
       'Read one transaction of this budget: date, signed amount in milliunits, account, payee, memo, current category and the bank-supplied facts. Ids from another budget are not found.',
     parameters: {
       type: 'object',
-      properties: { transaction_id: { type: 'string', description: 'The transaction id, as given in the task or by search_similar_transactions.' } },
+      properties: { transaction_id: { type: 'string', description: 'The transaction id (a uuid) as given in the task or by search_similar_transactions.' } },
       required: ['transaction_id'],
       additionalProperties: false,
     },
@@ -43,7 +44,7 @@ export const TOOL_DEFINITIONS: readonly AiTool[] = [
       'How this payee was categorized before, in this budget: categories, transaction counts and the most recent date. Use it when the payee id is known.',
     parameters: {
       type: 'object',
-      properties: { payee_id: { type: 'string', description: 'The payee id of the transaction (null when it has none).' } },
+      properties: { payee_id: { type: 'string', description: 'The payee id (a uuid); omit when the transaction has none.' } },
       required: ['payee_id'],
       additionalProperties: false,
     },
@@ -64,8 +65,9 @@ export const TOOL_DEFINITIONS: readonly AiTool[] = [
   },
 ];
 
-const getTransactionArgs = z.object({ transaction_id: z.string().min(1).max(64) });
-const payeeHistoryArgs = z.object({ payee_id: z.string().min(1).max(64) });
+const uuid = z.string().uuid();
+const getTransactionArgs = z.object({ transaction_id: uuid });
+const payeeHistoryArgs = z.object({ payee_id: uuid });
 const searchArgs = z.object({
   description: z.string().trim().min(1).max(300),
   limit: z.coerce.number().int().min(1).max(10).optional(),
@@ -132,8 +134,10 @@ export function createTools(db: Queryable, budgetId: string): CategorizeTools {
       try {
         return await execute(call);
       } catch (error) {
+        // A tool never throws into the agent loop: the model sees the failure
+        // and can correct itself, and one bad guess cannot fail a paid chunk.
         if (error instanceof z.ZodError) return JSON.stringify({ error: 'invalid arguments', issues: error.issues.map((i) => i.message) });
-        throw error;
+        return JSON.stringify({ error: 'tool lookup failed' });
       }
     },
   };

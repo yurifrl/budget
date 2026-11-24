@@ -10,16 +10,29 @@
  *    can do anything except produce suggestions: tool calls are read-only and
  *    budget-scoped (./tools.ts), and the answer is validated with zod and
  *    filtered against the budget's own category ids before it is stored.
+ *  - Model text shown to the person (`reason`) is sanitized: control and
+ *    bidirectional characters stripped, whitespace collapsed, ~200 chars.
+ *  - Model confidence is clamped below 1, so it can never look like the payee
+ *    rule's certainty (1.0); `source` is stored alongside it.
  *  - The assistant turn echoes the provider's `rawContent` back unchanged
  *    (Anthropic thinking blocks must survive a tool loop).
+ *  - Every turn declares the tools, including the final structured-output
+ *    turn: Anthropic's tool-use docs require "the same tools as the first
+ *    request" while tool_use/tool_result blocks are in the history, and sends
+ *    tool_choice {"type":"none"} there. OpenAI-family adapters send
+ *    tool_choice "none" where documented; Z.ai (only `auto`) keeps the tools
+ *    declared and the answer text is all that is read.
  *  - The caller's AbortSignal reaches every provider call, so a cancelled
  *    activity aborts the in-flight generation.
+ *  - Cost is bounded per transaction: CLASSIFY_MAX_TOKENS per turn, at most
+ *    CLASSIFY_MAX_CALLS calls, and CLASSIFY_MAX_TOKENS_PER_TRANSACTION total.
  */
 import { z } from '@shared/zod';
 
 import type { AiChatRequest, AiChatResult, AiJsonSchema, AiMessage, AiProvider, AiTokenUsage } from '../ai';
 import { AiProviderError } from '../ai';
-import { CategorizeError } from './errors';
+import { CategorizeError, failureForProviderError } from './errors';
+import { CLASSIFY_MAX_CALLS, CLASSIFY_MAX_TOKENS, CLASSIFY_MAX_TOKENS_PER_TRANSACTION } from './jobspec';
 import type { AgentTransaction } from './store';
 import type { CategorizeTools } from './tools';
 
@@ -29,8 +42,19 @@ export const MAX_TOOL_TURNS = 4;
 export const MAX_TOOL_CALLS = 12;
 /** Suggestions kept per transaction. */
 export const MAX_SUGGESTIONS = 3;
+/** Longest `reason` shown to the person; longer text is truncated, not an error. */
+export const MAX_REASON_CHARS = 200;
+/** A model answer can never claim the payee rule's certainty (1). */
+export const MAX_MODEL_CONFIDENCE = 0.99;
 
 export type SuggestionDraft = { categoryId: string; confidence: number; reason: string | null };
+
+/**
+ * Spend already made on this transaction across attempts. A retry after a
+ * timeout passes the same object back, so the call cap and the token cap are
+ * per TRANSACTION, not per attempt, and the reported usage is cumulative.
+ */
+export type CallBudget = { calls: number; tokens: AiTokenUsage };
 
 export type ClassifyRequest = {
   provider: AiProvider;
@@ -40,6 +64,8 @@ export type ClassifyRequest = {
   /** Ids of the budget's live visible categories; anything else is dropped. */
   allowedCategoryIds: ReadonlySet<string>;
   signal?: AbortSignal;
+  /** Shared across retries; omit for a single attempt. */
+  budget?: CallBudget;
 };
 
 export type ClassifyResult = {
@@ -53,8 +79,8 @@ export type ClassifyResult = {
 
 /**
  * The model's answer. Tolerant on the way in (a JSON string number, a missing
- * reason), strict on the way out: unknown category ids are dropped by the
- * caller and at most MAX_SUGGESTIONS rows are kept. `max(8)` accepts an
+ * or overlong reason), strict on the way out: unknown category ids are dropped
+ * by the caller and at most MAX_SUGGESTIONS rows are kept. `max(8)` accepts an
  * over-eager answer instead of failing the whole (already billed) turn.
  */
 const answerSchema = z.object({
@@ -66,7 +92,9 @@ const answerSchema = z.object({
           (value) => (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : value),
           z.number().min(0).max(1),
         ),
-        reason: z.string().trim().max(1000).nullish(),
+        // No max here: a long reason is truncated by sanitizeReason, so an
+        // already billed answer is not thrown away over its length.
+        reason: z.string().nullish(),
       }),
     )
     .max(8),
@@ -88,8 +116,8 @@ const ANSWER_SCHEMA: AiJsonSchema = {
           required: ['category_id', 'confidence', 'reason'],
           properties: {
             category_id: { type: 'string', description: 'One id from list_categories.' },
-            confidence: { type: 'number', minimum: 0, maximum: 1 },
-            reason: { type: 'string', description: 'Short evidence-based reason.' },
+            confidence: { type: 'number', minimum: 0, maximum: MAX_MODEL_CONFIDENCE },
+            reason: { type: 'string', description: 'Short evidence-based reason (about 200 characters).' },
           },
         },
       },
@@ -109,6 +137,16 @@ Rules for the answer:
 - If nothing fits, return an empty list. Never force a category.
 - The final answer is exactly one JSON object, no Markdown: {"suggestions":[{"category_id":"...","confidence":0.9,"reason":"..."}]}`;
 
+/** Control characters and bidi overrides that must never reach app-rendered text. */
+const UNSAFE_TEXT = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+
+/** Model text shown to a person: one line, no control/bidi characters, bounded. */
+export function sanitizeReason(reason: string | null | undefined): string | null {
+  if (reason == null) return null;
+  const clean = reason.replace(UNSAFE_TEXT, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_REASON_CHARS).trim();
+  return clean === '' ? null : clean;
+}
+
 /** Extract the JSON object from model text (fenced or bare), or null. */
 function extractJson(text: string | null): unknown {
   if (!text) return null;
@@ -123,46 +161,68 @@ function extractJson(text: string | null): unknown {
   }
 }
 
-/** Validate, drop foreign/duplicate category ids, sort by confidence and cap. */
-function toSuggestions(text: string | null, allowed: ReadonlySet<string>): SuggestionDraft[] | null {
+type Answer = {
+  suggestions: SuggestionDraft[];
+  /** False when the list was non-empty but every id was unknown/foreign. */
+  usable: boolean;
+};
+
+/**
+ * Validate, drop foreign/duplicate category ids, clamp confidence, sanitize
+ * the reason, sort and cap. Null means the text is not the answer schema.
+ */
+function readAnswer(text: string | null, allowed: ReadonlySet<string>): Answer | null {
   const parsed = answerSchema.safeParse(extractJson(text));
   if (!parsed.success) return null;
   const best = new Map<string, SuggestionDraft>();
   for (const suggestion of parsed.data.suggestions) {
     if (!allowed.has(suggestion.category_id)) continue;
+    const confidence = Math.min(suggestion.confidence, MAX_MODEL_CONFIDENCE);
     const current = best.get(suggestion.category_id);
-    if (!current || suggestion.confidence > current.confidence) {
+    if (!current || confidence > current.confidence) {
       best.set(suggestion.category_id, {
         categoryId: suggestion.category_id,
-        confidence: suggestion.confidence,
-        reason: suggestion.reason ?? null,
+        confidence,
+        reason: sanitizeReason(suggestion.reason),
       });
     }
   }
-  return [...best.values()].sort((a, b) => b.confidence - a.confidence).slice(0, MAX_SUGGESTIONS);
+  const suggestions = [...best.values()].sort((a, b) => b.confidence - a.confidence).slice(0, MAX_SUGGESTIONS);
+  // A legitimately empty list is an answer; a list of only unknown ids is not,
+  // and must never be written as "no suggestions" (that would delete pending
+  // rows the person can still see).
+  return { suggestions, usable: parsed.data.suggestions.length === 0 || suggestions.length > 0 };
 }
-
-const fail = (kind: CategorizeError['kind'], usage: AiTokenUsage, retryAfterMs: number | null = null): CategorizeError =>
-  new CategorizeError(kind, usage, retryAfterMs);
 
 /**
  * Run the conversation for one transaction. Throws CategorizeError with token
  * usage for every failure; the caller decides retry/fail policy.
  */
 export async function classifyTransaction(request: ClassifyRequest): Promise<ClassifyResult> {
-  const usage: AiTokenUsage = { input: 0, output: 0 };
+  const budget: CallBudget = request.budget ?? { calls: 0, tokens: { input: 0, output: 0 } };
+  const usage = budget.tokens;
   const addUsage = (u?: AiTokenUsage | null): void => {
     if (!u) return;
     usage.input += u.input;
     usage.output += u.output;
   };
-  const call = async (body: Omit<AiChatRequest, 'model' | 'signal'>): Promise<AiChatResult> => {
+  const fail = (kind: CategorizeError['kind']): CategorizeError => new CategorizeError(kind, usage);
+
+  const call = async (body: Omit<AiChatRequest, 'model' | 'signal' | 'maxTokens'>): Promise<AiChatResult> => {
+    budget.calls++;
+    if (budget.calls > CLASSIFY_MAX_CALLS) throw fail('budget');
     try {
-      const result = await request.provider.chat({ ...body, model: request.model, signal: request.signal });
+      const result = await request.provider.chat({
+        ...body,
+        model: request.model,
+        signal: request.signal,
+        maxTokens: CLASSIFY_MAX_TOKENS,
+      });
       addUsage(result.usage);
+      if (usage.input + usage.output > CLASSIFY_MAX_TOKENS_PER_TRANSACTION) throw fail('budget');
       return result;
     } catch (error) {
-      if (error instanceof AiProviderError) throw fail(error.kind, usage, error.retryAfterMs);
+      if (error instanceof AiProviderError) throw failureForProviderError(error, usage);
       throw error;
     }
   };
@@ -179,9 +239,9 @@ export async function classifyTransaction(request: ClassifyRequest): Promise<Cla
     const result = await call({ messages, tools: [...request.tools.definitions] });
     lastModel = result.model;
     if (result.toolCalls.length === 0) {
-      const suggestions = toSuggestions(result.text, request.allowedCategoryIds);
-      if (suggestions) return { suggestions, usage, model: lastModel, toolCalls };
-      break; // answered with something that is not the schema: ask once more, JSON only
+      const answer = readAnswer(result.text, request.allowedCategoryIds);
+      if (answer?.usable) return { suggestions: answer.suggestions, usage, model: lastModel, toolCalls };
+      break; // not the schema (or only unknown ids): ask once more, JSON only
     }
     messages.push({ role: 'assistant', content: result.text, toolCalls: result.toolCalls, rawContent: result.rawContent });
     for (const toolCall of result.toolCalls) {
@@ -194,14 +254,16 @@ export async function classifyTransaction(request: ClassifyRequest): Promise<Cla
     }
   }
 
-  // Structured-output turn: no tools, schema enforced where the provider can.
+  // Structured-output turn. Tools stay declared because the history contains
+  // tool_use/tool_result blocks (Anthropic requires the same `tools`); tool
+  // use is disabled where the API documents it.
   messages.push({
     role: 'user',
     content:
-      'Answer now with only this JSON object and no other text: {"suggestions":[{"category_id":"<id from list_categories>","confidence":<0..1>,"reason":"<short reason>"}]}. An empty list is allowed.',
+      'Answer now with only this JSON object and no other text: {"suggestions":[{"category_id":"<id from list_categories>","confidence":<0..1>,"reason":"<short reason>"}]}. An empty list is allowed. Do not call tools.',
   });
-  const final = await call({ messages, jsonSchema: ANSWER_SCHEMA });
-  const suggestions = toSuggestions(final.text, request.allowedCategoryIds);
-  if (suggestions === null) throw fail('bad_response', usage);
-  return { suggestions, usage, model: final.model, toolCalls };
+  const final = await call({ messages, tools: [...request.tools.definitions], toolChoice: 'none', jsonSchema: ANSWER_SCHEMA });
+  const answer = readAnswer(final.text, request.allowedCategoryIds);
+  if (!answer?.usable) throw fail('bad_response');
+  return { suggestions: answer.suggestions, usage, model: final.model, toolCalls };
 }

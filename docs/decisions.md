@@ -1900,45 +1900,114 @@ app. The two now ship independently.
   the tool layer whitelists exactly those and drops account/branch/routing
   numbers, CPF/CNPJ, reference ids and card numbers before text leaves the
   server.
-- A run walks a snapshot window: live, uncategorized, non-upcoming,
-  non-transfer, non-split transactions of the budget, newest first, in
-  chunks of 10 by offset. If a transaction is categorized while the run is
-  in progress the window shrinks and one row can be skipped; the next run
-  covers it. Writes re-read the transaction under `FOR UPDATE` and refuse to
-  write when it is no longer uncategorized, so a suggestion is never created
-  for a categorized transaction.
+- The candidate set is the app's own "needs a category" rule, not a second
+  definition: live, uncategorized, non-upcoming outflows (`amount <= 0`;
+  inflows go to Ready to Assign) on live, open, on-budget accounts, without
+  live split legs, linked transfers, a transfer mark other than `dismissed`,
+  a payee covered by an active transfer rule while it is waiting/outside, an
+  on-budget `Transfer : <account>` payee, or a Reconciliation/Balance
+  adjustment payee. `candidates.test.ts` imports the client's
+  `registerCategoryCell` and fails if the SQL diverges for a case that
+  function can express. A transaction that already has suggestions is skipped
+  unless the run is an explicit re-classify (`force` in the job input).
+- A run takes a keyset snapshot at prepare: the newest candidate's
+  `(date, id)` bounds the walk and each chunk continues below the last
+  processed row (`order by date desc, id desc`). Rows inserted mid-run cannot
+  shift the window (offset pagination double-billed new rows and skipped
+  others) and a transaction categorized meanwhile just disappears. A row
+  categorized mid-run is refused by the write's `FOR UPDATE` guard.
 - The existing payee rule (`suggestedCategoryForPayee`) answers first: a
   payee-rule transaction gets one `payee_rule` suggestion (confidence 1,
-  provider/model null) and the model is not called. The rule is called, never
-  duplicated.
+  provider/model null) and the model is not called — but only when the rule's
+  category is still visible; a hidden one falls through to the model. The rule
+  is called, never duplicated.
 - `category_suggestions` is keyed `(transaction_id, rank)`, ranks 1..3.
-  Re-runs upsert in place and delete pending ranks above the new answer;
-  decided rows (`status` other than pending, written by budget-edxg) are
-  never deleted. No check constraint on `source`/`status`: the value lists
-  are code.
+  Re-runs upsert pending rows in place and delete pending ranks above the new
+  answer. A transaction with ANY decided row (accepted or dismissed) is never
+  re-asked, never overwritten at its rank and never hidden behind a new
+  pending row: the chunk checks before the model call, and the write refuses
+  as the last line of defence. An answer whose ids are all unknown is
+  `bad_response` and writes nothing, so it cannot delete pending rows an empty
+  (valid) answer may clear. The read path filters hidden/deleted categories
+  and groups and deleted accounts too. No check constraint on
+  `source`/`status`: the value lists are code.
 - The job never writes `transactions.category_id`; accepting stays the
   normal transaction update path.
 - Retry policy is in the chunk activity: `timeout` is retried ONCE for that
   transaction (a timed-out generation may already be billed) and then counted
-  failed; `bad_response` counts the transaction failed without a second
-  attempt; one failing transaction never fails the run. `auth` and
-  `permanent` stop the run as non-retryable ApplicationFailures;
-  `rate_limited` retries the activity after the provider's retry-after
-  (capped at 15m, default 60s); `transient` retries the activity with the
-  worker's backoff. A rate-limit retry re-runs the chunk; writes are
-  idempotent, so only the model calls of that chunk are repeated.
+  failed; `bad_response` counts the transaction failed; a request-scoped 4xx
+  (400/413/422) is counted failed and the run continues; a transaction that
+  spends its token cap is counted failed. Account/key-level 4xx (402, 403,
+  404 …), `auth` and `transient` stop/retry the run as before: `auth` and
+  `permanent` are non-retryable ApplicationFailures, `transient` retries the
+  activity. `rate_limited` waits once inside the chunk (up to 60 s) and
+  retries the ONE transaction; a second 429 returns to Temporal, which waits
+  the provider's retry-after (capped 15 m). Doc basis for the 400/413/422
+  split: Anthropic `invalid_request_error` = "an issue with the format or
+  content of your request" and `request_too_large` = 413
+  (platform.claude.com/docs/en/api/errors); OpenAI 400 `invalid_request_error`
+  (developers.openai.com/api/docs/guides/error-codes). Neither status means
+  the key or account is wrong.
+- Cost caps and their consistency: `CLASSIFY_MAX_TOKENS = 1024` per turn
+  (`ai/http.ts` derives a 60 s deadline), at most 6 calls per transaction
+  (4 tool turns + final answer + one timeout retry) and 20k tokens
+  (input+output) per transaction, `CATEGORIZE_CHUNK_SIZE = 5`,
+  `CATEGORIZE_RUN_LIMIT = 100` transactions per run (the remainder waits for
+  the next run; coalescing means the next trigger starts a new run),
+  `CATEGORIZE_CHUNK_TIMEOUT_MS = 5 x 6 x 60 s + 60 s = 31 min`, which is the
+  chunk activity's `startToCloseTimeout`; a test asserts the formula and the
+  1024-token deadline. Provider calls are serialized per key in-process
+  (`categorize/key-lock.ts`) and the `-ai` queue runs one activity per worker
+  (`maxConcurrentActivityTaskExecutions: 1`); across pods the provider 429 is
+  the bound. The chunk heartbeats its progress (counts, cursor, token totals)
+  every 10 s and on every transaction/call, and a retried attempt resumes
+  after its last finished transaction with those totals — finished rows are
+  never paid for twice, and a stopped chunk's tokens still reach the ledger.
+- Continue-as-new is deliberately NOT implemented yet: with the 100-run cap a
+  run is at most 20 chunks (~60 history events), far from Temporal's 50k
+  event hard limit. If the cap or chunk count grows, carry the summary and
+  cursor into a continuation.
+- The final structured-output turn keeps the tools declared because the
+  history contains tool_use/tool_result blocks: Anthropic's tool-use doc says
+  "Send the request with the same `tools` as the first request" and
+  "tool_use ids were found without tool_result blocks" is its documented 400
+  (platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls).
+  Anthropic then gets `tool_choice: {"type":"none"}` (define-tools doc);
+  OpenAI/OpenRouter/DeepSeek get `tool_choice: "none"` (OpenAI function
+  calling guide), and Z.ai — whose OpenAPI documents only `"auto"` — keeps
+  the tools without a choice. Adapter tests stub the documented rejection.
 - No usable key (or a key without a model) ends the run at once as a
   succeeded run with a fixed user-safe sentence in `job_runs.user_message`,
   like the connections "paused" notice — not a failed run with retries.
 - The key is resolved inside each activity and never crosses workflow
-  history; activity results carry counts and transaction ids only; failures
+  history; activity results carry counts, ids and the cursor only; failures
   use fixed sentences, so no provider text (and no key) reaches
-  `job_runs`, `job_attempts`, `job_logs` or the workflow. Because no error
-  text is kept, `redactSecrets` has nothing to redact.
+  `job_runs`, `job_attempts`, `job_logs` or the workflow. Unexpected
+  failures log only their Postgres error code for diagnosis. Because no
+  provider error text is kept, `redactSecrets` has nothing to redact. The
+  registry swap (`setProviders`) is a deep-import test seam, not part of the
+  AI barrel: it hands the decrypted key to its caller.
+- Who a run acts for is ONE function, `store.runActorForBudget`: today the
+  budget owner (the owner's own key pays, or the shared key when enabled for
+  them) and the ledger tenant is the owner. `startCategorizeRun` does not take
+  an owner from its caller. A member of a shared budget triggering a run that
+  spends the owner's key is the accepted product behaviour for now.
+- `readCategorySuggestions` is scoped by budget id only; the HTTP layer
+  checks budget access. A non-uuid `transactionId` is a 400
+  (`invalid_transaction_id`), not a driver error.
+- Migration 0111 adds `category_suggestions(category_id)`: the FK is
+  `on delete cascade`, so a category delete would otherwise scan the table
+  per row. The 0110/0111 foreign keys into `transactions`, `budgets` and
+  `categories` add no new constraint on the shared database: syscd-app has
+  no TRUNCATE of those tables (checked with ripgrep; its only TRUNCATE is
+  `food_portion, food_catalog ... cascade`), and `transactions` already had
+  referencing tables (`subtransactions`, `connection_transactions`,
+  `transfer_links`), so a plain `TRUNCATE transactions` was never possible.
 - `AiChatResult.usage` was added to the AI port (OpenAI-compatible
   `prompt_tokens`/`completion_tokens`, Anthropic `input_tokens`/`output_tokens`;
   null when the provider reports none). The run result and each chunk log
   line report input/output token totals; nothing estimates them.
 - One run per budget: subject key = budget id, so every trigger joins the
   active run. Provider calls run on the `<queue>-ai` task queue (1 activity
-  start/s across pods), separate from ledger and bank work.
+  start/s across pods, one activity at a time per worker), separate from
+  ledger and bank work.

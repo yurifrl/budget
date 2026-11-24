@@ -8,25 +8,38 @@
  * join the same queued/running run (jobs ledger partial unique index).
  */
 import { enqueueJob, registerJobType, runsForSubjects, type JobRun, type Queryable } from '../jobs';
+import { HttpError } from '../core/validate';
 import { CATEGORIZE_RUN_JOB } from './jobspec';
+import { runActorForBudget } from './store';
 
 registerJobType({ jobType: CATEGORIZE_RUN_JOB, workflow: 'categorizeRun' });
 
+export type StartCategorizeRunParams = {
+  budgetId: string;
+  /** The signed-in person asking for the run (audit only; not who pays). */
+  requestedBy: string;
+  /** Explicit re-classify: also re-ask transactions that already have suggestions. */
+  force?: boolean;
+};
+
 /**
- * Enqueue (or join) a categorization run for one budget. `ownerUserId` is the
- * budget owner, whose AI key the run resolves (own first, else the shared key
- * when the feature is on for them). Pass a transaction client to make the
- * enqueue part of the caller's transaction (outbox).
+ * Enqueue (or join) a categorization run for one budget. The caller does NOT
+ * choose who the run acts for: `runActorForBudget` derives it (today the
+ * budget owner, whose key pays) and the ledger tenant is that same person.
+ * Pass a transaction client to make the enqueue part of the caller's
+ * transaction (outbox).
  */
 export async function startCategorizeRun(
   db: Queryable,
-  params: { budgetId: string; ownerUserId: string; requestedBy: string },
+  params: StartCategorizeRunParams,
 ): Promise<{ run: JobRun; created: boolean }> {
+  const actor = await runActorForBudget(db, params.budgetId);
+  if (!actor) throw new HttpError(404, 'budget not found');
   return enqueueJob(db, {
     jobType: CATEGORIZE_RUN_JOB,
     subjectKey: params.budgetId,
-    tenantId: params.ownerUserId,
-    input: {},
+    tenantId: actor,
+    input: { force: params.force === true },
     requestedBy: params.requestedBy,
   });
 }

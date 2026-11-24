@@ -76,6 +76,27 @@ export default defineConfig([
       ],
     },
   },
+  // Production modules never import a feature's ./testing helpers. The zod ban
+  // is repeated because no-restricted-imports options replace, not merge.
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/**/*.test.ts', 'src/*/testing/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: noDirectZod['no-restricted-imports'][1].paths,
+          patterns: [
+            ...noDirectZod['no-restricted-imports'][1].patterns,
+            {
+              group: ['*/testing/*', './testing/*', '../testing/*'],
+              message: 'Test helpers live in src/<feature>/testing and are imported by *.test.ts only.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // A feature imports core/*, its own internals, and another feature's public
   // barrel only. Entrypoints (src/*.ts, the composition root app.ts) are exempt.
   {
@@ -97,5 +118,12 @@ export default defineConfig([
         },
       ],
     },
+  },
+  // Tests and the helpers themselves may deep-import a dependency's internals
+  // (the AI registry seam in src/ai/providers is deliberately off the barrel).
+  // This block comes last: import/no-restricted-paths is re-enabled above it.
+  {
+    files: ['src/**/*.test.ts', 'src/*/testing/**/*.ts'],
+    rules: { 'import/no-restricted-paths': 'off' },
   },
 ]);

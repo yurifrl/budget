@@ -5,10 +5,10 @@
  */
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 
-import { pool } from '../core/db';
+import { pool, type Queryable } from '../core/db';
 import { dbReady } from '../core/test-gate';
 import { createTools, searchTokens } from './tools';
-import { cleanupFixtures, newBudget, newPayee, newTransaction, type BudgetFixture } from './test-fixtures';
+import { cleanupFixtures, newBudget, newPayee, newTransaction, type BudgetFixture } from './testing';
 
 let a: BudgetFixture;
 let b: BudgetFixture;
@@ -124,6 +124,25 @@ describe.skipIf(!dbReady)('categorize tools are budget-scoped', () => {
     const tools = createTools(pool, a.budgetId);
     expect(await call(tools, 'get_transaction', { transaction_id: 42 })).toMatchObject({ error: 'invalid arguments' });
     expect(await call(tools, 'nope')).toEqual({ error: 'unknown tool nope' });
+  });
+
+  test('a non-uuid id chosen by the model answers an error, never a database error', async () => {
+    const tools = createTools(pool, a.budgetId);
+    // Both columns are uuid: the old schemas forwarded this to Postgres and
+    // threw 22P02, which failed and re-billed the whole chunk.
+    expect(await call(tools, 'get_transaction', { transaction_id: 'txn_1' })).toMatchObject({ error: 'invalid arguments' });
+    expect(await call(tools, 'payee_history', { payee_id: 'payee_1' })).toMatchObject({ error: 'invalid arguments' });
+  });
+
+  test('a database error inside a tool becomes an { error } result, not a throw', async () => {
+    // A driver that fails every query: test double for the Queryable port.
+    const broken = {
+      query: async () => {
+        throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
+      },
+    } as unknown as Queryable;
+    const result = await call(createTools(broken, a.budgetId), 'list_categories');
+    expect(result).toEqual({ error: 'tool lookup failed' });
   });
 
   test('searchTokens folds accents, drops short words and wildcards, dedupes', () => {

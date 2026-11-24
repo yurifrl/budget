@@ -124,6 +124,7 @@ export const SPECIFIC_ERROR_CODES = [
   'person_edits_own_name',
   'owner_cannot_be_removed',
   'invalid_backup',
+  'invalid_transaction_id',
 ] as const;
 
 /**

@@ -10,6 +10,7 @@ import type { Pool } from 'pg';
 
 import type { Queryable } from '../core/db';
 import { withTransaction } from '../core/db';
+import { HttpError } from '../core/validate';
 
 /** Where a suggestion came from. 'payee_rule' answers first; 'ai' is the model. */
 export type SuggestionSource = 'payee_rule' | 'ai';
@@ -43,6 +44,9 @@ export type AgentTransaction = {
 
 /** One candidate row for a run (the provider payload is reduced to `bank`). */
 export type Candidate = AgentTransaction;
+
+/** Keyset position of a candidate: newest first, `(date, id)` is unique and stable. */
+export type CandidateCursor = { date: string; id: string };
 
 const record = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -113,10 +117,30 @@ export async function budgetOwner(db: Queryable, budgetId: string): Promise<stri
 }
 
 /**
- * Live, uncategorized transactions a run may suggest for: not deleted, not
- * upcoming occurrences, not transfers, not split parents (their legs carry the
- * categories), on a live account. Ordered newest first with the id as a stable
- * tiebreaker, so a chunk window is deterministic within one run.
+ * Who a categorize run acts for — THE single place this product decision lives.
+ * Today it is the budget OWNER: the owner's own key pays (or the shared key
+ * when the feature is enabled for them), and the ledger tenant is the owner.
+ * A member of a shared budget can therefore trigger a run that spends the
+ * owner's key; changing that (for example "the requester's key") is a change
+ * to this function only. Null when the budget is gone.
+ */
+export async function runActorForBudget(db: Queryable, budgetId: string): Promise<string | null> {
+  return budgetOwner(db, budgetId);
+}
+
+/**
+ * The app's "this transaction still needs a category" rule, in SQL. It mirrors
+ * `client/src/domain/register.ts` (`registerCategoryCell`, lines 20-37) and
+ * the facts the register screen scopes by; `candidates.test.ts` imports that
+ * client function and fails on any divergence for the cases it can express.
+ *
+ * Excluded here: inflows (money in goes to Ready to Assign), rows on
+ * off-budget/tracking or closed or deleted accounts, split parents, upcoming
+ * occurrences, linked transfers, rows a transfer mark or a transfer payee
+ * covers, reconciliation/balance adjustments, and after a first run —
+ * transactions that already have suggestions (unless `force`).
+ *
+ * `$2` is `force`.
  */
 const CANDIDATE_FROM = `
   from public.transactions t
@@ -129,18 +153,88 @@ const CANDIDATE_WHERE = `
     and t.deleted = false
     and t.category_id is null
     and t.upcoming = false
+    and t.amount <= 0
     and t.transfer_transaction_id is null
     and t.transfer_account_id is null
     and a.deleted = false
-    and p.transfer_account_id is null
-    and not exists (select 1 from public.subtransactions s where s.transaction_id = t.id and s.deleted = false)`;
+    and a.closed = false
+    and a.on_budget = true
+    and coalesce(p.name, t.import_payee_name, '') not in ('Reconciliation Adjustment', 'Balance Adjustment')
+    and (
+      p.transfer_account_id is null
+      or not exists (
+        select 1 from public.accounts ta
+         where ta.id = p.transfer_account_id
+           and ta.deleted = false
+           and ta.on_budget = true
+      )
+    )
+    and (
+      coalesce(p.name, t.import_payee_name, '') !~ '^Transfer[[:space:]]*:'
+      or not exists (
+        select 1 from public.accounts pa
+         where pa.budget_id = t.budget_id
+           and pa.deleted = false
+           and pa.on_budget = true
+           and lower(pa.name) = lower(regexp_replace(coalesce(p.name, t.import_payee_name, ''), '^Transfer[[:space:]]*:[[:space:]]*', ''))
+      )
+    )
+    and not exists (
+      select 1 from public.transfer_marks m
+       where m.transaction_id = t.id and m.state <> 'dismissed'
+    )
+    and not exists (
+      select 1 from public.payees pr
+       where pr.id = t.payee_id
+         and pr.transfer_rule in ('auto', 'account')
+         and (pr.transfer_rule_since is null or t.created_at >= pr.transfer_rule_since)
+         and (
+           (current_date - t.date) <= pr.transfer_rule_wait_days
+           or pr.transfer_rule_no_match = 'outside'
+         )
+    )
+    and not exists (select 1 from public.subtransactions s where s.transaction_id = t.id and s.deleted = false)
+    and ($2::boolean or not exists (select 1 from public.category_suggestions cs where cs.transaction_id = t.id))`;
 
-export async function countCandidates(db: Queryable, budgetId: string): Promise<number> {
-  const { rows } = await db.query<{ n: number }>(`select count(*)::int as n ${CANDIDATE_FROM} ${CANDIDATE_WHERE}`, [budgetId]);
-  return rows[0]?.n ?? 0;
+/** The candidate set at run start: how many, and the snapshot's newest row. */
+export async function candidateWindow(
+  db: Queryable,
+  budgetId: string,
+  force: boolean,
+): Promise<{ count: number; newest: CandidateCursor | null }> {
+  const count = await db.query<{ n: number }>(
+    `select count(*)::int as n ${CANDIDATE_FROM} ${CANDIDATE_WHERE}`,
+    [budgetId, force],
+  );
+  const newest = await db.query<CandidateCursor>(
+    `select t.date::text as date, t.id::text as id
+       ${CANDIDATE_FROM}
+       ${CANDIDATE_WHERE}
+      order by t.date desc, t.id desc
+      limit 1`,
+    [budgetId, force],
+  );
+  return { count: count.rows[0]?.n ?? 0, newest: newest.rows[0] ?? null };
 }
 
-export async function listCandidates(db: Queryable, budgetId: string, offset: number, limit: number): Promise<Candidate[]> {
+/**
+ * The next candidate window, walked by a keyset `(date, id)` fixed at run
+ * start: rows newer than `snapshot` are never seen by this run and rows
+ * inserted or removed mid-run can neither shift the window (offset
+ * pagination's double-bill/skip) nor be missed once the cursor passed them.
+ */
+export async function listCandidates(
+  db: Queryable,
+  budgetId: string,
+  params: { snapshot: CandidateCursor; cursor: CandidateCursor | null; limit: number; force: boolean },
+): Promise<Candidate[]> {
+  const args: unknown[] = [budgetId, params.force, params.snapshot.date, params.snapshot.id];
+  let keyset = '';
+  if (params.cursor) {
+    args.push(params.cursor.date, params.cursor.id);
+    keyset = `and (t.date, t.id) < ($${args.length - 1}::date, $${args.length}::uuid)`;
+  }
+  args.push(params.limit);
   const { rows } = await db.query<Candidate & { raw_payload: Record<string, unknown> | null }>(
     `select t.id, t.date::text as date, t.amount as amount_milliunits,
             json_build_object('name', a.name, 'type', a.type, 'currency', a.currency) as account,
@@ -149,9 +243,11 @@ export async function listCandidates(db: Queryable, budgetId: string, offset: nu
             ct.raw_payload
        ${CANDIDATE_FROM}
        ${CANDIDATE_WHERE}
-      order by t.date desc, t.id
-      limit $2 offset $3`,
-    [budgetId, limit, offset],
+        and (t.date, t.id) <= ($3::date, $4::uuid)
+        ${keyset}
+      order by t.date desc, t.id desc
+      limit $${args.length}`,
+    args,
   );
   return rows.map(({ raw_payload, ...row }) => ({ ...row, bank: bankFacts(raw_payload) }));
 }
@@ -234,7 +330,8 @@ export type SimilarTransaction = {
 /**
  * Categorized live transactions whose payee/import name/memo contains any of
  * the caller's tokens, best token coverage first. `tokens` are already reduced
- * to [a-z0-9] by the tool, so a `%` can never arrive here.
+ * to [a-z0-9] by the tool, so a `%` can never arrive here. Hidden categories
+ * and groups are not evidence the model should learn from.
  */
 export async function searchSimilar(
   db: Queryable,
@@ -250,6 +347,7 @@ export async function searchSimilar(
             c.id as category_id, c.name as category_name
        from public.transactions t
        join public.categories c on c.id = t.category_id and c.budget_id = t.budget_id
+       join public.category_groups g on g.id = c.group_id and g.budget_id = c.budget_id
        left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id
        cross join lateral (
          select coalesce(p.name, '') || ' ' || coalesce(t.import_payee_name_original, '') || ' ' || coalesce(t.memo, '') as haystack
@@ -257,7 +355,8 @@ export async function searchSimilar(
       where t.budget_id = $1
         and t.deleted = false
         and t.category_id is not null
-        and c.deleted = false
+        and c.deleted = false and c.hidden = false
+        and g.deleted = false and g.hidden = false
         and h.haystack ilike any($2::text[])
       order by (select count(*) from unnest($3::text[]) tok where h.haystack ilike '%' || tok || '%') desc,
                t.date desc, t.id
@@ -276,12 +375,28 @@ export type NewSuggestion = {
   model: string | null;
 };
 
+/** True when the person (or the accept/skip flow) already decided a row of this transaction. */
+export async function hasDecidedSuggestion(db: Queryable, transactionId: string): Promise<boolean> {
+  const { rows } = await db.query(
+    `select 1 from public.category_suggestions
+      where transaction_id = $1 and status <> 'pending'
+      limit 1`,
+    [transactionId],
+  );
+  return rows.length > 0;
+}
+
 /**
  * Replace one transaction's suggestion set atomically, and only while the
  * transaction is still live, uncategorized and in this budget: the row lock
- * makes a concurrent categorization win (then nothing is written). Ranks above
- * the new answer are dropped while pending; a decided row is never deleted.
- * Returns false when the transaction was categorized meanwhile (or is gone).
+ * makes a concurrent categorization win (then nothing is written).
+ *
+ * A transaction with ANY decided row (accepted or dismissed) is left alone:
+ * the person already answered it, so no new suggestion may overwrite a decided
+ * one at its rank, hide it behind a pending row, or resurrect a category they
+ * dismissed. Callers skip such transactions too (`CANDIDATE_WHERE`); this is
+ * the last line of defence. Ranks above the new answer are dropped while
+ * pending only. Returns false when nothing was written.
  */
 export async function replaceSuggestions(
   pool: Pool,
@@ -295,6 +410,11 @@ export async function replaceSuggestions(
       [transactionId, budgetId],
     );
     if (locked.rowCount === 0) return false;
+    const existing = await client.query<{ status: string }>(
+      'select status from public.category_suggestions where transaction_id = $1 and budget_id = $2',
+      [transactionId, budgetId],
+    );
+    if (existing.rows.some((row) => row.status !== 'pending')) return false;
     for (const [index, suggestion] of suggestions.entries()) {
       await client.query(
         `insert into public.category_suggestions
@@ -303,7 +423,8 @@ export async function replaceSuggestions(
          on conflict (transaction_id, rank) do update
            set category_id = excluded.category_id, confidence = excluded.confidence,
                reason = excluded.reason, source = excluded.source,
-               provider = excluded.provider, model = excluded.model, updated_at = now()`,
+               provider = excluded.provider, model = excluded.model, updated_at = now()
+           where public.category_suggestions.status = 'pending'`,
         [
           transactionId,
           budgetId,
@@ -330,7 +451,7 @@ export type SuggestionListOptions = {
   /** Only suggestions at or above this confidence (0..1). Applied at read time. */
   minConfidence: number;
   status?: SuggestionStatus;
-  /** Restrict to one transaction (the page's one-by-one view). */
+  /** Restrict to one transaction (the page's one-by-one view); must be a uuid. */
   transactionId?: string;
   limit: number;
   offset: number;
@@ -357,16 +478,27 @@ export type SuggestionRow = {
   memo: string | null;
 };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Suggestions the page may show: pending by default, at/above the threshold,
  * for live uncategorized transactions of this budget only (a transaction
- * categorized by hand after the run drops out of the queue).
+ * categorized by hand after the run drops out of the queue). Hidden/deleted
+ * categories and groups and deleted accounts are filtered here as well as at
+ * write time, so an old row can never surface through a later hide.
+ *
+ * The caller (the HTTP layer) checks budget ACCESS: this query is scoped by
+ * `budgetId` only. A non-uuid `transactionId` is a validation error, not a
+ * driver error, because callers pass it through from a path parameter.
  */
 export async function listSuggestions(
   db: Queryable,
   budgetId: string,
   options: SuggestionListOptions,
 ): Promise<{ rows: SuggestionRow[]; total: number }> {
+  if (options.transactionId !== undefined && !UUID_RE.test(options.transactionId)) {
+    throw new HttpError(400, 'transaction id must be a uuid', 'invalid_transaction_id');
+  }
   const from = `from public.category_suggestions s
     join public.transactions t on t.id = s.transaction_id and t.budget_id = s.budget_id
     join public.categories c on c.id = s.category_id and c.budget_id = s.budget_id
@@ -375,7 +507,9 @@ export async function listSuggestions(
     left join public.payees p on p.id = t.payee_id and p.budget_id = s.budget_id`;
   const where = `s.budget_id = $1 and s.status = $2 and s.confidence >= $3
     and t.deleted = false and t.category_id is null
-    and c.deleted = false and g.deleted = false
+    and c.deleted = false and c.hidden = false
+    and g.deleted = false and g.hidden = false
+    and a.deleted = false
     ${options.transactionId ? 'and s.transaction_id = $4' : ''}`;
   const args: unknown[] = [budgetId, options.status ?? 'pending', options.minConfidence];
   if (options.transactionId) args.push(options.transactionId);

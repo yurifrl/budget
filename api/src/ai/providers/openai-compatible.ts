@@ -41,6 +41,13 @@ export type OpenAiCompatibleConfig = {
   structured: StructuredOutput;
   /** OpenAI's newer models want max_completion_tokens; the other three accept max_tokens. */
   tokenParam: 'max_tokens' | 'max_completion_tokens';
+  /**
+   * Whether the provider documents `tool_choice: "none"` (OpenAI family:
+   * function-calling guide; DeepSeek: chat-completion reference). Z.ai's
+   * OpenAPI documents only `"auto"` (`docs.z.ai/openapi.json`), so its entry
+   * sets false and the adapter keeps `tools` without a choice.
+   */
+  toolChoiceNone?: boolean;
   /** Drop ids this provider lists but this adapter cannot chat with (OpenAI's embeddings, audio, image). */
   filterModel?: (id: string) => boolean;
 };
@@ -104,6 +111,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
         type: 'function',
         function: { name: tool.name, description: tool.description, parameters: tool.parameters },
       }));
+      if (request.toolChoice === 'none' && this.config.toolChoiceNone !== false) body.tool_choice = 'none';
     }
     if (request.jsonSchema) this.applyStructured(body, request.jsonSchema);
     const json = await requestJson({

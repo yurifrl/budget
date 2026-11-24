@@ -123,6 +123,8 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           staticModels: ZAI_MODELS,
           structured: 'json_object',
           tokenParam: 'max_tokens',
+          // Its OpenAPI documents `tool_choice` only as "auto".
+          toolChoiceNone: false,
         },
         apiKey,
         options?.fetch,

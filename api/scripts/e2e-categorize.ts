@@ -17,14 +17,16 @@ import { hostname } from 'node:os';
 
 import { AI_PROVIDERS, type AiProviderId } from '@shared/contracts/ai';
 
-import type { AiChatRequest, AiChatResult, AiProvider, ProviderEntry } from '../src/ai';
-import { configureAiEnv, setProviders, storeOwnKey } from '../src/ai';
-import { AI_QUEUE_SUFFIX, CATEGORIZE_RUN_JOB } from '../src/categorize';
+import type { AiChatRequest, AiChatResult, AiProvider } from '../src/ai';
+import { configureAiEnv, storeOwnKey } from '../src/ai';
+import type { ProviderEntry } from '../src/ai/providers';
+import { setProviders } from '../src/ai/providers';
+import { AI_QUEUE_SUFFIX, startCategorizeRun } from '../src/categorize';
 import { createCategorizeActivities } from '../src/categorize/activities';
 import { configureDb, pool } from '../src/core/db';
 import { runMigrations } from '../src/core/migrate';
 import { configureSecretBox } from '../src/core/secret-box';
-import { configureJobs, createTemporalClient, enqueueJob } from '../src/jobs';
+import { configureJobs, createTemporalClient } from '../src/jobs';
 import { createLedgerActivities } from '../src/jobs/activities';
 import { startWorkerHost } from '../src/jobs/worker-host';
 
@@ -85,18 +87,13 @@ async function waitForRun(runId: string, ms = 90_000): Promise<Record<string, un
 }
 
 async function startRun(budgetId: string): Promise<string> {
-  const { run } = await enqueueJob(pool, {
-    jobType: CATEGORIZE_RUN_JOB,
-    subjectKey: budgetId,
-    tenantId: OWNER,
-    input: {},
-    requestedBy: OWNER,
-    instanceId,
-  });
+  // The real start path: it derives the run's actor (the owner) itself and
+  // stores { force } in the job input.
+  const { run } = await startCategorizeRun(pool, { budgetId, requestedBy: OWNER });
   await temporal.client.workflow.start('categorizeRun', {
     taskQueue,
     workflowId: `categorize-e2e-${run.id}`,
-    args: [{ runId: run.id, jobType: run.job_type, subjectKey: budgetId, tenantId: OWNER, input: {} }],
+    args: [{ runId: run.id, jobType: run.job_type, subjectKey: budgetId, tenantId: run.tenant_id, input: run.input }],
   });
   return run.id;
 }
@@ -111,7 +108,9 @@ const worker = startWorkerHost({
   namespace,
   taskQueue,
   activities: { ...ledgerActivities, ...createCategorizeActivities(pool, trackedAttempt) },
-  activityQueues: [{ taskQueue: `${taskQueue}${AI_QUEUE_SUFFIX}`, maxTaskQueueActivitiesPerSecond: 50 }],
+  activityQueues: [
+    { taskQueue: `${taskQueue}${AI_QUEUE_SUFFIX}`, maxTaskQueueActivitiesPerSecond: 50, maxConcurrentActivityTaskExecutions: 1 },
+  ],
 });
 
 const budgets: string[] = [];

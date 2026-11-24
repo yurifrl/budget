@@ -387,6 +387,9 @@ describe.skipIf(!dbReady)('AI key operations', () => {
   test('providerFor builds the adapter for the resolved key; the raw pair is not exported', async () => {
     expect('createProvider' in aiModule).toBe(false);
     expect('makeResolvedAiKey' in aiModule).toBe(false);
+    // The registry swap hands the decrypted key to whatever a caller installs;
+    // it is a test seam (deep import), never part of the cross-feature barrel.
+    expect('setProviders' in aiModule).toBe(false);
     expect(() => providerFor({ provider: 'openai', apiKey: KEY } as never)).toThrow(TypeError);
     await op('ai_credentials_save', { api_key: KEY });
     const resolved = await resolveAiKey(pool, user.id);

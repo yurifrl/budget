@@ -197,29 +197,46 @@ start at `0100`). One image runs both the API and the worker
 - **Category suggestions.** `api/src/categorize/` is a new feature with no
   HTTP surface yet; the queue/accept contracts are budget-edxg. A
   `categorize_run` job (one per budget: subject key = budget id, so triggers
-  coalesce) has a prepare activity resolve the budget owner's AI key (own,
-  else shared when the flag is on; none → the run succeeds with a fixed
-  sentence, no retries) and count candidates, then chunk activities on the
-  `<queue>-ai` task queue (1 activity start/s across pods, like `-pluggy`)
-  walk the window. A chunk asks the existing `suggestedCategoryForPayee` rule
-  first (source `payee_rule`, no model call) and sends only the rest to a
-  bounded tool loop (`get_transaction`, `list_categories`, `payee_history`,
-  `search_similar_transactions`; every query scopes `budget_id` in SQL).
-  Answers are zod-validated, filtered to the budget's visible category ids,
-  deduped, capped at three and upserted by `(transaction_id, rank)` into
-  `public.category_suggestions` (migration 0110); a row is written only while
-  the transaction is still uncategorized (row lock). The job never writes
-  `transactions.category_id`. Retry policy by provider kind lives in the
-  chunk: `timeout` is retried once per transaction then counted failed,
-  `bad_response` counts the transaction failed, one failure never fails the
-  run; `auth`/`permanent` fail the run non-retryably, `rate_limited` retries
-  the activity after the provider's retry-after (capped 15m), `transient`
-  retries the activity. Activity results and logs carry counts and ids only;
-  no provider text or key is kept. `AiChatResult.usage` (provider-reported
-  input/output tokens) was added to the AI port so the ledger reports token
-  usage per run. Imports for the next task: `startCategorizeRun`,
-  `categorizeRunStatus`, `readCategorySuggestions` (threshold applied at read
-  time).
+  coalesce; `force` re-asks rows that already have suggestions) has a prepare
+  activity resolve the run's key through one `runActorForBudget` function
+  (today the budget owner: own key, else the shared key when the flag is on;
+  none → the run succeeds with a fixed sentence, no retries) and take a
+  keyset snapshot of candidates, then chunk activities on the `<queue>-ai`
+  task queue (1 activity start/s across pods, one at a time per worker) walk
+  the window below the last processed `(date, id)`. Candidates are the app's
+  "needs a category" rows (outflows, on-budget open accounts, no splits, no
+  transfer link/mark/rule, no adjustment payee; `candidates.test.ts` checks
+  the SQL against the client's `registerCategoryCell`). A chunk asks the
+  existing `suggestedCategoryForPayee` rule first (source `payee_rule`, no
+  model call, visible categories only) and sends only the rest to a bounded
+  tool loop (`get_transaction`, `list_categories`, `payee_history`,
+  `search_similar_transactions`; every query scopes `budget_id` in SQL, tool
+  ids must be uuids and no tool error escapes into the loop). Answers are
+  zod-validated, filtered to visible category ids, sanitized (reason ≤200
+  chars, no control/bidi), confidence capped below the rule's 1, deduped and
+  capped at three; pending rows are upserted by `(transaction_id, rank)` into
+  `public.category_suggestions` (0110, plus the 0111 category index), only
+  while the transaction is still uncategorized. A transaction with any
+  decided suggestion is never re-asked or overwritten; an all-unknown-id
+  answer writes nothing. The job never writes `transactions.category_id`.
+  Cost caps: 1024 output tokens per turn, 6 calls and 20k tokens per
+  transaction, 5 transactions per chunk, 100 per run (remainder next run),
+  and the chunk activity deadline is derived from those (31 min); calls are
+  serialized per key and a retried chunk resumes from its heartbeat cursor
+  and token totals. Retry policy by provider kind lives in the chunk:
+  `timeout` once per transaction, `bad_response` and request-scoped 4xx
+  (400/413/422) count that transaction failed, one failure never fails the
+  run; `auth`/account-level `permanent` stop the run non-retryably, one 429
+  retries the transaction after a short wait and a second is retried by
+  Temporal with the provider's retry-after, `transient` retries the activity.
+  The final structured-output turn keeps the tools declared (Anthropic's
+  tool-use rule) and disables tool choice where documented. Activity results
+  and logs carry counts, ids, cursor and Postgres codes only; no provider
+  text or key is kept. `AiChatResult.usage` (provider-reported input/output
+  tokens) was added to the AI port so the ledger reports token usage per run.
+  Imports for the next task: `startCategorizeRun`, `categorizeRunStatus`,
+  `readCategorySuggestions` (threshold at read time; caller checks budget
+  access).
 - **Repeat-rule tick.** Still an in-process interval in the API
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.

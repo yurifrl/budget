@@ -58,6 +58,14 @@ export type AiChatRequest = {
   model: string;
   messages: AiMessage[];
   tools?: AiTool[];
+  /**
+   * Disallow tool calls on this turn (`none`) where the adapter's provider
+   * documents it: Anthropic `tool_choice: {"type":"none"}` (define-tools doc),
+   * OpenAI-family `tool_choice: "none"` (function-calling guide). Z.ai's
+   * OpenAPI documents only `auto`, so its entry ignores this field; keeping
+   * `tools` declared is then the only guarantee the history stays valid.
+   */
+  toolChoice?: 'none';
   jsonSchema?: AiJsonSchema | null;
   /** Dropped by adapters whose pinned API version removed sampling parameters (Anthropic 2026-10-21). */
   temperature?: number;

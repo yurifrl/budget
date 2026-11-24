@@ -1,21 +1,33 @@
 /**
  * Categorizer engine against Postgres with a fake provider (no HTTP, no real
  * key): payee-rule short-circuit, model answers, idempotent re-runs, invalid
- * ids, mid-run categorization, the per-kind retry policy, cancellation and the
+ * ids, mid-run categorization, decided suggestions, the per-kind retry policy,
+ * keyset walking, heartbeat resume, token accounting, cancellation and the
  * "no key in any result" rule.
  */
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 
-import { configureAiEnv, setProviders, storeOwnKey, AiProviderError, type AiChatResult } from '../ai';
+import { configureAiEnv, storeOwnKey, AiProviderError, type AiChatResult } from '../ai';
+import { setProviders } from '../ai/providers';
 import { pool } from '../core/db';
 import { configureSecretBox } from '../core/secret-box';
 import { dbReady } from '../core/test-gate';
-import { prepareRun, runChunk, type ChunkParams } from './chunk';
+import { prepareRun, runChunk, type ChunkParams, type ChunkProgress } from './chunk';
 import { CategorizeError } from './errors';
-import { answer, fakeProviders, toolTurn } from './fake-provider';
-import { cleanupFixtures, newBudget, newCategory, newPayee, newTransaction, suggestionsOf, type BudgetFixture } from './test-fixtures';
+import { answer, fakeProviders, toolTurn } from './testing';
+import {
+  cleanupFixtures,
+  newAccount,
+  newBudget,
+  newCategory,
+  newPayee,
+  newTransaction,
+  suggestionsOf,
+  type BudgetFixture,
+} from './testing';
 
 const KEY = 'sk-test-owner-0123456789abcdef';
+const MAX = { date: '9999-12-31', id: 'ffffffff-ffff-ffff-ffff-ffffffffffff' };
 let a: BudgetFixture;
 let b: BudgetFixture;
 
@@ -37,13 +49,13 @@ afterAll(async () => {
 });
 
 const run = (fx: BudgetFixture, params: Partial<ChunkParams> = {}) =>
-  runChunk(pool, { budgetId: fx.budgetId, offset: 0, limit: 10, total: 1, ...params });
+  runChunk(pool, { budgetId: fx.budgetId, force: false, snapshot: MAX, cursor: null, limit: 10, total: 1, ...params });
 
-const uncategorized = (fx: BudgetFixture, date = '2026-11-01', extra: { payeeId?: string } = {}) =>
+const uncategorized = (fx: BudgetFixture, date = '2026-11-01', extra: Partial<Parameters<typeof newTransaction>[0]> = {}) =>
   newTransaction({ budgetId: fx.budgetId, accountId: fx.accountId, date, amount: -2500, ...extra });
 
 describe.skipIf(!dbReady)('categorizer run', () => {
-  test('stores the model suggestion and an identical re-run upserts in place', async () => {
+  test('stores the model suggestion and a forced re-run upserts in place', async () => {
     const fake = fakeProviders(() => answer([{ category_id: a.food, confidence: 0.9, reason: 'grocery store' }]));
     setProviders(fake.table);
     const txn = await uncategorized(a);
@@ -66,23 +78,24 @@ describe.skipIf(!dbReady)('categorizer run', () => {
     // The job never writes transactions.category_id.
     expect((await pool.query('select category_id from public.transactions where id = $1', [txn])).rows[0].category_id).toBeNull();
 
-    const second = await run(a);
-    expect(second).toMatchObject({ suggested: 1, skipped: 0 });
+    const second = await run(a, { force: true });
+    expect(second).toMatchObject({ examined: 1, suggested: 1, skipped: 0 });
     expect(await suggestionsOf(txn)).toEqual(rows);
   });
 
   test('drops ids of another budget, unknown ids and duplicates; keeps the best confidence', async () => {
     const extra = await newCategory(a.budgetId, a.groupId, 'Household');
-    const fake = fakeProviders(() =>
-      answer([
-        { category_id: b.food, confidence: 0.99 },
-        { category_id: 'not-a-category', confidence: 0.98 },
-        { category_id: a.food, confidence: 0.4 },
-        { category_id: a.food, confidence: 0.7 },
-        { category_id: extra, confidence: 0.6 },
-      ]),
+    setProviders(
+      fakeProviders(() =>
+        answer([
+          { category_id: b.food, confidence: 0.99 },
+          { category_id: 'not-a-category', confidence: 0.98 },
+          { category_id: a.food, confidence: 0.4 },
+          { category_id: a.food, confidence: 0.7 },
+          { category_id: extra, confidence: 0.6 },
+        ]),
+      ).table,
     );
-    setProviders(fake.table);
     const txn = await uncategorized(a);
 
     expect(await run(a)).toMatchObject({ suggested: 1 });
@@ -97,15 +110,16 @@ describe.skipIf(!dbReady)('categorizer run', () => {
   test('keeps at most three suggestions, best confidence first', async () => {
     const second = await newCategory(a.budgetId, a.groupId, 'Household');
     const third = await newCategory(a.budgetId, a.groupId, 'Transport');
-    const fake = fakeProviders(() =>
-      answer([
-        { category_id: a.food, confidence: 0.3 },
-        { category_id: a.dining, confidence: 0.9 },
-        { category_id: second, confidence: 0.6 },
-        { category_id: third, confidence: 0.5 },
-      ]),
+    setProviders(
+      fakeProviders(() =>
+        answer([
+          { category_id: a.food, confidence: 0.3 },
+          { category_id: a.dining, confidence: 0.9 },
+          { category_id: second, confidence: 0.6 },
+          { category_id: third, confidence: 0.5 },
+        ]),
+      ).table,
     );
-    setProviders(fake.table);
     const txn = await uncategorized(a);
 
     await run(a);
@@ -131,20 +145,34 @@ describe.skipIf(!dbReady)('categorizer run', () => {
     ]);
   });
 
-  test('a transaction categorized by hand mid-run gets no suggestion', async () => {
-    const fake = fakeProviders(async () => {
-      await pool.query('update public.transactions set category_id = $2 where id = $1', [txn, a.food]);
-      return answer([{ category_id: a.dining, confidence: 0.9 }]);
-    });
+  test('a payee rule pointing at a hidden category is ignored and the model answers', async () => {
+    const payee = await newPayee(a.budgetId, 'Hidden Favorite', { mode: 'fixed', defaultCategoryId: a.hidden });
+    const fake = fakeProviders(() => answer([{ category_id: a.food, confidence: 0.8 }]));
     setProviders(fake.table);
+    const txn = await uncategorized(a, '2026-11-02', { payeeId: payee });
+
+    expect(await run(a)).toMatchObject({ rule: 0, suggested: 1 });
+    expect(fake.calls.length).toBeGreaterThan(0);
+    const rows = await suggestionsOf(txn);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ category_id: a.food, source: 'ai' });
+  });
+
+  test('a transaction categorized by hand mid-run gets no suggestion', async () => {
     const txn = await uncategorized(a);
+    setProviders(
+      fakeProviders(async () => {
+        await pool.query('update public.transactions set category_id = $2 where id = $1', [txn, a.food]);
+        return answer([{ category_id: a.dining, confidence: 0.9 }]);
+      }).table,
+    );
 
     expect(await run(a)).toMatchObject({ examined: 1, suggested: 0, skipped: 1 });
     expect(await suggestionsOf(txn)).toEqual([]);
     expect((await pool.query('select category_id from public.transactions where id = $1', [txn])).rows[0].category_id).toBe(a.food);
   });
 
-  test('an empty answer writes nothing and clears stale pending ranks', async () => {
+  test('an empty answer clears stale pending ranks', async () => {
     const txn = await uncategorized(a);
     await pool.query(
       `insert into public.category_suggestions (transaction_id, budget_id, rank, category_id, confidence, source)
@@ -153,11 +181,11 @@ describe.skipIf(!dbReady)('categorizer run', () => {
     );
     setProviders(fakeProviders(() => answer([])).table);
 
-    expect(await run(a)).toMatchObject({ examined: 1, suggested: 0, empty: 1 });
+    expect(await run(a, { force: true })).toMatchObject({ examined: 1, suggested: 0, empty: 1 });
     expect(await suggestionsOf(txn)).toEqual([]);
   });
 
-  test('a re-run that answers fewer ranks drops the extra pending row', async () => {
+  test('a forced re-run that answers fewer ranks drops the extra pending row', async () => {
     let call = 0;
     setProviders(
       fakeProviders(() =>
@@ -172,7 +200,7 @@ describe.skipIf(!dbReady)('categorizer run', () => {
     const txn = await uncategorized(a);
     await run(a);
     expect((await suggestionsOf(txn)).map((row) => row.rank)).toEqual([1, 2]);
-    await run(a);
+    await run(a, { force: true });
     expect((await suggestionsOf(txn)).map((row) => row.rank)).toEqual([1]);
   });
 
@@ -186,27 +214,32 @@ describe.skipIf(!dbReady)('categorizer run', () => {
     expect((await suggestionsOf(own)).length).toBe(1);
   });
 
-  test('passes the tool loop through and echoes rawContent unchanged', async () => {
+  test('passes the tool loop through, echoes rawContent and survives a non-uuid tool guess', async () => {
     const rawContent = [{ type: 'thinking', thinking: 'check categories', signature: 'sig-1' }];
     const fake = fakeProviders((request, call) =>
-      call === 1 ? { ...toolTurn('list_categories', {}), rawContent } : answer([{ category_id: a.food, confidence: 0.9 }]),
+      call === 1
+        ? { ...toolTurn('get_transaction', { transaction_id: 'txn_1' }), rawContent }
+        : call === 2
+          ? toolTurn('list_categories', {})
+          : answer([{ category_id: a.food, confidence: 0.9 }]),
     );
     setProviders(fake.table);
     await uncategorized(a);
 
     const result = await run(a);
     expect(result).toMatchObject({ suggested: 1 });
-    if ('usage' in result) expect(result.usage).toEqual({ input: 17, output: 8 });
-    expect(fake.calls).toHaveLength(2);
-    const messages = fake.calls[1]!.request.messages;
-    expect(messages[0]!.role).toBe('system');
-    expect(messages[0]!.content).toContain('UNTRUSTED DATA');
-    expect(messages[2]).toMatchObject({ role: 'assistant', rawContent });
-    expect(messages[3]!.role).toBe('tool');
-    expect(messages[3]!.content).toContain(a.food);
+    if ('usage' in result) expect(result.usage).toEqual({ input: 24, output: 11 });
+    expect(fake.calls).toHaveLength(3);
+    // M1: the invalid id became a tool error the model could read, so the run
+    // continued instead of failing and re-billing the chunk.
+    expect(fake.calls[1]!.request.messages[2]).toMatchObject({ role: 'assistant', rawContent });
+    expect(fake.calls[1]!.request.messages[3]).toMatchObject({ role: 'tool' });
+    expect(fake.calls[1]!.request.messages[3]!.content).toContain('invalid arguments');
+    expect(fake.calls[2]!.request.messages[5]!.role).toBe('tool');
+    expect(fake.calls[2]!.request.messages[5]!.content).toContain(a.food);
   });
 
-  test('a non-JSON answer gets one schema-enforced repair turn', async () => {
+  test('a non-JSON answer gets one schema-enforced repair turn with tools still declared', async () => {
     const fake = fakeProviders((request, call) =>
       call === 1
         ? { text: 'I am not sure, maybe groceries.', toolCalls: [], model: 'fake-model', finishReason: 'stop', usage: { input: 4, output: 2 } }
@@ -217,8 +250,59 @@ describe.skipIf(!dbReady)('categorizer run', () => {
 
     expect(await run(a)).toMatchObject({ suggested: 1 });
     expect(fake.calls).toHaveLength(2);
-    expect(fake.calls[1]!.request.tools).toBeUndefined();
+    expect(fake.calls[1]!.request.tools?.map((tool) => tool.name)).toEqual([
+      'list_categories',
+      'get_transaction',
+      'payee_history',
+      'search_similar_transactions',
+    ]);
+    expect(fake.calls[1]!.request.toolChoice).toBe('none');
     expect(fake.calls[1]!.request.jsonSchema?.name).toBe('category_suggestions');
+  });
+});
+
+describe.skipIf(!dbReady)('decided suggestions are never rewritten', () => {
+  test('a dismissed row survives a forced re-run and the model is not even called', async () => {
+    setProviders(fakeProviders(() => answer([{ category_id: a.food, confidence: 0.9 }])).table);
+    const txn = await uncategorized(a);
+    await run(a);
+    await pool.query(`update public.category_suggestions set status = 'dismissed' where transaction_id = $1`, [txn]);
+
+    const fake = fakeProviders(() => answer([{ category_id: a.dining, confidence: 0.9 }]));
+    setProviders(fake.table);
+    const result = await run(a, { force: true });
+    expect(result).toMatchObject({ examined: 1, suggested: 0, skipped: 1 });
+    expect(fake.calls).toHaveLength(0);
+    expect(await suggestionsOf(txn)).toEqual([
+      { rank: 1, category_id: a.food, confidence: 0.9, reason: 'evidence', source: 'ai', provider: 'openai', model: 'fake-model', status: 'dismissed' },
+    ]);
+  });
+
+  test('an accepted row is not hidden behind a new pending one at its rank', async () => {
+    setProviders(fakeProviders(() => answer([{ category_id: a.food, confidence: 0.9 }])).table);
+    const txn = await uncategorized(a);
+    await run(a);
+    await pool.query(`update public.category_suggestions set status = 'accepted' where transaction_id = $1`, [txn]);
+
+    const fake = fakeProviders(() => answer([{ category_id: a.dining, confidence: 0.9 }]));
+    setProviders(fake.table);
+    expect(await run(a, { force: true })).toMatchObject({ skipped: 1 });
+    expect(fake.calls).toHaveLength(0);
+    expect((await suggestionsOf(txn)).map((row) => [row.category_id, row.status])).toEqual([[a.food, 'accepted']]);
+  });
+
+  test('an answer with only unknown ids never deletes pending rows', async () => {
+    const txn = await uncategorized(a);
+    await pool.query(
+      `insert into public.category_suggestions (transaction_id, budget_id, rank, category_id, confidence, source)
+       values ($1, $2, 1, $3, 0.7, 'ai')`,
+      [txn, a.budgetId, a.food],
+    );
+    const unknown = () => answer([{ category_id: '11111111-2222-4333-8444-555555555555', confidence: 0.9 }]);
+    setProviders(fakeProviders(unknown).table);
+
+    expect(await run(a, { force: true })).toMatchObject({ examined: 1, failed: 1 });
+    expect((await suggestionsOf(txn)).map((row) => [row.category_id, row.status])).toEqual([[a.food, 'pending']]);
   });
 });
 
@@ -234,6 +318,23 @@ describe.skipIf(!dbReady)('retry policy by provider error kind', () => {
     expect(await run(a)).toMatchObject({ examined: 1, suggested: 1, failed: 0 });
     expect(fake.calls).toHaveLength(2);
     expect((await suggestionsOf(txn)).length).toBe(1);
+  });
+
+  test('a timeout retry reports the whole transaction usage once, not per attempt', async () => {
+    setProviders(
+      fakeProviders((request, call) => {
+        if (call === 1) return toolTurn('list_categories', {});
+        if (call === 2) throw new AiProviderError('timeout', 'slow');
+        return answer([{ category_id: a.food, confidence: 0.9 }]);
+      }).table,
+    );
+    await uncategorized(a);
+    const result = await run(a);
+    if (!('usage' in result)) throw new Error('expected a chunk window');
+    // tool turn 7/3 + answer 10/5; the timeout attempt reported the same 7/3
+    // as part of its cumulative usage and nothing is counted twice.
+    expect(result).toMatchObject({ suggested: 1, failed: 0 });
+    expect(result.usage).toEqual({ input: 17, output: 8 });
   });
 
   test('a second timeout marks that transaction failed and the run continues', async () => {
@@ -268,7 +369,53 @@ describe.skipIf(!dbReady)('retry policy by provider error kind', () => {
     expect((await suggestionsOf(secondTxn)).length).toBe(1);
   });
 
-  for (const kind of ['auth', 'permanent', 'rate_limited', 'transient'] as const) {
+  test('a per-transaction 400 fails only that transaction; a 404 stops the run', async () => {
+    const firstTxn = await uncategorized(a, '2026-11-05');
+    const secondTxn = await uncategorized(a, '2026-11-04');
+    let call = 0;
+    setProviders(
+      fakeProviders(() => {
+        call++;
+        if (call === 1) throw new AiProviderError('permanent', 'context length exceeded', 400);
+        return answer([{ category_id: a.food, confidence: 0.9 }]);
+      }).table,
+    );
+    const result = await run(a, { total: 2 });
+    expect(result).toMatchObject({ examined: 2, suggested: 1, failed: 1 });
+    if ('failedIds' in result) expect(result.failedIds).toEqual([firstTxn]);
+    expect((await suggestionsOf(secondTxn)).length).toBe(1);
+
+    setProviders(fakeProviders(() => Promise.reject(new AiProviderError('permanent', 'model not found', 404))).table);
+    const stopped = await run(a, { force: true, total: 2 }).catch((e: unknown) => e);
+    expect(stopped).toBeInstanceOf(CategorizeError);
+    expect((stopped as CategorizeError).kind).toBe('permanent');
+  });
+
+  test('one 429 waits and retries the transaction instead of the chunk', async () => {
+    const fake = fakeProviders((request, call) => {
+      if (call === 1) throw new AiProviderError('rate_limited', 'slow down', 429, 5);
+      return answer([{ category_id: a.food, confidence: 0.9 }]);
+    });
+    setProviders(fake.table);
+    const txn = await uncategorized(a);
+
+    expect(await run(a)).toMatchObject({ examined: 1, suggested: 1 });
+    expect(fake.calls).toHaveLength(2);
+    expect((await suggestionsOf(txn)).length).toBe(1);
+  });
+
+  test('a second 429 is thrown so Temporal waits the provider delay outside the activity', async () => {
+    const fake = fakeProviders(() => Promise.reject(new AiProviderError('rate_limited', 'slow down', 429, 5)));
+    setProviders(fake.table);
+    await uncategorized(a);
+
+    const error = await run(a).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(CategorizeError);
+    expect((error as CategorizeError).kind).toBe('rate_limited');
+    expect(fake.calls).toHaveLength(2);
+  });
+
+  for (const kind of ['auth', 'transient'] as const) {
     test(`${kind} stops the run and writes nothing for the transaction`, async () => {
       setProviders(fakeProviders(() => Promise.reject(new AiProviderError(kind, 'refused', null, 12_000))).table);
       const txn = await uncategorized(a);
@@ -285,6 +432,143 @@ describe.skipIf(!dbReady)('retry policy by provider error kind', () => {
     expect(error).toBeInstanceOf(CategorizeError);
     expect((error as Error).message).not.toContain('abc123');
     expect((error as Error).message).not.toContain('upstream');
+  });
+});
+
+describe.skipIf(!dbReady)('keyset walking, resume and accounting', () => {
+  test('a new row at the top and a shrink mid-run cannot duplicate or skip candidates', async () => {
+    const first = await uncategorized(a, '2026-11-03');
+    const second = await uncategorized(a, '2026-11-02');
+    setProviders(fakeProviders(() => answer([{ category_id: a.food, confidence: 0.9 }])).table);
+
+    const prepared = await prepareRun(pool, a.budgetId, false);
+    if (!('snapshot' in prepared)) throw new Error('expected a prepared window');
+    expect(prepared.total).toBe(2);
+    const snapshot = prepared.snapshot!;
+
+    // First chunk: newest only.
+    const head = await run(a, { snapshot, limit: 1, total: 2 });
+    if (!('nextCursor' in head)) throw new Error('expected a chunk window');
+    expect(head.examined).toBe(1);
+    expect(head.nextCursor).toEqual({ date: '2026-11-03', id: first });
+
+    // A connections sync inserts a newer row and an older one mid-run.
+    const newer = await uncategorized(a, '2026-11-10');
+    const older = await uncategorized(a, '2026-10-01');
+
+    const tail = await run(a, { snapshot, cursor: head.nextCursor, limit: 1, total: 2 });
+    if (!('nextCursor' in tail)) throw new Error('expected a chunk window');
+    expect(tail.examined).toBe(1);
+    expect(tail.nextCursor).toEqual({ date: '2026-11-02', id: second });
+
+    expect((await suggestionsOf(first)).length).toBe(1);
+    expect((await suggestionsOf(second)).length).toBe(1);
+    expect(await suggestionsOf(newer)).toEqual([]);
+    expect(await suggestionsOf(older)).toEqual([]);
+  });
+
+  test('a retried chunk resumes after its last finished transaction and keeps billed tokens', async () => {
+    const first = await uncategorized(a, '2026-11-03');
+    const second = await uncategorized(a, '2026-11-02');
+    const third = await uncategorized(a, '2026-11-01');
+    setProviders(fakeProviders(() => answer([{ category_id: a.food, confidence: 0.9 }])).table);
+
+    const resume: ChunkProgress = {
+      examined: 1,
+      total: 3,
+      cursor: { date: '2026-11-03', id: first },
+      suggested: 0,
+      rule: 0,
+      empty: 0,
+      skipped: 0,
+      failed: 0,
+      failedIds: [],
+      inputTokens: 5,
+      outputTokens: 2,
+    };
+    const result = await run(a, { force: true, limit: 2, total: 3, cursor: null, snapshot: MAX, resume });
+    if (!('examined' in result)) throw new Error('expected a chunk window');
+    // Only the two remaining rows were sent to the model; the first was not
+    // paid for again and got no new row.
+    expect(result.examined).toBe(3);
+    expect(result.usage).toEqual({ input: 25, output: 12 });
+    expect(await suggestionsOf(first)).toEqual([]);
+    expect((await suggestionsOf(second)).length).toBe(1);
+    expect((await suggestionsOf(third)).length).toBe(1);
+  });
+
+  test('a failed transaction still contributes the tokens it did spend', async () => {
+    setProviders(
+      fakeProviders((request, call) => {
+        if (call === 1) return toolTurn('list_categories', {});
+        throw new AiProviderError('timeout', 'slow');
+      }).table,
+    );
+    await uncategorized(a);
+    const result = await run(a);
+    if (!('usage' in result)) throw new Error('expected a chunk window');
+    // One tool turn (7 in / 3 out) was billed before the two timed-out
+    // attempts; the transaction failed but the run's totals include it.
+    expect(result).toMatchObject({ examined: 1, failed: 1, suggested: 0 });
+    expect(result.usage).toEqual({ input: 7, output: 3 });
+  });
+
+  test('a normal re-run does not re-ask a transaction that already has suggestions', async () => {
+    setProviders(fakeProviders(() => answer([{ category_id: a.food, confidence: 0.9 }])).table);
+    await uncategorized(a);
+    await run(a);
+    const prepared = await prepareRun(pool, a.budgetId, false);
+    expect(prepared).toMatchObject({ total: 0, remaining: 0 });
+    expect(await run(a)).toMatchObject({ examined: 0 });
+    // An explicit re-classify asks again.
+    expect(await run(a, { force: true })).toMatchObject({ examined: 1 });
+  });
+
+  test('a run-level failure keeps the failing transaction usage in the heartbeat', async () => {
+    setProviders(
+      fakeProviders((request, call) => {
+        if (call === 1) return toolTurn('list_categories', {});
+        throw new AiProviderError('auth', 'refused', 401);
+      }).table,
+    );
+    await uncategorized(a);
+    const snapshots: ChunkProgress[] = [];
+    const error = await run(a, { onProgress: (progress) => snapshots.push({ ...progress }) }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(CategorizeError);
+    expect(snapshots.some((progress) => progress.inputTokens === 7 && progress.outputTokens === 3)).toBe(true);
+  });
+});
+
+describe.skipIf(!dbReady)('run cap and prepare', () => {
+  test('prepare caps the run and reports the remainder', async () => {
+    for (const date of ['2026-11-03', '2026-11-02', '2026-11-01']) await uncategorized(a, date);
+    const prepared = await prepareRun(pool, a.budgetId, false, 2);
+    expect(prepared).toMatchObject({ total: 2, remaining: 1 });
+    if ('snapshot' in prepared) expect(prepared.snapshot?.date).toBe('2026-11-03');
+  });
+
+  test('prepare with no candidates has no snapshot and no work', async () => {
+    expect(await prepareRun(pool, a.budgetId, false)).toEqual({ total: 0, remaining: 0, snapshot: null });
+  });
+
+  test('prepare ends at once without a usable key and makes no provider call', async () => {
+    const bare = await newBudget('run-bare');
+    const fake = fakeProviders(() => answer([]));
+    setProviders(fake.table);
+
+    // The fresh owner has no ai_credentials and the shared key is not configured.
+    expect(await prepareRun(pool, bare.budgetId, false)).toEqual({ problem: 'own_key_required' });
+    expect(fake.calls).toHaveLength(0);
+  });
+
+  test('prepare reports a key saved without a model', async () => {
+    const bare = await newBudget('run-no-model');
+    await storeOwnKey(pool, bare.userId, 'openai', 'sk-test-no-model-0123456789', null);
+    await uncategorized(bare);
+    setProviders(fakeProviders(() => answer([])).table);
+
+    expect(await prepareRun(pool, bare.budgetId, false)).toEqual({ problem: 'no_model' });
+    expect(await run(bare)).toEqual({ problem: 'no_model' });
   });
 });
 
@@ -322,32 +606,12 @@ describe.skipIf(!dbReady)('cancellation and key handling', () => {
     expect(fake.calls[0]!.apiKey).toBe(KEY);
   });
 
-  test('prepare ends at once without a usable key and makes no provider call', async () => {
-    const bare = await newBudget('run-bare');
-    const fake = fakeProviders(() => answer([]));
-    setProviders(fake.table);
-
-    // The fresh owner has no ai_credentials and the shared key is not configured.
-    expect(await prepareRun(pool, bare.budgetId)).toEqual({ problem: 'own_key_required' });
-    expect(fake.calls).toHaveLength(0);
-  });
-
-  test('prepare reports a key saved without a model', async () => {
-    const bare = await newBudget('run-no-model');
-    await storeOwnKey(pool, bare.userId, 'openai', 'sk-test-no-model-0123456789', null);
-    await uncategorized(bare);
-    setProviders(fakeProviders(() => answer([])).table);
-
-    expect(await prepareRun(pool, bare.budgetId)).toEqual({ problem: 'no_model' });
-    expect(await run(bare)).toEqual({ problem: 'no_model' });
-  });
-
   test('no activity result or workflow-visible value contains the key', async () => {
     const fake = fakeProviders(() => answer([{ category_id: a.food, confidence: 0.9 }]));
     setProviders(fake.table);
     await uncategorized(a);
 
-    const prepared = await prepareRun(pool, a.budgetId);
+    const prepared = await prepareRun(pool, a.budgetId, false);
     const chunk = await run(a);
     // The fake did receive the key (proves it was resolved), but it never
     // appears in a result, and no request message carries it either.
