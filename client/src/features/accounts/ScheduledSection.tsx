@@ -10,7 +10,7 @@
  *
  * Derived upcoming card installments (budget-lubt) are read-only rows: dimmed,
  * named by their purchase with the "kk/NN" fraction as a pill that never
- * truncates, a card glyph instead of the repeat one, and no editor (the
+ * truncates, a card glyph instead of the flag/attachment ones, and no editor (the
  * server computes them per read; there is no stored row to edit).
  */
 
@@ -110,23 +110,48 @@ export function ScheduledSection({
                       ) : null}
                     </View>
                   </Pressable>
-                  <Ionicons name="bookmark-outline" size={15} color={colors.faint} />
-                  <Ionicons name="image-outline" size={15} color={colors.faint} />
-                  <Text
-                    style={[styles.name, checked && styles.textOn]}
-                    numberOfLines={1}
-                  >
-                    {installment ? installment.name : (account?.name ?? displaySystemName(txn.payee ?? ''))}
-                  </Text>
                   {installment ? (
-                    <Text style={[styles.fraction, checked && styles.fractionOn]}>{installment.fraction}</Text>
-                  ) : null}
-                  <Text style={[styles.date, checked && styles.textOn]}>
-                    {formatDate(txn.date)}
-                  </Text>
-                  {installment ? (
-                    <Ionicons name="card-outline" size={13} color={checked ? colors.white : colors.muted} />
-                  ) : null}
+                    // In place of the flag/attachment glyphs (a placeholder has neither):
+                    // keeps the purchase name readable at phone width.
+                    <Ionicons name="card-outline" size={15} color={checked ? colors.white : colors.faint} />
+                  ) : (
+                    <>
+                      <Ionicons name="bookmark-outline" size={15} color={colors.faint} />
+                      <Ionicons name="image-outline" size={15} color={colors.faint} />
+                    </>
+                  )}
+                  {installment && !showWide ? (
+                    // Phone: the purchase name gets the whole line; fraction and
+                    // date sit beneath it so neither crushes the name.
+                    <View style={styles.stack}>
+                      <Text style={[styles.stackName, checked && styles.textOn]} numberOfLines={1}>
+                        {installment.name}
+                      </Text>
+                      <View style={styles.stackMeta}>
+                        <Text style={[styles.fraction, checked && styles.fractionOn]} numberOfLines={1}>
+                          {installment.fraction}
+                        </Text>
+                        <Text style={[styles.stackDate, checked && styles.textOn]}>{formatDate(txn.date)}</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <Text
+                        style={[styles.name, checked && styles.textOn]}
+                        numberOfLines={1}
+                      >
+                        {installment ? installment.name : (account?.name ?? displaySystemName(txn.payee ?? ''))}
+                      </Text>
+                      {installment ? (
+                        <Text style={[styles.fraction, checked && styles.fractionOn]} numberOfLines={1}>
+                          {installment.fraction}
+                        </Text>
+                      ) : null}
+                      <Text style={[styles.date, checked && styles.textOn]}>
+                        {formatDate(txn.date)}
+                      </Text>
+                    </>
+                  )}
                   {txn.repeatRuleId ? (
                     <Ionicons
                       name="repeat"
@@ -195,6 +220,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     overflow: 'hidden',
     fontVariant: ['tabular-nums'],
+    flexShrink: 0,
   },
   fractionOn: { backgroundColor: colors.indigo2, color: colors.white },
   checkHit: { padding: 2 },
@@ -221,6 +247,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
   },
+  stack: { flex: 1, minWidth: 0, gap: 3 },
+  stackName: { color: colors.text, fontSize: 13 },
+  stackMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stackDate: { color: colors.muted, fontSize: 12 },
   textOn: { color: colors.white, fontWeight: '600' },
   amount: {
     color: colors.text,
