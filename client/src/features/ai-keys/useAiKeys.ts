@@ -88,8 +88,14 @@ export function useAiKeys(): AiKeysState {
   const [detectProvider, detectState] = useDetectAiProviderMutation();
   const [listModels, listState] = useListAiModelsMutation();
   const resetSave = saveState.reset;
-  const resetDetect = detectState.reset;
-  const resetList = listState.reset;
+  // The mutation triggers/resets can change identity between renders. The
+  // effects below must not restart mid-request (a restart drops the answer and
+  // leaves "Detecting provider…" forever), so they read them through refs and
+  // depend only on the data.
+  const detectRef = useRef({ run: detectProvider, reset: detectState.reset });
+  detectRef.current = { run: detectProvider, reset: detectState.reset };
+  const listRef = useRef({ run: listModels, reset: listState.reset });
+  listRef.current = { run: listModels, reset: listState.reset };
 
   const [editing, setEditing] = useState(false);
   const [apiKey, setApiKey] = useState('');
@@ -126,7 +132,8 @@ export function useAiKeys(): AiKeysState {
     let cancelled = false;
     setDetecting(true);
     const timer = setTimeout(() => {
-      void detectProvider({ apiKey: key })
+      void detectRef.current
+        .run({ apiKey: key })
         .unwrap()
         .then((result) => {
           if (cancelled) return;
@@ -138,14 +145,14 @@ export function useAiKeys(): AiKeysState {
         })
         .finally(() => {
           if (!cancelled) setDetecting(false);
-          resetDetect();
+          detectRef.current.reset();
         });
     }, DETECT_DEBOUNCE_MS);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [key, detectProvider, resetDetect]);
+  }, [key]);
 
   // Models of the candidate key: loaded once both the key and a provider are set.
   useEffect(() => {
@@ -164,7 +171,8 @@ export function useAiKeys(): AiKeysState {
     setModelsError(null);
     setModel(null);
     setModelQuery('');
-    void listModels({ apiKey: key, provider })
+    void listRef.current
+      .run({ apiKey: key, provider })
       .unwrap()
       .then((result) => {
         if (cancelled) return;
@@ -179,12 +187,12 @@ export function useAiKeys(): AiKeysState {
       .finally(() => {
         if (cancelled) return;
         setModelsLoading(false);
-        resetList();
+        listRef.current.reset();
       });
     return () => {
       cancelled = true;
     };
-  }, [provider, key, modelsFor, listModels, resetList]);
+  }, [provider, key, modelsFor]);
 
   const startReplace = useCallback(() => {
     setEditing(true);

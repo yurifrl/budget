@@ -29,6 +29,7 @@ export function AiKeyForm({ keys }: { keys: AiKeysState }) {
   return (
     <View style={styles.card}>
       <Text style={styles.section}>{replacing ? t('form.replaceTitle') : t('form.addTitle')}</Text>
+      {keys.notice ? <Text style={styles.okText}>{keys.notice}</Text> : null}
 
       <PasswordField
         label={t('form.keyLabel')}
@@ -121,6 +122,7 @@ const styles = StyleSheet.create({
   label: { color: colors.muted, fontSize: 13, fontWeight: '600' },
   muted: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   hint: { color: colors.indigo3, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  okText: { color: colors.greenPillFg, fontSize: 13, fontWeight: '600' },
   errorText: { color: colors.redFg, fontSize: 13, lineHeight: 18 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
