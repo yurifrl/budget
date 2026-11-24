@@ -1,5 +1,21 @@
 # Changelog
 
+## v2026.11.24 2026-11-24 release
+
+### Changed
+
+- release: v2026.11.24
+- tasks: close budget-u5yt, budget-lubt, budget-mit6
+- docs: transfer matcher decisions (budget-mit6)
+- feat(transfers): phone layouts for the popover and payees, review polish
+- feat(transfers): register suggestions, popover, review list with bulk link, payee transfer rules (client)
+- feat(transfers): match transfers between own accounts, suggestions, payee transfer rules (api + contracts)
+- fix(installments): no selection checkbox on derived installment rows in Scheduled
+- fix(installments): phone Scheduled row stacks the purchase name over fraction and date
+- feat(installments): derive upcoming card installments; skip phantom pending after anticipation
+- connections: full history import with resume, 30-day daily pulls (budget-u5yt)
+
+
 ## v2026.11.23-04 2026-11-23 release
 
 ### Changed
