@@ -60,8 +60,8 @@ export const categorizeMerchantPanelSchema = z.object({
 export const categorizeQueueRowSchema = z.object({
   transaction_id: uuidSchema,
   date: isoDateSchema,
-  /** Signed integer milliunits; an outflow is negative. */
-  amount_milliunits: milliunitsSchema,
+  /** Integer milliunits; an outflow is negative. */
+  amount: milliunitsSchema,
   account_id: uuidSchema,
   account_name: z.string(),
   payee_id: uuidSchema.nullable(),
@@ -77,31 +77,38 @@ export const categorizeQueueRowSchema = z.object({
 
 /**
  * Transactions with the same payee and the same top suggestion, aggregated over
- * the WHOLE queue (not the requested page). `transaction_ids` is everything an
- * accept of the bundle needs, newest first.
+ * the WHOLE queue (not the requested page). `bundle_key` fetches the bundle's
+ * rows through the queue's `bundle` filter and is what accept takes; the bundle
+ * itself carries no transaction ids.
  */
 export const categorizeBundleSchema = z.object({
+  bundle_key: z.string(),
   payee_id: uuidSchema.nullable(),
   payee: z.string(),
   count: z.number().int().positive(),
-  /** Signed integer milliunits: the sum of the bundle's transactions. */
-  total_milliunits: milliunitsSchema,
+  /** Integer milliunits: the sum of the bundle's transactions. */
+  total: milliunitsSchema,
   first_date: isoDateSchema,
   last_date: isoDateSchema,
   suggestion: categorizeSuggestionSchema,
-  transaction_ids: z.array(uuidSchema).min(1),
 });
 
+/**
+ * One count per row state; `no_suggestion` counts exactly the rows whose state
+ * is `no_suggestion` (a usable visible suggestion is required for
+ * below_threshold, so a pending suggestion on a now-hidden category does not
+ * count there). The five states sum to `left_to_categorize`.
+ */
 export const categorizeQueueCountsSchema = z.object({
   /** Rows the queue holds now (all states). */
   left_to_categorize: z.number().int().min(0),
-  /** Rows with at least one suggestion at/above the threshold. */
+  /** Rows with at least one visible suggestion at/above the threshold. */
   above_threshold: z.number().int().min(0),
-  /**
-   * Rows without a suggestion at/above the threshold: below-threshold,
-   * classified with no suggestion, failed and not-classified alike.
-   */
+  has_suggestions: z.number().int().min(0),
+  below_threshold: z.number().int().min(0),
   no_suggestion: z.number().int().min(0),
+  failed: z.number().int().min(0),
+  not_classified: z.number().int().min(0),
 });
 
 export const categorizeQueueSchema = z.object({
@@ -191,7 +198,7 @@ export const categorizeAcceptResultSchema = z.object({
  * already undone), its category changed since the accept, it is an upcoming
  * repeat occurrence, or it is gone.
  */
-export const categorizeUndoSkipReasonSchema = z.enum(['no_decision', 'category_changed', 'upcoming', 'not_found']);
+export const categorizeUndoSkipReasonSchema = z.enum(['no_decision', 'category_changed', 'upcoming', 'skipped', 'not_found']);
 
 export const categorizeUndoSkipSchema = z.object({
   transaction_id: uuidSchema,

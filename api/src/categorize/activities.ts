@@ -133,8 +133,9 @@ export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): C
           return { problem: result.problem };
         }
         await ctx.log('info', 'categorize run prepared', { total: result.total, remaining: result.remaining });
-        // Make the total visible to categorize_run_status before the first chunk.
-        await recordRunProgress(db, args.runId, args.budgetId, 0, result.total);
+        // Make the total visible to categorize_run_status before the first
+        // chunk. Progress is observability, never a reason to fail the run.
+        await recordRunProgress(db, args.runId, args.budgetId, 0, result.total).catch(() => undefined);
         return result;
       });
     },

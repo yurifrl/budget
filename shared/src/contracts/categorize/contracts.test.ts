@@ -21,7 +21,7 @@ const suggestion = { category_id: c, category_name: 'Food', confidence: 0.91, re
 const row = {
   transaction_id: t,
   date: '2026-11-01',
-  amount_milliunits: -2500,
+  amount: -2500,
   account_id: b,
   account_name: 'Checking',
   payee_id: null,
@@ -65,24 +65,33 @@ describe('Categorize contracts', () => {
     expect(Object.keys(categorizeQueueList.input.shape)).not.toContain('confidence_threshold');
 
     const bundle = {
+      bundle_key: 'eyJwYXllZV9pZCI6bnVsbCwicGF5ZWUiOiJQYWRhcmlhIiwiY2F0ZWdvcnlfaWQiOiJ4In0',
       payee_id: null,
       payee: 'Padaria',
       count: 2,
-      total_milliunits: -5000,
+      total: -5000,
       first_date: '2026-11-01',
       last_date: '2026-11-02',
       suggestion,
-      transaction_ids: [t],
     };
     const output = {
       rows: [row],
-      counts: { left_to_categorize: 1, above_threshold: 1, no_suggestion: 0 },
+      counts: {
+        left_to_categorize: 1,
+        above_threshold: 1,
+        has_suggestions: 1,
+        below_threshold: 0,
+        no_suggestion: 0,
+        failed: 0,
+        not_classified: 0,
+      },
       bundles: [bundle],
     };
     expect(categorizeQueueList.output!.safeParse(output).success).toBe(true);
     expect(categorizeQueueList.output!.safeParse({ ...output, rows: [{ ...row, state: 'maybe' }] }).success).toBe(false);
     expect(categorizeQueueList.output!.safeParse({ ...output, rows: [{ ...row, suggestions: [{ ...suggestion, confidence: 1.1 }] }] }).success).toBe(false);
-    expect(categorizeQueueList.output!.safeParse({ ...output, bundles: [{ ...bundle, transaction_ids: [] }] }).success).toBe(false);
+    expect(categorizeQueueList.output!.safeParse({ ...output, bundles: [{ ...bundle, total: 'x' }] }).success).toBe(false);
+    expect(categorizeQueueList.input.parse({ budget_id: b, bundle: 'key' })).toMatchObject({ bundle: 'key' });
   });
 
   test('run start and status: no forced flag, progress shape, AI reason', () => {
@@ -117,17 +126,21 @@ describe('Categorize contracts', () => {
     expect(categorizeRunStatus.output!.safeParse({ ...status, last_finished: { ...finished, total: -1 } }).success).toBe(false);
   });
 
-  test('accept takes pairs; undo takes only transaction ids and reports skips with a reason', () => {
+  test('accept takes pairs or a bundle; duplicates are invalid; undo lists skip reasons', () => {
     const items = [{ transaction_id: t, category_id: c }];
     expect(categorizeAccept.input.safeParse({ budget_id: b, items }).success).toBe(true);
     expect(categorizeAccept.input.safeParse({ budget_id: b, items: [] }).success).toBe(false);
     expect(categorizeAccept.input.safeParse({ budget_id: b, items: [{ transaction_id: 'nope', category_id: c }] }).success).toBe(false);
+    expect(categorizeAccept.input.safeParse({ budget_id: b, items: [...items, ...items] }).success).toBe(false);
+    expect(categorizeAccept.input.safeParse({ budget_id: b, bundle_key: 'key' }).success).toBe(true);
     expect(categorizeAccept.output!.safeParse({ accepted: 1, items }).success).toBe(true);
     expect(categorizeUndo.input.safeParse({ budget_id: b, transaction_ids: [t] }).success).toBe(true);
+    expect(categorizeUndo.input.safeParse({ budget_id: b, transaction_ids: [t, t] }).success).toBe(false);
     expect(categorizeUndo.input.safeParse({ budget_id: b, items }).success).toBe(false);
     expect(categorizeUndo.input.safeParse({ budget_id: b, transaction_ids: [] }).success).toBe(false);
     expect(categorizeUndo.output!.safeParse({ restored: 1, transaction_ids: [t], skipped: [] }).success).toBe(true);
     expect(categorizeUndo.output!.safeParse({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'no_decision' }] }).success).toBe(true);
+    expect(categorizeUndo.output!.safeParse({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'skipped' }] }).success).toBe(true);
     expect(categorizeUndo.output!.safeParse({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'stale' }] }).success).toBe(false);
     expect(categorizeUndo.output!.safeParse({ restored: 1, transaction_ids: [t] }).success).toBe(false);
   });

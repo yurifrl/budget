@@ -28,8 +28,8 @@ import { pool } from '../core/db';
 import { HttpError } from '../core/validate';
 import type { JobRun } from '../jobs';
 import { categorizeRunStatus as readRunStatus, startCategorizeRun } from './job';
-import { acceptCategories, skipTransaction, undoAccept } from './decision-store';
-import { getConfidenceThreshold, listQueue, setConfidenceThreshold } from './queue-store';
+import { acceptBundle, acceptCategories, skipTransaction, undoAccept } from './decision-store';
+import { decodeBundleKey, getConfidenceThreshold, listQueue, setConfidenceThreshold } from './queue-store';
 import { readRunProgress, runActorForBudget } from './store';
 
 type AiStatus = z.output<typeof categorizeAiStatusSchema>;
@@ -107,9 +107,11 @@ function aiUnavailable(reason: CategorizeSkipProblem): HttpError {
 }
 
 export const operations = [
-  implement(categorizeQueueList, (_c, { budget_id: budgetId, limit, offset }) =>
-    listQueue(pool, budgetId, { limit, offset }),
-  ),
+  implement(categorizeQueueList, (_c, { budget_id: budgetId, limit, offset, bundle }) => {
+    const key = bundle === undefined ? undefined : decodeBundleKey(bundle);
+    if (key === null) throw new HttpError(400, 'invalid bundle key', 'invalid_input');
+    return listQueue(pool, budgetId, { limit, offset, bundle: key });
+  }),
 
   implement(categorizeRunStart, async (_c, { budget_id: budgetId }) => {
     const status = await readRunStatus(pool, budgetId);
@@ -142,9 +144,18 @@ export const operations = [
     };
   }),
 
-  implement(categorizeAccept, (c, { budget_id: budgetId, items }) => {
+  implement(categorizeAccept, (c, { budget_id: budgetId, items, bundle_key: bundleKey }) => {
     const user = c.get('user');
     if (!user) throw new HttpError(401, 'unauthorized');
+    if ((items === undefined) === (bundleKey === undefined)) {
+      throw new HttpError(400, 'send exactly one of items or bundle_key', 'invalid_input');
+    }
+    if (bundleKey !== undefined) {
+      const key = decodeBundleKey(bundleKey);
+      if (!key) throw new HttpError(400, 'invalid bundle key', 'invalid_input');
+      return acceptBundle(pool, budgetId, key, user.id);
+    }
+    if (items === undefined) throw new HttpError(400, 'items are required', 'invalid_input');
     return acceptCategories(pool, budgetId, items, user.id);
   }),
 
@@ -152,9 +163,11 @@ export const operations = [
     undoAccept(pool, budgetId, transaction_ids),
   ),
 
-  implement(categorizeSkip, (_c, { budget_id: budgetId, transaction_id }) =>
-    skipTransaction(pool, budgetId, transaction_id),
-  ),
+  implement(categorizeSkip, (c, { budget_id: budgetId, transaction_id }) => {
+    const user = c.get('user');
+    if (!user) throw new HttpError(401, 'unauthorized');
+    return skipTransaction(pool, budgetId, transaction_id, user.id);
+  }),
 
   implement(categorizeSettingsGet, async (_c, { budget_id: budgetId }) => ({
     budget_id: budgetId,
