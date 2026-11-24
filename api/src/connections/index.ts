@@ -22,6 +22,8 @@ export {
   blockedImportShadowIds,
   findUserConnection,
   getImportMetadata,
+  listImportHints,
   listInstallmentSources,
+  setImportShadowsBlocked,
 } from './ledger-reads';
-export type { ImportMetadata, InstallmentSourceRow } from './ledger-reads';
+export type { ImportHint, ImportMetadata, InstallmentSourceRow } from './ledger-reads';

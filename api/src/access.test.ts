@@ -163,6 +163,8 @@ const samples: Record<string, Record<string, unknown>> = {
   budget_payees_set_hidden: { id: V.payee, budget_id: A.budget, hidden: true },
   budget_payees_set_rename_rule: { id: V.payee, budget_id: A.budget, match_type: 'is', condition: 'pwned' },
   budget_payees_transactions: { id: V.payee, budget_id: A.budget },
+  budget_payees_transfer_rule_get: { id: V.payee, budget_id: A.budget },
+  budget_payees_set_transfer_rule: { id: V.payee, budget_id: A.budget, mode: 'auto' },
   budget_repeat_rules_delete: { id: V.rule, budget_id: A.budget },
   budget_transactions_delete: { id: V.txn, budget_id: A.budget },
   budget_transactions_get: { id: V.txn, budget_id: A.budget },
@@ -199,6 +201,7 @@ async function budgetSnapshot(budgetId: string, withConnection = false): Promise
   const tables = [
     'budgets', 'accounts', 'category_groups', 'categories', 'category_bundles', 'payees', 'transactions',
     'subtransactions', 'txn_repeat_rules', 'category_targets', 'category_notes', 'month_notes', 'assignments', 'budget_members',
+    'transfer_marks', 'transfer_links',
   ];
   const out: Record<string, unknown> = {};
   for (const t of tables) {
@@ -234,6 +237,10 @@ const POINTERS: Array<[table: string, column: string, target: string]> = [
   ['category_bundles', 'group_id', 'category_groups'],
   ['payees', 'default_category_id', 'categories'],
   ['payees', 'transfer_account_id', 'accounts'],
+  ['payees', 'transfer_rule_account_id', 'accounts'],
+  ['transfer_marks', 'transaction_id', 'transactions'],
+  ['transfer_links', 'transaction_id', 'transactions'],
+  ['transfer_links', 'peer_transaction_id', 'transactions'],
   ['txn_repeat_rules', 'account_id', 'accounts'],
   ['txn_repeat_rules', 'category_id', 'categories'],
   ['txn_repeat_rules', 'payee_id', 'payees'],
@@ -530,6 +537,21 @@ const bodyCases: BodyCase[] = [
     input: { id: A.txn, budget_id: A.budget, patch: { matched_transaction_id: V.txn } } },
   { op: 'budget_transactions_update', fields: ['subtransactions[].category_id'], outcome: 'reject', status: 400,
     input: { id: A.txn, budget_id: A.budget, patch: {}, subtransactions: [{ category_id: V.category, memo: null, outflow: 5000, inflow: 0 }] } },
+  // transfers between own accounts
+  { op: 'budget_transfer_suggestions_list', fields: ['account_id'], outcome: 'reject', status: 404,
+    input: { budget_id: A.budget, account_id: V.account } },
+  { op: 'budget_transfers_link', fields: ['links[].transaction_id'], outcome: 'reject', status: 404,
+    input: { budget_id: A.budget, links: [{ transaction_id: V.txn, account_id: A.account }] } },
+  { op: 'budget_transfers_link', fields: ['links[].counterpart_id'], outcome: 'reject', status: 404,
+    input: { budget_id: A.budget, links: [{ transaction_id: A.txn, counterpart_id: V.txn }] } },
+  { op: 'budget_transfers_link', fields: ['links[].account_id'], outcome: 'reject', status: 404,
+    input: { budget_id: A.budget, links: [{ transaction_id: A.txn, account_id: V.account }] } },
+  { op: 'budget_transfers_unlink', fields: ['transaction_ids[]'], outcome: 'reject', status: 404,
+    input: { budget_id: A.budget, transaction_ids: [A.txn, V.txn] } },
+  { op: 'budget_transfers_mark', fields: ['transaction_ids[]'], outcome: 'reject', status: 404,
+    input: { budget_id: A.budget, transaction_ids: [A.txn, V.txn], state: 'dismissed' } },
+  { op: 'budget_payees_set_transfer_rule', fields: ['account_id'], outcome: 'reject', status: 400,
+    input: { id: A.payee, budget_id: A.budget, mode: 'account', account_id: V.account } },
   // connections (the attacker's own connection, the victim's account)
   { op: 'connections_transactions_list', fields: ['accountId'], outcome: 'reject', status: 404,
     input: { id: A.connection, accountId: V.account } },
@@ -713,6 +735,10 @@ const onVictimBudget: Record<string, Record<string, unknown>> = {
   budget_transactions_bulk_import: { account_id: V.account, txns: [bulkRow()] },
   budget_transactions_create: { txn: txnBase({ account_id: V.account }) },
   budget_transactions_list: {},
+  budget_transfer_suggestions_list: { account_id: V.account },
+  budget_transfers_link: { links: [{ transaction_id: V.txn, account_id: V.account }] },
+  budget_transfers_unlink: { transaction_ids: [V.txn] },
+  budget_transfers_mark: { transaction_ids: [V.txn], state: 'dismissed' },
 };
 const victimInput = (c: OperationContract): Record<string, unknown> | undefined => {
   const base = onVictimBudget[c.name] ?? samples[c.name];

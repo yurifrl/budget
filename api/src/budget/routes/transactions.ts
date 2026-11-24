@@ -23,7 +23,7 @@ import {
   resolvePayeeId,
   upsertPayee,
 } from '../domain/transactions';
-import { linkCardPayments } from '../domain/card-payments';
+import { linkTransfers, transferOverview } from '../domain/transfer-links';
 import { deleteMirror, insertMirror, resolveTransferPeer, syncMirror } from '../domain/transfers';
 import { advanceOccurrence } from '../domain/repeat-schedule';
 import { applyRules } from '@shared/domain/payees';
@@ -121,7 +121,20 @@ export const operations = [
       list.push(row);
       byTxn.set(row.transaction_id, list);
     }
-    const stored = rows.map((t) => ({ ...t, subtransactions: byTxn.get(t.id) ?? [] }));
+    // Transfer matcher view (budget-mit6): suggestion icon, pending rule rows, who linked.
+    const transfers = await transferOverview(pool, budgetId);
+    const stored = rows.map((t) => {
+      const s = transfers.rows.get(t.id);
+      return {
+        ...t,
+        subtransactions: byTxn.get(t.id) ?? [],
+        transfer_suggestion: s
+          ? { confidence: s.confidence, candidate_count: s.candidateCount, counterpart_id: s.counterpartId }
+          : null,
+        transfer_pending: transfers.pending.get(t.id) ?? null,
+        transfer_link_method: t.transfer_transaction_id ? (transfers.methods.get(t.id) ?? null) : null,
+      };
+    });
     // Card installments the bank has not billed yet: derived per read, never
     // stored (see domain/upcoming-installments), merged newest first.
     const upcoming = upcomingInstallmentRows(await listInstallmentSources(pool, budgetId));
@@ -297,8 +310,8 @@ export const operations = [
           { account_id, cleared_delta: 0, uncleared_delta: unclearedDelta },
         ]);
       }
-      // Imported statement payments (cash outflow + card inflow) become transfers.
-      if (imported > 0) await linkCardPayments(client, budget_id);
+      // Imported rows that pair with another own account's row become transfers.
+      if (imported > 0) await linkTransfers(client, budget_id);
       return { imported, duplicates };
     });
   }),

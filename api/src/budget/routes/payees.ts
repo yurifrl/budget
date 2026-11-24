@@ -11,8 +11,12 @@ import {
   payeesSetCategorization,
   payeesSetHidden,
   payeesSetRenameRule,
+  payeesSetTransferRule,
   payeesTransactions,
+  payeesTransferRuleGet,
 } from '@shared/contracts/budget';
+import { linkTransfers } from '../domain/transfer-links';
+import * as transferStore from '../store/transfers';
 import { loadRenameRules } from '../domain/transactions';
 import { budgetRouter } from '../router';
 import { categoryInBudget } from '../store/categories';
@@ -35,6 +39,25 @@ function payeeNameConflict(other: PayeeNameHolder): HttpError {
     'payee_name_exists',
     { name: other.name },
   );
+}
+
+/** The wire shape of a payee's transfer rule (mode null = off). */
+function transferRuleOutput(
+  payeeId: string,
+  rule: NonNullable<Awaited<ReturnType<typeof transferStore.getPayeeTransferRule>>>,
+  pastRows: number,
+  linked: number,
+) {
+  return {
+    payee_id: payeeId,
+    mode: rule.mode ?? ('off' as const),
+    account_id: rule.account_id,
+    no_match: rule.no_match,
+    wait_days: Number(rule.wait_days),
+    since: rule.since,
+    past_rows: pastRows,
+    linked,
+  };
 }
 
 async function requirePayee(budgetId: string, id: string): Promise<void> {
@@ -144,6 +167,41 @@ export const operations = [
     );
     if (!updated) throw new HttpError(404, 'payee not found');
   }),
+
+  // "Treat as transfer" rule (budget-mit6).
+  implement(payeesTransferRuleGet, async (_c, { id, budget_id }) => {
+    const rule = await transferStore.getPayeeTransferRule(pool, budget_id, id);
+    if (!rule) throw new HttpError(404, 'payee not found');
+    return transferRuleOutput(id, rule, await transferStore.countOpenPayeeRows(pool, budget_id, id), 0);
+  }),
+
+  implement(payeesSetTransferRule, async (_c, { id, budget_id, mode, account_id, no_match, wait_days, apply_to_past }) =>
+    withTransaction(pool, async (client) => {
+      const current = await transferStore.getPayeeTransferRule(client, budget_id, id);
+      if (!current) throw new HttpError(404, 'payee not found');
+      const accountId = mode === 'account' ? (account_id ?? null) : null;
+      if (mode === 'account' && !accountId) throw new HttpError(400, 'choose the other account', 'transfer_rule_needs_account');
+      if (accountId) {
+        const account = await transferStore.getTransferAccount(client, budget_id, accountId);
+        if (!account) throw new HttpError(400, 'account not found in budget', 'account_not_in_budget');
+        if (!account.on_budget) throw new HttpError(400, 'only accounts in the budget', 'transfer_off_budget');
+      }
+      const linking = mode === 'auto' || mode === 'account';
+      const wasLinking = current.mode === 'auto' || current.mode === 'account';
+      // A new rule covers rows created from now on; "Apply to past rows" covers every row.
+      const since = apply_to_past && linking ? null : linking && wasLinking ? 'keep' : 'now';
+      await transferStore.setPayeeTransferRule(client, budget_id, id, {
+        mode: mode === 'off' ? null : mode,
+        accountId,
+        noMatch: no_match ?? current.no_match,
+        waitDays: wait_days ?? Number(current.wait_days),
+        since,
+      });
+      const linked = linking ? await linkTransfers(client, budget_id) : 0;
+      const saved = (await transferStore.getPayeeTransferRule(client, budget_id, id))!;
+      return transferRuleOutput(id, saved, await transferStore.countOpenPayeeRows(client, budget_id, id), linked);
+    }),
+  ),
 ];
 
 export default budgetRouter('/payees', operations);

@@ -781,14 +781,15 @@ async function syncOnce(
     timings.rows = rowCount;
     timings.rows_ms = Date.now() - rowsStart;
 
-    // Pair imported card-statement payments (cash outflow + card inflow) as
-    // transfers; idempotent, so it also backfills rows imported earlier.
+    // Pair transfers between the budget's own accounts (card payments, PIX/TED
+    // between own accounts, payee rules); idempotent, so it also backfills
+    // rows imported earlier.
     const linkStart = Date.now();
     for (const budgetId of new Set(stillLinked.filter((a) => fetched.has(a.id)).map((a) => a.budget_id))) {
       input.onProgress?.();
-      await ledger.linkCardPayments(pg, budgetId);
+      await ledger.linkTransfers(pg, budgetId);
     }
-    timings.link_card_payments_ms = Date.now() - linkStart;
+    timings.link_transfers_ms = Date.now() - linkStart;
 
     await pg.query(
       'UPDATE public.connections SET last_synced_at = now(), updated_at = now() WHERE id = $1',

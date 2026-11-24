@@ -46,6 +46,56 @@ export async function blockImportShadows(db: Queryable, transactionIds: readonly
   );
 }
 
+/** Set the sync shadow `blocked` flag of `transactionIds` (rows without a shadow are unaffected). */
+export async function setImportShadowsBlocked(db: Queryable, transactionIds: readonly string[], blocked: boolean): Promise<void> {
+  if (transactionIds.length === 0) return;
+  await db.query(
+    `UPDATE connection_transactions SET blocked = $2, updated_at = now() WHERE transaction_id = ANY($1) AND blocked <> $2`,
+    [transactionIds, blocked],
+  );
+}
+
+/** The provider's transfer hints for one imported row (see `listImportHints`). */
+export type ImportHint = {
+  /** Pluggy `category` (e.g. "Same person transfer", "Transfer - PIX"); null when absent. */
+  category: string | null;
+  /** Pluggy `operationType` (PIX, TED, PAGAMENTO_FATURA, ...); null when absent. */
+  operationType: string | null;
+  /** The bank's own timestamp for the row (raw `date`); null when absent. */
+  bankTime: string | null;
+  /** The sync shadow is frozen (a person edited the row). */
+  blocked: boolean;
+};
+
+/**
+ * The bank's transfer hints of `transactionIds` that have a sync shadow, by
+ * transaction id. Input of the transfer matcher (budget-mit6); read from the
+ * stored raw payload, so rows imported before it was recorded have no hints.
+ */
+export async function listImportHints(db: Queryable, transactionIds: readonly string[]): Promise<Map<string, ImportHint>> {
+  if (transactionIds.length === 0) return new Map();
+  const r = await db.query<{
+    transaction_id: string;
+    category: string | null;
+    operation_type: string | null;
+    bank_time: string | null;
+    blocked: boolean;
+  }>(
+    `SELECT transaction_id, blocked,
+            raw_payload->>'category' AS category,
+            raw_payload->>'operationType' AS operation_type,
+            raw_payload->>'date' AS bank_time
+     FROM connection_transactions WHERE transaction_id = ANY($1)`,
+    [transactionIds],
+  );
+  return new Map(
+    r.rows.map((row) => [
+      row.transaction_id,
+      { category: row.category, operationType: row.operation_type, bankTime: row.bank_time, blocked: row.blocked },
+    ]),
+  );
+}
+
 /** What the bank sent for one imported transaction (see `getImportMetadata`). */
 export type ImportMetadata = {
   provider: string;

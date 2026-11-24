@@ -186,6 +186,9 @@ export const payeeAdminRowSchema = payeeRowSchema.extend({
   /** Majority category of the payee's last 3 categorized transactions; null when none. */
   inferred_category_id: id.nullable(),
   inferred_category_name: nullableString,
+  /** "Treat as transfer" rule (budget-mit6); null = off. */
+  transfer_rule: z.enum(['auto', 'account', 'never']).nullable(),
+  transfer_rule_account_id: id.nullable(),
 });
 
 export const payeeSuggestionSchema = z.object({
@@ -281,6 +284,70 @@ export const subTransactionRowSchema = z.object({
   deleted: z.boolean(),
 });
 
+// ---- transfers between own accounts (budget-mit6) ------------------------------
+
+export const transferConfidences = ['sure', 'choose', 'one_side'] as const;
+export const transferBases = ['unique', 'ordinal', 'evidence', 'rule', 'ambiguous', 'unmatched'] as const;
+export const transferRuleModes = ['off', 'auto', 'account', 'never'] as const;
+export const transferNoMatchPolicies = ['outside', 'review'] as const;
+
+/**
+ * The register's per-row transfer suggestion: `sure` = one proposed other
+ * side, `choose` = several possible, `one_side` = looks like a transfer but no
+ * matching row (the other account may not be in this budget).
+ */
+export const transferRowSuggestionSchema = z.object({
+  confidence: z.enum(transferConfidences),
+  candidate_count: z.number().int(),
+  /** The proposed other side when there is exactly one. */
+  counterpart_id: id.nullable(),
+});
+
+/** One side of a suggested transfer, as the review list shows it. Amount in signed milliunits. */
+export const transferLegSchema = z.object({
+  transaction_id: id,
+  account_id: id,
+  account_name: z.string(),
+  date: z.string(),
+  amount: milli,
+  payee_name: nullableString,
+  /** The bank's label for the row (Pluggy category, else operation type); null when none. */
+  bank_label: nullableString,
+  /** Untouched bank row (not edited since import). */
+  untouched: z.boolean(),
+});
+
+/** One suggestion: the row it is about and its proposed other side(s), closest date first. */
+export const transferSuggestionSchema = z.object({
+  /** The row the suggestion is about (the outflow of a pair, or the lone row). */
+  id,
+  confidence: z.enum(transferConfidences),
+  /** Why: `unique` only candidate, `ordinal` paired in date order among repeats, `evidence` bank labels, `rule` payee rule, `ambiguous` several candidates, `unmatched` no candidate. */
+  basis: z.enum(transferBases),
+  leg: transferLegSchema,
+  candidates: z.array(transferLegSchema.extend({ days_apart: z.number().int() })),
+});
+
+export const transferLinkResultSchema = z.object({
+  /** Every transaction id now linked (both legs of each pair); pass them to unlink to undo. */
+  linked: z.array(id),
+  rules_created: z.number().int(),
+});
+
+export const payeeTransferRuleSchema = z.object({
+  payee_id: id,
+  mode: z.enum(transferRuleModes),
+  account_id: id.nullable(),
+  no_match: z.enum(transferNoMatchPolicies),
+  wait_days: z.number().int(),
+  /** Rows created from this instant on are covered (ISO); null = every row. */
+  since: timestamp.nullable(),
+  /** Live rows of this payee still uncategorized and unlinked ("Apply to N past rows"). */
+  past_rows: z.number().int(),
+  /** Rows the last save linked (0 on reads). */
+  linked: z.number().int(),
+});
+
 export const transactionRowSchema = z.object({
   id,
   account_id: id,
@@ -323,6 +390,18 @@ export const transactionRowSchema = z.object({
    * no budget activity. Absent on stored rows.
    */
   installment: z.object({ number: z.number().int(), total: z.number().int() }).optional(),
+  /** List reads only: the transfer matcher thinks this row is one leg of a transfer between own accounts (null = no). */
+  transfer_suggestion: transferRowSuggestionSchema.nullable().optional(),
+  /**
+   * List reads only: a row of a "treat as transfer" payee with no linked other
+   * side. `waiting` = its other side has not arrived yet (counts as a transfer:
+   * no category, no budget effect); `outside` = a transfer to an account
+   * outside the budget (no category asked; moves Ready to Assign like any money
+   * leaving or entering the budget). Null otherwise.
+   */
+  transfer_pending: z.enum(['waiting', 'outside']).nullable().optional(),
+  /** List reads only: who linked this transfer leg (`auto` matcher, `rule` payee rule, `user`); null when unknown or not linked. */
+  transfer_link_method: z.enum(['auto', 'rule', 'user']).nullable().optional(),
 });
 
 /** A split leg on the detail read, with its category's name. */

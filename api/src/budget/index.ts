@@ -27,6 +27,7 @@ import categoryTargets, { operations as categoryTargetsOps } from './routes/cate
 import planAutoAssign, { operations as planAutoAssignOps } from './routes/plan-auto-assign';
 import revision, { operations as revisionOps } from './routes/revision';
 import payeeSuggestions, { operations as payeeSuggestionsOps } from './routes/payee-suggestions';
+import transfers, { operations as transfersOps } from './routes/transfers';
 
 const app = new Hono();
 
@@ -54,6 +55,7 @@ export const operations: readonly AnyOperation[] = [
   ...categoryTargetsOps,
   ...planAutoAssignOps,
   ...payeeSuggestionsOps,
+  ...transfersOps,
   ...revisionOps,
 ];
 
@@ -83,6 +85,7 @@ app.route('/payees', payees);
 app.route('/category-targets', categoryTargets);
 app.route('/plan-auto-assign', planAutoAssign);
 app.route('/payee-suggestions', payeeSuggestions);
+app.route('/transfers', transfers);
 app.route('/budget-revision', revision);
 
 export default app;
