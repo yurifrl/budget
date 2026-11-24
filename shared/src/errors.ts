@@ -87,6 +87,7 @@ export const SPECIFIC_ERROR_CODES = [
   // AI keys (category suggestions).
   'own_ai_key_required',
   'ai_key_rejected',
+  'ai_key_forbidden',
   'ai_provider_unknown',
   'ai_provider_mismatch',
   'ai_model_unknown',

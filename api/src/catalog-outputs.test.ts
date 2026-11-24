@@ -97,7 +97,7 @@ const fakeAiEntry = (id: AiProviderId): ProviderEntry => ({
     chat: async () => {
       throw new Error('chat is not used by the catalog outputs test');
     },
-    verifyKey: async () => {},
+    verifyKey: async () => null,
     listModels: async () => aiModels,
   }),
 });

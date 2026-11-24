@@ -140,7 +140,7 @@ describe('OpenAI-compatible model listing', () => {
         data: [{ id: 'gpt-b', name: 'Bee', context_length: 128_000 }, { id: 'gpt-a' }, { id: 42 }],
       }),
     );
-    for (const id of ['openai', 'openrouter', 'deepseek', 'zai'] as const) {
+    for (const id of ['openai', 'openrouter', 'deepseek'] as const) {
       const models = await createProvider(id, 'key-123', { baseUrl }).listModels();
       expect(captured[0]!.path).toBe('/models');
       expect(captured[0]!.headers.authorization).toBe('Bearer key-123');
@@ -159,20 +159,37 @@ describe('OpenAI-compatible model listing', () => {
           { id: 'gpt-4.1' },
           { id: 'o3-mini' },
           { id: 'chatgpt-4o-latest' },
+          // Fine-tunes and search-preview models are Chat Completions models (OpenAI model docs).
+          { id: 'ft:gpt-4.1-mini:acme::abc123' },
+          { id: 'gpt-4o-search-preview' },
+          { id: 'gpt-4o-mini-search-preview' },
           { id: 'text-embedding-3-small' },
           { id: 'gpt-4o-audio-preview' },
           { id: 'gpt-image-1' },
           { id: 'omni-moderation-latest' },
           { id: 'gpt-5-codex' },
+          // Responses API only: o1-pro, o3-pro, gpt-5-pro.
+          { id: 'o1-pro' },
+          { id: 'o3-pro' },
+          { id: 'gpt-5-pro' },
+          // Legacy Completions only.
+          { id: 'gpt-3.5-turbo-instruct' },
         ],
       }),
     );
     const models = await createProvider('openai', 'key-123', { baseUrl }).listModels();
-    expect(models.map((model) => model.id)).toEqual(['chatgpt-4o-latest', 'gpt-4.1', 'o3-mini']);
+    expect(models.map((model) => model.id)).toEqual([
+      'chatgpt-4o-latest',
+      'ft:gpt-4.1-mini:acme::abc123',
+      'gpt-4.1',
+      'gpt-4o-mini-search-preview',
+      'gpt-4o-search-preview',
+      'o3-mini',
+    ]);
     // The filter is OpenAI's only: another provider's list is passed through.
     captured = [];
     const openrouterModels = await createProvider('openrouter', 'key-123', { baseUrl }).listModels();
-    expect(openrouterModels).toHaveLength(8);
+    expect(openrouterModels).toHaveLength(15);
   });
 
   test('a model list without data is a bad_response', async () => {
@@ -182,26 +199,61 @@ describe('OpenAI-compatible model listing', () => {
 });
 
 describe('OpenAI-compatible key check', () => {
-  test('OpenRouter authenticates with /key; the others with /models', async () => {
+  test('OpenRouter authenticates with /key; OpenAI and DeepSeek with /models', async () => {
     let baseUrl = stub(() => Response.json({ data: {} }));
-    await createProvider('openrouter', 'sk-or-v1-test', { baseUrl }).verifyKey();
+    await expect(createProvider('openrouter', 'sk-or-v1-test', { baseUrl }).verifyKey()).resolves.toBeNull();
     expect(captured[0]!.method).toBe('GET');
     expect(captured[0]!.path).toBe('/key');
     expect(captured[0]!.headers.authorization).toBe('Bearer sk-or-v1-test');
     await stopStub();
 
-    for (const id of ['openai', 'deepseek', 'zai'] as const) {
-      baseUrl = stub(() => Response.json({ data: [] }));
-      await createProvider(id, 'key-123', { baseUrl }).verifyKey();
+    for (const id of ['openai', 'deepseek'] as const) {
+      baseUrl = stub(() => Response.json({ data: [{ id: 'gpt-a' }] }));
+      const checked = await createProvider(id, 'key-123', { baseUrl }).verifyKey();
       expect(captured[0]!.path).toBe('/models');
       expect(captured[0]!.headers.authorization).toBe('Bearer key-123');
+      // The check is the authenticated model list, so its models come back
+      // instead of being fetched a second time by the caller.
+      expect(checked).toEqual([{ id: 'gpt-a', name: 'gpt-a', contextLength: null }]);
       await stopStub();
     }
+  });
+
+  test('zai verifies with the documented tokenizer endpoint and lists its documented models offline', async () => {
+    const baseUrl = stub(() => Response.json({ usage: { prompt_tokens: 1, total_tokens: 1 } }));
+    const provider = createProvider('zai', 'zai-key-123', { baseUrl });
+    await expect(provider.verifyKey()).resolves.toBeNull();
+    expect(captured).toHaveLength(1);
+    expect(captured[0]!.method).toBe('POST');
+    expect(captured[0]!.path).toBe('/tokenizer');
+    expect(captured[0]!.headers.authorization).toBe('Bearer zai-key-123');
+    expect(captured[0]!.body).toMatchObject({ model: 'glm-4.6', messages: [{ role: 'user', content: 'ping' }] });
+
+    captured = [];
+    const models = await provider.listModels();
+    expect(models.map((model) => model.id)).toEqual([
+      'glm-4.6',
+      'glm-4.7',
+      'glm-5',
+      'glm-5.1',
+      'glm-5.2',
+      'glm-5.3',
+      'glm-5.3-flash',
+      'glm-5.3-flashx',
+      'glm-5.3-flashx-legal',
+    ]);
+    expect(captured).toEqual([]);
   });
 
   test('an OpenRouter key rejected by /key fails as auth even though /models is public', async () => {
     const baseUrl = stub(() => Response.json({ error: { message: 'Invalid API key' } }, { status: 401 }));
     await expect(createProvider('openrouter', 'junk', { baseUrl }).verifyKey()).rejects.toMatchObject({ kind: 'auth', status: 401 });
+  });
+
+  test('an OpenAI restricted key without models:read verifies despite the 403, and listing says forbidden', async () => {
+    const baseUrl = stub(() => Response.json({ error: { message: 'Missing scopes: api.model.read' } }, { status: 403 }));
+    await expect(createProvider('openai', 'sk-restricted', { baseUrl }).verifyKey()).resolves.toBeNull();
+    await expect(createProvider('openai', 'sk-restricted', { baseUrl }).listModels()).rejects.toMatchObject({ kind: 'forbidden', status: 403 });
   });
 });
 
@@ -211,6 +263,11 @@ describe('provider error mapping', () => {
     const failure = createProvider('openai', 'bad', { baseUrl }).listModels();
     await expect(failure).rejects.toBeInstanceOf(AiProviderError);
     await expect(failure).rejects.toMatchObject({ kind: 'auth', status: 401, message: expect.stringContaining('Incorrect API key') });
+  });
+
+  test('403 is forbidden (valid key, missing permission) and 401 is auth', async () => {
+    const baseUrl = stub(() => Response.json({ error: { message: 'Missing scopes: api.model.read' } }, { status: 403 }));
+    await expect(createProvider('deepseek', 'key', { baseUrl }).verifyKey()).rejects.toMatchObject({ kind: 'forbidden', status: 403 });
   });
 
   test('429 carries Retry-After; 5xx and network failures are transient', async () => {

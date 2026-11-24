@@ -17,6 +17,20 @@ export type FetchLike = (input: string | URL | Request, init?: RequestInit) => P
 export const DEFAULT_CHAT_TIMEOUT_MS = 60_000;
 export const DEFAULT_MODELS_TIMEOUT_MS = 15_000;
 
+/**
+ * Conservative output speed used to size a chat deadline from its token cap.
+ * Anthropic's default cap is 16k (thinking counts toward it), which at 25
+ * tokens/s needs 640 s; a 60 s deadline would abort long generations while the
+ * provider keeps billing them.
+ */
+const CHAT_MIN_OUTPUT_TOKENS_PER_SECOND = 25;
+
+/** Deadline for one chat call: the 60 s floor, or enough for the requested cap. */
+export function chatTimeoutMs(maxTokens?: number): number {
+  if (!maxTokens || maxTokens <= 0) return DEFAULT_CHAT_TIMEOUT_MS;
+  return Math.max(DEFAULT_CHAT_TIMEOUT_MS, Math.ceil((maxTokens / CHAT_MIN_OUTPUT_TOKENS_PER_SECOND) * 1000));
+}
+
 export type JsonRequest = {
   provider: AiProviderId;
   url: string;
@@ -51,7 +65,10 @@ function retryAfterMs(res: Response): number | null {
 function errorFromResponse(provider: AiProviderId, res: Response, text: string): AiProviderError {
   const detail = upstreamMessage(text);
   const message = `${provider} API ${res.status}${detail ? `: ${detail}` : ''}`;
-  if (res.status === 401 || res.status === 403) return new AiProviderError('auth', message, res.status);
+  // 401 = the key is not accepted; 403 = it authenticated but may not do this
+  // (for example an OpenAI key without the Models Read permission).
+  if (res.status === 401) return new AiProviderError('auth', message, res.status);
+  if (res.status === 403) return new AiProviderError('forbidden', message, res.status);
   if (res.status === 429) return new AiProviderError('rate_limited', message, res.status, retryAfterMs(res));
   if (res.status === 408 || res.status >= 500) return new AiProviderError('transient', message, res.status);
   return new AiProviderError('permanent', message, res.status);
@@ -60,6 +77,7 @@ function errorFromResponse(provider: AiProviderId, res: Response, text: string):
 /** Perform one JSON request. Throws `AiProviderError` for every failure shape. */
 export async function requestJson(request: JsonRequest): Promise<unknown> {
   const fetchImpl = request.fetch ?? fetch;
+  const timeoutMs = request.timeoutMs ?? DEFAULT_MODELS_TIMEOUT_MS;
   const headers: Record<string, string> = {
     accept: 'application/json',
     ...(request.body !== undefined ? { 'content-type': 'application/json' } : {}),
@@ -71,9 +89,15 @@ export async function requestJson(request: JsonRequest): Promise<unknown> {
       method: request.method ?? 'GET',
       headers,
       body: request.body === undefined ? undefined : JSON.stringify(request.body),
-      signal: AbortSignal.timeout(request.timeoutMs ?? DEFAULT_MODELS_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
+    // A completion that hit its deadline may already have been generated (and
+    // billed) upstream. Retrying a transient error would pay for the same work
+    // again, so a timeout is permanent: the caller may re-run it deliberately.
+    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      throw new AiProviderError('permanent', `${request.provider} request timed out after ${timeoutMs} ms`);
+    }
     const detail = err instanceof Error ? err.message : String(err);
     throw new AiProviderError('transient', `${request.provider} request failed: ${detail}`);
   }

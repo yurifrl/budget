@@ -5,11 +5,13 @@
  * without knowing which vendor answered.
  */
 export type AiErrorKind =
-  /** The provider refused the key (401/403, or its own auth error). */
+  /** The provider refused the key (401). */
   | 'auth'
+  /** The key authenticated but the endpoint is not permitted (403): a permission problem, not a bad key. */
+  | 'forbidden'
   /** Rate limit / quota (429). `retryAfterMs` when the provider said. */
   | 'rate_limited'
-  /** Network error, timeout, 408 or 5xx: worth retrying later. */
+  /** Network error, timeout, 408 or 5xx: worth retrying later (except a timeout, which may already be billed). */
   | 'transient'
   /** A 4xx that is not auth or rate limiting: the request itself is wrong. */
   | 'permanent'

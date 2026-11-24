@@ -11,18 +11,34 @@
 import type { AiProviderId } from '@shared/contracts/ai';
 
 import { AiProviderError } from '../errors';
-import { DEFAULT_CHAT_TIMEOUT_MS, DEFAULT_MODELS_TIMEOUT_MS, requestJson, type FetchLike } from '../http';
+import { chatTimeoutMs, DEFAULT_MODELS_TIMEOUT_MS, requestJson, type FetchLike } from '../http';
 import type { AiChatRequest, AiChatResult, AiJsonSchema, AiModel, AiProvider, AiToolCall } from '../types';
 
 export type StructuredOutput = 'json_schema' | 'json_object';
+
+/** The authenticated, side-effect-free call that proves a key is accepted. */
+export type KeyCheck = {
+  path: string;
+  method?: 'GET' | 'POST';
+  body?: unknown;
+};
 
 export type OpenAiCompatibleConfig = {
   id: AiProviderId;
   /** Name used in error messages ("OpenRouter API 429: ..."). */
   label: string;
   baseUrl: string;
-  /** GET path of an authenticated, side-effect-free key check: /key on OpenRouter, /models elsewhere. */
-  keyCheckPath: string;
+  /** /key on OpenRouter, /models elsewhere, Z.ai's documented tokenizer. */
+  keyCheck: KeyCheck;
+  /**
+   * OpenAI only: /models needs the separate `api.model.read` scope, which a
+   * chat-only restricted key lacks. A 403 there still proves the key
+   * authenticated, so the key check accepts it; listing models later reports
+   * the permission error instead of calling the key bad.
+   */
+  keyCheckAcceptsForbidden?: boolean;
+  /** Providers with no documented model-list endpoint (Z.ai): their documented chat models. */
+  staticModels?: readonly AiModel[];
   /** json_schema = response_format json_schema; json_object = JSON mode + schema in a system message. */
   structured: StructuredOutput;
   /** OpenAI's newer models want max_completion_tokens; the other three accept max_tokens. */
@@ -37,12 +53,19 @@ const asRecord = (value: unknown): Json | null => (typeof value === 'object' && 
 
 /**
  * OpenAI's /models has no capability field and includes embedding, audio,
- * image and moderation models. This adapter only speaks Chat Completions, so
- * keep the chat families and drop the known non-chat ones. Heuristic by
- * design: an unknown new chat family is dropped, never a non-chat one added.
+ * image and moderation models. This adapter only speaks Chat Completions
+ * (OpenAI docs, per-model "Endpoints" table), so keep the chat families and
+ * drop the known non-chat ones. Heuristic by design: an unknown new chat
+ * family is dropped, never a non-chat one added.
+ *
+ * Kept despite the tokens: fine-tuned `ft:...` models work with Chat
+ * Completions, and `*-search-preview` models are Chat Completions models.
+ * Dropped: `*-pro` (o1-pro, o3-pro, gpt-5-pro) and `*-codex`, which are
+ * Responses API only, and `gpt-3.5-turbo-instruct` (legacy Completions).
  */
-const OPENAI_NON_CHAT = /(^|[-/])(?:embedding|moderation|tts|whisper|transcribe|audio|realtime|image|sora|search|dall-e|codex|deep-research)(?:$|[-/])/;
-const OPENAI_CHAT_FAMILY = /^(?:gpt-|chatgpt-|o\d)/;
+const OPENAI_NON_CHAT =
+  /(^|[-/])(?:embedding|moderation|tts|whisper|transcribe|audio|realtime|image|sora|dall-e|codex|deep-research|instruct|pro)(?:$|[-/])/;
+const OPENAI_CHAT_FAMILY = /^(?:gpt-|chatgpt-|o\d|ft:)/;
 
 export const isOpenAiChatModel = (id: string): boolean => OPENAI_CHAT_FAMILY.test(id) && !OPENAI_NON_CHAT.test(id);
 
@@ -78,23 +101,36 @@ export class OpenAiCompatibleProvider implements AiProvider {
       method: 'POST',
       headers: this.auth,
       body,
-      timeoutMs: DEFAULT_CHAT_TIMEOUT_MS,
+      timeoutMs: chatTimeoutMs(request.maxTokens),
       fetch: this.fetchImpl,
     });
     return this.parseChat(json, request.model);
   }
 
-  async verifyKey(): Promise<void> {
-    await requestJson({
-      provider: this.id,
-      url: `${this.config.baseUrl.replace(/\/+$/, '')}${this.config.keyCheckPath}`,
-      headers: this.auth,
-      timeoutMs: DEFAULT_MODELS_TIMEOUT_MS,
-      fetch: this.fetchImpl,
-    });
+  async verifyKey(): Promise<AiModel[] | null> {
+    const base = this.config.baseUrl.replace(/\/+$/, '');
+    try {
+      const json = await requestJson({
+        provider: this.id,
+        url: `${base}${this.config.keyCheck.path}`,
+        method: this.config.keyCheck.method ?? 'GET',
+        headers: this.auth,
+        body: this.config.keyCheck.body,
+        timeoutMs: DEFAULT_MODELS_TIMEOUT_MS,
+        fetch: this.fetchImpl,
+      });
+      // Only /models answers a list; /key (OpenRouter) and /tokenizer (Z.ai) do not.
+      return this.config.keyCheck.path === '/models' ? this.parseModels(json) : null;
+    } catch (err) {
+      if (this.config.keyCheckAcceptsForbidden && err instanceof AiProviderError && err.kind === 'forbidden') return null;
+      throw err;
+    }
   }
 
   async listModels(): Promise<AiModel[]> {
+    // No documented model-list endpoint (Z.ai): return the documented chat
+    // models, so save/test can still validate a picked model.
+    if (this.config.staticModels) return [...this.config.staticModels].sort((a, b) => a.id.localeCompare(b.id));
     const json = await requestJson({
       provider: this.id,
       url: `${this.config.baseUrl.replace(/\/+$/, '')}/models`,
@@ -102,6 +138,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
       timeoutMs: DEFAULT_MODELS_TIMEOUT_MS,
       fetch: this.fetchImpl,
     });
+    return this.parseModels(json);
+  }
+
+  private parseModels(json: unknown): AiModel[] {
     const data = Array.isArray(asRecord(json)?.data) ? (asRecord(json)!.data as unknown[]) : null;
     if (!data) throw new AiProviderError('bad_response', `${this.config.label} answered the model list without a data array`);
     const models: AiModel[] = [];

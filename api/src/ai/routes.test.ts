@@ -4,7 +4,7 @@
  * status, test, model listing, delete and the shared-key fallback. No
  * provider is ever called.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { Hono } from 'hono';
 
 import { contracts as aiContracts, type AiProviderId } from '@shared/contracts/ai';
@@ -16,7 +16,8 @@ import { dbReady } from '../core/test-gate';
 import { makeOpCaller } from '../core/test-op';
 import { httpOnError } from '../core/validate';
 import type { IdentityUser } from '../user';
-import ai from './index';
+import ai, { providerFor } from './index';
+import * as aiModule from './index';
 import { operations } from './routes';
 import { AiProviderError } from './errors';
 import { configureAiEnv } from './env';
@@ -53,6 +54,8 @@ type Call = { kind: 'verify' | 'list'; provider: AiProviderId; apiKey: string };
 let calls: Call[] = [];
 let verifyFailure: unknown = null;
 let listFailure: unknown = null;
+/** When set, the fake key check returns this list (the OpenAI/DeepSeek shape). */
+let verifyModels: AiModel[] | null = null;
 
 const fakeEntry = (id: AiProviderId): ProviderEntry => ({
   baseUrl: `https://${id}.test`,
@@ -64,6 +67,7 @@ const fakeEntry = (id: AiProviderId): ProviderEntry => ({
     verifyKey: async () => {
       calls.push({ kind: 'verify', provider: id, apiKey });
       if (verifyFailure) throw verifyFailure;
+      return verifyModels;
     },
     listModels: async () => {
       calls.push({ kind: 'list', provider: id, apiKey });
@@ -97,6 +101,7 @@ beforeEach(async () => {
   calls = [];
   verifyFailure = null;
   listFailure = null;
+  verifyModels = null;
   acting = user;
   await store.deleteCredential(pool, user.id);
   await pool.query(`delete from public.feature_overrides where feature_key = 'shared-ai-key' and user_id = $1`, [user.id]);
@@ -350,5 +355,85 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     expect(status.json.shared.available).toBe(true);
     expect(status.json.effective).toBeNull();
     expect(await resolveAiKey(pool, user.id)).toEqual({ ok: false, problem: 'unreadable' });
+  });
+
+  test('a valid-provider row whose secret no longer opens is not effective own', async () => {
+    const sealedBox = { current: 1, keys: new Map([[1, crypto.getRandomValues(new Uint8Array(32))]]) };
+    configureSecretBox(sealedBox);
+    try {
+      expect((await op('ai_credentials_save', { api_key: KEY })).status).toBe(200);
+      expect((await op('ai_credentials_get', {})).json.effective).toBe('own');
+
+      // A different master key: the stored ciphertext no longer opens here.
+      configureSecretBox({ current: 1, keys: new Map([[1, crypto.getRandomValues(new Uint8Array(32))]]) });
+      const status = await op('ai_credentials_get', {});
+      expect(status.json.own.provider).toBe('openrouter');
+      expect(status.json.effective).toBeNull();
+      expect(await resolveAiKey(pool, user.id)).toEqual({ ok: false, problem: 'unreadable' });
+    } finally {
+      configureSecretBox({ current: 1, keys: new Map([[1, crypto.getRandomValues(new Uint8Array(32))]]) });
+    }
+  });
+
+  test('providerFor builds the adapter for the resolved key; the raw pair is not exported', async () => {
+    expect('createProvider' in aiModule).toBe(false);
+    await op('ai_credentials_save', { api_key: KEY });
+    const resolved = await resolveAiKey(pool, user.id);
+    if (!resolved.ok) throw new Error('expected a resolved key');
+    calls = [];
+    const provider = providerFor(resolved.key);
+    expect(provider.id).toBe('openrouter');
+    await provider.listModels();
+    expect(calls).toEqual([{ kind: 'list', provider: 'openrouter', apiKey: KEY }]);
+  });
+
+  test('save and test reuse the models the key check fetched', async () => {
+    verifyModels = MODELS;
+    const saved = await op('ai_credentials_save', { api_key: KEY, model: 'model-a' });
+    expect(saved.status).toBe(200);
+    expect(calls).toEqual([{ kind: 'verify', provider: 'openrouter', apiKey: KEY }]);
+
+    calls = [];
+    const tested = await op('ai_credentials_test', {});
+    expect(tested.json).toEqual({ provider: 'openrouter', models: 2 });
+    expect(calls).toEqual([{ kind: 'verify', provider: 'openrouter', apiKey: KEY }]);
+  });
+
+  test('a key the provider forbids is 403 ai_key_forbidden, not a bad key', async () => {
+    verifyFailure = new AiProviderError('forbidden', 'Missing scopes: api.model.read', 403);
+    const save = await op('ai_credentials_save', { api_key: KEY });
+    expect(save.status).toBe(403);
+    expect(save.json.code).toBe('ai_key_forbidden');
+    expect(JSON.stringify(save.json)).not.toContain('api.model.read');
+
+    verifyFailure = null;
+    await op('ai_credentials_save', { api_key: KEY });
+    calls = [];
+    listFailure = new AiProviderError('forbidden', 'Missing scopes: api.model.read', 403);
+    const listed = await op('ai_models_list', {});
+    expect(listed.status).toBe(403);
+    expect(listed.json.code).toBe('ai_key_forbidden');
+  });
+
+  test('provider log text is redacted for fragments, masked keys and Z.ai shapes', async () => {
+    const zaiKey = '0123456789abcdef0123456789abcdef.SECRETsecret1234';
+    const fragment = KEY.slice(4, 16);
+    verifyFailure = new AiProviderError(
+      'transient',
+      `refused ${KEY} fragment ${fragment} masked sk-proj-****abcd other ${zaiKey}`,
+    );
+    const spy = spyOn(console, 'error').mockImplementation(() => {});
+    let logged = '';
+    try {
+      await op('ai_credentials_save', { api_key: KEY });
+      logged = spy.mock.calls.map((call) => call.join(' ')).join(' ');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(logged).toContain('[redacted]');
+    expect(logged).not.toContain(KEY);
+    expect(logged).not.toContain(fragment);
+    expect(logged).not.toContain('****abcd');
+    expect(logged).not.toContain(zaiKey);
   });
 });

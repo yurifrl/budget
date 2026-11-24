@@ -5,7 +5,7 @@
  * user turn, and structured output through `output_config.format`.
  */
 import { AiProviderError } from '../errors';
-import { DEFAULT_CHAT_TIMEOUT_MS, DEFAULT_MODELS_TIMEOUT_MS, requestJson, type FetchLike } from '../http';
+import { chatTimeoutMs, DEFAULT_MODELS_TIMEOUT_MS, requestJson, type FetchLike } from '../http';
 import type { AiChatRequest, AiChatResult, AiModel, AiProvider, AiToolCall } from '../types';
 
 /** API version that carries structured outputs (`output_config.format`). */
@@ -40,12 +40,13 @@ export class AnthropicProvider implements AiProvider {
   }
 
   async chat(request: AiChatRequest): Promise<AiChatResult> {
+    const maxTokens = request.maxTokens ?? DEFAULT_MAX_TOKENS;
     const system = request.messages
       .flatMap((message) => (message.role === 'system' ? [message.content] : []))
       .join('\n\n');
     const body: Json = {
       model: request.model,
-      max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
+      max_tokens: maxTokens,
       messages: this.wireMessages(request.messages),
     };
     if (system) body.system = system;
@@ -60,14 +61,14 @@ export class AnthropicProvider implements AiProvider {
       method: 'POST',
       headers: this.headers,
       body,
-      timeoutMs: DEFAULT_CHAT_TIMEOUT_MS,
+      timeoutMs: chatTimeoutMs(maxTokens),
       fetch: this.fetchImpl,
     });
     return this.parseChat(json, request.model);
   }
 
   /** A one-item Models call is authenticated and costs no inference tokens. */
-  async verifyKey(): Promise<void> {
+  async verifyKey(): Promise<AiModel[] | null> {
     const url = new URL(`${this.baseUrl.replace(/\/+$/, '')}/models`);
     url.searchParams.set('limit', '1');
     await requestJson({
@@ -77,6 +78,7 @@ export class AnthropicProvider implements AiProvider {
       timeoutMs: DEFAULT_MODELS_TIMEOUT_MS,
       fetch: this.fetchImpl,
     });
+    return null;
   }
 
   async listModels(): Promise<AiModel[]> {

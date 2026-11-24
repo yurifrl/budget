@@ -98,8 +98,13 @@ export interface AiProvider {
    * (no chat tokens spent). Throws `AiProviderError('auth')` when the provider
    * refuses it. A model list is NOT a check on every provider: OpenRouter's is
    * public. Adapters know their own authenticated endpoint.
+   *
+   * Returns the models the check already fetched when the check IS the model
+   * list (OpenAI, DeepSeek), so callers that also need the list do not ask
+   * twice; null when the check was something else (OpenRouter `/key`, the
+   * Anthropic Models call, Z.ai's tokenizer).
    */
-  verifyKey(): Promise<void>;
+  verifyKey(): Promise<AiModel[] | null>;
   /** Every model this key can chat with, sorted by id. */
   listModels(): Promise<AiModel[]>;
 }

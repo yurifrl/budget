@@ -150,7 +150,7 @@ describe('Anthropic chat request', () => {
 describe('Anthropic key check', () => {
   test('verifyKey calls the authenticated Models API with limit=1', async () => {
     const baseUrl = stub(() => Response.json({ data: [], has_more: false, last_id: null }));
-    await createProvider('anthropic', 'sk-ant-test', { baseUrl }).verifyKey();
+    await expect(createProvider('anthropic', 'sk-ant-test', { baseUrl }).verifyKey()).resolves.toBeNull();
     expect(captured[0]!.method).toBe('GET');
     expect(captured[0]!.path).toBe('/models?limit=1');
     expect(captured[0]!.headers['x-api-key']).toBe('sk-ant-test');

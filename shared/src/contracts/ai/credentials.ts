@@ -6,6 +6,7 @@
  *
  * Error codes (body `{ error, code }`):
  *   ai_key_rejected             400  the provider refused the key
+ *   ai_key_forbidden            403  the key is valid but not permitted (e.g. OpenAI restricted key without Models Read)
  *   ai_provider_unknown         400  no provider given and none could be detected
  *   ai_model_unknown            400  the chosen model is not in the provider's list
  *   ai_provider_mismatch        400  a saved key was asked to list models for another provider
@@ -37,6 +38,7 @@ const API_ONLY = { api: true, cli: false, mcp: false } as const;
 
 export const AI_KEY_REQUIRED = 'own_ai_key_required';
 export const AI_KEY_REJECTED = 'ai_key_rejected';
+export const AI_KEY_FORBIDDEN = 'ai_key_forbidden';
 export const AI_PROVIDER_UNKNOWN = 'ai_provider_unknown';
 export const AI_PROVIDER_MISMATCH = 'ai_provider_mismatch';
 export const AI_MODEL_UNKNOWN = 'ai_model_unknown';

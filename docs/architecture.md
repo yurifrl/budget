@@ -161,8 +161,18 @@ start at `0100`). One image runs both the API and the worker
   adapters — OpenRouter, Anthropic, OpenAI, Z.ai, DeepSeek — with the provider
   guessed from the key shape and overridable (Z.ai keys have no documented
   shape, so that provider is chosen by hand). Saving checks the key with an
-  authenticated call (OpenRouter's `/key`; the others' model list) and never
-  sends a stored key to another provider's host. Operations:
+  authenticated call (OpenRouter's `/key`; OpenAI and DeepSeek's model list;
+  Anthropic's one-model Models call; Z.ai's documented tokenizer, because its
+  API documents no model list) and never sends a stored key to another
+  provider's host: `providerFor(resolvedKey)` is the only way to build an
+  adapter for a stored key. OpenAI's `/models` needs the separate
+  `api.model.read` scope, so a 403 there still proves the key authenticated
+  and is reported later as 403 `ai_key_forbidden` when listing, not as a bad
+  key. Z.ai's model list is the set its OpenAPI spec documents. A chat deadline
+  is the 60 s floor or enough for the requested token cap at 25 output
+  tokens/s (Anthropic's 16k default → 640 s), and a timed-out chat is
+  `permanent`, never retried, because the aborted generation may already be
+  billed. Operations:
   `GET|PUT|DELETE /ai/credentials`, `GET /ai/credentials/test`,
   `POST /ai/provider-detect`, `POST /ai/models`; the key is never returned.
 - **Repeat-rule tick.** Still an in-process interval in the API

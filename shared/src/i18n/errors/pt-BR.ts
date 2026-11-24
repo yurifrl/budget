@@ -64,6 +64,7 @@ const m: Translation<typeof en> = {
   // AI keys (category suggestions).
   own_ai_key_required: 'Adicione sua própria chave de IA para receber sugestões de categoria.',
   ai_key_rejected: 'O provedor de IA não aceitou esta chave. Confira e tente novamente.',
+  ai_key_forbidden: 'O provedor de IA aceitou esta chave, mas ela não tem permissão para isso. Confira as permissões da chave; chaves da OpenAI precisam de Models Read para listar modelos.',
   ai_provider_unknown: 'Não foi possível saber a qual provedor de IA esta chave pertence. Escolha o provedor.',
   ai_provider_mismatch: 'Sua chave de IA salva pertence a outro provedor. Salve uma chave para este provedor ou liste os modelos da chave salva.',
   ai_model_unknown: 'Este modelo não está disponível para esta chave. Escolha um da lista.',
