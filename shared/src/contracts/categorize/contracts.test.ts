@@ -117,14 +117,18 @@ describe('Categorize contracts', () => {
     expect(categorizeRunStatus.output!.safeParse({ ...status, last_finished: { ...finished, total: -1 } }).success).toBe(false);
   });
 
-  test('accept/undo: batch pairs, all-or-nothing shaped answer, same items back', () => {
+  test('accept takes pairs; undo takes only transaction ids and reports skips with a reason', () => {
     const items = [{ transaction_id: t, category_id: c }];
     expect(categorizeAccept.input.safeParse({ budget_id: b, items }).success).toBe(true);
     expect(categorizeAccept.input.safeParse({ budget_id: b, items: [] }).success).toBe(false);
     expect(categorizeAccept.input.safeParse({ budget_id: b, items: [{ transaction_id: 'nope', category_id: c }] }).success).toBe(false);
     expect(categorizeAccept.output!.safeParse({ accepted: 1, items }).success).toBe(true);
-    expect(categorizeUndo.input.safeParse({ budget_id: b, items }).success).toBe(true);
+    expect(categorizeUndo.input.safeParse({ budget_id: b, transaction_ids: [t] }).success).toBe(true);
+    expect(categorizeUndo.input.safeParse({ budget_id: b, items }).success).toBe(false);
+    expect(categorizeUndo.input.safeParse({ budget_id: b, transaction_ids: [] }).success).toBe(false);
     expect(categorizeUndo.output!.safeParse({ restored: 1, transaction_ids: [t], skipped: [] }).success).toBe(true);
+    expect(categorizeUndo.output!.safeParse({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'no_decision' }] }).success).toBe(true);
+    expect(categorizeUndo.output!.safeParse({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'stale' }] }).success).toBe(false);
     expect(categorizeUndo.output!.safeParse({ restored: 1, transaction_ids: [t] }).success).toBe(false);
   });
 

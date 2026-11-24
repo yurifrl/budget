@@ -16,11 +16,12 @@ import {
  * so a failure leaves nothing applied.
  */
 const items = z.array(categorizeDecisionItemSchema).min(1).max(1000);
+const transactionIds = z.array(uuidSchema).min(1).max(1000);
 
 export const categorizeAccept = defineOperation({
   name: 'categorize_accept',
   description:
-    'Categorize a batch of transactions (one row, a bundle or accept-all): [{transaction_id, category_id}]. Goes through the same transaction update path as budget_transactions_update (ownership, budget revision, category in this budget), plus: the category must be assignable (not hidden/internal/credit-card-payment) and the transaction must still need a category. All items are applied atomically; one bad item applies none. Marks the matching suggestion accepted, or records the person\'s manual choice; other suggestions of the transaction are dismissed. Idempotent: repeating an already-applied pair succeeds. The answer carries exactly what categorize_undo needs.',
+    'Categorize a batch of transactions (one row, a bundle or accept-all): [{transaction_id, category_id}]. Goes through the same transaction update path as budget_transactions_update (ownership, budget revision, category in this budget), plus: the category must be assignable (not hidden/internal/credit-card-payment) and the transaction must still need a category. All items are applied atomically; one bad item applies none. Records the decision so categorize_undo can reverse it, marks the matching suggestion accepted, or records the person\'s manual choice; other suggestions of the transaction are dismissed. A repeat of a pair this endpoint already applied is a no-op; a transaction that already carries a category without such a record is refused as already categorized.',
   input: z.object({ budget_id: budgetId, items }),
   output: categorizeAcceptResultSchema,
   method: 'POST',
@@ -32,8 +33,8 @@ export const categorizeAccept = defineOperation({
 export const categorizeUndo = defineOperation({
   name: 'categorize_undo',
   description:
-    'Undo a previous categorize_accept in one round trip: pass the items it returned. Clears the category through the same transaction update path and restores the transaction\'s suggestions to pending (a recorded manual choice is removed). Idempotent when the category is already clear. An item whose category changed since the accept is left untouched and listed in `skipped`; every other item is applied atomically.',
-  input: z.object({ budget_id: budgetId, items }),
+    'Undo a previous categorize_accept in one round trip: pass the transaction ids it applied. Reverses only a recorded accept, and only while the transaction still carries the category accept set and is not an upcoming repeat occurrence; it clears the category through the same transaction update path and restores the transaction\'s suggestions exactly (a recorded manual choice is removed). Everything else is left untouched and listed in `skipped` with a reason: no_decision (never accepted or already undone, including a row cleared by hand), category_changed, upcoming, not_found. A row accepted and later cleared by hand is left as is.',
+  input: z.object({ budget_id: budgetId, transaction_ids: transactionIds }),
   output: categorizeUndoResultSchema,
   method: 'POST',
   path: '/categorize/undo',

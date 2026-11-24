@@ -186,11 +186,23 @@ export const categorizeAcceptResultSchema = z.object({
   items: z.array(categorizeDecisionItemSchema),
 });
 
+/**
+ * Why undo left a transaction alone: no accept record (never accepted, or
+ * already undone), its category changed since the accept, it is an upcoming
+ * repeat occurrence, or it is gone.
+ */
+export const categorizeUndoSkipReasonSchema = z.enum(['no_decision', 'category_changed', 'upcoming', 'not_found']);
+
+export const categorizeUndoSkipSchema = z.object({
+  transaction_id: uuidSchema,
+  reason: categorizeUndoSkipReasonSchema,
+});
+
 export const categorizeUndoResultSchema = z.object({
   restored: z.number().int().min(0),
   transaction_ids: z.array(uuidSchema),
-  /** Items left untouched because their category changed since the accept. */
-  skipped: z.array(uuidSchema),
+  /** Everything undo did not reverse, with the reason. */
+  skipped: z.array(categorizeUndoSkipSchema),
 });
 
 export const categorizeSkipResultSchema = z.object({

@@ -201,8 +201,10 @@ start at `0100`). One image runs both the API and the worker
   whole-queue bundles/counts), `POST /run` + `GET /run` (any member starts the
   owner-key run; status gives done/total from `categorize_run_progress` (0114),
   the last run, and why AI is unavailable), `POST /accept` (atomic batch through
-  the transaction update path), `POST /undo` (one round trip; rows whose
-  category changed are skipped), `POST /skip` (dismisses, freezing the row),
+  the transaction update path), `POST /undo` (one round trip; only a recorded
+  accept is reversed, and only while its category is still the one accept set;
+  everything else is skipped with a reason), `POST /skip` (dismisses, freezing
+  the row),
   and `GET|PUT /settings` (confidence threshold, read at queue time; 0113).
   A `categorize_run` job (one per budget: subject key = budget id, so triggers
   coalesce; `force` re-asks rows that already have suggestions) has a prepare

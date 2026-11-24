@@ -142,9 +142,15 @@ export const operations = [
     };
   }),
 
-  implement(categorizeAccept, (_c, { budget_id: budgetId, items }) => acceptCategories(pool, budgetId, items)),
+  implement(categorizeAccept, (c, { budget_id: budgetId, items }) => {
+    const user = c.get('user');
+    if (!user) throw new HttpError(401, 'unauthorized');
+    return acceptCategories(pool, budgetId, items, user.id);
+  }),
 
-  implement(categorizeUndo, (_c, { budget_id: budgetId, items }) => undoAccept(pool, budgetId, items)),
+  implement(categorizeUndo, (_c, { budget_id: budgetId, transaction_ids }) =>
+    undoAccept(pool, budgetId, transaction_ids),
+  ),
 
   implement(categorizeSkip, (_c, { budget_id: budgetId, transaction_id }) =>
     skipTransaction(pool, budgetId, transaction_id),

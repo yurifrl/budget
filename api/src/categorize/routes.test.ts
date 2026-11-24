@@ -48,8 +48,8 @@ const queue = (who: IdentityUser, extra = '') =>
 const status = (who: IdentityUser, budgetId = a.budgetId) => call(who, 'GET', `/categorize/run?budget_id=${budgetId}`);
 const accept = (who: IdentityUser, items: unknown[], budgetId = a.budgetId) =>
   call(who, 'POST', '/categorize/accept', { budget_id: budgetId, items });
-const undo = (who: IdentityUser, items: unknown[], budgetId = a.budgetId) =>
-  call(who, 'POST', '/categorize/undo', { budget_id: budgetId, items });
+const undo = (who: IdentityUser, transactionIds: string[], budgetId = a.budgetId) =>
+  call(who, 'POST', '/categorize/undo', { budget_id: budgetId, transaction_ids: transactionIds });
 const skip = (who: IdentityUser, transactionId: string, budgetId = a.budgetId) =>
   call(who, 'POST', '/categorize/skip', { budget_id: budgetId, transaction_id: transactionId });
 
@@ -227,10 +227,11 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     const revAfter = (await pool.query('select revision from public.budgets where id = $1', [a.budgetId])).rows[0].revision;
     expect(revAfter).toBeGreaterThan(revBefore);
 
-    // Repeat: same pairs succeed, record a manual choice for t2, and do not bump the revision again.
+    // Repeat: same pairs are a no-op (the decision record exists) and do not
+    // bump the revision; t2's manual choice from the first accept stays.
     const repeat = await accept(memberUser(), [{ transaction_id: t1, category_id: a.food }, { transaction_id: t2, category_id: a.dining }]);
     expect(repeat.status).toBe(200);
-    expect((await (await accept(memberUser(), [{ transaction_id: t2, category_id: a.dining }])).json()).accepted).toBe(1);
+    expect((await (await accept(memberUser(), [{ transaction_id: t2, category_id: a.dining }])).json()).accepted).toBe(0);
     expect((await pool.query('select revision from public.budgets where id = $1', [a.budgetId])).rows[0].revision).toBe(revAfter);
     const manual = (await pool.query('select source, status from public.category_suggestions where transaction_id = $1', [t2])).rows;
     expect(manual).toEqual([{ source: 'manual', status: 'accepted' }]);
@@ -299,21 +300,23 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     await suggest(t, a.dining, { rank: 2 });
     const accepted = await (await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }])).json();
 
-    const back = await undo(ownerUser(), accepted.items);
+    const back = await undo(ownerUser(), [t]);
     expect(back.status).toBe(200);
     expect(await back.json()).toEqual({ restored: 1, transaction_ids: [t], skipped: [] });
     expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBeNull();
     expect((await pool.query('select rank, status from public.category_suggestions where transaction_id = $1 order by rank', [t])).rows)
       .toEqual([{ rank: 1, status: 'pending' }, { rank: 2, status: 'pending' }]);
-    expect((await undo(ownerUser(), accepted.items)).status).toBe(200); // idempotent
+    // The decision was consumed: a second undo has nothing to reverse.
+    expect(await (await undo(ownerUser(), [t])).json())
+      .toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'no_decision' }] });
 
     // Accept again, then change the category behind the page's back: undo
     // leaves it alone and reports it skipped.
     await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
     await pool.query('update public.transactions set category_id = $2 where id = $1', [t, a.dining]);
-    const stale = await undo(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
+    const stale = await undo(ownerUser(), [t]);
     expect(stale.status).toBe(200);
-    expect(await stale.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [t] });
+    expect(await stale.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'category_changed' }] });
     expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBe(a.dining);
     expect((await pool.query('select status from public.category_suggestions where transaction_id = $1 order by rank', [t])).rows.map((r) => r.status))
       .toEqual(['accepted', 'dismissed']);
@@ -327,12 +330,9 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
       { transaction_id: eligible, category_id: a.dining },
     ]);
     await pool.query('update public.transactions set category_id = $2 where id = $1', [changed, a.dining]);
-    const res = await undo(ownerUser(), [
-      { transaction_id: changed, category_id: a.food },
-      { transaction_id: eligible, category_id: a.dining },
-    ]);
+    const res = await undo(ownerUser(), [changed, eligible]);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ restored: 1, transaction_ids: [eligible], skipped: [changed] });
+    expect(await res.json()).toEqual({ restored: 1, transaction_ids: [eligible], skipped: [{ transaction_id: changed, reason: 'category_changed' }] });
     const after = (await pool.query('select id, category_id from public.transactions where id = any($1)', [[changed, eligible]])).rows;
     expect(Object.fromEntries(after.map((r) => [r.id, r.category_id]))).toEqual({ [changed]: a.dining, [eligible]: null });
   });
@@ -345,6 +345,78 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('categorize_already_categorized');
     expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBeNull();
+  });
+
+
+  test('repeat accept keeps the model suggestion and undo restores it to pending (no manual overwrite)', async () => {
+    const t = await txn({ payeeId: await newPayee('Repeat model') });
+    await suggest(t, a.food, { rank: 1, source: 'ai' });
+    expect((await (await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }])).json()).accepted).toBe(1);
+    const repeat = await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
+    expect(repeat.status).toBe(200);
+    expect((await repeat.json()).accepted).toBe(0);
+    expect((await pool.query('select rank, status, source from public.category_suggestions where transaction_id = $1', [t])).rows)
+      .toEqual([{ rank: 1, status: 'accepted', source: 'ai' }]);
+    const back = await undo(ownerUser(), [t]);
+    expect(await back.json()).toEqual({ restored: 1, transaction_ids: [t], skipped: [] });
+    expect((await pool.query('select rank, status, source from public.category_suggestions where transaction_id = $1', [t])).rows)
+      .toEqual([{ rank: 1, status: 'pending', source: 'ai' }]);
+  });
+
+  test('P1: undo does not clear a category a person set by hand', async () => {
+    const t = await txn({ categoryId: a.food, payeeId: await newPayee('Hand set') });
+    const res = await undo(ownerUser(), [t]);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'no_decision' }] });
+    expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBe(a.food);
+    expect((await pool.query('select count(*)::int as n from public.categorize_decisions where transaction_id = $1', [t])).rows[0].n).toBe(0);
+  });
+
+  test('P2: undo leaves an uncategorized inflow, and its account balance, alone', async () => {
+    const t = await txn({ amount: 50_000, payeeId: await newPayee('Inflow') });
+    const before = (await pool.query('select cleared_balance, uncleared_balance from public.accounts where id = $1', [a.accountId])).rows[0];
+    const res = await undo(ownerUser(), [t]);
+    expect(await res.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'no_decision' }] });
+    expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBeNull();
+    expect((await pool.query('select cleared_balance, uncleared_balance from public.accounts where id = $1', [a.accountId])).rows[0]).toEqual(before);
+  });
+
+  test('P3: undo does not detach an upcoming repeat occurrence, even with a record', async () => {
+    const t = await txn({ categoryId: a.food, upcoming: true, payeeId: await newPayee('Scheduled') });
+    const plain = await undo(ownerUser(), [t]);
+    expect(await plain.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'no_decision' }] });
+    expect((await pool.query('select category_id, upcoming from public.transactions where id = $1', [t])).rows[0])
+      .toEqual({ category_id: a.food, upcoming: true });
+
+    await pool.query(
+      `insert into public.categorize_decisions (transaction_id, budget_id, category_id, user_id) values ($1, $2, $3, $4)`,
+      [t, a.budgetId, a.food, a.userId],
+    );
+    const guarded = await undo(ownerUser(), [t]);
+    expect(await guarded.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'upcoming' }] });
+    expect((await pool.query('select category_id, upcoming from public.transactions where id = $1', [t])).rows[0])
+      .toEqual({ category_id: a.food, upcoming: true });
+  });
+
+  test('P4: undo does not reopen a skipped transaction', async () => {
+    const t = await txn({ payeeId: await newPayee('Skipped undo') });
+    await suggest(t, a.food);
+    await skip(ownerUser(), t);
+    const res = await undo(ownerUser(), [t]);
+    expect(await res.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'no_decision' }] });
+    expect((await pool.query('select status from public.category_suggestions where transaction_id = $1', [t])).rows)
+      .toEqual([{ status: 'dismissed' }]);
+    expect((await queueJson(ownerUser())).rows).toEqual([]);
+  });
+
+  test('P7: accept refuses a hand-categorized row instead of recording a manual choice', async () => {
+    const t = await txn({ amount: 50_000, categoryId: a.food, payeeId: await newPayee('Hand inflow') });
+    const res = await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('categorize_already_categorized');
+    expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBe(a.food);
+    expect((await pool.query('select count(*)::int as n from public.category_suggestions where transaction_id = $1', [t])).rows[0].n).toBe(0);
+    expect((await pool.query('select count(*)::int as n from public.categorize_decisions where transaction_id = $1', [t])).rows[0].n).toBe(0);
   });
 
   test('skip dismisses every suggestion, removes the row from the queue and is idempotent', async () => {
