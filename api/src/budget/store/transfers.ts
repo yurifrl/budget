@@ -25,6 +25,10 @@ export interface TransferCandidateSql {
   /** Bank-imported with the bank's payee text (the sync shadow's `blocked` flag is read separately). */
   untouched_ledger: boolean;
   mark: 'dismissed' | 'outside' | 'manual' | null;
+  /** The account's bank connection, when linked. */
+  connection_id: string | null;
+  /** The account's institution label, else its connection's (raw text; see domain/bank-key.ts). */
+  institution: string | null;
 }
 
 const CANDIDATE_SELECT = `
@@ -38,9 +42,11 @@ const CANDIDATE_SELECT = `
          t.transfer_account_id, t.transfer_transaction_id, t.payee_id, p.name AS payee_name,
          (t.import_id IS NOT NULL
           AND (t.payee_id IS NULL OR p.name IN (t.import_payee_name, t.import_payee_name_original))) AS untouched_ledger,
-         m.state AS mark
+         m.state AS mark,
+         a.connection_id, COALESCE(NULLIF(btrim(a.institution), ''), c.institution) AS institution
   FROM transactions t
   JOIN accounts a ON a.id = t.account_id
+  LEFT JOIN connections c ON c.id = a.connection_id
   LEFT JOIN payees p ON p.id = t.payee_id
   LEFT JOIN transfer_marks m ON m.transaction_id = t.id`;
 

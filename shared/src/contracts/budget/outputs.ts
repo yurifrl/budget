@@ -332,6 +332,15 @@ export const transferLinkResultSchema = z.object({
   /** Every transaction id now linked (both legs of each pair); pass them to unlink to undo. */
   linked: z.array(id),
   rules_created: z.number().int(),
+  /**
+   * Counterpart links made although they break an account rule (they are still
+   * linked): `card_outflow` a card is never the paying side; `card_payment_other_bank`
+   * a checking account paid another bank's card; `cash_same_bank` checking to
+   * checking within one bank.
+   */
+  warnings: z.array(
+    z.object({ transaction_id: id, counterpart_id: id, rule: z.enum(['card_outflow', 'card_payment_other_bank', 'cash_same_bank']) }),
+  ),
 });
 
 export const payeeTransferRuleSchema = z.object({

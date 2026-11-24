@@ -263,4 +263,40 @@ describe.skipIf(!dbReady)('transfers between own accounts (operations)', () => {
     await op('budget_payees_set_transfer_rule', { id: payee, budget_id: B, mode: 'never' });
     expect((await list()).get(a)!.transfer_suggestion).toBeNull();
   });
+
+  test('account rules by bank (budget-zkts): the chain links right; a rule-breaking manual link warns', async () => {
+    await reset();
+    const setBanks = (labels: [string, string | null][]) =>
+      Promise.all(labels.map(([id, label]) => pool.query('UPDATE accounts SET institution = $2 WHERE id = $1', [id, label])));
+    await setBanks([
+      [itau, 'itau'],
+      [nubank, 'Nu Pagamentos S.A.'],
+      [nucard, 'Nubank'],
+    ]);
+    try {
+      const itauOut = await imported(itau, -100_000, '2026-10-12', 'PIX TRANSF NUBANK');
+      const nuIn = await imported(nubank, 100_000, '2026-10-12', 'Transferência recebida');
+      const cardIn = await imported(nucard, 100_000, '2026-10-12', 'Pagamento recebido');
+      const nuOut = await imported(nubank, -100_000, '2026-10-12', 'Pagamento de fatura');
+      expect(await runLinker()).toBe(2);
+      expect((await get(itauOut)).transfer_transaction_id).toBe(nuIn);
+      expect((await get(nuOut)).transfer_transaction_id).toBe(cardIn);
+
+      // Itaú conta paying the Nubank card breaks rule 2: no suggestion, but a person may still link it.
+      const a = await imported(itau, -70_000, '2026-10-14', 'PIX TRANSF SERGIO');
+      const b = await imported(nucard, 70_000, '2026-10-14', 'Pagamento recebido');
+      expect(await runLinker()).toBe(0);
+      expect((await list()).get(a)!.transfer_suggestion).toBeNull();
+      const res = await op('budget_transfers_link', { budget_id: B, links: [{ transaction_id: a, counterpart_id: b }] });
+      expect(res.status, JSON.stringify(res.json)).toBe(200);
+      expect(res.json.warnings).toEqual([{ transaction_id: a, counterpart_id: b, rule: 'card_payment_other_bank' }]);
+      expect((await get(a)).transfer_transaction_id).toBe(b);
+    } finally {
+      await setBanks([
+        [itau, null],
+        [nubank, null],
+        [nucard, null],
+      ]);
+    }
+  });
 });

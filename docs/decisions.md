@@ -1885,3 +1885,19 @@ app. The two now ship independently.
 - A rule covers rows created after it was set (`transfer_rule_since`);
   "Apply to past rows" clears it. Undone links are marked `manual`: still
   suggested, never auto-linked again.
+
+## Transfer account rules by bank (budget-zkts)
+
+- The person's rules, enforced in the matcher's `fits` (`pairViolation`), so
+  breaking candidates are dropped before any tie-break: (1) a card only
+  receives (card→card is no longer paired; a lone card outflow is never a
+  one-side suggestion); (2) cash→card only within one bank; (3) cash→cash
+  only across banks.
+- Bank of an account: `bankKey(accounts.institution ?? connections.institution)`
+  (`domain/bank-key.ts`: accents/punctuation/suffixes stripped, known brands
+  mapped, so "Itaú Unibanco PF" = "itau", "Nu Pagamentos S.A." = "Nubank").
+  With no label on either side, the same `connection_id` means the same bank.
+  Otherwise unknown: rules 2 and 3 do not apply (old behaviour).
+- A fixed-account payee rule is the person's choice and skips rules 2–3.
+  `POST /transfers/link` with a counterpart never blocks; a pair that breaks
+  a rule is linked and listed in `warnings`.
