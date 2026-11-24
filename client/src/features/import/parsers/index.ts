@@ -22,11 +22,7 @@ export {
   type NubankLayout,
   type NubankRow,
 } from './sources/nubank';
-export {
-  detectContabilizeiCsv,
-  parseContabilizeiCsv,
-  type ContabilizeiRow,
-} from './sources/contabilizei';
+export { detectContabilizeiCsv, parseContabilizeiCsv } from './sources/contabilizei';
 export {
   STATEMENT_EXTENSIONS,
   parseStatementFile,

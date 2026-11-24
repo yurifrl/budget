@@ -1,25 +1,16 @@
 /**
  * Contabilizei statement source — the PJ bank account's CSV export
  * (`<account>_<DDMMMYYYY>_<DDMMMYYYY>.csv`), zero-config. The file has no
- * provider id column, so rows carry a deterministic YNAB-fallback id
- * (`contabilizei:<date>:<signedMilli>:<n>` — date + amount + ordinal)
- * and the bulk endpoint dedupes re-imports on it like any other source.
+ * provider id column, so rows go to the server id-less and the bulk
+ * endpoint's YNAB fallback key
+ * (`YNAB:<milliunits>:<date>:<payeeId>:<occurrence>`, the occurrence counted
+ * against the account's existing rows) dedupes re-imports.
  */
 
 import { parseCsv, sniffDelimiter } from '../util/csv';
 import { parseImportDate } from '../util/date';
 import { parseImportAmount } from '../util/money';
 import type { ImportParseResult, ImportRow } from '@/domain/importTypes';
-
-/** A parsed row that also carries the dedupe key used by the bulk endpoint. */
-export interface ContabilizeiRow extends ImportRow {
-  /** Deterministic dedupe id — derived, never read from the file. */
-  importId: string;
-}
-
-export interface ContabilizeiParseResult extends ImportParseResult {
-  rows: ContabilizeiRow[];
-}
 
 const has = (cells: string[], re: RegExp): boolean => cells.some((c) => re.test(c.trim()));
 const idxOf = (cells: string[], re: RegExp): number => cells.findIndex((c) => re.test(c.trim()));
@@ -38,6 +29,11 @@ const isHeader = (cells: string[]): boolean =>
   has(cells, /^saída$/i) &&
   has(cells, /^saldo do dia$/i);
 
+/** A side cell carrying no amount: empty string or Contabilizei's bare `-`. */
+function isEmptySide(s: string): boolean {
+  return s === '' || s === '-';
+}
+
 /** Detect the Contabilizei CSV from the header row; `has` trims the UTF-8 BOM off the first cell. */
 export function detectContabilizeiCsv(text: string): boolean {
   const firstLine = text.split(/\r?\n/).find((l) => l.trim() !== '') ?? '';
@@ -51,8 +47,8 @@ export function detectContabilizeiCsv(text: string): boolean {
  * (pt-BR "R$ 1.314,51"; a bare `-` or empty cell means 0). `Saldo do dia` is
  * a per-day figure and is not imported.
  */
-export function parseContabilizeiCsv(text: string): ContabilizeiParseResult {
-  const rows: ContabilizeiRow[] = [];
+export function parseContabilizeiCsv(text: string): ImportParseResult {
+  const rows: ImportRow[] = [];
   const errors: string[] = [];
   const firstLine = text.split(/\r?\n/).find((l) => l.trim() !== '') ?? '';
   const raw = parseCsv(text, sniffDelimiter(firstLine));
@@ -67,11 +63,6 @@ export function parseContabilizeiCsv(text: string): ContabilizeiParseResult {
   const inflowCol = idxOf(header, /^entrada$/i);
   const outflowCol = idxOf(header, /^saída$/i);
 
-  // Occurrence count per (date, signed amount): the ordinal keeps ids
-  // unique for same-day equal-amount rows whatever the payee, and the
-  // payee appears nowhere in the id, so renaming it never changes the id.
-  const occurrence = new Map<string, number>();
-
   for (let i = headerIdx + 1; i < raw.length; i++) {
     const cells = raw[i];
     const line = i + 1;
@@ -80,29 +71,29 @@ export function parseContabilizeiCsv(text: string): ContabilizeiParseResult {
       errors.push(`line ${line}: bad date`);
       continue;
     }
-    const inflow = parseSide(cell(cells, inflowCol));
-    const outflow = parseSide(cell(cells, outflowCol));
-    // Both sides empty/`-` (or unreadable), or both sides set: no single
-    // readable side.
-    if (inflow == null || outflow == null || (inflow === 0) === (outflow === 0)) {
+    const inflowCell = cell(cells, inflowCol).trim();
+    const outflowCell = cell(cells, outflowCol).trim();
+    const inflow = parseSide(inflowCell);
+    const outflow = parseSide(outflowCell);
+    // Unreadable text, or both sides empty/`-`: no amount at all.
+    if (inflow == null || outflow == null || (isEmptySide(inflowCell) && isEmptySide(outflowCell))) {
       errors.push(`line ${line}: no readable amount`);
       continue;
     }
-    const payee = cell(cells, payeeCol).trim();
-    const signedMilli = (inflow - outflow) * 10;
-    // Key WITHOUT the payee: two same-day rows with the same amount but
-    // different payees must still get :1 and :2, or their identical ids
-    // would make the server's dedupe silently drop the second row.
-    const key = `${date}:${signedMilli}`;
-    const n = (occurrence.get(key) ?? 0) + 1;
-    occurrence.set(key, n);
+    // Net the two sides: a negative cell reverses its side (a "-R$ 5,00"
+    // Saída is money coming back), and no negative cents are ever emitted.
+    const signed = inflow - outflow;
+    if (signed === 0) {
+      // Both sides set and equal, or an explicit 0: nothing to import.
+      errors.push(`line ${line}: amount is zero`);
+      continue;
+    }
     rows.push({
       date,
-      payee,
+      payee: cell(cells, payeeCol).trim(),
       memo: cell(cells, typeCol).trim(),
-      outflowCents: outflow,
-      inflowCents: inflow,
-      importId: `contabilizei:${date}:${signedMilli}:${n}`,
+      outflowCents: signed < 0 ? -signed : 0,
+      inflowCents: signed > 0 ? signed : 0,
     });
   }
   const consumed = headerIdx + 1 + rows.length + errors.length;
@@ -112,6 +103,6 @@ export function parseContabilizeiCsv(text: string): ContabilizeiParseResult {
 /** `Entrada`/`Saída` cell → cents; a bare `-` or empty cell means 0. */
 function parseSide(input: string): number | null {
   const s = input.trim();
-  if (s === '' || s === '-') return 0;
+  if (isEmptySide(s)) return 0;
   return parseImportAmount(s);
 }

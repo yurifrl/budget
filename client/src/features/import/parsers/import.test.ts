@@ -367,16 +367,15 @@ describe("parseStatementFile", () => {
     expect(result.errors).toEqual(["OFX/QFX format is no longer supported — export the statement as XLS or TXT from Itaú instead"]);
   });
 
-  it("routes the Contabilizei CSV to its own source (payee and dedupe ids)", () => {
+  it("routes the Contabilizei CSV to its own source (right payee, id-less rows)", () => {
     const result = parseStatementFile("31132424_01OUT2026_31OUT2026.csv", stmt(CONTABILIZEI_SAMPLE));
     expect(result.errors).toEqual([]);
     expect(result.rows).toHaveLength(11);
-    expect(result.rows[0]).toMatchObject({
-      payee: "YURI FREIRE LIMA",
-      importId: "contabilizei:2026-10-05:-10000000:1",
-    });
+    expect(result.rows[0]).toMatchObject({ payee: "YURI FREIRE LIMA" });
     // The transaction type must not win the payee column (generic parser).
     expect(result.rows.every((r) => r.payee !== "PIX")).toBe(true);
+    // No client import id: the server's YNAB fallback key dedupes re-imports.
+    expect(result.rows.every((r) => "importId" in r === false)).toBe(true);
   });
 });
 
@@ -490,7 +489,6 @@ describe("parseContabilizeiCsv", () => {
       memo: "PIX",
       outflowCents: 1_000_000,
       inflowCents: 0,
-      importId: "contabilizei:2026-10-05:-10000000:1",
     });
     expect(result.rows.find((r) => r.payee === "DARF Unificado")).toEqual({
       date: "2026-10-20",
@@ -498,55 +496,34 @@ describe("parseContabilizeiCsv", () => {
       memo: "Pagamento",
       outflowCents: 17831,
       inflowCents: 0,
-      importId: "contabilizei:2026-10-20:-178310:1",
     });
     const nsx = result.rows.filter((r) => r.payee === "NSX BRASIL S.A.");
     expect(nsx.map((r) => r.inflowCents)).toEqual([250000, 7096041]);
   });
 
-  it("derives unique, stable import ids", () => {
-    const result = parseContabilizeiCsv(CONTABILIZEI_SAMPLE);
-    const ids = result.rows.map((r) => r.importId);
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(parseContabilizeiCsv(CONTABILIZEI_SAMPLE).rows.map((r) => r.importId)).toEqual(ids);
-  });
-
-  it("numbers identical same-day rows :1 and :2", () => {
+  it("nets negative cells into the opposite side (never negative cents)", () => {
     const result = parseContabilizeiCsv(
       "Data,Categoria,Lan\u00e7amento,Descri\u00e7\u00e3o,Entrada,Sa\u00edda,Saldo do dia\r\n" +
-        '15/10/2026,Pessoa Jur\u00eddica,PIX,YURI FREIRE LIMA,-,"R$ 1,00","-R$ 1,00"\r\n' +
-        '15/10/2026,Pessoa Jur\u00eddica,PIX,YURI FREIRE LIMA,-,"R$ 1,00","-R$ 1,00"\r\n',
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,Refund,"-R$ 5,00",-,-\r\n' +
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,Charge,-,"-R$ 5,00",-\r\n',
     );
     expect(result.errors).toEqual([]);
-    expect(result.rows.map((r) => r.importId)).toEqual([
-      "contabilizei:2026-10-15:-1000:1",
-      "contabilizei:2026-10-15:-1000:2",
+    expect(result.rows).toEqual([
+      { date: "2026-10-15", payee: "Refund", memo: "PIX", outflowCents: 500, inflowCents: 0 },
+      { date: "2026-10-15", payee: "Charge", memo: "PIX", outflowCents: 0, inflowCents: 500 },
     ]);
   });
 
-  it("numbers same-day equal-amount rows with different payees :1 and :2", () => {
-    // The payee is not in the occurrence key: same (date, amount) with
-    // different payees still gets distinct ids, or the server's dedupe
-    // would silently drop the second row.
-    const result = parseContabilizeiCsv(
-      "Data,Categoria,Lan\u00e7amento,Descri\u00e7\u00e3o,Entrada,Sa\u00edda,Saldo do dia\r\n" +
-        '15/10/2026,Pessoa Jur\u00eddica,PIX,YURI FREIRE LIMA,-,"R$ 1,00","-R$ 1,00"\r\n' +
-        '15/10/2026,Pessoa Jur\u00eddica,PIX,NSX BRASIL S.A.,-,"R$ 1,00","-R$ 1,00"\r\n',
-    );
-    expect(result.errors).toEqual([]);
-    expect(result.rows.map((r) => [r.payee, r.importId])).toEqual([
-      ["YURI FREIRE LIMA", "contabilizei:2026-10-15:-1000:1"],
-      ["NSX BRASIL S.A.", "contabilizei:2026-10-15:-1000:2"],
-    ]);
-  });
-
-  it("rejects rows with both sides empty or both set", () => {
+  it("nets both-sides-set rows; reports net-zero and both-empty rows", () => {
     const result = parseContabilizeiCsv(
       "Data,Categoria,Lan\u00e7amento,Descri\u00e7\u00e3o,Entrada,Sa\u00edda,Saldo do dia\r\n" +
         '15/10/2026,Pessoa Jur\u00eddica,PIX,X,-,-,-\r\n' +
-        '15/10/2026,Pessoa Jur\u00eddica,PIX,X,"R$ 1,00","R$ 2,00",-\r\n',
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,X,"R$ 2,00","R$ 2,00",-\r\n' +
+        '15/10/2026,Pessoa Jur\u00eddica,PIX,X,"R$ 3,00","R$ 1,00",-\r\n',
     );
-    expect(result.rows).toEqual([]);
-    expect(result.errors).toEqual(["line 2: no readable amount", "line 3: no readable amount"]);
+    expect(result.rows).toEqual([
+      { date: "2026-10-15", payee: "X", memo: "PIX", outflowCents: 0, inflowCents: 200 },
+    ]);
+    expect(result.errors).toEqual(["line 2: no readable amount", "line 3: amount is zero"]);
   });
 });

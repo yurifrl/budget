@@ -79,7 +79,8 @@ export function parseStatementFile(name: string, data: StatementData): ImportPar
     };
   }
   // Contabilizei's header shares `Data`/`Descrição` with a Nubank conta
-  // export, so it is checked first; its rows carry derived dedupe ids.
+  // export, so it is checked first. Its rows go to the server id-less: the
+  // bulk endpoint's YNAB fallback key dedupes re-imports.
   if (detectContabilizeiCsv(text)) return parseContabilizeiCsv(text);
   const nubankLayout = detectNubankLayout(text);
   if (nubankLayout) return parseNubankCsv(text, nubankLayout);
