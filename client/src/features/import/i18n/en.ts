@@ -1,7 +1,7 @@
 export default {
   'screen.needBudget': 'Activate a budget to import transactions.',
   'screen.title': 'Import Transactions',
-  'screen.subtitle': 'Bank statements — Nubank CSV, Itaú extrato, generic CSV',
+  'screen.subtitle': 'Bank statements — Nubank CSV, Contabilizei CSV, Itaú extrato, generic CSV',
   'account.label': 'Account',
   'account.placeholder': 'Choose account…',
   'account.groupCash': 'Cash',
@@ -11,7 +11,7 @@ export default {
   'file.choose': 'Choose file…',
   'file.none': 'No file selected',
   'file.managePayees': 'Manage payees',
-  'file.hint': 'Supports Nubank CSV, Itaú extrato TXT/XLS, and generic CSV.',
+  'file.hint': 'Supports Nubank CSV, Contabilizei CSV, Itaú extrato TXT/XLS, and generic CSV.',
 
   'mapping.title': 'Column mapping',
   'mapping.delimiter': 'Delimiter',
