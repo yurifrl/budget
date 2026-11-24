@@ -1,0 +1,2 @@
+{"issue_id":"budget-fvtx","action":"save","at":"2026-11-24T14:36:42.879Z","actor":null,"data":{"status":"open","title":"Categorizer engine + Temporal job: tool-calling agent, category_suggestions table, categorize_run"}}
+{"issue_id":"budget-fvtx","action":"dependency_added","at":"2026-11-24T14:36:42.881Z","actor":"yuri","data":{"target":"budget-q8kf","type":"blocks"}}

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-q8kf",
+  "title": "AI provider layer (api): shared-ai-key flag, own keys, 5 provider adapters, model listing",
+  "description": "New feature api/src/ai/. Feature 'shared-ai-key' (default off) in shared/src/features. Table ai_credentials (user, provider, sealed secret, chosen model) via core/secret-box, copying api/src/connections/keys.ts and migration 0104. Own keys are stored on the server for every platform. Resolution: own key wins, else shared env key when the flag is on, else error own_ai_key_required; no paused state. AiProvider interface (chat with tool calls + structured output, list models) with adapters for OpenRouter, Anthropic, OpenAI, Z.ai, DeepSeek. Detect provider from the key format, caller may override. Shared key: provider/model from env + app_settings. Contracts in shared/src/contracts/ai/: credentials status, save, delete, test, detect provider, list models. Plan, decisions and owner answers: handoff.md at the repo root. Mock: tk show budget-seoa (evidence ev-c96ced overview, PNGs). Follow AGENTS.md (contracts, migrations additive only + MIGRATION_SIGNATURES, i18n, ports, test DB rules).",
+  "status": "ready-to-review",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-24T14:36:41.887Z",
+  "updated_at": "2026-11-24T15:20:33.419Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-v2xe",
+  "sprint": null,
+  "labels": [],
+  "notes": "Implemented api/src/ai (feature shared-ai-key; ai_credentials migration 0107; sealed own key; shared env key + app_settings.aiSharedModel; 5 adapters; /ai contracts+handlers; catalog). Evidence: ev q8kf verification — typecheck+lint green, shared 176, client 1246, admin 20, api 1263 pass.\nIndependent review of 9eff45c found 8 problems (attached review-q8kf.md); sent back to the omp session for fixes. Not approved.\nReview fixes applied: Anthropic sampling/thinking/max_input_tokens, authenticated verifyKey (OpenRouter /key), Z.ai manual-choice, /ai/models provider guard, fixed error messages + Retry-After, provider bound in AAD, shared-model consistency, OpenAI chat filter. ai tests 57 pass/0 skip/0 fail on :55432; full api 1275 pass.",
+  "design": null,
+  "acceptance_criteria": "Contracts + handlers + catalog entry; tests for key resolution, provider detection, sealing, and each adapter against a stubbed HTTP server (no real provider calls in tests); task typecheck, lint, test:api green.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-q8kf",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-q8kf",
+    "changeset": {
+      "base": "6d92eab2b5113e59e7cc6e1c9d8f8291c195d3eb",
+      "baseBranch": "main"
+    },
+    "agent_session": "01a20dfc-f608-74bd-a3b9-be35d1452cb4",
+    "finished_at": "2026-11-24T15:20:32.569Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 2,
+        "files": 42,
+        "additions": 2723,
+        "deletions": 25
+      },
+      "head": "db50606632c07946926668b2c2a1fd2bdfacebef",
+      "at": "2026-11-24T15:20:32.569Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-a9d26e",
+      "name": "q8kf-evidence.txt",
+      "mime": "text/plain",
+      "size": 1235,
+      "sha256": "9aacac6fbf9ea8a8cbd81ee33c2440bb1b381bc433bf7ec4f1ce25eed39e5f44",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-feacd9",
+      "name": "review-q8kf.md",
+      "mime": "text/markdown",
+      "size": 8912,
+      "sha256": "49d63507eaab3dd7bc5e6cd212f2fac2bc680d2c3914427446e1ec9e3b15fa01",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-93c76b",
+      "name": "q8kf-review-evidence.txt",
+      "mime": "text/plain",
+      "size": 3026,
+      "sha256": "efd3b066ce7753a935fccb10b270ec8e85ae63f58d360c6022ad3823c5b41e5d",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 2,
+  "comments": [],
+  "comment_count": 0
+}

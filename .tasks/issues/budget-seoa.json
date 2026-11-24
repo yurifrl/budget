@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-seoa",
+  "title": "Mock: Categorize page (AI category suggestions): bundle view + one-by-one view, web 1400 and mobile 375",
+  "description": "",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-24T12:45:36.928Z",
+  "updated_at": "2026-11-24T14:36:45.978Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Categorize page design mock: overview HTML + 5 standalone screens (web/mobile Bundles, web/mobile One by one, empty no-AI-key) with PNG screenshots, in scratchpad/categorize-mock; no repo code changed.\nOwner reviewed the mock and answered all questions (Inbox thread msg_01M86SWYDXDHKFPX415ZB7NYJ7); implementation filed under budget-v2xe.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": null,
+  "metadata": {},
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-c96ced",
+      "name": "categorize-mock.html",
+      "mime": "application/octet-stream",
+      "size": 109892,
+      "sha256": "598180a35285c9bd0f0c6b8e1244e7b2864066ca0e057ef31d63348042cef2ea",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-2d6f08",
+      "name": "web-bundles.png",
+      "mime": "image/png",
+      "size": 384813,
+      "sha256": "22a7d639d2397d20fe02e23b156949aba4c880af0af9b4b437e95d143a17b338",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-b2073b",
+      "name": "web-one-by-one.png",
+      "mime": "image/png",
+      "size": 214411,
+      "sha256": "8475c487dfc0c8f76d04e7150fe0a1c9c51217622633ed1c5ad82c9fa6841dcd",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c585e6",
+      "name": "mobile-bundles.png",
+      "mime": "image/png",
+      "size": 155618,
+      "sha256": "949cb1713ef4e70a3899bc10423f4ac9a0898431e775f48a9ff4d5b0cd615b84",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-06c595",
+      "name": "mobile-one-by-one.png",
+      "mime": "image/png",
+      "size": 129697,
+      "sha256": "99825c892f88144773267281c1eb10ce403c65c84b6db107793a073dfb85d301",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-9784fa",
+      "name": "empty-no-key.png",
+      "mime": "image/png",
+      "size": 106851,
+      "sha256": "2417bd26432eed5573c1c2c1a8d3f756b7f77ad4f73167aff58226d2d2a55c1f",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}
