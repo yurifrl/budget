@@ -1,9 +1,10 @@
 /**
  * Statement dispatcher — routes a picked file by filename extension and
- * content (Nubank CSV, Itaú extrato TXT/XLS, generic CSV), the way ynabu's
- * parser does.
+ * content (Contabilizei CSV, Nubank CSV, Itaú extrato TXT/XLS, generic CSV),
+ * the way ynabu's parser does.
  */
 
+import { detectContabilizeiCsv, parseContabilizeiCsv } from './contabilizei';
 import { parseImportCsv } from './generic-csv';
 import { parseItauExtratoTxt, parseItauExtratoXls, parseItauFaturaXls } from './itau';
 import { detectNubankLayout, parseNubankCsv } from './nubank';
@@ -26,10 +27,12 @@ export interface StatementData {
 /**
  * Parse a picked statement file by its name: `.xls`/`.xlsx` → Itaú XLS
  * (fatura when the filename says so, account extrato otherwise), `.txt` →
- * Itaú extrato, everything else → generic CSV. A `fatura*` CSV is a
- * credit-card bill whose positive amounts are charges (parseImportCsv's
- * `chargePositive`). OFX/QFX is rejected explicitly (by extension and by
- * content sniff, since bank exports frequently mislabel their files).
+ * Itaú extrato, everything else → CSV content sniffing: Contabilizei
+ * (dedupe ids), Nubank conta/fatura, then the generic CSV parser. A
+ * `fatura*` CSV is a credit-card bill whose positive amounts are charges
+ * (parseImportCsv's `chargePositive`). OFX/QFX is rejected explicitly (by
+ * extension and by content sniff, since bank exports frequently mislabel
+ * their files).
  */
 /** Real OFX/QFX SGML content (as opposed to the line-based legacy OFC). */
 const OFX_SGML_RE = /<ofx[\s>]|<stmttrn>/i;
@@ -75,6 +78,9 @@ export function parseStatementFile(name: string, data: StatementData): ImportPar
       errors: ['legacy binary OFC format is not supported — export the statement as XLS or TXT from Itaú instead'],
     };
   }
+  // Contabilizei's header shares `Data`/`Descrição` with a Nubank conta
+  // export, so it is checked first; its rows carry derived dedupe ids.
+  if (detectContabilizeiCsv(text)) return parseContabilizeiCsv(text);
   const nubankLayout = detectNubankLayout(text);
   if (nubankLayout) return parseNubankCsv(text, nubankLayout);
   const result = parseImportCsv(text, { chargePositive: isFatura });
