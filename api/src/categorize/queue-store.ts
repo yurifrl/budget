@@ -200,7 +200,7 @@ export async function listQueue(
   }>(
     `${QUEUE_CTE},
      top as (
-       select q.transaction_id, q.payee_id, q.payee, q.date, q.amount,
+       select q.transaction_id, q.payee_id, q.payee, q.date, q.amount_milliunits as amount,
               s.category_id, s.category_name, s.confidence, s.reason, s.source
          from q
          cross join lateral (

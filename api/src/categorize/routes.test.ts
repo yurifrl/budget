@@ -365,8 +365,8 @@ describe.skipIf(!dbReady)('run start and status', () => {
     const activeId = crypto.randomUUID();
     await pool.query(
       `insert into jobs.job_runs (id, job_type, subject_key, tenant_id, instance_id, input, requested_by)
-       values ($1, 'categorize_run', $2, $3, 'test', '{}'::jsonb, $3::text)`,
-      [activeId, progressBudget, a.userId],
+       values ($1, 'categorize_run', $2, $3, 'test', '{}'::jsonb, $4)`,
+      [activeId, progressBudget, a.userId, a.userId],
     );
     await pool.query(
       `insert into public.categorize_run_progress (run_id, budget_id, done, total) values ($1, $2, 7, 20)`,
