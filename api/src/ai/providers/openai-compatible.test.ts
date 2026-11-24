@@ -3,11 +3,16 @@
  * each provider sends (auth, token param, structured-output spelling, tools)
  * and how responses/errors are parsed. No real provider is ever called.
  */
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import type { Server } from 'bun';
+import type { AiProviderId } from '@shared/contracts/ai';
 
 import { AiProviderError } from '../errors';
-import { createProvider } from './index';
+import type { FetchInit, FetchLike } from '../http';
+import { makeResolvedAiKey, providerFor, type ProviderOptions } from './index';
+
+const createProvider = (id: AiProviderId, apiKey: string, options?: ProviderOptions) =>
+  providerFor(makeResolvedAiKey({ source: 'own', provider: id, model: null, apiKey, updatedAt: null }), options);
 
 type Captured = { method: string; path: string; headers: Record<string, string>; body: unknown };
 let server: Server<undefined> | null = null;
@@ -133,6 +138,43 @@ describe('OpenAI-compatible chat request', () => {
   });
 });
 
+describe('OpenAI-compatible chat deadline and cancellation', () => {
+  test('the deadline follows the cap and a caller abort rejects as timeout', async () => {
+    const seen: number[] = [];
+    let init: FetchInit | undefined;
+    const fetchImpl: FetchLike = async (_input, requestInit) => {
+      init = requestInit;
+      return chatReply({ content: 'hi' });
+    };
+    const spy = spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      seen.push(ms);
+      return new AbortController().signal;
+    });
+    try {
+      await createProvider('openai', 'key', { baseUrl: 'https://stub.test', fetch: fetchImpl }).chat({
+        model: 'm',
+        messages: [{ role: 'user', content: 'hi' }],
+        maxTokens: 16_000,
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(seen).toEqual([640_000]);
+    expect(init?.timeout).toBe(false);
+
+    const controller = new AbortController();
+    const aborting: FetchLike = (_input, requestInit) =>
+      new Promise((_resolve, reject) => {
+        requestInit!.signal!.addEventListener('abort', () => reject(requestInit!.signal!.reason));
+        queueMicrotask(() => controller.abort());
+      });
+    const failure = await createProvider('openai', 'key', { baseUrl: 'https://stub.test', fetch: aborting })
+      .chat({ model: 'm', messages: [], signal: controller.signal })
+      .catch((err: unknown) => err);
+    expect(failure).toMatchObject({ kind: 'timeout', provider: 'openai' });
+  });
+});
+
 describe('OpenAI-compatible model listing', () => {
   test('asks /models with bearer auth and parses id/name/context_length, sorted', async () => {
     const baseUrl = stub(() =>
@@ -152,44 +194,47 @@ describe('OpenAI-compatible model listing', () => {
     }
   });
 
-  test('openai drops models the Chat Completions API cannot chat with', async () => {
-    const baseUrl = stub(() =>
-      Response.json({
-        data: [
-          { id: 'gpt-4.1' },
-          { id: 'o3-mini' },
-          { id: 'chatgpt-4o-latest' },
-          // Fine-tunes and search-preview models are Chat Completions models (OpenAI model docs).
-          { id: 'ft:gpt-4.1-mini:acme::abc123' },
-          { id: 'gpt-4o-search-preview' },
-          { id: 'gpt-4o-mini-search-preview' },
-          { id: 'text-embedding-3-small' },
-          { id: 'gpt-4o-audio-preview' },
-          { id: 'gpt-image-1' },
-          { id: 'omni-moderation-latest' },
-          { id: 'gpt-5-codex' },
-          // Responses API only: o1-pro, o3-pro, gpt-5-pro.
-          { id: 'o1-pro' },
-          { id: 'o3-pro' },
-          { id: 'gpt-5-pro' },
-          // Legacy Completions only.
-          { id: 'gpt-3.5-turbo-instruct' },
-        ],
-      }),
-    );
+  test('openai drops non-chat and tool-less models but keeps chat fine-tunes', async () => {
+    const data = [
+      { id: 'gpt-4.1' },
+      { id: 'o3-mini' },
+      // Shut down and their supported-feature lists omit function calling.
+      { id: 'chatgpt-4o-latest' },
+      { id: 'gpt-4o-search-preview' },
+      { id: 'gpt-4o-mini-search-preview' },
+      // Chat fine-tunes; the org/suffix may contain -pro- or -image-.
+      { id: 'ft:gpt-4.1-mini:acme::abc123' },
+      { id: 'ft:gpt-4o-mini:acme:invoice-pro-v2:abc' },
+      { id: 'ft:gpt-4o-mini:acme:image-gen:abc' },
+      // Completions-only fine-tunes, and a fine-tune of a tool-less base.
+      { id: 'ft:babbage-002:acme::abc' },
+      { id: 'ft:davinci-002:acme::abc' },
+      { id: 'ft:gpt-4o-search-preview:acme::abc' },
+      { id: 'text-embedding-3-small' },
+      { id: 'gpt-4o-audio-preview' },
+      { id: 'gpt-image-1' },
+      { id: 'omni-moderation-latest' },
+      { id: 'gpt-5-codex' },
+      // Responses API only: o1-pro, o3-pro, gpt-5-pro.
+      { id: 'o1-pro' },
+      { id: 'o3-pro' },
+      { id: 'gpt-5-pro' },
+      // Legacy Completions only.
+      { id: 'gpt-3.5-turbo-instruct' },
+    ];
+    const baseUrl = stub(() => Response.json({ data }));
     const models = await createProvider('openai', 'key-123', { baseUrl }).listModels();
     expect(models.map((model) => model.id)).toEqual([
-      'chatgpt-4o-latest',
       'ft:gpt-4.1-mini:acme::abc123',
+      'ft:gpt-4o-mini:acme:image-gen:abc',
+      'ft:gpt-4o-mini:acme:invoice-pro-v2:abc',
       'gpt-4.1',
-      'gpt-4o-mini-search-preview',
-      'gpt-4o-search-preview',
       'o3-mini',
     ]);
     // The filter is OpenAI's only: another provider's list is passed through.
     captured = [];
     const openrouterModels = await createProvider('openrouter', 'key-123', { baseUrl }).listModels();
-    expect(openrouterModels).toHaveLength(15);
+    expect(openrouterModels).toHaveLength(data.length);
   });
 
   test('a model list without data is a bad_response', async () => {
@@ -219,19 +264,17 @@ describe('OpenAI-compatible key check', () => {
     }
   });
 
-  test('zai verifies with the documented tokenizer endpoint and lists its documented models offline', async () => {
-    const baseUrl = stub(() => Response.json({ usage: { prompt_tokens: 1, total_tokens: 1 } }));
+  test('zai verifies with the cheapest documented chat call and returns its suggestion list', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
     const provider = createProvider('zai', 'zai-key-123', { baseUrl });
-    await expect(provider.verifyKey()).resolves.toBeNull();
+    const models = await provider.verifyKey('glm-4.7');
     expect(captured).toHaveLength(1);
     expect(captured[0]!.method).toBe('POST');
-    expect(captured[0]!.path).toBe('/tokenizer');
+    expect(captured[0]!.path).toBe('/chat/completions');
     expect(captured[0]!.headers.authorization).toBe('Bearer zai-key-123');
-    expect(captured[0]!.body).toMatchObject({ model: 'glm-4.6', messages: [{ role: 'user', content: 'ping' }] });
-
-    captured = [];
-    const models = await provider.listModels();
-    expect(models.map((model) => model.id)).toEqual([
+    // The caller's model when there is one; a documented model otherwise.
+    expect(captured[0]!.body).toMatchObject({ model: 'glm-4.7', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 });
+    expect(models!.map((model) => model.id)).toEqual([
       'glm-4.6',
       'glm-4.7',
       'glm-5',
@@ -242,6 +285,14 @@ describe('OpenAI-compatible key check', () => {
       'glm-5.3-flashx',
       'glm-5.3-flashx-legal',
     ]);
+
+    captured = [];
+    const withoutModel = await provider.verifyKey();
+    expect(withoutModel!.map((model) => model.id)).toHaveLength(9);
+    expect(captured[0]!.body).toMatchObject({ model: 'glm-5.3-flash', max_tokens: 1 });
+
+    captured = [];
+    await provider.listModels();
     expect(captured).toEqual([]);
   });
 
@@ -250,10 +301,25 @@ describe('OpenAI-compatible key check', () => {
     await expect(createProvider('openrouter', 'junk', { baseUrl }).verifyKey()).rejects.toMatchObject({ kind: 'auth', status: 401 });
   });
 
-  test('an OpenAI restricted key without models:read verifies despite the 403, and listing says forbidden', async () => {
-    const baseUrl = stub(() => Response.json({ error: { message: 'Missing scopes: api.model.read' } }, { status: 403 }));
-    await expect(createProvider('openai', 'sk-restricted', { baseUrl }).verifyKey()).resolves.toBeNull();
-    await expect(createProvider('openai', 'sk-restricted', { baseUrl }).listModels()).rejects.toMatchObject({ kind: 'forbidden', status: 403 });
+  test('a restricted OpenAI key is 401 for the missing scope, so it cannot be saved', async () => {
+    // OpenAI error docs: a key without the endpoint's scope is invalid
+    // authentication (401), and 403 is a country/region block.
+    const baseUrl = stub(() =>
+      Response.json(
+        { error: { message: 'You have insufficient permissions for this operation. Missing scopes: api.model.read.' } },
+        { status: 401 },
+      ),
+    );
+    await expect(createProvider('openai', 'sk-restricted', { baseUrl }).verifyKey()).rejects.toMatchObject({
+      kind: 'auth',
+      status: 401,
+    });
+  });
+
+  test('a 403 proves nothing about the key: OpenAI country blocks and other providers are auth', async () => {
+    const baseUrl = stub(() => Response.json({ error: { message: 'unsupported_country_region_territory' } }, { status: 403 }));
+    await expect(createProvider('openai', 'sk-any', { baseUrl }).verifyKey()).rejects.toMatchObject({ kind: 'auth', status: 403 });
+    await expect(createProvider('deepseek', 'key', { baseUrl }).verifyKey()).rejects.toMatchObject({ kind: 'auth', status: 403 });
   });
 });
 
@@ -263,11 +329,6 @@ describe('provider error mapping', () => {
     const failure = createProvider('openai', 'bad', { baseUrl }).listModels();
     await expect(failure).rejects.toBeInstanceOf(AiProviderError);
     await expect(failure).rejects.toMatchObject({ kind: 'auth', status: 401, message: expect.stringContaining('Incorrect API key') });
-  });
-
-  test('403 is forbidden (valid key, missing permission) and 401 is auth', async () => {
-    const baseUrl = stub(() => Response.json({ error: { message: 'Missing scopes: api.model.read' } }, { status: 403 }));
-    await expect(createProvider('deepseek', 'key', { baseUrl }).verifyKey()).rejects.toMatchObject({ kind: 'forbidden', status: 403 });
   });
 
   test('429 carries Retry-After; 5xx and network failures are transient', async () => {

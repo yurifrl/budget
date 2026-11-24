@@ -64,7 +64,7 @@ const fakeEntry = (id: AiProviderId): ProviderEntry => ({
     chat: async () => {
       throw new Error('chat is not used by the key routes');
     },
-    verifyKey: async () => {
+    verifyKey: async (_model?: string) => {
       calls.push({ kind: 'verify', provider: id, apiKey });
       if (verifyFailure) throw verifyFailure;
       return verifyModels;
@@ -261,13 +261,19 @@ describe.skipIf(!dbReady)('AI key operations', () => {
       ],
     });
     expect(JSON.stringify(candidate.json)).not.toContain(KEY);
-    expect(calls).toEqual([{ kind: 'list', provider: 'openrouter', apiKey: KEY }]);
+    expect(calls).toEqual([
+      { kind: 'verify', provider: 'openrouter', apiKey: KEY },
+      { kind: 'list', provider: 'openrouter', apiKey: KEY },
+    ]);
 
     await op('ai_credentials_save', { api_key: KEY });
     calls = [];
     const saved = await op('ai_models_list', {});
     expect(saved.json.provider).toBe('openrouter');
-    expect(calls).toEqual([{ kind: 'list', provider: 'openrouter', apiKey: KEY }]);
+    expect(calls).toEqual([
+      { kind: 'verify', provider: 'openrouter', apiKey: KEY },
+      { kind: 'list', provider: 'openrouter', apiKey: KEY },
+    ]);
 
     // A stored key never goes to another provider's host.
     calls = [];
@@ -280,7 +286,10 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     calls = [];
     const candidateOverride = await op('ai_models_list', { api_key: KEY, provider: 'openai' });
     expect(candidateOverride.json.provider).toBe('openai');
-    expect(calls).toEqual([{ kind: 'list', provider: 'openai', apiKey: KEY }]);
+    expect(calls).toEqual([
+      { kind: 'verify', provider: 'openai', apiKey: KEY },
+      { kind: 'list', provider: 'openai', apiKey: KEY },
+    ]);
   });
 
   test('models with an undetectable candidate key is 400 ai_provider_unknown', async () => {
@@ -377,6 +386,8 @@ describe.skipIf(!dbReady)('AI key operations', () => {
 
   test('providerFor builds the adapter for the resolved key; the raw pair is not exported', async () => {
     expect('createProvider' in aiModule).toBe(false);
+    expect('makeResolvedAiKey' in aiModule).toBe(false);
+    expect(() => providerFor({ provider: 'openai', apiKey: KEY } as never)).toThrow(TypeError);
     await op('ai_credentials_save', { api_key: KEY });
     const resolved = await resolveAiKey(pool, user.id);
     if (!resolved.ok) throw new Error('expected a resolved key');
@@ -399,28 +410,37 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     expect(calls).toEqual([{ kind: 'verify', provider: 'openrouter', apiKey: KEY }]);
   });
 
-  test('a key the provider forbids is 403 ai_key_forbidden, not a bad key', async () => {
-    verifyFailure = new AiProviderError('forbidden', 'Missing scopes: api.model.read', 403);
-    const save = await op('ai_credentials_save', { api_key: KEY });
-    expect(save.status).toBe(403);
-    expect(save.json.code).toBe('ai_key_forbidden');
-    expect(JSON.stringify(save.json)).not.toContain('api.model.read');
-
-    verifyFailure = null;
-    await op('ai_credentials_save', { api_key: KEY });
-    calls = [];
-    listFailure = new AiProviderError('forbidden', 'Missing scopes: api.model.read', 403);
-    const listed = await op('ai_models_list', {});
-    expect(listed.status).toBe(403);
-    expect(listed.json.code).toBe('ai_key_forbidden');
+  test('a 403 is a refused key, not a special permission case', async () => {
+    verifyFailure = new AiProviderError('auth', 'unsupported_country_region_territory', 403, null, 'openai');
+    const save = await op('ai_credentials_save', { api_key: KEY, provider: 'openai' });
+    expect(save.status).toBe(400);
+    expect(save.json.code).toBe('ai_key_rejected');
+    expect(save.json.error).not.toContain('Models Read');
+    expect(await store.getCredential(pool, user.id)).toBeNull();
   });
 
-  test('provider log text is redacted for fragments, masked keys and Z.ai shapes', async () => {
-    const zaiKey = '0123456789abcdef0123456789abcdef.SECRETsecret1234';
-    const fragment = KEY.slice(4, 16);
+  test('zai accepts a typed model outside the suggestion list after the key check', async () => {
+    const res = await op('ai_credentials_save', { api_key: 'zai-custom-key-123456', provider: 'zai', model: 'glm-future' });
+    expect(res.status).toBe(200);
+    expect(res.json.own).toMatchObject({ provider: 'zai', model: 'glm-future' });
+    expect(calls).toEqual([{ kind: 'verify', provider: 'zai', apiKey: 'zai-custom-key-123456' }]);
+  });
+
+  test('models with a zai candidate verifies the key before returning its list', async () => {
+    verifyFailure = new AiProviderError('auth', 'bad zai key', 401, null, 'zai');
+    const res = await op('ai_models_list', { api_key: 'zai-candidate-key-123456', provider: 'zai' });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe('ai_key_rejected');
+    expect(calls).toEqual([{ kind: 'verify', provider: 'zai', apiKey: 'zai-candidate-key-123456' }]);
+  });
+
+  test('provider log lines name provider, kind and status but never upstream text or the key', async () => {
     verifyFailure = new AiProviderError(
-      'transient',
-      `refused ${KEY} fragment ${fragment} masked sk-proj-****abcd other ${zaiKey}`,
+      'rate_limited',
+      `quota exceeded for org org-secret key ${KEY}`,
+      429,
+      7000,
+      'openrouter',
     );
     const spy = spyOn(console, 'error').mockImplementation(() => {});
     let logged = '';
@@ -430,10 +450,10 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     } finally {
       spy.mockRestore();
     }
-    expect(logged).toContain('[redacted]');
+    expect(logged).toContain('provider=openrouter');
+    expect(logged).toContain('kind=rate_limited');
+    expect(logged).toContain('status=429');
+    expect(logged).not.toContain('org-secret');
     expect(logged).not.toContain(KEY);
-    expect(logged).not.toContain(fragment);
-    expect(logged).not.toContain('****abcd');
-    expect(logged).not.toContain(zaiKey);
   });
 });

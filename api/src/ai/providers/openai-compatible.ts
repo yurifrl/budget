@@ -16,8 +16,12 @@ import type { AiChatRequest, AiChatResult, AiJsonSchema, AiModel, AiProvider, Ai
 
 export type StructuredOutput = 'json_schema' | 'json_object';
 
-/** The authenticated, side-effect-free call that proves a key is accepted. */
-export type KeyCheck = {
+/**
+ * The authenticated call that proves a key is accepted. The model is the
+ * caller's chosen id for providers whose check is a chat call (Z.ai); it is
+ * ignored by fixed checks such as `/key` and `/models`.
+ */
+export type KeyCheck = (model: string | null) => {
   path: string;
   method?: 'GET' | 'POST';
   body?: unknown;
@@ -28,15 +32,8 @@ export type OpenAiCompatibleConfig = {
   /** Name used in error messages ("OpenRouter API 429: ..."). */
   label: string;
   baseUrl: string;
-  /** /key on OpenRouter, /models elsewhere, Z.ai's documented tokenizer. */
+  /** /key on OpenRouter, /models elsewhere, the cheapest chat call on Z.ai. */
   keyCheck: KeyCheck;
-  /**
-   * OpenAI only: /models needs the separate `api.model.read` scope, which a
-   * chat-only restricted key lacks. A 403 there still proves the key
-   * authenticated, so the key check accepts it; listing models later reports
-   * the permission error instead of calling the key bad.
-   */
-  keyCheckAcceptsForbidden?: boolean;
   /** Providers with no documented model-list endpoint (Z.ai): their documented chat models. */
   staticModels?: readonly AiModel[];
   /** json_schema = response_format json_schema; json_object = JSON mode + schema in a system message. */
@@ -53,21 +50,32 @@ const asRecord = (value: unknown): Json | null => (typeof value === 'object' && 
 
 /**
  * OpenAI's /models has no capability field and includes embedding, audio,
- * image and moderation models. This adapter only speaks Chat Completions
- * (OpenAI docs, per-model "Endpoints" table), so keep the chat families and
- * drop the known non-chat ones. Heuristic by design: an unknown new chat
- * family is dropped, never a non-chat one added.
+ * image, search and moderation models. This adapter only speaks Chat
+ * Completions and the categorizer needs tool calling, so keep the chat
+ * families and drop the known non-chat ones.
  *
- * Kept despite the tokens: fine-tuned `ft:...` models work with Chat
- * Completions, and `*-search-preview` models are Chat Completions models.
- * Dropped: `*-pro` (o1-pro, o3-pro, gpt-5-pro) and `*-codex`, which are
- * Responses API only, and `gpt-3.5-turbo-instruct` (legacy Completions).
+ * Docs (2026-11-24): `gpt-4o-search-preview`, `gpt-4o-mini-search-preview` and
+ * `chatgpt-4o-latest` are shut down and their supported-feature lists omit
+ * function calling; `babbage-002`/`davinci-002` support legacy Completions
+ * only (Chat Completions: not supported). Dropped: `*-pro` and `*-codex`
+ * (Responses API only), `gpt-3.5-turbo-instruct` and the legacy Completions
+ * fine-tunes.
+ *
+ * Fine-tunes are otherwise kept: `ft:<base>:<org>:<suffix>:<id>` works with
+ * Chat Completions, and the org/suffix may contain `-pro-` or `-image-`, so
+ * only the base model is checked. Heuristic by design: an unknown new chat
+ * family is dropped, never a non-chat one added.
  */
+const OPENAI_COMPLETIONS_FINE_TUNE = /^ft:(?:babbage-002|davinci-002|gpt-3\.5-turbo-instruct)(?:$|:)/;
 const OPENAI_NON_CHAT =
-  /(^|[-/])(?:embedding|moderation|tts|whisper|transcribe|audio|realtime|image|sora|dall-e|codex|deep-research|instruct|pro)(?:$|[-/])/;
-const OPENAI_CHAT_FAMILY = /^(?:gpt-|chatgpt-|o\d|ft:)/;
+  /(^|[-/])(?:embedding|moderation|tts|whisper|transcribe|audio|realtime|image|sora|dall-e|codex|deep-research|instruct|pro|search-preview|chatgpt)(?:$|[-/])/;
+const OPENAI_CHAT_FAMILY = /^(?:gpt-|o\d|ft:)/;
 
-export const isOpenAiChatModel = (id: string): boolean => OPENAI_CHAT_FAMILY.test(id) && !OPENAI_NON_CHAT.test(id);
+export function isOpenAiChatModel(id: string): boolean {
+  if (OPENAI_COMPLETIONS_FINE_TUNE.test(id)) return false;
+  if (id.startsWith('ft:')) return !OPENAI_NON_CHAT.test(id.split(':')[1] ?? '');
+  return OPENAI_CHAT_FAMILY.test(id) && !OPENAI_NON_CHAT.test(id);
+}
 
 export class OpenAiCompatibleProvider implements AiProvider {
   readonly id: AiProviderId;
@@ -102,29 +110,30 @@ export class OpenAiCompatibleProvider implements AiProvider {
       headers: this.auth,
       body,
       timeoutMs: chatTimeoutMs(request.maxTokens),
+      timeoutKind: 'timeout',
+      signal: request.signal,
+      disableSocketIdleTimeout: true,
       fetch: this.fetchImpl,
     });
     return this.parseChat(json, request.model);
   }
 
-  async verifyKey(): Promise<AiModel[] | null> {
+  async verifyKey(model?: string): Promise<AiModel[] | null> {
     const base = this.config.baseUrl.replace(/\/+$/, '');
-    try {
-      const json = await requestJson({
-        provider: this.id,
-        url: `${base}${this.config.keyCheck.path}`,
-        method: this.config.keyCheck.method ?? 'GET',
-        headers: this.auth,
-        body: this.config.keyCheck.body,
-        timeoutMs: DEFAULT_MODELS_TIMEOUT_MS,
-        fetch: this.fetchImpl,
-      });
-      // Only /models answers a list; /key (OpenRouter) and /tokenizer (Z.ai) do not.
-      return this.config.keyCheck.path === '/models' ? this.parseModels(json) : null;
-    } catch (err) {
-      if (this.config.keyCheckAcceptsForbidden && err instanceof AiProviderError && err.kind === 'forbidden') return null;
-      throw err;
-    }
+    const check = this.config.keyCheck(model ?? null);
+    const json = await requestJson({
+      provider: this.id,
+      url: `${base}${check.path}`,
+      method: check.method ?? 'GET',
+      headers: this.auth,
+      body: check.body,
+      timeoutMs: DEFAULT_MODELS_TIMEOUT_MS,
+      fetch: this.fetchImpl,
+    });
+    // Only /models answers a list; /key (OpenRouter) and the chat check (Z.ai)
+    // do not. Z.ai returns its documented suggestion list after the check.
+    if (check.path === '/models') return this.parseModels(json);
+    return this.config.staticModels ? [...this.config.staticModels].sort((a, b) => a.id.localeCompare(b.id)) : null;
   }
 
   async listModels(): Promise<AiModel[]> {
@@ -143,7 +152,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
 
   private parseModels(json: unknown): AiModel[] {
     const data = Array.isArray(asRecord(json)?.data) ? (asRecord(json)!.data as unknown[]) : null;
-    if (!data) throw new AiProviderError('bad_response', `${this.config.label} answered the model list without a data array`);
+    if (!data) throw new AiProviderError('bad_response', `${this.config.label} answered the model list without a data array`, null, null, this.id);
     const models: AiModel[] = [];
     for (const entry of data) {
       const model = asRecord(entry);
@@ -200,7 +209,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
   private parseChat(json: unknown, requestedModel: string): AiChatResult {
     const root = asRecord(json);
     const choice = Array.isArray(root?.choices) ? asRecord((root!.choices as unknown[])[0]) : null;
-    if (!choice) throw new AiProviderError('bad_response', `${this.config.label} answered without a chat choice`);
+    if (!choice) throw new AiProviderError('bad_response', `${this.config.label} answered without a chat choice`, null, null, this.id);
     const message = asRecord(choice.message) ?? {};
     const content = message.content;
     const text =
@@ -223,7 +232,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
       const call = asRecord(entry);
       const fn = asRecord(call?.function);
       if (typeof call?.id !== 'string' || !call.id || typeof fn?.name !== 'string' || !fn.name) {
-        throw new AiProviderError('bad_response', `${this.config.label} returned a tool call without id or name`);
+        throw new AiProviderError('bad_response', `${this.config.label} returned a tool call without id or name`, null, null, this.id);
       }
       let args: Record<string, unknown> = {};
       if (typeof fn.arguments === 'string' && fn.arguments.trim()) {
@@ -233,7 +242,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
           if (!record) throw new Error('not an object');
           args = record;
         } catch {
-          throw new AiProviderError('bad_response', `${this.config.label} returned tool call ${index} arguments that are not a JSON object`);
+          throw new AiProviderError('bad_response', `${this.config.label} returned tool call ${index} arguments that are not a JSON object`, null, null, this.id);
         }
       } else if (asRecord(fn.arguments)) {
         args = asRecord(fn.arguments)!;

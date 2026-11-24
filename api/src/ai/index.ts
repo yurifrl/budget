@@ -4,8 +4,9 @@
  */
 export { default, default as routes, operations } from './routes';
 export { configureAiEnv, AI_SHARED_API_KEY_ENV, AI_SHARED_MODEL_ENV, AI_SHARED_PROVIDER_ENV, sharedAiConfig } from './env';
-export { aiKeyHttpError, resolveAiKey, sharedAiAllowed, sharedAiStatus, storeOwnKey, type AiKeyProblem, type ResolvedAiKey } from './keys';
+export { aiKeyHttpError, resolveAiKey, sharedAiAllowed, sharedAiStatus, storeOwnKey, type AiKeyProblem } from './keys';
 export { detectProvider } from './detect';
-export { providerFor, providerBaseUrl } from './providers';
+export { providerFor, providerBaseUrl, type ResolvedAiKey } from './providers';
+export { redactSecrets } from './redact';
 export { AiProviderError, type AiErrorKind } from './errors';
 export type { AiChatRequest, AiChatResult, AiJsonSchema, AiMessage, AiModel, AiProvider, AiTool, AiToolCall } from './types';

@@ -1,14 +1,14 @@
 /**
  * AI provider registry — provider id → adapter factory.
  *
- * One map, sourced from the five adapters. Everything else resolves adapters
- * only through this module. New provider = new adapter folder + one line here +
- * one value in shared/src/contracts/ai/outputs.ts.
+ * One map, sourced from the five adapters. Everything else reaches adapters
+ * only through `providerFor`, which consumes an opaque `ResolvedAiKey` created
+ * by key resolution. New provider = new adapter folder + one line here + one
+ * value in shared/src/contracts/ai/outputs.ts.
  */
 import type { AiProviderId } from '@shared/contracts/ai';
 
 import type { FetchLike } from '../http';
-import type { ResolvedAiKey } from '../keys';
 import type { AiModel, AiProvider } from '../types';
 import { AnthropicProvider } from './anthropic';
 import { isOpenAiChatModel, OpenAiCompatibleProvider } from './openai-compatible';
@@ -27,11 +27,13 @@ export type ProviderEntry = {
 };
 
 /**
- * Z.ai's OpenAPI spec documents no model-list endpoint (checked against
- * docs.z.ai/openapi.json, 2026-11-24), so the list is the chat models that
- * spec names: the text families in ChatCompletionTextRequest and the vision
- * families in ChatCompletionVisionRequest. Context lengths are not published
- * per model; null means "provider did not report it".
+ * Z.ai documents no model-list endpoint (docs.z.ai/openapi.json, 2026-11-24).
+ * This is the documented chat-model suggestion list: the text request enum
+ * (glm-5.3 … glm-4.6) plus the FLASH/FLASHX/LEGAL variants named in the
+ * pricing table and chat examples. Vision families are separate and not
+ * listed. Context lengths are not published per model; null means the provider
+ * did not report one. A caller may save a model id outside this list: it is a
+ * suggestion, since the real list cannot be fetched.
  */
 const ZAI_MODELS: readonly AiModel[] = [
   'glm-4.6',
@@ -45,6 +47,13 @@ const ZAI_MODELS: readonly AiModel[] = [
   'glm-5.3-flashx-legal',
 ].map((id) => ({ id, name: id, contextLength: null }));
 
+/**
+ * Cheapest documented model for a key check: GLM-5.3-Flash at $0.15/M input
+ * and $0.50/M output (docs.z.ai/guides/overview/pricing). A "ping" with
+ * max_tokens 1 costs well under $0.00001. It is a member of ZAI_MODELS.
+ */
+const ZAI_KEY_CHECK_MODEL = 'glm-5.3-flash';
+
 const entries: Record<AiProviderId, ProviderEntry> = {
   openrouter: {
     baseUrl: 'https://openrouter.ai/api/v1',
@@ -55,7 +64,7 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           label: 'OpenRouter',
           baseUrl: options?.baseUrl ?? entries.openrouter.baseUrl,
           // /models is public; /key authenticates the key.
-          keyCheck: { path: '/key' },
+          keyCheck: () => ({ path: '/key' }),
           structured: 'json_schema',
           tokenParam: 'max_tokens',
         },
@@ -75,10 +84,9 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           id: 'openai',
           label: 'OpenAI',
           baseUrl: options?.baseUrl ?? entries.openai.baseUrl,
-          // /models needs api.model.read; a chat-only restricted key gets 403,
-          // which still proves the key authenticated.
-          keyCheck: { path: '/models' },
-          keyCheckAcceptsForbidden: true,
+          // OpenAI documents 401 when the key lacks the endpoint's scope, so a
+          // chat-only restricted key cannot verify and is not saved.
+          keyCheck: () => ({ path: '/models' }),
           structured: 'json_schema',
           tokenParam: 'max_completion_tokens',
           filterModel: isOpenAiChatModel,
@@ -95,13 +103,18 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           id: 'zai',
           label: 'Z.ai',
           baseUrl: options?.baseUrl ?? entries.zai.baseUrl,
-          // No documented model-list endpoint; the tokenizer is documented,
-          // authenticated and spends no inference tokens.
-          keyCheck: {
-            path: '/tokenizer',
+          // No documented model-list endpoint. The documented chat completion
+          // is the cheapest call that proves the key; the user's chosen model
+          // is used when there is one, otherwise the cheapest documented model.
+          keyCheck: (model) => ({
+            path: '/chat/completions',
             method: 'POST',
-            body: { model: 'glm-4.6', messages: [{ role: 'user', content: 'ping' }] },
-          },
+            body: {
+              model: model ?? ZAI_KEY_CHECK_MODEL,
+              messages: [{ role: 'user', content: 'ping' }],
+              max_tokens: 1,
+            },
+          }),
           staticModels: ZAI_MODELS,
           structured: 'json_object',
           tokenParam: 'max_tokens',
@@ -118,7 +131,7 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           id: 'deepseek',
           label: 'DeepSeek',
           baseUrl: options?.baseUrl ?? entries.deepseek.baseUrl,
-          keyCheck: { path: '/models' },
+          keyCheck: () => ({ path: '/models' }),
           structured: 'json_object',
           tokenParam: 'max_tokens',
         },
@@ -135,18 +148,58 @@ export function setProviders(map: Record<AiProviderId, ProviderEntry> | null): v
   table = map ?? entries;
 }
 
-/** The adapter for `id` on this key. The caller has already validated `id`. */
-export function createProvider(id: AiProviderId, apiKey: string, options?: ProviderOptions): AiProvider {
-  return table[id].create(apiKey, options);
+const RESOLVED_KEY_TOKEN: unique symbol = Symbol('ResolvedAiKey');
+
+type ResolvedKeyFields = {
+  source: 'own' | 'shared';
+  provider: AiProviderId;
+  model: string | null;
+  apiKey: string;
+  updatedAt: string | null;
+};
+
+/**
+ * The key a run would use, decrypted. Only `resolveAiKey` (through the
+ * module-internal factory) can produce one: the constructor requires a token
+ * private to this module, the secret has no accessor, and a structural
+ * `{ provider, apiKey }` object is not a `ResolvedAiKey`. `adapter()` binds the
+ * secret to its own provider's host; `providerFor` is the public entry.
+ */
+export class ResolvedAiKey {
+  readonly source: 'own' | 'shared';
+  readonly provider: AiProviderId;
+  readonly model: string | null;
+  readonly updatedAt: string | null;
+  readonly #apiKey: string;
+
+  constructor(token: typeof RESOLVED_KEY_TOKEN, fields: ResolvedKeyFields) {
+    if (token !== RESOLVED_KEY_TOKEN) throw new TypeError('ResolvedAiKey must come from resolveAiKey');
+    this.source = fields.source;
+    this.provider = fields.provider;
+    this.model = fields.model;
+    this.updatedAt = fields.updatedAt;
+    this.#apiKey = fields.apiKey;
+  }
+
+  /** The adapter for exactly this provider and secret. */
+  adapter(options?: ProviderOptions): AiProvider {
+    return table[this.provider].create(this.#apiKey, options);
+  }
+}
+
+/** Internal: key resolution and the candidate checks in this feature only. */
+export function makeResolvedAiKey(fields: ResolvedKeyFields): ResolvedAiKey {
+  return new ResolvedAiKey(RESOLVED_KEY_TOKEN, fields);
 }
 
 /**
  * The adapter for a resolved key. Takes the whole resolution, never a
  * (provider, key) pair, so a caller cannot send a stored key to another
- * provider's host. This is the only helper the categorizer should use.
+ * provider's host. This is the only provider factory the categorizer gets.
  */
 export function providerFor(resolved: ResolvedAiKey, options?: ProviderOptions): AiProvider {
-  return createProvider(resolved.provider, resolved.apiKey, options);
+  if (!(resolved instanceof ResolvedAiKey)) throw new TypeError('providerFor requires a key from resolveAiKey');
+  return resolved.adapter(options);
 }
 
 /** The configured API origin of a provider (boot diagnostics, error hints). */

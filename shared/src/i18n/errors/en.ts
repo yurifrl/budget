@@ -68,7 +68,6 @@ export default {
   // AI keys (category suggestions).
   own_ai_key_required: 'Add your own AI key to get category suggestions.',
   ai_key_rejected: 'The AI provider did not accept this key. Check it and try again.',
-  ai_key_forbidden: 'The AI provider accepted this key, but it is not allowed to do this. Check the key permissions; OpenAI keys need Models Read to list models.',
   ai_provider_unknown: 'Could not tell which AI provider this key belongs to. Choose the provider.',
   ai_provider_mismatch: 'Your saved AI key belongs to a different provider. Save a key for this provider, or list the saved key’s models.',
   ai_model_unknown: 'That model is not available for this key. Choose one from the list.',

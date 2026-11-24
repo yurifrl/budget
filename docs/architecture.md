@@ -161,18 +161,29 @@ start at `0100`). One image runs both the API and the worker
   adapters — OpenRouter, Anthropic, OpenAI, Z.ai, DeepSeek — with the provider
   guessed from the key shape and overridable (Z.ai keys have no documented
   shape, so that provider is chosen by hand). Saving checks the key with an
-  authenticated call (OpenRouter's `/key`; OpenAI and DeepSeek's model list;
-  Anthropic's one-model Models call; Z.ai's documented tokenizer, because its
-  API documents no model list) and never sends a stored key to another
-  provider's host: `providerFor(resolvedKey)` is the only way to build an
-  adapter for a stored key. OpenAI's `/models` needs the separate
-  `api.model.read` scope, so a 403 there still proves the key authenticated
-  and is reported later as 403 `ai_key_forbidden` when listing, not as a bad
-  key. Z.ai's model list is the set its OpenAPI spec documents. A chat deadline
-  is the 60 s floor or enough for the requested token cap at 25 output
-  tokens/s (Anthropic's 16k default → 640 s), and a timed-out chat is
-  `permanent`, never retried, because the aborted generation may already be
-  billed. Operations:
+  authenticated call (OpenRouter's `/key`; OpenAI and DeepSeek's `/models`;
+  Anthropic's Models list, returned so save/test use one call; Z.ai's cheapest
+  documented chat completion with `max_tokens: 1`, on the chosen model or
+  GLM-5.3-Flash, because its API documents neither a model list nor a tokenizer
+  price) and never sends a stored key to another provider's host.
+  `resolveAiKey` returns an opaque `ResolvedAiKey` (private secret, constructor
+  token); `providerFor(resolvedKey)` is the only adapter factory, and
+  `createProvider` is not exported. `POST /ai/models` with a candidate key
+  verifies it before listing. OpenAI documents 401, not a permission-specific
+  403, when a key lacks an endpoint's scope (`/models` needs
+  `api.model.read`), so a chat-only restricted key cannot be verified and is
+  not saved; its 403 is a country/region block. Z.ai's model list is the
+  documented suggestion list (text models plus the FLASH/FLASHX/LEGAL
+  variants); a typed id outside it is accepted, since the real list cannot be
+  fetched. A chat deadline is the 60 s floor or enough for the requested token
+  cap at 25 output tokens/s (16k, assumed when unset → 640 s). A deadline or a
+  caller `AbortSignal` rejects as kind `timeout`; the caller (the categorizer)
+  decides whether to retry, because a non-streaming generation may already be
+  billed. Non-chat deadlines stay `transient`. Bun's 5-minute socket idle
+  timer is disabled on chat calls so the deadline governs. Provider failures
+  are logged as provider/kind/status only (no upstream account text); the
+  barrel exports `redactSecrets` for callers that record error text.
+  Operations:
   `GET|PUT|DELETE /ai/credentials`, `GET /ai/credentials/test`,
   `POST /ai/provider-detect`, `POST /ai/models`; the key is never returned.
 - **Repeat-rule tick.** Still an in-process interval in the API

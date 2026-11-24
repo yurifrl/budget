@@ -62,23 +62,20 @@ export class AnthropicProvider implements AiProvider {
       headers: this.headers,
       body,
       timeoutMs: chatTimeoutMs(maxTokens),
+      timeoutKind: 'timeout',
+      signal: request.signal,
+      disableSocketIdleTimeout: true,
       fetch: this.fetchImpl,
     });
     return this.parseChat(json, request.model);
   }
 
-  /** A one-item Models call is authenticated and costs no inference tokens. */
+  /**
+   * The authenticated Models call is the key check and costs no inference
+   * tokens. Returning its list lets save/test use one call instead of two.
+   */
   async verifyKey(): Promise<AiModel[] | null> {
-    const url = new URL(`${this.baseUrl.replace(/\/+$/, '')}/models`);
-    url.searchParams.set('limit', '1');
-    await requestJson({
-      provider: this.id,
-      url: url.toString(),
-      headers: this.headers,
-      timeoutMs: DEFAULT_MODELS_TIMEOUT_MS,
-      fetch: this.fetchImpl,
-    });
-    return null;
+    return this.listModels();
   }
 
   async listModels(): Promise<AiModel[]> {
@@ -97,7 +94,7 @@ export class AnthropicProvider implements AiProvider {
       });
       const root = asRecord(json);
       const data = Array.isArray(root?.data) ? (root!.data as unknown[]) : null;
-      if (!data) throw new AiProviderError('bad_response', 'Anthropic answered the model list without a data array');
+      if (!data) throw new AiProviderError('bad_response', 'Anthropic answered the model list without a data array', null, null, this.id);
       for (const entry of data) {
         const model = asRecord(entry);
         if (typeof model?.id !== 'string' || !model.id) continue;
@@ -150,7 +147,7 @@ export class AnthropicProvider implements AiProvider {
   private parseChat(json: unknown, requestedModel: string): AiChatResult {
     const root = asRecord(json);
     const content = Array.isArray(root?.content) ? (root!.content as unknown[]) : null;
-    if (!content) throw new AiProviderError('bad_response', 'Anthropic answered without a content array');
+    if (!content) throw new AiProviderError('bad_response', 'Anthropic answered without a content array', null, null, this.id);
     const texts: string[] = [];
     const toolCalls: AiToolCall[] = [];
     for (const raw of content) {
@@ -159,7 +156,7 @@ export class AnthropicProvider implements AiProvider {
         texts.push(block.text);
       } else if (block?.type === 'tool_use') {
         if (typeof block.id !== 'string' || !block.id || typeof block.name !== 'string' || !block.name) {
-          throw new AiProviderError('bad_response', 'Anthropic returned a tool_use block without id or name');
+          throw new AiProviderError('bad_response', 'Anthropic returned a tool_use block without id or name', null, null, this.id);
         }
         toolCalls.push({ id: block.id, name: block.name, arguments: asRecord(block.input) ?? {} });
       }

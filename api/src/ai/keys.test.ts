@@ -127,7 +127,7 @@ describe.skipIf(!dbReady)('key resolution', () => {
     const resolution = await resolveAiKey(pool, user.id);
     expect(resolution.ok).toBe(true);
     if (!resolution.ok) return;
-    expect(resolution.key).toMatchObject({ source: 'own', provider: 'openai', model: 'gpt-4.1-mini', apiKey: KEY });
+    expect(resolution.key).toMatchObject({ source: 'own', provider: 'openai', model: 'gpt-4.1-mini' });
     expect(resolution.key.updatedAt).toBe(own.updated_at.toISOString());
     // Deleting the own key falls back to the shared one, model from app_settings.
     await pool.query(`insert into public.app_settings (key, value) values ($1, $2::jsonb)`, [AI_SHARED_MODEL_SETTING, JSON.stringify('openrouter/auto')]);
@@ -135,7 +135,7 @@ describe.skipIf(!dbReady)('key resolution', () => {
     const shared = await resolveAiKey(pool, user.id);
     expect(shared.ok).toBe(true);
     if (!shared.ok) return;
-    expect(shared.key).toMatchObject({ source: 'shared', provider: 'openrouter', model: 'openrouter/auto', apiKey: SHARED_KEY, updatedAt: null });
+    expect(shared.key).toMatchObject({ source: 'shared', provider: 'openrouter', model: 'openrouter/auto', updatedAt: null });
   });
 
   test('the feature gate: no own key and shared off is own_ai_key_required', async () => {
