@@ -4,8 +4,8 @@
  * model, then save / test / remove. It shows the current state from the
  * server (own credential without the key, a blocked stored row, or the
  * installation's shared AI, or neither). The key only ever goes to our API,
- * which stores it encrypted; this screen keeps it in memory while typed and
- * never on the device.
+ * which stores it encrypted; this screen holds it in memory only while it is
+ * focused, and never on the device.
  */
 
 import { useRouter } from 'expo-router';

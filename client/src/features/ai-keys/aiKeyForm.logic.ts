@@ -2,8 +2,9 @@
  * Pure state machine of the AI key entry form: the typed key, detection's
  * result, the provider choice, the model list and the model text. The hook
  * only runs effects and mutations against it; every sequence (typing that
- * resets a stale list, a retry keeping the chosen model, a stale list answer)
- * is decided here and tested in aiKeyForm.logic.test.ts.
+ * resets a stale list, a retry keeping the chosen model, a search that keeps
+ * the pick, a stale list answer) is decided here and tested in
+ * aiKeyForm.logic.test.ts.
  */
 
 import type { AiProviderId } from '@shared/contracts/ai';
@@ -98,6 +99,39 @@ export function shouldListModels(state: Pick<AiKeyFormState, 'provider' | 'key' 
   return token !== null && !state.detecting && state.modelsFor !== token;
 }
 
+/**
+ * The model list for this key+provider has not answered yet: queued for the
+ * debounce, in flight, or not started. The form's "Loading models…" line and
+ * Save's disabled state both read this, so the two cannot disagree.
+ */
+export function isModelListPending(input: {
+  modelsLoading: boolean;
+  modelsLoaded: boolean;
+  modelsError: boolean;
+}): boolean {
+  return input.modelsLoading || (!input.modelsLoaded && !input.modelsError);
+}
+
+/**
+ * Whether Save may store the key: a plausible key, a provider, detection
+ * settled, and the model list settled (loaded or failed) for this pair. While
+ * detection runs or the debounced list is still due, Save would store the key
+ * with no model even though the screen says the models are loading.
+ */
+export function canSaveAiKey(input: {
+  key: string;
+  provider: AiProviderId | null;
+  detecting: boolean;
+  modelsLoading: boolean;
+  modelsLoaded: boolean;
+  modelsError: boolean;
+}): boolean {
+  if (input.key.trim().length < MIN_AI_KEY_LENGTH) return false;
+  if (input.provider === null) return false;
+  if (input.detecting) return false;
+  return !isModelListPending(input);
+}
+
 /** Everything a new key or provider invalidates: list, pick, list error, attempt token. */
 function clearedPair(state: AiKeyFormState): Pick<AiKeyFormState, 'models' | 'modelsFor' | 'modelsLoading' | 'modelsError' | 'model' | 'modelQuery' | 'attemptedToken'> {
   return { models: [], modelsFor: null, modelsLoading: false, modelsError: null, model: null, modelQuery: '', attemptedToken: null };
@@ -170,8 +204,15 @@ export function aiKeyFormReducer(state: AiKeyFormState, event: AiKeyFormEvent): 
       };
     }
     case 'modelQueryEdited': {
-      const keep = state.model !== null && labelOf(state, state.model) === event.text ? state.model : null;
-      return { ...state, modelQuery: event.text, model: keep };
+      // Typing searches; it does not unchoose. A dropped pick would be saved
+      // with no model and the card cannot set one (only a new key can). Only
+      // clearing the field unchoses. Z.ai is the exception: its typed text is
+      // the model, so the text replaces the pick.
+      if (state.provider === 'zai') {
+        const keep = state.model !== null && labelOf(state, state.model) === event.text ? state.model : null;
+        return { ...state, modelQuery: event.text, model: keep };
+      }
+      return { ...state, modelQuery: event.text, model: event.text.trim() === '' ? null : state.model };
     }
     case 'modelCommitted':
       return { ...state, model: event.id, modelQuery: labelOf(state, event.id) };

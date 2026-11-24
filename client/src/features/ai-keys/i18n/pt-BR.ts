@@ -48,7 +48,6 @@ const m: Translation<typeof en> = {
   'form.providerRequired': 'Escolha um provedor antes de salvar.',
   'form.detected': 'Detectado pela chave: {provider}. Você pode mudar.',
   'form.providerDiffers': 'A chave parece ser de {detected}, mas {chosen} está selecionado.',
-  'form.providerChosen': 'Escolha o provedor dono desta chave.',
   'form.modelLabel': 'Modelo',
   'form.modelPlaceholder': 'Buscar modelos',
   'form.modelsLoading': 'Carregando modelos…',

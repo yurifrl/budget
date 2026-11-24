@@ -21,7 +21,7 @@ import {
 } from '@/ui/bits';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors } from '@/ui/theme';
-import { providerLabel } from './aiKeys.logic';
+import { localDatePart, providerLabel } from './aiKeys.logic';
 import { t } from './i18n';
 import type { AiKeysState } from './useAiKeys';
 
@@ -40,7 +40,7 @@ export function AiKeySavedCard({ keys }: { keys: AiKeysState }) {
       <SettingsCardRow label={t('state.provider')} value={providerLabel(own.provider)} />
       <SettingsCardRow label={t('state.model')} value={own.model ?? t('state.none')} lines={2} />
       {own.model === null ? <Text style={settingsCardText.body}>{t('state.noModel')}</Text> : null}
-      <Text style={settingsCardText.muted}>{t('state.savedAt', { date: fmt.formatDate(own.updated_at.slice(0, 10)) })}</Text>
+      <Text style={settingsCardText.muted}>{t('state.savedAt', { date: fmt.formatDate(localDatePart(own.updated_at)) })}</Text>
 
       {keys.notice ? (
         <Text style={settingsCardText.ok} accessibilityLiveRegion="polite">
@@ -72,6 +72,12 @@ export function AiKeySavedCard({ keys }: { keys: AiKeysState }) {
           onCancel={() => keys.setConfirmingRemove(false)}
           onConfirm={() => void keys.remove()}
         />
+      ) : keys.unreadable ? (
+        // Test can only fail with ai_key_unreadable, and the fix is a new key.
+        <SettingsCardActions wrap>
+          <SettingsCardButton label={t('state.saveNewKey')} primary onPress={keys.startReplace} />
+          <SettingsCardButton label={t('state.remove')} danger onPress={() => keys.setConfirmingRemove(true)} />
+        </SettingsCardActions>
       ) : (
         <SettingsCardActions wrap>
           <SettingsCardButton

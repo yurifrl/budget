@@ -109,7 +109,9 @@ export function detectionHint(input: {
     return t('form.providerDiffers', { detected: providerLabel(detected), chosen: providerLabel(provider) });
   }
   if (detected !== null) return t('form.detected', { provider: providerLabel(detected) });
-  return t('form.providerChosen');
+  // A chosen provider with nothing detected needs no line: the chip is selected,
+  // and the old "pick the provider" sentence would instruct a done step.
+  return null;
 }
 
 /** Model rows for the picker: the provider's name, the id as the sub-line when it differs. */
@@ -118,6 +120,19 @@ export function modelOptions(models: readonly AiModel[]): { key: string; label: 
     const label = model.name !== '' ? model.name : model.id;
     return { key: model.id, label, ...(label !== model.id ? { sub: model.id } : {}) };
   });
+}
+
+/**
+ * The local calendar date (YYYY-MM-DD) of a stored timestamp, for formatDate.
+ * Slicing the ISO string would show the UTC day: a key saved at 22:00 in São
+ * Paulo would read as tomorrow. A date-only value is already a date.
+ */
+export function localDatePart(iso: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 /** The `{ status, message, code }` an RTK Query request rejects with (platform/api/baseQuery). */
@@ -192,10 +207,10 @@ export function modelListFailure(error: unknown): ModelListFailure {
 }
 
 /**
- * The status shows an own key, but the server cannot open it (master key
- * changed). This shape becomes reachable with budget-ucyr's ownKeyUsable:
- * on main the server answers effective 'own' whenever own is non-null, so the
- * screen is written ahead of it on purpose.
+ * The status shows an own key the server cannot open (the encryption key
+ * changed, or the row is otherwise unusable). Since budget-ucyr the server
+ * reports effective null for such a row, so this state is reachable; the key
+ * must not be presented as usable and Test cannot work.
  */
 export function ownKeyUnreadable(status: AiCredentialStatus): boolean {
   return status.own !== null && status.effective === null;

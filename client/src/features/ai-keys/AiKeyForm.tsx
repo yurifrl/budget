@@ -33,11 +33,6 @@ import type { AiKeysState } from './useAiKeys';
 export function AiKeyForm({ keys }: { keys: AiKeysState }) {
   // A blocked row also opens this form; Cancel must return to its card.
   const replacing = keys.mode === 'saved' || keys.mode === 'blocked';
-  const canSave =
-    keys.apiKey.trim().length >= MIN_AI_KEY_LENGTH &&
-    keys.provider !== null &&
-    !keys.saving &&
-    !keys.modelsLoading;
   const showManualModel = keys.modelsError !== null && keys.modelsRetryable;
   return (
     <SettingsCard>
@@ -94,7 +89,7 @@ export function AiKeyForm({ keys }: { keys: AiKeysState }) {
       {keys.modelsReady ? (
         <View style={styles.models}>
           <Text style={styles.label}>{t('form.modelLabel')}</Text>
-          {keys.modelsLoading || (!keys.modelsLoaded && !keys.modelsError) ? (
+          {keys.modelsPending ? (
             <Text style={settingsCardText.muted}>{t('form.modelsLoading')}</Text>
           ) : null}
           {!keys.modelsLoading && keys.modelsError ? (
@@ -164,7 +159,7 @@ export function AiKeyForm({ keys }: { keys: AiKeysState }) {
           label={keys.saving ? t('form.saving') : t('form.save')}
           primary
           busy={keys.saving}
-          disabled={!canSave}
+          disabled={!keys.canSave}
           onPress={() => void keys.save()}
         />
       </SettingsCardActions>

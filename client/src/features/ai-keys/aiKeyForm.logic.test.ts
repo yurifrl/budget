@@ -10,8 +10,10 @@ import { describe, expect, test } from 'bun:test';
 import type { AiModel } from '@/budget/data/api';
 import {
   aiKeyFormReducer,
+  canSaveAiKey,
   effectiveModel,
   initialAiKeyForm,
+  isModelListPending,
   modelToken,
   shouldListModels,
   type AiKeyFormEvent,
@@ -70,6 +72,33 @@ describe('shouldListModels', () => {
       { type: 'modelsLoaded', token: TOKEN, models: MODELS },
     );
     expect(shouldListModels(listed)).toBe(false);
+  });
+});
+
+describe('isModelListPending', () => {
+  test('is true until the list answers, loaded or failed', () => {
+    expect(isModelListPending({ modelsLoading: false, modelsLoaded: false, modelsError: false })).toBe(true);
+    expect(isModelListPending({ modelsLoading: true, modelsLoaded: false, modelsError: false })).toBe(true);
+    expect(isModelListPending({ modelsLoading: false, modelsLoaded: true, modelsError: false })).toBe(false);
+    expect(isModelListPending({ modelsLoading: false, modelsLoaded: false, modelsError: true })).toBe(false);
+  });
+});
+
+describe('canSaveAiKey', () => {
+  const base = { key: KEY, provider: 'openai' as const, detecting: false, modelsLoading: false, modelsLoaded: false, modelsError: false };
+
+  test('stays disabled from the paste until the list answers', () => {
+    expect(canSaveAiKey({ ...base, detecting: true })).toBe(false); // detection running
+    expect(isModelListPending(base)).toBe(true);
+    expect(canSaveAiKey(base)).toBe(false); // debounce window before modelsStarted
+    expect(canSaveAiKey({ ...base, modelsLoading: true })).toBe(false);
+    expect(canSaveAiKey({ ...base, modelsLoaded: true })).toBe(true);
+    expect(canSaveAiKey({ ...base, modelsError: true })).toBe(true);
+  });
+
+  test('also needs a plausible key and a provider', () => {
+    expect(canSaveAiKey({ ...base, modelsLoaded: true, key: 'short' })).toBe(false);
+    expect(canSaveAiKey({ ...base, modelsLoaded: true, provider: null })).toBe(false);
   });
 });
 
@@ -181,10 +210,22 @@ describe('the model list', () => {
     expect(loaded.modelQuery).toBe('');
   });
 
-  test('editing the text uncommits the model unless it is still its label', () => {
+  test('editing the search text keeps the chosen model; clearing the field unchoses', () => {
     const picked = aiKeyFormReducer(openAiLoaded(), { type: 'modelCommitted', id: 'gpt-5' });
-    expect(aiKeyFormReducer(picked, { type: 'modelQueryEdited', text: 'gpt-5' }).model).toBeNull();
-    expect(aiKeyFormReducer(picked, { type: 'modelQueryEdited', text: 'GPT-5' }).model).toBe('gpt-5');
+    expect(aiKeyFormReducer(picked, { type: 'modelQueryEdited', text: 'gpt' }).model).toBe('gpt-5');
+    expect(aiKeyFormReducer(picked, { type: 'modelQueryEdited', text: 'gpt-5' }).model).toBe('gpt-5');
+    expect(aiKeyFormReducer(picked, { type: 'modelQueryEdited', text: '   ' }).model).toBeNull();
+    expect(effectiveModel(aiKeyFormReducer(picked, { type: 'modelQueryEdited', text: 'gpt' }))).toBe('gpt-5');
+  });
+
+  test('Z.ai typed text replaces the pick', () => {
+    const zai = aiKeyFormReducer(
+      reduce({ type: 'keyEdited', key: KEY }, { type: 'providerChosen', provider: 'zai' }),
+      { type: 'modelCommitted', id: 'glm-4.6' },
+    );
+    const edited = aiKeyFormReducer(zai, { type: 'modelQueryEdited', text: 'glm-5.3-custom' });
+    expect(edited.model).toBeNull();
+    expect(effectiveModel(edited)).toBe('glm-5.3-custom');
   });
 });
 

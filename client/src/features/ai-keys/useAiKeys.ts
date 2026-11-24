@@ -2,11 +2,13 @@
  * Wiring of the AI key screen: the status query, detection, the model list of
  * the candidate key, and save / test / remove. The form state machine lives in
  * aiKeyForm.logic.ts; this hook only runs effects and mutations against it, so
- * every sequence is testable without a renderer. The key stays in the form
- * state while typed; save/list/detect mutations are reset once they settle so
- * the request arguments (the key) do not stay in the redux store.
+ * every sequence is testable without a renderer. The key is held only while the
+ * screen is focused: leaving resets the form, and the effects' cleanups abort
+ * detection and the list. Save/list/detect mutations are reset once they settle
+ * so the request arguments (the key) do not stay in the redux store.
  */
 
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 
 import type { AiProviderId } from '@shared/contracts/ai';
@@ -36,10 +38,10 @@ import {
   type AiKeyFormError,
   type AiKeysScreenMode,
 } from './aiKeys.logic';
-import { aiKeyFormReducer, effectiveModel, initialAiKeyForm, modelToken, shouldListModels } from './aiKeyForm.logic';
+import { aiKeyFormReducer, canSaveAiKey, effectiveModel, initialAiKeyForm, isModelListPending, modelToken, shouldListModels } from './aiKeyForm.logic';
 import { t } from './i18n';
 
-/** Detection is a local, cheap guess; debounce while the key is typed or pasted. */
+/** Detection is a server call with the candidate key; debounce while it is typed or pasted. */
 const DETECT_DEBOUNCE_MS = 300;
 /** The list costs an upstream call with the key: wait until typing has stopped and detection settled. */
 const LIST_DEBOUNCE_MS = 600;
@@ -75,6 +77,10 @@ export interface AiKeysState {
   effectiveModel: string | null;
   /** Both the key and a provider are set: the model picker is meaningful. */
   modelsReady: boolean;
+  /** The list for this pair has not answered yet: the loading line and Save both read it. */
+  modelsPending: boolean;
+  /** Save may store the key: settled detection and list, and no save in flight. */
+  canSave: boolean;
   /** The status has an own key the server cannot open: re-save it, do not present it as usable. */
   unreadable: boolean;
   error: AiKeyFormError | null;
@@ -124,12 +130,42 @@ export function useAiKeys(): AiKeysState {
   const [testError, setTestError] = useState<string | null>(null);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
+  // This route stays mounted in the tab navigator: leaving the screen drops the
+  // typed key and every ephemeral message, so reopening never shows the key
+  // pre-filled. Resetting form.key makes the detection and list effects' cleanups
+  // abort whatever is still in flight.
+  useFocusEffect(
+    useCallback(() => () => {
+      update({ type: 'reset' });
+      setEditing(false);
+      setError(null);
+      setNotice(null);
+      setTestResult(null);
+      setTestError(null);
+      setConfirmingRemove(false);
+    }, []),
+  );
+
   const key = form.key.trim();
   const mode = aiKeysScreenMode({ status: statusQuery.data, isError: statusQuery.isError });
   const unreadable = statusQuery.data ? ownKeyUnreadable(statusQuery.data) : false;
   const showForm = mode === 'empty' || mode === 'shared' || ((mode === 'saved' || mode === 'blocked') && editing);
   const modelsLoaded =
     form.modelsError === null && form.modelsFor !== null && form.modelsFor === modelToken(form.provider, form.key);
+  const modelsPending = isModelListPending({
+    modelsLoading: form.modelsLoading,
+    modelsLoaded,
+    modelsError: form.modelsError !== null,
+  });
+  const canSave =
+    canSaveAiKey({
+      key: form.key,
+      provider: form.provider,
+      detecting: form.detecting,
+      modelsLoading: form.modelsLoading,
+      modelsLoaded,
+      modelsError: form.modelsError !== null,
+    }) && !saveState.isLoading;
 
   // Detection: debounced on the key; a manual choice is never overwritten. The
   // sequence id keeps a superseded answer (and its reset) away from a newer one.
@@ -226,6 +262,7 @@ export function useAiKeys(): AiKeysState {
 
   const editKey = useCallback((text: string) => {
     update({ type: 'keyEdited', key: text });
+    setNotice(null);
     setError((current) => (current?.field === 'key' ? null : current));
   }, []);
 
@@ -340,6 +377,8 @@ export function useAiKeys(): AiKeysState {
     editModelQuery,
     effectiveModel: effectiveModel(form),
     modelsReady: form.provider !== null && key.length >= MIN_AI_KEY_LENGTH,
+    modelsPending,
+    canSave,
     unreadable,
     error,
     notice,

@@ -27,6 +27,7 @@ import {
   aiKeysScreenMode,
   checkSaveInput,
   detectionHint,
+  localDatePart,
   modelListFailure,
   modelOptions,
   ownKeyUnreadable,
@@ -120,11 +121,20 @@ describe('detectionHint', () => {
     expect(detectionHint(base)).toBe(t('form.providerUnknown'));
   });
 
-  test('a manual choice survives a different detection, and a guess shows without detection', () => {
+  test('a manual choice survives a different detection, and says nothing when it stands alone', () => {
     expect(detectionHint({ ...base, provider: 'zai', detected: 'anthropic' })).toBe(
       t('form.providerDiffers', { detected: 'Anthropic', chosen: 'Z.ai' }),
     );
-    expect(detectionHint({ ...base, provider: 'zai' })).toBe(t('form.providerChosen'));
+    expect(detectionHint({ ...base, provider: 'zai' })).toBeNull();
+  });
+});
+
+describe('localDatePart', () => {
+  test('keeps a date-only value and the local day of a timestamp', () => {
+    expect(localDatePart('2026-11-24')).toBe('2026-11-24');
+    expect(localDatePart('2026-11-24T00:15:00')).toBe('2026-11-24');
+    expect(localDatePart('2026-11-24T23:30:00')).toBe('2026-11-24');
+    expect(localDatePart('nonsense')).toBe('nonsense');
   });
 });
 

@@ -49,7 +49,6 @@ export default {
   'form.providerRequired': 'Choose a provider before saving.',
   'form.detected': 'Detected from the key: {provider}. You can change it.',
   'form.providerDiffers': 'The key looks like {detected}, but {chosen} is selected.',
-  'form.providerChosen': 'Pick the provider this key belongs to.',
   'form.modelLabel': 'Model',
   'form.modelPlaceholder': 'Search models',
   'form.modelsLoading': 'Loading models…',
