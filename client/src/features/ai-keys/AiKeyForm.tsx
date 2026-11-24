@@ -4,8 +4,9 @@
  * choose instead of failing), switch the provider by hand, then pick one of
  * that provider's models and save. Detection and the model list are
  * best-effort reads of the candidate key; only Save sends it for keeps. When
- * the provider refuses to list models (403 ai_key_forbidden) the form shows
- * why, takes a typed model id, and still lets the key be saved without one.
+ * the model list cannot be fetched (rate limit, provider unavailable) the form
+ * shows why, takes a typed model id, and still lets the key be saved without
+ * one. Z.ai's list is a suggestion, so it also accepts a typed id.
  */
 
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -91,15 +92,20 @@ export function AiKeyForm({ keys }: { keys: AiKeysState }) {
             </>
           ) : null}
           {!keys.modelsLoading && !keys.modelsError ? (
-            <Combobox
-              value={keys.modelQuery}
-              onChangeText={keys.editModelQuery}
-              options={modelOptions(keys.models)}
-              onPick={keys.chooseModel}
-              placeholder={t('form.modelPlaceholder')}
-              chevron
-              accessibilityLabel={t('form.modelLabel')}
-            />
+            <>
+              <Combobox
+                value={keys.modelQuery}
+                onChangeText={keys.editModelQuery}
+                options={modelOptions(keys.models)}
+                onPick={keys.chooseModel}
+                onCreate={keys.provider === 'zai' ? keys.editManualModel : undefined}
+                createLabel={(query) => t('form.useTypedModel', { model: query })}
+                placeholder={t('form.modelPlaceholder')}
+                chevron
+                accessibilityLabel={t('form.modelLabel')}
+              />
+              {keys.provider === 'zai' ? <Text style={styles.muted}>{t('form.zaiTypedHint')}</Text> : null}
+            </>
           ) : null}
           {!keys.modelsLoading && !keys.modelsError && keys.models.length === 0 ? (
             <Text style={styles.muted}>{t('form.modelsEmpty')}</Text>

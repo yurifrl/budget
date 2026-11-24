@@ -24,13 +24,12 @@ import {
 } from '@/budget/data/api';
 import { useAppDispatch } from '@/state/hooks';
 import {
-  AI_KEY_FORBIDDEN_CODE,
-  aiErrorCode,
   aiErrorView,
   aiKeysScreenMode,
   checkSaveInput,
   detectionHint,
   MIN_AI_KEY_LENGTH,
+  ownKeyUnreadable,
   providerLabel,
   type AiKeyFormError,
   type AiKeysScreenMode,
@@ -58,10 +57,6 @@ export interface AiKeysState {
   models: readonly AiModel[];
   modelsLoading: boolean;
   modelsError: string | null;
-  /** The last model-list failure was 403 ai_key_forbidden (key valid, lacks Models Read). */
-  modelsForbidden: boolean;
-  /** The saved own key was stored without a model because its provider forbids listing them. */
-  savedForbidden: boolean;
   retryModels: () => void;
   model: string | null;
   modelQuery: string;
@@ -71,6 +66,8 @@ export interface AiKeysState {
   editManualModel: (text: string) => void;
   /** Both the key and a provider are set: the model picker is meaningful. */
   modelsReady: boolean;
+  /** The status has an own key the server cannot open: re-save it, do not present it as usable. */
+  unreadable: boolean;
   error: AiKeyFormError | null;
   notice: string | null;
   saving: boolean;
@@ -117,8 +114,6 @@ export function useAiKeys(): AiKeysState {
   const [modelsFor, setModelsFor] = useState<string | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  const [modelsForbidden, setModelsForbidden] = useState(false);
-  const [savedForbidden, setSavedForbidden] = useState(false);
   /** `${provider}\n${key}` of the last list attempt: a retry of the same pair keeps a chosen model. */
   const attemptedToken = useRef<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
@@ -133,6 +128,7 @@ export function useAiKeys(): AiKeysState {
 
   const key = apiKey.trim();
   const mode = aiKeysScreenMode({ status: statusQuery.data, isError: statusQuery.isError });
+  const unreadable = statusQuery.data ? ownKeyUnreadable(statusQuery.data) : false;
   const showForm = mode === 'empty' || mode === 'shared' || (mode === 'saved' && editing);
 
   // Detection: debounced on the key; a manual choice is never overwritten.
@@ -175,7 +171,6 @@ export function useAiKeys(): AiKeysState {
       setModelsFor(null);
       setModelsLoading(false);
       setModelsError(null);
-      setModelsForbidden(false);
       attemptedToken.current = null;
       return;
     }
@@ -188,7 +183,6 @@ export function useAiKeys(): AiKeysState {
     setModels([]);
     setModelsLoading(true);
     setModelsError(null);
-    setModelsForbidden(false);
     if (!retry) {
       setModel(null);
       setModelQuery('');
@@ -211,7 +205,6 @@ export function useAiKeys(): AiKeysState {
         if (cancelled) return;
         setModelsFor(token);
         setModelsError(aiErrorView(err));
-        setModelsForbidden(aiErrorCode(err) === AI_KEY_FORBIDDEN_CODE);
       })
       .finally(() => {
         if (cancelled) return;
@@ -234,7 +227,6 @@ export function useAiKeys(): AiKeysState {
     setModels([]);
     setModelsFor(null);
     setModelsError(null);
-    setModelsForbidden(false);
     attemptedToken.current = null;
     setError(null);
     setNotice(null);
@@ -254,7 +246,6 @@ export function useAiKeys(): AiKeysState {
     setModels([]);
     setModelsFor(null);
     setModelsError(null);
-    setModelsForbidden(false);
     attemptedToken.current = null;
     setError(null);
   }, []);
@@ -328,15 +319,13 @@ export function useAiKeys(): AiKeysState {
       setModels([]);
       setModelsFor(null);
       setEditing(false);
-      // The saved card explains a missing model only when the provider forbade listing them.
-      setSavedForbidden(modelsForbidden);
       setNotice(t('notice.saved', { provider: providerLabel(status.own?.provider ?? provider!) }));
     } catch (err) {
       setError({ field: 'form', message: aiErrorView(err) });
     } finally {
       resetSave();
     }
-  }, [key, provider, model, modelsForbidden, saveKey, saveState.isLoading, resetSave, dispatch]);
+  }, [key, provider, model, saveKey, saveState.isLoading, resetSave, dispatch]);
 
   const remove = useCallback(async () => {
     setError(null);
@@ -351,8 +340,6 @@ export function useAiKeys(): AiKeysState {
       dispatch(budgetApi.util.upsertQueryData('getAiCredentials', undefined, next));
       setConfirmingRemove(false);
       setEditing(false);
-      setModelsForbidden(false);
-      setSavedForbidden(false);
       setNotice(t('notice.removed'));
     } catch (err) {
       setError({ field: 'form', message: aiErrorView(err) });
@@ -388,8 +375,6 @@ export function useAiKeys(): AiKeysState {
     models,
     modelsLoading,
     modelsError,
-    modelsForbidden,
-    savedForbidden,
     retryModels,
     model,
     modelQuery,
@@ -397,6 +382,7 @@ export function useAiKeys(): AiKeysState {
     editModelQuery,
     editManualModel,
     modelsReady: provider !== null && key.length >= MIN_AI_KEY_LENGTH,
+    unreadable,
     error,
     notice,
     saving: saveState.isLoading,

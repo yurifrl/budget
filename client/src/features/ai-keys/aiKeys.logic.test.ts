@@ -19,13 +19,12 @@ import {
 
 import type { AiCredentialStatus } from '@/budget/data/api';
 import {
-  AI_KEY_FORBIDDEN_CODE,
-  aiErrorCode,
   aiErrorView,
   aiKeysScreenMode,
   checkSaveInput,
   detectionHint,
   modelOptions,
+  ownKeyUnreadable,
   providerLabel,
   providerOptions,
 } from './aiKeys.logic';
@@ -45,6 +44,15 @@ function status(own: AiCredentialStatus['own'], sharedAvailable: boolean): AiCre
 
 const own = { provider: 'anthropic' as const, model: 'claude-sonnet-4', updated_at: '2026-11-24T10:00:00.000Z' };
 
+function rawStatus(overrides: Partial<AiCredentialStatus>): AiCredentialStatus {
+  return {
+    own: null,
+    shared: { available: false, provider: null, model: null },
+    effective: null,
+    ...overrides,
+  };
+}
+
 describe('aiKeysScreenMode', () => {
   test('waits, fails, or shows own / shared / neither', () => {
     expect(aiKeysScreenMode({ status: undefined, isError: false })).toBe('loading');
@@ -52,6 +60,19 @@ describe('aiKeysScreenMode', () => {
     expect(aiKeysScreenMode({ status: status(own, true), isError: false })).toBe('saved');
     expect(aiKeysScreenMode({ status: status(null, true), isError: false })).toBe('shared');
     expect(aiKeysScreenMode({ status: status(null, false), isError: false })).toBe('empty');
+  });
+
+  test('a shared provider with available false is not offered as shared AI', () => {
+    const shared = { available: false, provider: 'openrouter' as const, model: 'openai/gpt-4o-mini' };
+    expect(aiKeysScreenMode({ status: rawStatus({ shared }), isError: false })).toBe('empty');
+  });
+});
+
+describe('ownKeyUnreadable', () => {
+  test('an own key the server cannot open is not the key in use', () => {
+    expect(ownKeyUnreadable(status(own, false))).toBe(false);
+    expect(ownKeyUnreadable(rawStatus({ own, effective: null }))).toBe(true);
+    expect(ownKeyUnreadable(status(null, true))).toBe(false);
   });
 });
 
@@ -117,37 +138,33 @@ describe('modelOptions', () => {
 describe('aiErrorView', () => {
   const codes = [
     AI_KEY_REJECTED,
-    AI_KEY_FORBIDDEN_CODE,
     AI_PROVIDER_UNKNOWN,
     AI_PROVIDER_MISMATCH,
     AI_MODEL_UNKNOWN,
     AI_KEY_REQUIRED,
+    'rate_limited',
+    'upstream_error',
     AI_ENCRYPTION_MISSING,
     AI_KEY_UNREADABLE,
     AI_SHARED_KEY_MISSING,
     AI_SHARED_MODEL_MISSING,
   ];
 
-  test('every AI error code has its own message, never the generic fallback', () => {
+  test('every required code has its own message, never the generic fallback', () => {
     const generic = t('error.generic');
     const messages = codes.map((code) => aiErrorView({ status: 400, code }));
     for (const message of messages) expect(message).not.toBe(generic);
     expect(new Set(messages).size).toBe(codes.length);
   });
 
-  test('a forbidden key (valid but not permitted) is not read as a rejected key', () => {
-    // budget-ucyr adds AI_KEY_FORBIDDEN; the wire value is the contract's.
-    expect(AI_KEY_FORBIDDEN_CODE).toBe('ai_key_forbidden');
-    const forbidden = aiErrorView({ status: 403, code: AI_KEY_FORBIDDEN_CODE });
-    expect(forbidden).toBe(t('error.keyForbidden'));
-    expect(forbidden).not.toBe(t('error.keyRejected'));
-    expect(aiErrorCode({ status: 403, code: AI_KEY_FORBIDDEN_CODE })).toBe('ai_key_forbidden');
-    expect(aiErrorCode(null)).toBeUndefined();
-  });
-
-  test('a provider 429, an upstream 502 and a dead connection read clearly', () => {
+  test('the message follows the code, not the HTTP status', () => {
     expect(aiErrorView({ status: 429, code: 'rate_limited' })).toBe(t('error.rateLimited'));
     expect(aiErrorView({ status: 502, code: 'upstream_error' })).toBe(t('error.providerUnavailable'));
+    // Same code, another status: the code still decides.
+    expect(aiErrorView({ status: 500, code: 'rate_limited' })).toBe(t('error.rateLimited'));
+    // No code: the generic sentence, never a guess from the status.
+    expect(aiErrorView({ status: 429, message: 'HTTP 429' })).toBe(t('error.generic'));
+    expect(aiErrorView({ status: 502, message: 'HTTP 502' })).toBe(t('error.generic'));
     expect(aiErrorView({ status: 'FETCH_ERROR', message: 'Failed to fetch' })).toBe(t('error.unreachable'));
   });
 

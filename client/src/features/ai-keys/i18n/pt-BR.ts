@@ -12,8 +12,8 @@ const m: Translation<typeof en> = {
   'state.model': 'Modelo',
   'state.none': 'Não escolhido',
   'state.noModel': 'Nenhum modelo escolhido ainda. Troque a chave para escolher um.',
-  'state.modelForbidden':
-    'O provedor aceitou esta chave, mas não permite listar modelos (uma chave restrita da OpenAI precisa de Models Read). As sugestões de categoria precisam de um modelo: ative essa permissão e salve a chave de novo.',
+  'state.unreadable':
+    'Esta chave salva não pode mais ser aberta neste servidor (a chave de criptografia pode ter mudado). Salve a chave de novo.',
   'state.savedAt': 'Salva em {date}',
   'state.test': 'Testar chave',
   'state.testing': 'Testando…',
@@ -51,6 +51,8 @@ const m: Translation<typeof en> = {
   'form.modelsEmpty': 'Este provedor não retornou modelos.',
   'form.manualModelHint':
     'Não foi possível carregar a lista de modelos. Digite o id de um modelo, se souber, ou salve a chave sem modelo.',
+  'form.zaiTypedHint': 'O Z.ai não tem lista de modelos: estes são sugestões. Digite qualquer id de modelo para usá-lo.',
+  'form.useTypedModel': 'Usar "{model}"',
   'form.saveWithoutModel': 'Nenhum modelo escolhido — você pode salvar a chave sem um.',
   'form.keyTooShort': 'A chave parece curta demais. Cole a chave inteira.',
   'form.save': 'Salvar chave',
@@ -66,8 +68,6 @@ const m: Translation<typeof en> = {
   'provider.deepseek': 'DeepSeek',
 
   'error.keyRejected': 'O provedor de IA não aceitou esta chave. Confira e tente de novo.',
-  'error.keyForbidden':
-    'O provedor de IA aceitou esta chave, mas ela não tem permissão para listar modelos. Uma chave restrita da OpenAI precisa da permissão Models Read.',
   'error.providerUnknown': 'Não deu para saber a qual provedor esta chave pertence. Escolha o provedor e tente de novo.',
   'error.providerMismatch': 'A chave salva é de outro provedor. Salve uma chave para este provedor.',
   'error.modelUnknown': 'O provedor não oferece esse modelo. Escolha um da lista.',

@@ -23,11 +23,10 @@ export function AiKeySavedCard({ keys }: { keys: AiKeysState }) {
   return (
     <View style={styles.card}>
       <Text style={styles.section}>{t('state.ownTitle')}</Text>
+      {keys.unreadable ? <Text style={styles.warnText}>{t('state.unreadable')}</Text> : null}
       <Row label={t('state.provider')} value={providerLabel(own.provider)} />
       <Row label={t('state.model')} value={own.model ?? t('state.none')} />
-      {own.model === null ? (
-        <Text style={styles.body}>{keys.savedForbidden ? t('state.modelForbidden') : t('state.noModel')}</Text>
-      ) : null}
+      {own.model === null ? <Text style={styles.body}>{t('state.noModel')}</Text> : null}
       <Text style={styles.muted}>{t('state.savedAt', { date: own.updated_at.slice(0, 10) })}</Text>
 
       {keys.notice ? <Text style={styles.okText}>{keys.notice}</Text> : null}
@@ -106,6 +105,7 @@ const styles = StyleSheet.create({
   body: { color: colors.text, fontSize: 14, lineHeight: 20 },
   muted: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   okText: { color: colors.greenPillFg, fontSize: 13, fontWeight: '600' },
+  warnText: { color: colors.yellowPillFg, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   errorText: { color: colors.redFg, fontSize: 13, lineHeight: 18 },
   kv: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 4 },
   kvLabel: { color: colors.muted, fontSize: 14 },

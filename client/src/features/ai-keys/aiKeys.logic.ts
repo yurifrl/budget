@@ -78,8 +78,8 @@ export interface AiKeyFormError {
 
 /**
  * Save-time checks (the server validates too; this keeps the button honest).
- * The model is optional in the contract and here: a key whose provider forbids
- * listing models (403 ai_key_forbidden) can still be saved without one.
+ * The model is optional in the contract and here: a key can be saved while its
+ * model list cannot be fetched (rate limit, provider unavailable).
  */
 export function checkSaveInput(input: { apiKey: string; provider: AiProviderId | null }): AiKeyFormError | null {
   if (input.apiKey.trim().length < MIN_AI_KEY_LENGTH) return { field: 'key', message: t('form.keyTooShort') };
@@ -124,33 +124,18 @@ function asApiError(error: unknown): ApiErrorLike {
   return typeof error === 'object' && error !== null ? (error as ApiErrorLike) : {};
 }
 
-/** The stable error code of a rejected request, when the API sent one. */
-export function aiErrorCode(error: unknown): string | undefined {
-  const code = asApiError(error).code;
-  return typeof code === 'string' ? code : undefined;
-}
-
 /**
- * `ai_key_forbidden` (403: the provider accepts the key but it may not do this,
- * e.g. an OpenAI restricted key without Models Read) is added to the shared AI
- * contracts by budget-ucyr. That branch is not merged into this one yet, so its
- * `AI_KEY_FORBIDDEN` constant cannot be imported here; the wire value is fixed
- * by the contract and this literal matches it.
- */
-export const AI_KEY_FORBIDDEN_CODE = 'ai_key_forbidden';
-
-/**
- * One sentence for a failed AI request. Every code the AI contracts define
- * has its own message; a provider 429 and upstream failures (502) are the
- * transport kinds the screen can also meet.
+ * One sentence for a failed AI request, chosen by the body's `code` alone (a
+ * status fallback would guess: the same code can arrive with another status,
+ * and a 429/502 without its code is not ours to explain). Every code the AI
+ * contracts define has a message, plus the provider 429 (`rate_limited`) and
+ * upstream 502 (`upstream_error`) the screen can also meet.
  */
 export function aiErrorView(error: unknown): string {
   const e = asApiError(error);
   switch (e.code) {
     case AI_KEY_REJECTED:
       return t('error.keyRejected');
-    case AI_KEY_FORBIDDEN_CODE:
-      return t('error.keyForbidden');
     case AI_PROVIDER_UNKNOWN:
       return t('error.providerUnknown');
     case AI_PROVIDER_MISMATCH:
@@ -167,11 +152,23 @@ export function aiErrorView(error: unknown): string {
       return t('error.sharedKeyMissing');
     case AI_SHARED_MODEL_MISSING:
       return t('error.sharedModelMissing');
+    case 'rate_limited':
+      return t('error.rateLimited');
+    case 'upstream_error':
+      return t('error.providerUnavailable');
     default:
       break;
   }
-  if (e.status === 429) return t('error.rateLimited');
-  if (e.status === 502) return t('error.providerUnavailable');
   if (e.status === 'FETCH_ERROR') return t('error.unreachable');
   return apiErrorMessage(error, t('error.generic'));
+}
+
+/**
+ * The status shows an own key, but the server cannot open it (master key
+ * changed, or the stored provider is not one this build knows). A run would
+ * not use it, so the card must say "save it again" instead of presenting it as
+ * the key in use.
+ */
+export function ownKeyUnreadable(status: AiCredentialStatus): boolean {
+  return status.own !== null && status.effective === null;
 }
