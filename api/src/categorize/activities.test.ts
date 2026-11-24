@@ -10,6 +10,7 @@ import { CancelledFailure } from '@temporalio/common';
 import { CategorizeError, failureForProviderError } from './errors';
 import { failureLogFields, readProgress, toActivityFailure } from './activities';
 import { MAX_RATE_LIMIT_DELAY_MS } from './jobspec';
+import { CATEGORIZE_FAILURE_MESSAGES } from './messages';
 import { AiProviderError } from '../ai';
 
 const none = { input: 0, output: 0 };
@@ -23,6 +24,15 @@ describe('activity failure translation', () => {
     const permanent = toActivityFailure(new CategorizeError('permanent', none)) as ApplicationFailure;
     expect(permanent.type).toBe('AiPermanent');
     expect(permanent.nonRetryable).toBe(true);
+  });
+
+  test('systematic request failures stop the run with a user-safe sentence', () => {
+    const failure = toActivityFailure(new CategorizeError('systematic', none)) as ApplicationFailure;
+    expect(failure.type).toBe('AiSystematic');
+    expect(failure.nonRetryable).toBe(true);
+    expect(failure.message).toBe('the AI provider refused the request repeatedly');
+    expect(CATEGORIZE_FAILURE_MESSAGES.AiSystematic).toContain('run stopped');
+    expect(failure.message).not.toContain('upstream');
   });
 
   test('rate_limited waits the provider retry-after, capped', () => {

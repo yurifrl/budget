@@ -30,6 +30,7 @@ export const CATEGORIZE_FAILURE_MESSAGES: Record<string, string> = {
   AiAuth: 'The AI provider refused your key. Check your AI key and try again.',
   AiPermanent: 'The AI provider refused the request. Try again later.',
   AiRateLimited: 'The AI provider is limiting requests right now. We will try again shortly.',
+  AiSystematic: 'The AI provider rejected the requests; the run stopped. Check your AI settings and try again.',
   AiTransient: "Couldn't reach the AI provider. We will try again later.",
   BudgetMissing: 'This budget is no longer available.',
 };

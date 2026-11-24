@@ -65,6 +65,11 @@ export function toActivityFailure(error: unknown): Error {
         return ApplicationFailure.create({ message: error.message, type: 'AiAuth', nonRetryable: true });
       case 'permanent':
         return ApplicationFailure.create({ message: error.message, type: 'AiPermanent', nonRetryable: true });
+      case 'systematic':
+        // The provider refused every request in a row: a request-shape bug.
+        // Ending the run (non-retryable) is the safe path; the workflow shows
+        // the fixed sentence below.
+        return ApplicationFailure.create({ message: error.message, type: 'AiSystematic', nonRetryable: true });
       case 'rate_limited':
         return ApplicationFailure.create({
           message: error.message,

@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 
-import { chatTimeoutMs } from '../ai/http';
+import { chatTimeoutMs } from '../ai';
 import {
   CATEGORIZE_CHUNK_SIZE,
   CATEGORIZE_CHUNK_TIMEOUT_MS,
@@ -31,9 +31,12 @@ describe('categorize cost bounds', () => {
   });
 
   test('the caps are small and ordered', () => {
-    expect(CLASSIFY_MAX_TOKENS).toBeLessThanOrEqual(2048);
-    expect(CLASSIFY_MAX_TOKENS_PER_TRANSACTION).toBeGreaterThan(CLASSIFY_MAX_TOKENS);
-    expect(CLASSIFY_MAX_CALLS).toBeGreaterThan(0);
+    // Reasoning tokens count toward the output cap, so 1k is not enough.
+    expect(CLASSIFY_MAX_TOKENS).toBe(4000);
+    expect(CLASSIFY_MAX_TOKENS_PER_TRANSACTION).toBe(80_000);
+    // Every call's full output cap fits in the per-transaction budget.
+    expect(CLASSIFY_MAX_TOKENS_PER_TRANSACTION).toBeGreaterThanOrEqual(CLASSIFY_MAX_CALLS * CLASSIFY_MAX_TOKENS);
+    expect(CLASSIFY_MAX_CALLS).toBe(6);
     expect(CATEGORIZE_RUN_LIMIT).toBe(100);
   });
 

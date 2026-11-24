@@ -323,3 +323,38 @@ describe('Anthropic tool history and the final structured turn', () => {
     });
   });
 });
+
+describe('Anthropic reasoning effort', () => {
+  const answerBody = () => ({
+    model: 'claude-test',
+    stop_reason: 'end_turn',
+    content: [{ type: 'text', text: 'ok' }],
+  });
+
+  test('sends output_config.effort on a model that documents it, beside the schema', async () => {
+    const baseUrl = stub(() => Response.json(answerBody()));
+    const provider = createProvider('anthropic', 'sk-ant-test', { baseUrl });
+    await provider.chat({
+      model: 'claude-opus-5-5',
+      messages: [{ role: 'user', content: 'categorize' }],
+      maxTokens: 4000,
+      reasoningEffort: 'low',
+      jsonSchema: { name: 'suggestions', schema: { type: 'object', properties: {} } },
+    });
+    expect((captured[0]!.body as Record<string, unknown>).output_config).toMatchObject({
+      effort: 'low',
+      format: { type: 'json_schema' },
+    });
+  });
+
+  test('omits effort for a model whose docs do not list it', async () => {
+    const baseUrl = stub(() => Response.json(answerBody()));
+    const provider = createProvider('anthropic', 'sk-ant-test', { baseUrl });
+    await provider.chat({
+      model: 'claude-3-5-sonnet-20241022',
+      messages: [{ role: 'user', content: 'categorize' }],
+      reasoningEffort: 'low',
+    });
+    expect(captured[0]!.body).not.toHaveProperty('output_config');
+  });
+});

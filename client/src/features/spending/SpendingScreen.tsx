@@ -18,7 +18,9 @@ import { usePersonFilter , PersonFilterBar } from '@/features/people';
 import { useBudgetShell } from '@/shell/context';
 
 import { t } from './i18n';
-import { displaySystemName, isReconciliationAdjustmentPayee } from '@/domain/systemNames';
+import { isSystemAdjustmentPayee } from '@shared/domain/category-needs';
+
+import { displaySystemName } from '@/domain/systemNames';
 
 export function SpendingScreen() {
   const { formatMoney, formatDateLong } = useMoneyFormat();
@@ -81,10 +83,10 @@ export function SpendingScreen() {
           };
           const cat = txn.categoryId
             ? categoryNameFor(txn.categoryId)
-            : txn.inflow > 0 || isReconciliationAdjustmentPayee(txn.payee)
+            : txn.inflow > 0 || isSystemAdjustmentPayee(txn.payee)
               ? t('row.readyToAssign')
               : t('row.unknown');
-          const warn = !txn.categoryId && txn.inflow === 0 && !isReconciliationAdjustmentPayee(txn.payee);
+          const warn = !txn.categoryId && txn.inflow === 0 && !isSystemAdjustmentPayee(txn.payee);
           const acct = budget.accounts.find((a) => a.id === txn.accountId);
           return (
             <View style={styles.txn}>

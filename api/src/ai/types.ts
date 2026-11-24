@@ -54,6 +54,24 @@ export type AiJsonSchema = {
   schema: Record<string, unknown>;
 };
 
+/**
+ * Optional reasoning effort. Each adapter maps it to the provider's documented
+ * parameter, and omits it where the provider or the chosen model documents no
+ * support (see the adapter and provider table):
+ *  - Anthropic `output_config.effort` — platform.claude.com/docs/en/build-with-claude/effort;
+ *    applied for the model families that document effort (4.5+ Opus, 4.6+ Sonnet, 5.5+ Haiku, Fable/Mythos 5+).
+ *  - OpenAI `reasoning_effort` — developers.openai.com/api/docs/guides/reasoning;
+ *    applied to the gpt-5+ and o-series chat models, omitted for others.
+ *  - OpenRouter `reasoning.effort` — openrouter.ai/docs/guides/reasoning-tokens
+ *    (normalized; models without reasoning ignore it).
+ *  - DeepSeek `reasoning_effort` — api-docs.deepseek.com/guides/thinking_mode
+ *    (thinking is on by default; the parameter sets its effort).
+ *  - Z.ai `reasoning_effort` — docs.z.ai/guides/llm/glm-5.3 (GLM-5.3 only;
+ *    earlier GLM models document no effort parameter here).
+ * Documentation only: no live call was made for these mappings.
+ */
+export type AiReasoningEffort = 'low' | 'medium' | 'high' | 'max';
+
 export type AiChatRequest = {
   model: string;
   messages: AiMessage[];
@@ -71,6 +89,8 @@ export type AiChatRequest = {
   temperature?: number;
   /** Upper bound of the answer (thinking tokens included). Adapters pick a documented default when omitted. */
   maxTokens?: number;
+  /** Ask for less reasoning where the provider/model documents it (see AiReasoningEffort). */
+  reasoningEffort?: AiReasoningEffort;
   /**
    * Caller cancellation (for example a cancelled Temporal activity). The
    * adapter combines it with its deadline; either rejects with

@@ -1,15 +1,23 @@
 /**
- * The candidate set must equal the app's own definition of "needs a category"
- * (client/src/domain/register.ts) plus the facts the register screen scopes
- * by: inflows, adjustments, transfers, tracking/closed accounts. The first
- * block imports the CLIENT function and fails if the SQL ever diverges for a
- * case that function can express; the rest exercises the exclusions the screen
- * gets from its account scope and the server's transfer state.
+ * The candidate SQL must equal the app's own "needs a category" rule
+ * (shared/src/domain/category-needs.ts, the function the register cell uses)
+ * over the same rows, plus the register screen's scope and the run's own
+ * bookkeeping. This test builds one fixture set, feeds each row's facts to the
+ * shared predicate, and compares that verdict with the SQL candidate set — no
+ * client import.
+ *
+ * The transfer-pending half comes from the app's transfer plan
+ * (`transferOverview`, the register's `transferPending` source), not from a
+ * second copy in SQL; the cases below cover the divergences that a second copy
+ * had (manual marks, dismissed marks under a payee rule, rule rows with an open
+ * counterpart).
  */
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 
-import { registerCategoryCell } from '../../../client/src/domain/register';
-import type { Budget as ClientBudget } from '../../../client/src/domain/types';
+import { needsCategory } from '@shared/domain/category-needs';
+import { isInternalTransferPayee } from '@shared/domain/transfers';
+
+import { transferOverview } from '../budget';
 import { pool } from '../core/db';
 import { dbReady } from '../core/test-gate';
 import * as store from './store';
@@ -37,66 +45,141 @@ async function candidateIds(): Promise<Set<string>> {
 const outflow = (extra: Partial<Parameters<typeof newTransaction>[0]> = {}) =>
   newTransaction({ budgetId: a.budgetId, accountId: a.accountId, date: '2026-11-01', amount: -2500, ...extra });
 
-describe.skipIf(!dbReady)('candidate set matches the client rule', () => {
-  test('registerCategoryCell agrees with the SQL for rows the cell can express', async () => {
+describe.skipIf(!dbReady)('candidate set equals the shared needs-category rule', () => {
+  test('every app-rule case agrees with the SQL over the same rows', async () => {
     const savings = await newAccount(a.budgetId, 'Savings');
-    const account = {
-      id: a.accountId,
-      name: 'Checking',
-      type: 'checking' as const,
-      group: 'CASH' as const,
-      onBudget: true,
-      clearedBalance: 0,
-      unclearedBalance: 0,
-      lastReconciledAt: null,
-      userId: null,
-    };
-    const peer = { ...account, id: savings, name: 'Savings' };
-    const budget: Pick<ClientBudget, 'accounts' | 'categories'> = { accounts: [account, peer], categories: [] };
-    const warn = (row: { payee: string; inflow: number; splits?: boolean }) =>
-      registerCategoryCell(budget, {
-        payee: row.payee,
-        categoryId: null,
-        splits: row.splits ? [{ id: 's1', categoryId: null, memo: '', outflow: row.inflow, inflow: 0 }] : undefined,
-        inflow: row.inflow,
-      }).warn;
+    const accounts = (
+      await pool.query<{ name: string; on_budget: boolean }>('select name, on_budget from public.accounts where budget_id = $1 and deleted = false', [
+        a.budgetId,
+      ])
+    ).rows.map((row) => ({ name: row.name, onBudget: row.on_budget }));
 
-    const cases: { row: { payee: string; inflow: number; splits?: boolean }; id: string }[] = [
-      { row: { payee: 'Padaria', inflow: 0 }, id: await outflow({ importPayeeName: 'Padaria' }) },
-      { row: { payee: 'Salary', inflow: 500_000 }, id: await outflow({ amount: 500_000, importPayeeName: 'Salary' }) },
-      { row: { payee: 'Zero', inflow: 0 }, id: await outflow({ amount: 0, importPayeeName: 'Zero' }) },
-      { row: { payee: 'Reconciliation Adjustment', inflow: 0 }, id: await outflow({ importPayeeName: 'Reconciliation Adjustment' }) },
-      { row: { payee: 'Balance Adjustment', inflow: 0 }, id: await outflow({ importPayeeName: 'Balance Adjustment' }) },
-      { row: { payee: 'Split parent', inflow: 0, splits: true }, id: await outflow({ importPayeeName: 'Split parent' }) },
-      { row: { payee: 'Transfer : Savings', inflow: 0 }, id: await outflow({ importPayeeName: 'Transfer : Savings' }) },
-    ];
-    // A split parent is a row WITH live legs; the cell only sees the flag.
+    const waitingPayee = await newPayee(a.budgetId, 'Waiting Payee', { transferRule: 'auto', transferRuleWaitDays: 5 });
+    const outsidePayee = await newPayee(a.budgetId, 'Outside Payee', {
+      transferRule: 'account',
+      transferRuleWaitDays: 5,
+      transferRuleNoMatch: 'outside',
+    });
+    const reviewPayee = await newPayee(a.budgetId, 'Review Payee', { transferRule: 'auto', transferRuleWaitDays: 5, transferRuleNoMatch: 'review' });
+    const dismissedRulePayee = await newPayee(a.budgetId, 'Dismissed Rule Payee', { transferRule: 'auto', transferRuleWaitDays: 5 });
+    const openPayee = await newPayee(a.budgetId, 'Open Payee', { transferRule: 'auto', transferRuleWaitDays: 5 });
+
+    const plain = await outflow({ importPayeeName: 'Padaria' });
+    const zero = await outflow({ amount: 0, importPayeeName: 'Zero' });
+    const inflow = await outflow({ amount: 500_000, importPayeeName: 'Salary' });
+    const adjustment = await outflow({ importPayeeName: 'Reconciliation Adjustment' });
+    const balance = await outflow({ importPayeeName: 'Balance Adjustment' });
+    const split = await outflow({ importPayeeName: 'Split parent' });
+    const transferPayee = await outflow({ importPayeeName: 'Transfer : Savings' });
+    const waiting = await newTransaction({
+      budgetId: a.budgetId,
+      accountId: a.accountId,
+      // Inside the rule's 5-day wait window (today is the test day).
+      date: '2099-01-01',
+      amount: -2500,
+      payeeId: waitingPayee,
+      importPayeeName: 'WAITING',
+    });
+    const outside = await newTransaction({
+      budgetId: a.budgetId,
+      accountId: a.accountId,
+      date: '2020-01-02',
+      amount: -800,
+      payeeId: outsidePayee,
+      importPayeeName: 'OLD OUTSIDE',
+    });
+    const review = await newTransaction({
+      budgetId: a.budgetId,
+      accountId: a.accountId,
+      date: '2020-01-01',
+      amount: -700,
+      payeeId: reviewPayee,
+      importPayeeName: 'OLD REVIEW',
+    });
+    const manual = await outflow({ importPayeeName: 'UNLINKED BY PERSON', mark: 'manual' });
+    const dismissedUnderRule = await outflow({ payeeId: dismissedRulePayee, importPayeeName: 'DISMISSED MARK', mark: 'dismissed' });
+    // A rule row with an open counterpart: the planner pairs it (not pending),
+    // so the app still shows it as needing a category.
+    const open = await outflow({ payeeId: openPayee, importPayeeName: 'OPEN RULE' });
+    const counterpart = await newTransaction({
+      budgetId: a.budgetId,
+      accountId: savings,
+      date: '2026-11-01',
+      amount: 2500,
+      importPayeeName: 'OPEN RULE IN',
+    });
+
     await pool.query(
       `insert into public.subtransactions (id, transaction_id, budget_id, category_id, amount) values (gen_random_uuid(), $1, $2, $3, -2500)`,
-      [cases[5]!.id, a.budgetId, a.food],
+      [split, a.budgetId, a.food],
     );
 
+    const splitCounts = new Map<string, number>();
+    for (const row of (
+      await pool.query<{ transaction_id: string; n: number }>(
+        'select transaction_id, count(*)::int as n from public.subtransactions where budget_id = $1 and deleted = false group by transaction_id',
+        [a.budgetId],
+      )
+    ).rows) {
+      splitCounts.set(row.transaction_id, row.n);
+    }
+    const pending = (await transferOverview(pool, a.budgetId)).pending;
+
+    const cases: { id: string; payee: string; amount: number }[] = [
+      { id: plain, payee: 'Padaria', amount: -2500 },
+      { id: zero, payee: 'Zero', amount: 0 },
+      { id: inflow, payee: 'Salary', amount: 500_000 },
+      { id: adjustment, payee: 'Reconciliation Adjustment', amount: -2500 },
+      { id: balance, payee: 'Balance Adjustment', amount: -2500 },
+      { id: split, payee: 'Split parent', amount: -2500 },
+      { id: transferPayee, payee: 'Transfer : Savings', amount: -2500 },
+      { id: waiting, payee: 'WAITING', amount: -2500 },
+      { id: outside, payee: 'OLD OUTSIDE', amount: -800 },
+      { id: review, payee: 'OLD REVIEW', amount: -700 },
+      { id: manual, payee: 'UNLINKED BY PERSON', amount: -2500 },
+      { id: dismissedUnderRule, payee: 'DISMISSED MARK', amount: -2500 },
+      { id: open, payee: 'OPEN RULE', amount: -2500 },
+      { id: counterpart, payee: 'OPEN RULE IN', amount: 2500 },
+    ];
+
     const ids = await candidateIds();
-    for (const c of cases) expect({ id: c.id, candidate: ids.has(c.id) }).toEqual({ id: c.id, candidate: warn(c.row) });
+    for (const c of cases) {
+      const expected = needsCategory({
+        payee: c.payee,
+        categoryId: null,
+        splitCount: splitCounts.get(c.id) ?? 0,
+        amount: c.amount,
+        transferPending: pending.get(c.id) ?? null,
+        transferPayee: isInternalTransferPayee(c.payee, accounts),
+      });
+      expect({ id: c.id, candidate: ids.has(c.id) }).toEqual({ id: c.id, candidate: expected });
+    }
+    // The divergence cases are explicit: a manual mark and a dismissed mark
+    // under an active payee rule are not pending, and both need a category.
+    expect(pending.has(manual)).toBe(false);
+    expect(pending.has(dismissedUnderRule)).toBe(false);
+    expect(ids.has(manual)).toBe(true);
+    expect(ids.has(dismissedUnderRule)).toBe(true);
+    // Waiting/outside plan rows are pending and are not candidates.
+    expect(pending.get(waiting)).toBe('waiting');
+    expect(pending.get(outside)).toBe('outside');
+    expect(ids.has(waiting)).toBe(false);
+    expect(ids.has(outside)).toBe(false);
+    // A rule row with an open counterpart is paired by the plan, not pending.
+    expect(pending.has(open)).toBe(false);
+    expect(ids.has(open)).toBe(true);
   });
 });
 
-describe.skipIf(!dbReady)('candidate exclusions', () => {
-  test('inflows, adjustments, splits, upcoming, transfers and split legs are never sent to the model', async () => {
+describe.skipIf(!dbReady)('candidate exclusions outside the register rule', () => {
+  test('upcoming, linked, off-budget, closed, deleted and split-leg rows are never sent to the model', async () => {
     const savings = await newAccount(a.budgetId, 'Savings');
-    const card = await newAccount(a.budgetId, 'Card', { type: 'creditCard', group: 'CREDIT' });
     const gone = await newAccount(a.budgetId, 'Gone');
     const noCategory = await outflow({ importPayeeName: 'COUNTED STORE' });
     const unique = {
-      inflow: await outflow({ amount: 400_000, importPayeeName: 'SALARY' }),
-      reconciliation: await outflow({ importPayeeName: 'Reconciliation Adjustment' }),
-      balance: await outflow({ importPayeeName: 'Balance Adjustment' }),
       upcoming: await outflow({ importPayeeName: 'SCHEDULED', upcoming: true }),
       linkedAccount: await outflow({ importPayeeName: 'TRANSFER OUT', transferAccountId: savings }),
       linkedTransaction: await outflow({ importPayeeName: 'TRANSFER OUT 2', transferTransactionId: crypto.randomUUID() }),
-      markedOutside: await outflow({ importPayeeName: 'SUSPECT', mark: 'outside' }),
-      transferPayee: await outflow({ importPayeeName: 'Transfer : Savings' }),
-      cardPayment: await outflow({ importPayeeName: 'Transfer : Card' }),
       splitParent: await outflow({ importPayeeName: 'SPLIT' }),
       offBudget: await outflow({
         accountId: await newAccount(a.budgetId, 'Brokerage', { onBudget: false }),
@@ -110,47 +193,10 @@ describe.skipIf(!dbReady)('candidate exclusions', () => {
       `insert into public.subtransactions (id, transaction_id, budget_id, category_id, amount) values (gen_random_uuid(), $1, $2, $3, -500)`,
       [unique.splitParent, a.budgetId, a.food],
     );
-    // A dismissed mark means "not a transfer": the row is normal spending.
-    const dismissed = await outflow({ importPayeeName: 'NOT A TRANSFER', mark: 'dismissed' });
 
     const ids = await candidateIds();
     expect(ids.has(noCategory)).toBe(true);
-    expect(ids.has(dismissed)).toBe(true);
     for (const [name, id] of Object.entries(unique)) expect({ name, candidate: ids.has(id) }).toEqual({ name, candidate: false });
-  });
-
-  test('a payee transfer rule hides a waiting/outside row but not one it gave up for review', async () => {
-    const recent = await newPayee(a.budgetId, 'Waiting Payee', { transferRule: 'auto', transferRuleWaitDays: 5 });
-    const old = await newPayee(a.budgetId, 'Review Payee', { transferRule: 'auto', transferRuleWaitDays: 5, transferRuleNoMatch: 'review' });
-    const outside = await newPayee(a.budgetId, 'Outside Payee', {
-      transferRule: 'account',
-      transferRuleWaitDays: 5,
-      transferRuleNoMatch: 'outside',
-    });
-    const waiting = await outflow({ payeeId: recent, importPayeeName: 'WAITING' });
-    const givenUp = await newTransaction({
-      budgetId: a.budgetId,
-      accountId: a.accountId,
-      date: '2020-01-01',
-      amount: -700,
-      payeeId: old,
-      importPayeeName: 'OLD REVIEW',
-    });
-    const outsideRow = await newTransaction({
-      budgetId: a.budgetId,
-      accountId: a.accountId,
-      date: '2020-01-02',
-      amount: -800,
-      payeeId: outside,
-      importPayeeName: 'OLD OUTSIDE',
-    });
-
-    const ids = await candidateIds();
-    expect(ids.has(waiting)).toBe(false);
-    expect(ids.has(outsideRow)).toBe(false);
-    // After wait_days with no_match=review the app shows the row as spending
-    // to categorize, so the run may suggest one.
-    expect(ids.has(givenUp)).toBe(true);
   });
 
   test('force is the only way back in once a transaction has a suggestion', async () => {

@@ -65,15 +65,27 @@ const reply = (text: string | null, usage = { input: 10, output: 5 }, toolCalls:
 const answer = (suggestions: unknown[]) => reply(JSON.stringify({ suggestions }));
 
 describe('agent cost bounds', () => {
-  test('every call carries the small output cap', async () => {
+  test('every call carries the output cap and asks for low reasoning effort', async () => {
     const seen: (number | undefined)[] = [];
+    const efforts: (string | undefined)[] = [];
     await classifyTransaction(
       request((req) => {
         seen.push(req.maxTokens);
+        efforts.push(req.reasoningEffort);
         return answer([{ category_id: FOOD, confidence: 0.8, reason: 'bread' }]);
       }),
     );
     expect(seen).toEqual([CLASSIFY_MAX_TOKENS]);
+    expect(efforts).toEqual(['low']);
+  });
+
+  test('a cut-off answer is truncated, not bad_response, and its usage is kept', async () => {
+    const error = await classifyTransaction(
+      request(() => ({ ...answer([{ category_id: FOOD, confidence: 0.9 }]), finishReason: 'max_tokens' })),
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(CategorizeError);
+    expect((error as CategorizeError).kind).toBe('truncated');
+    expect((error as CategorizeError).usage).toEqual({ input: 10, output: 5 });
   });
 
   test('the final structured-output turn keeps the tools declared and disables new calls', async () => {

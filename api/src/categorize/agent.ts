@@ -217,8 +217,14 @@ export async function classifyTransaction(request: ClassifyRequest): Promise<Cla
         model: request.model,
         signal: request.signal,
         maxTokens: CLASSIFY_MAX_TOKENS,
+        // Documented low effort per adapter; thinking is on by default on the
+        // current models and its tokens count toward maxTokens.
+        reasoningEffort: 'low',
       });
       addUsage(result.usage);
+      // A cut-off answer is incomplete by definition (its JSON may end mid
+      // object) and retrying the same cap blindly would bill it again.
+      if (result.finishReason === 'max_tokens' || result.finishReason === 'length') throw fail('truncated');
       if (usage.input + usage.output > CLASSIFY_MAX_TOKENS_PER_TRANSACTION) throw fail('budget');
       return result;
     } catch (error) {

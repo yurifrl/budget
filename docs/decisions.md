@@ -1906,15 +1906,25 @@ app. The two now ship independently.
   numbers are still dropped before text leaves the server. The tool layer
   whitelists exactly those facts.
 - The candidate set is the app's own "needs a category" rule, not a second
-  definition: live, uncategorized, non-upcoming outflows (`amount <= 0`;
-  inflows go to Ready to Assign) on live, open, on-budget accounts, without
-  live split legs, linked transfers, a transfer mark other than `dismissed`,
-  a payee covered by an active transfer rule while it is waiting/outside, an
-  on-budget `Transfer : <account>` payee, or a Reconciliation/Balance
-  adjustment payee. `candidates.test.ts` imports the client's
-  `registerCategoryCell` and fails if the SQL diverges for a case that
-  function can express. A transaction that already has suggestions is skipped
-  unless the run is an explicit re-classify (`force` in the job input).
+  definition. The rule is `needsCategory` in
+  `shared/src/domain/category-needs.ts`; the register cell
+  (`client/src/domain/register.ts`) and the categorizer's SQL both use it.
+  The SQL keeps only the register's scope and the run's bookkeeping: live,
+  uncategorized, non-upcoming outflows (`amount <= 0`; inflows go to Ready
+  to Assign) on live, open, on-budget accounts, without live split legs,
+  linked transfers, an on-budget `Transfer : <account>` payee, or a
+  Reconciliation/Balance adjustment payee. The transfer-pending half is NOT
+  re-implemented in SQL: `transferOverview` — the same transfer plan the
+  register reads `transferPending` from — computes the pending ids
+  (`waiting`/`outside`) and the query excludes exactly those, which closes
+  the old divergences (a `manual` mark is not pending; a dismissed mark under
+  an active payee rule is not pending; a rule row with an open counterpart is
+  not pending; the plan's `today` is the server's date). `candidates.test.ts`
+  builds one fixture set, calls the shared predicate with each row's facts
+  (pending from `transferOverview`) and compares the verdict with the SQL
+  candidate set — no api → client import. A transaction that already has
+  suggestions is skipped unless the run is an explicit re-classify (`force` in
+  the job input).
 - A run takes a keyset snapshot at prepare: the newest candidate's
   `(date, id)` bounds the walk and each chunk continues below the last
   processed row (`order by date desc, id desc`). Rows inserted mid-run cannot
@@ -1934,15 +1944,51 @@ app. The two now ship independently.
   as the last line of defence. An answer whose ids are all unknown is
   `bad_response` and writes nothing, so it cannot delete pending rows an empty
   (valid) answer may clear. The read path filters hidden/deleted categories
-  and groups and deleted accounts too. No check constraint on
-  `source`/`status`: the value lists are code.
+  and groups, **card-payment and internal categories/groups**
+  (`is_credit_card_payments`, `internal`: the card-payment setup writes both)
+  and deleted accounts too. Internal envelopes are never offered to the model
+  nor accepted from an answer: booking a card payment there would turn a
+  transfer into spending. No check constraint on `source`/`status`: the value
+  lists are code.
+- The category list a suggestion may name is the app's assignable-category
+  set: live, visible, `internal = false`, in a live visible group with
+  `is_credit_card_payments = false` and `internal = false`.
+- Every classification attempt is recorded in `categorize_attempts` (0112),
+  one row per transaction: outcome `suggested` / `no_suggestion` / `failed`,
+  the failure kind, an attempt counter, the model and the SQL-computed
+  payee+memo fingerprint. A separate table (not a rank-0 marker in
+  `category_suggestions`) because a no-suggestion attempt has no category and
+  the suggestion table is keyed per category rank; a marker would force
+  nullable category/rank columns and make every existing query exclude it.
+  A normal run skips `no_suggestion` rows while the payee/memo fingerprint is
+  unchanged, and skips `failed` rows while the exponential backoff (10 min,
+  20 min, … capped 6 h) has not elapsed or the counter reached
+  `CATEGORIZE_MAX_ATTEMPTS = 3`; `force` resets the counter and re-asks. This
+  is what makes the newest-first 100-transaction cap walk the backlog across
+  runs instead of re-billing the same empty/failed rows. `readCategorizeAttempts`
+  and `SuggestionRow.attempt` let the queue page tell "not classified yet"
+  (no attempt row) from "classified, no suggestion" (`no_suggestion`).
+- Re-run rule (budget-edxg must know): once a person accepted or dismissed
+  ANY suggestion of a transaction, that transaction is FROZEN forever. A
+  normal run skips it (it has suggestion rows), a forced run skips it
+  (`hasDecidedSuggestion`), and `replaceSuggestions` refuses every write. It
+  stays frozen when the accepted category is later cleared, when every
+  suggestion was dismissed, and when its only pending suggestion points at a
+  since-hidden category. Unfreezing is a product change, not a flag.
 - The job never writes `transactions.category_id`; accepting stays the
   normal transaction update path.
 - Retry policy is in the chunk activity: `timeout` is retried ONCE for that
   transaction (a timed-out generation may already be billed) and then counted
-  failed; `bad_response` counts the transaction failed; a request-scoped 4xx
-  (400/413/422) is counted failed and the run continues; a transaction that
-  spends its token cap is counted failed. Account/key-level 4xx (402, 403,
+  failed; `bad_response` counts the transaction failed; a cut-off answer
+  (`stop_reason: max_tokens` / `finish_reason: length`, its own `truncated`
+  kind) is counted failed and recorded, so it is retried only after the
+  attempt backoff, never blindly; a request-scoped 4xx (400/413/422) is
+  counted failed; after `CATEGORIZE_MAX_CONSECUTIVE_REQUEST_FAILURES = 3` in a
+  row the run stops with a non-retryable `AiSystematic` failure and the fixed
+  sentence "The AI provider rejected the requests; the run stopped. Check
+  your AI settings and try again." — a request-shape bug must not end as a
+  "successful" run where every transaction failed. A transaction that spends
+  its token cap is counted failed. Account/key-level 4xx (402, 403,
   404 …), `auth` and `transient` stop/retry the run as before: `auth` and
   `permanent` are non-retryable ApplicationFailures, `transient` retries the
   activity. `rate_limited` waits once inside the chunk (up to 60 s) and
@@ -1953,25 +1999,64 @@ app. The two now ship independently.
   (platform.claude.com/docs/en/api/errors); OpenAI 400 `invalid_request_error`
   (developers.openai.com/api/docs/guides/error-codes). Neither status means
   the key or account is wrong.
-- Cost caps and their consistency: `CLASSIFY_MAX_TOKENS = 1024` per turn
-  (`ai/http.ts` derives a 60 s deadline), at most 6 calls per transaction
-  (4 tool turns + final answer + one timeout retry) and 20k tokens
-  (input+output) per transaction, `CATEGORIZE_CHUNK_SIZE = 5`,
-  `CATEGORIZE_RUN_LIMIT = 100` transactions per run (the remainder waits for
-  the next run; coalescing means the next trigger starts a new run),
-  `CATEGORIZE_CHUNK_TIMEOUT_MS = 5 x 6 x 60 s + 60 s = 31 min`, which is the
-  chunk activity's `startToCloseTimeout`; a test asserts the formula and the
-  1024-token deadline. Provider calls are serialized per key in-process
+- Cost caps and their consistency: `CLASSIFY_MAX_TOKENS = 4000` per turn
+  (reasoning tokens count toward the cap on current Anthropic models and
+  OpenAI reasoning models, so a 1k cap could be spent thinking before the
+  answer; `ai/http.ts` derives 160 s from 4000 at its conservative 25
+  tokens/s), at most 6 calls per transaction (4 tool turns + final answer +
+  one timeout retry) and 80k tokens (input+output) per transaction
+  (`>= 6 x 4000` plus ~9k input per call with capped tool results),
+  `CATEGORIZE_CHUNK_SIZE = 5`, `CATEGORIZE_RUN_LIMIT = 100` transactions per
+  run (the remainder waits for the next run; coalescing means the next
+  trigger starts a new run), `CATEGORIZE_CHUNK_TIMEOUT_MS = 5 x 6 x 160 s +
+  60 s = 81 min`, which is the chunk activity's `startToCloseTimeout`; a test
+  asserts the formula and the 4000-token deadline. Worst case one run: 600
+  calls (100 x 6) for the transactions, plus activity retries: each chunk has
+  up to 5 attempts, a retry resumes after its last finished transaction, so it
+  re-asks only its in-flight transaction (up to 4 x 20 chunks x 6 = 480 extra
+  calls; hard ceiling ~1,080 calls). Token budgets: 100 x 80k = 8M for the
+  transactions, plus the in-flight transaction's budget per retried attempt —
+  the caps, not the expected usage; a typical transaction is one call and the
+  per-run trigger is coalesced to one run.
+- Reasoning effort is an optional AI-port field (`AiReasoningEffort`), mapped
+  by each adapter to the provider's documented parameter and omitted where the
+  provider/model documents none. The categorizer asks for `low` on every
+  call. Doc basis (documentation only, no live call was made): Anthropic
+  `output_config.effort` (platform.claude.com/docs/en/build-with-claude/effort,
+  applied to Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable/Mythos 5+); OpenAI
+  `reasoning_effort` (developers.openai.com/api/docs/guides/reasoning,
+  gpt-5+ and o-series only); OpenRouter `reasoning: {effort}`
+  (openrouter.ai/docs/guides/reasoning-tokens); DeepSeek `reasoning_effort`
+  (api-docs.deepseek.com/guides/thinking_mode); Z.ai `reasoning_effort` on
+  GLM-5.3 (docs.z.ai/guides/llm/glm-5.3). `AiChatResult.finishReason` is the
+  provider's raw stop reason. These mappings are unverified against a live
+  provider; adapter tests assert the request shape the docs describe.
+- Untrusted text is bounded before it can reach a prompt: every bank string,
+  payee, memo and category note is capped at 200 characters (names at 80 in
+  tool results), `list_categories` is at most 200 categories and drops its
+  notes before a result may exceed `MAX_TOOL_RESULT_CHARS = 40k`, and the
+  other tools cap their rows. Free bank text (`descriptionRaw`, the PIX
+  `reason`) is masked first: formatted/bare CPF and CNPJ runs and 6+ digit
+  account/reference runs become `***`; the structured `merchant.cnpj` is kept
+  (merchant panel, business evidence). The cap runs on the masked text. Provider calls are serialized per key in-process
   (`categorize/key-lock.ts`) and the `-ai` queue runs one activity per worker
   (`maxConcurrentActivityTaskExecutions: 1`); across pods the provider 429 is
   the bound. The chunk heartbeats its progress (counts, cursor, token totals)
   every 10 s and on every transaction/call, and a retried attempt resumes
   after its last finished transaction with those totals — finished rows are
   never paid for twice, and a stopped chunk's tokens still reach the ledger.
-- Continue-as-new is deliberately NOT implemented yet: with the 100-run cap a
-  run is at most 20 chunks (~60 history events), far from Temporal's 50k
-  event hard limit. If the cap or chunk count grows, carry the summary and
-  cursor into a continuation.
+- Continue-as-new is deliberately NOT implemented yet (FU10): with the
+  100-transaction cap a run is at most 20 chunks (~60 history events), far
+  from Temporal's 50k event hard limit. If the cap or chunk count grows,
+  carry the summary and cursor into a continuation.
+- Known, deferred (review FU6/FU7): Temporal throttles heartbeats (~80% of
+  the 30 s heartbeat timeout), so after a worker crash the resumed
+  `examined`/cursor can lag 1–2 transactions; a finished row is skipped again
+  by the suggestions/attempts filters, and a forced run can re-bill the lag
+  window. The chunk deadline has ~60 s of slack (the in-chunk 429 wait is
+  per transaction, DB/key-lock/connect time is unbudgeted); a start-to-close
+  timeout resumes from the heartbeat, so the impact is bounded. Fix both if
+  the caps or chunk size grow.
 - The final structured-output turn keeps the tools declared because the
   history contains tool_use/tool_result blocks: Anthropic's tool-use doc says
   "Send the request with the same `tools` as the first request" and
@@ -2000,7 +2085,10 @@ app. The two now ship independently.
   spends the owner's key; changing it is a change to this one function.
 - `readCategorySuggestions` is scoped by budget id only; the HTTP layer
   checks budget access. A non-uuid `transactionId` is a 400
-  (`invalid_transaction_id`), not a driver error.
+  (`invalid_transaction_id`), not a driver error. `readCategorizeAttempts`
+  reads `categorize_attempts` per transaction (same scope, same uuid check);
+  see the attempts bullet above for the queue's "not classified" vs
+  "classified, none" distinction.
 - Migration 0111 adds `category_suggestions(category_id)`: the FK is
   `on delete cascade`, so a category delete would otherwise scan the table
   per row. The 0110/0111 foreign keys into `transactions`, `budgets` and

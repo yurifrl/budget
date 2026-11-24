@@ -35,6 +35,24 @@ function allowedFrom(feature, other) {
   return ['index.ts'];
 }
 
+/**
+ * Cross-feature zones: `feature` may import `other` through its barrel plus the
+ * documented seams. Tests and testing helpers add ONE exception on top: the
+ * ai/providers registry seam (deliberate deep import for setProviders).
+ */
+function crossFeatureZones({ providersSeam }) {
+  return features.flatMap((feature) =>
+    features
+      .filter((other) => other !== feature)
+      .map((other) => ({
+        target: `./src/${feature}`,
+        from: `./src/${other}`,
+        except: [...allowedFrom(feature, other), ...(providersSeam && other === 'ai' ? ['providers', 'providers/**'] : [])],
+        message: 'Features may only import another feature via its public barrel (src/<name>/index.ts), never its internals.',
+      })),
+  );
+}
+
 export default defineConfig([
   { ignores: ['node_modules/**', 'dist/**'] },
   { linterOptions: { reportUnusedDisableDirectives: 'off' } },
@@ -102,28 +120,16 @@ export default defineConfig([
   {
     files: features.map((f) => `src/${f}/**/*.ts`),
     rules: {
-      'import/no-restricted-paths': [
-        'error',
-        {
-          zones: features.flatMap((feature) =>
-            features
-              .filter((other) => other !== feature)
-              .map((other) => ({
-                target: `./src/${feature}`,
-                from: `./src/${other}`,
-                except: allowedFrom(feature, other),
-                message: 'Features may only import another feature via its public barrel (src/<name>/index.ts), never its internals.',
-              })),
-          ),
-        },
-      ],
+      'import/no-restricted-paths': ['error', { zones: crossFeatureZones({ providersSeam: false }) }],
     },
   },
-  // Tests and the helpers themselves may deep-import a dependency's internals
-  // (the AI registry seam in src/ai/providers is deliberately off the barrel).
+  // Tests and the helpers themselves may deep-import ONE dependency internal:
+  // the AI registry seam (src/ai/providers, deliberately off the barrel for
+  // setProviders). Every other cross-feature internal import stays banned —
+  // the rule is re-enabled with the same zones plus that one exception.
   // This block comes last: import/no-restricted-paths is re-enabled above it.
   {
     files: ['src/**/*.test.ts', 'src/*/testing/**/*.ts'],
-    rules: { 'import/no-restricted-paths': 'off' },
+    rules: { 'import/no-restricted-paths': ['error', { zones: crossFeatureZones({ providersSeam: true }) }] },
   },
 ]);

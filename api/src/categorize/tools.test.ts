@@ -7,8 +7,8 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { pool, type Queryable } from '../core/db';
 import { dbReady } from '../core/test-gate';
-import { createTools, searchTokens } from './tools';
-import { cleanupFixtures, newBudget, newPayee, newTransaction, type BudgetFixture } from './testing';
+import { createTools, MAX_TOOL_RESULT_CHARS, searchTokens } from './tools';
+import { cleanupFixtures, newBudget, newCategory, newPayee, newTransaction, type BudgetFixture } from './testing';
 
 let a: BudgetFixture;
 let b: BudgetFixture;
@@ -115,6 +115,49 @@ describe.skipIf(!dbReady)('categorize tools are budget-scoped', () => {
       operation_type: 'PIX',
       payment: { method: 'PIX', counterparty_name: 'Ana Souza' },
     });
+  });
+
+  test('free bank text is masked and capped before the model sees it', async () => {
+    const long = 'X'.repeat(500);
+    const txn = await newTransaction({
+      budgetId: a.budgetId,
+      accountId: a.accountId,
+      date: '2026-11-08',
+      amount: -3000,
+      memo: long,
+      importPayeeName: long,
+      rawPayload: {
+        descriptionRaw: `PIX ENVIADO CPF 123.456.789-00 AG 0001 CC 12345678 ${long}`,
+        merchant: { name: 'Loja', businessName: 'Loja LTDA', cnpj: '12.345.678/0001-90' },
+        paymentData: { paymentMethod: 'PIX', reason: `Transferencia 98765432100 para conta 12345678 ${long}` },
+      },
+    });
+    const detail = await call(createTools(pool, a.budgetId), 'get_transaction', { transaction_id: txn });
+    expect(detail.memo.length).toBe(200);
+    expect(detail.payee.length).toBe(200);
+    expect(detail.bank.description_raw.length).toBeLessThanOrEqual(200);
+    expect(detail.bank.description_raw).toContain('***');
+    expect(detail.bank.description_raw).not.toContain('123.456.789-00');
+    expect(detail.bank.description_raw).not.toContain('12345678');
+    // The merchant CNPJ is business evidence and is kept; CPF-shaped and
+    // account-shaped runs in free text are not.
+    expect(detail.bank.merchant.cnpj).toBe('12.345.678/0001-90');
+    expect(detail.bank.payment.reason).not.toContain('98765432100');
+    expect(detail.bank.payment.reason).toContain('***');
+    expect(detail.bank.payment.reason.length).toBeLessThanOrEqual(200);
+  });
+
+  test('a large category list drops notes before it exceeds the tool result cap', async () => {
+    for (let i = 0; i < 160; i += 1) {
+      await newCategory(a.budgetId, a.groupId, `Category ${i}`, { note: `note ${i} ${'N'.repeat(300)}` });
+    }
+    const listed = await call(createTools(pool, a.budgetId), 'list_categories');
+    const serialized = JSON.stringify(listed);
+    expect(serialized.length).toBeLessThanOrEqual(MAX_TOOL_RESULT_CHARS);
+    const categories = listed.groups.flatMap((group: { categories: { category_id: string; note?: string }[] }) => group.categories);
+    expect(categories.length).toBeGreaterThan(150);
+    expect(categories[0]).not.toHaveProperty('note');
+    expect(serialized).toContain(a.food);
   });
 
   test('payee_history is empty for another budget\'s payee and non-empty for this budget\'s', async () => {

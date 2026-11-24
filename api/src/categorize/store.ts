@@ -3,14 +3,18 @@
  * returns budget data takes the `budgetId` and puts it in the WHERE clause —
  * the model's tools are scoped by construction, never by post-filtering.
  *
- * The only table this feature writes besides its own is none: suggestions go
- * to `category_suggestions`; `transactions.category_id` is read, never written.
+ * The only tables this feature writes are its own: suggestions go to
+ * `category_suggestions`, attempts to `categorize_attempts`; 
+ * `transactions.category_id` is read, never written.
  */
 import type { Pool } from 'pg';
 
 import type { Queryable } from '../core/db';
 import { withTransaction } from '../core/db';
 import { HttpError } from '../core/validate';
+import { transferOverview } from '../budget';
+import type { CategorizeFailureKind } from './errors';
+import { CATEGORIZE_MAX_ATTEMPTS } from './jobspec';
 
 /** Where a suggestion came from. 'payee_rule' answers first; 'ai' is the model. */
 export type SuggestionSource = 'payee_rule' | 'ai';
@@ -63,10 +67,41 @@ export type CandidateCursor = { date: string; id: string };
 
 const record = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-const text = (value: unknown): string | undefined =>
-  typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
 const int = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : undefined;
+
+/** Longest untrusted text (bank text, payee, memo, category note) that may reach a prompt. */
+export const MAX_UNTRUSTED_TEXT_CHARS = 200;
+/** Longest category/payee name in a tool result; names are user text too. */
+export const MAX_NAME_CHARS = 80;
+
+const cap = (value: string, max = MAX_UNTRUSTED_TEXT_CHARS): string => value.slice(0, max);
+
+/**
+ * Mask CPF/CNPJ-shaped and account-shaped digit runs in free bank text before
+ * it reaches a prompt or the queue. Brazilian `descriptionRaw` and the PIX
+ * `reason` are payer/bank free text and often embed the counterpart's CPF or an
+ * account number. The structured `merchant.cnpj` is a business identifier and
+ * is kept (the merchant panel uses it); personal documents never are.
+ */
+export function maskFreeText(value: string): string {
+  return value
+    .replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, '***') // formatted CPF
+    .replace(/\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g, '***') // formatted CNPJ
+    .replace(/\b\d{11}\b/g, '***') // bare CPF
+    .replace(/\b\d{14}\b/g, '***') // bare CNPJ
+    .replace(/\b\d{6,}\b/g, '***'); // account / reference number runs
+}
+
+/**
+ * One bank string, safe for a prompt: trimmed, capped, and masked when it is
+ * free text (`mask` true for `descriptionRaw` / PIX `reason`).
+ */
+const text = (value: unknown, { mask = false }: { mask?: boolean } = {}): string | undefined => {
+  if (typeof value !== 'string' || value.trim() === '') return undefined;
+  const trimmed = cap(value.trim());
+  return mask ? maskFreeText(trimmed) : trimmed;
+};
 
 /**
  * The provider payload is reduced to facts a classifier may use and the
@@ -81,7 +116,7 @@ export function bankFacts(raw: Record<string, unknown> | null, amountMilliunits:
   const payerName = text(record(payment?.payer)?.name);
   const receiverName = text(record(payment?.receiver)?.name);
   const facts: BankFacts = {
-    description_raw: text(raw.descriptionRaw),
+    description_raw: text(raw.descriptionRaw, { mask: true }),
     category: text(raw.category),
     category_id: text(raw.categoryId),
     operation_type: text(raw.operationType),
@@ -99,7 +134,7 @@ export function bankFacts(raw: Record<string, unknown> | null, amountMilliunits:
     payment: payment
       ? {
           method: text(payment.paymentMethod),
-          reason: text(payment.reason),
+          reason: text(payment.reason, { mask: true }),
           counterparty_name: amountMilliunits < 0 ? receiverName : payerName,
         }
       : undefined,
@@ -142,24 +177,36 @@ export async function runActorForBudget(db: Queryable, budgetId: string): Promis
 }
 
 /**
- * The app's "this transaction still needs a category" rule, in SQL. It mirrors
- * `client/src/domain/register.ts` (`registerCategoryCell`, lines 20-37) and
- * the facts the register screen scopes by; `candidates.test.ts` imports that
- * client function and fails on any divergence for the cases it can express.
+ * Candidate SQL: `needsCategory` (shared/src/domain/category-needs.ts) for the
+ * register's rule, plus the facts a run may not act on.
+ *
+ * The transfer-pending half of the rule is NOT re-implemented here: the app's
+ * own transfer plan (`transferOverview`, the source of the register's
+ * `transferPending`) computes the pending ids and the query excludes them.
+ * `candidate-rule.test.ts` runs this SQL and the shared predicate over the
+ * same fixture rows and compares the sets, so the two cannot drift.
  *
  * Excluded here: inflows (money in goes to Ready to Assign), rows on
  * off-budget/tracking or closed or deleted accounts, split parents, upcoming
- * occurrences, linked transfers, rows a transfer mark or a transfer payee
- * covers, reconciliation/balance adjustments, and after a first run —
- * transactions that already have suggestions (unless `force`).
+ * occurrences, linked transfers, rows on internal "Transfer : <account>"
+ * payees, reconciliation/balance adjustments, transfer-plan pending rows
+ * (payee rule waiting or kept outside the budget), after a first run rows with
+ * suggestions, and rows whose recorded attempt says "no suggestion" (same
+ * payee/memo) or "failed" (still backing off / out of attempts).
  *
- * `$2` is `force`.
+ * Args: $1 budget, $2 force, $3 pending transfer ids, $4 max failed attempts.
  */
 const CANDIDATE_FROM = `
   from public.transactions t
   join public.accounts a on a.id = t.account_id and a.budget_id = t.budget_id
-  left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id
-  left join public.connection_transactions ct on ct.transaction_id = t.id and ct.budget_id = t.budget_id`;
+  left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id`;
+
+/**
+ * The payee+memo fingerprint of an attempt, the SAME expression the attempts
+ * table stores: a no_suggestion transaction becomes a candidate again when its
+ * payee or memo changes, and only then.
+ */
+const ATTEMPT_FINGERPRINT = `md5(coalesce(t.payee_id::text, '') || '|' || coalesce(p.name, t.import_payee_name, '') || '|' || coalesce(t.memo, ''))`;
 
 const CANDIDATE_WHERE = `
   where t.budget_id = $1
@@ -192,22 +239,27 @@ const CANDIDATE_WHERE = `
            and lower(pa.name) = lower(regexp_replace(coalesce(p.name, t.import_payee_name, ''), '^Transfer[[:space:]]*:[[:space:]]*', ''))
       )
     )
-    and not exists (
-      select 1 from public.transfer_marks m
-       where m.transaction_id = t.id and m.state <> 'dismissed'
-    )
-    and not exists (
-      select 1 from public.payees pr
-       where pr.id = t.payee_id
-         and pr.transfer_rule in ('auto', 'account')
-         and (pr.transfer_rule_since is null or t.created_at >= pr.transfer_rule_since)
-         and (
-           (current_date - t.date) <= pr.transfer_rule_wait_days
-           or pr.transfer_rule_no_match = 'outside'
-         )
-    )
     and not exists (select 1 from public.subtransactions s where s.transaction_id = t.id and s.deleted = false)
+    and not (t.id = any($3::uuid[]))
+    and (
+      $2::boolean
+      or not exists (
+        select 1 from public.categorize_attempts ca
+         where ca.transaction_id = t.id
+           and (
+             (ca.outcome = 'no_suggestion' and ca.input_fingerprint = ${ATTEMPT_FINGERPRINT})
+             or (ca.outcome = 'failed'
+                 and (ca.attempts >= $4::int
+                      or ca.last_attempt_at > now() - least(interval '10 minutes' * power(2::float8, ca.attempts - 1), interval '6 hours')))
+           )
+      )
+    )
     and ($2::boolean or not exists (select 1 from public.category_suggestions cs where cs.transaction_id = t.id))`;
+
+/** The ids the app's transfer plan marks pending for this budget (register `transferPending`). */
+async function pendingTransferIds(db: Queryable, budgetId: string): Promise<string[]> {
+  return [...(await transferOverview(db, budgetId)).pending.keys()];
+}
 
 /** The candidate set at run start: how many, and the snapshot's newest row. */
 export async function candidateWindow(
@@ -215,9 +267,11 @@ export async function candidateWindow(
   budgetId: string,
   force: boolean,
 ): Promise<{ count: number; newest: CandidateCursor | null }> {
+  const pending = await pendingTransferIds(db, budgetId);
+  const args = [budgetId, force, pending, CATEGORIZE_MAX_ATTEMPTS];
   const count = await db.query<{ n: number }>(
     `select count(*)::int as n ${CANDIDATE_FROM} ${CANDIDATE_WHERE}`,
-    [budgetId, force],
+    args,
   );
   const newest = await db.query<CandidateCursor>(
     `select t.date::text as date, t.id::text as id
@@ -225,7 +279,7 @@ export async function candidateWindow(
        ${CANDIDATE_WHERE}
       order by t.date desc, t.id desc
       limit 1`,
-    [budgetId, force],
+    args,
   );
   return { count: count.rows[0]?.n ?? 0, newest: newest.rows[0] ?? null };
 }
@@ -241,7 +295,8 @@ export async function listCandidates(
   budgetId: string,
   params: { snapshot: CandidateCursor; cursor: CandidateCursor | null; limit: number; force: boolean },
 ): Promise<Candidate[]> {
-  const args: unknown[] = [budgetId, params.force, params.snapshot.date, params.snapshot.id];
+  const pending = await pendingTransferIds(db, budgetId);
+  const args: unknown[] = [budgetId, params.force, pending, CATEGORIZE_MAX_ATTEMPTS, params.snapshot.date, params.snapshot.id];
   let keyset = '';
   if (params.cursor) {
     args.push(params.cursor.date, params.cursor.id);
@@ -255,14 +310,21 @@ export async function listCandidates(
             null as category,
             ct.raw_payload
        ${CANDIDATE_FROM}
+       left join public.connection_transactions ct on ct.transaction_id = t.id and ct.budget_id = t.budget_id
        ${CANDIDATE_WHERE}
-        and (t.date, t.id) <= ($3::date, $4::uuid)
+        and (t.date, t.id) <= ($5::date, $6::uuid)
         ${keyset}
       order by t.date desc, t.id desc
       limit $${args.length}`,
     args,
   );
-  return rows.map(({ raw_payload, ...row }) => ({ ...row, bank: bankFacts(raw_payload, row.amount_milliunits) }));
+  return rows.map(({ raw_payload, ...row }) => ({
+    ...row,
+    account: { ...row.account, name: cap(row.account.name, MAX_NAME_CHARS) },
+    payee: row.payee === null ? null : cap(row.payee),
+    memo: row.memo === null ? null : cap(row.memo),
+    bank: bankFacts(raw_payload, row.amount_milliunits),
+  }));
 }
 
 /** One live transaction of the budget, whatever its category state. Null when it is not this budget's. */
@@ -285,15 +347,26 @@ export async function getAgentTransaction(db: Queryable, budgetId: string, trans
   const row = rows[0];
   if (!row) return null;
   const { raw_payload, ...txn } = row;
-  return { ...txn, bank: bankFacts(raw_payload, txn.amount_milliunits) };
+  return {
+    ...txn,
+    account: { ...txn.account, name: cap(txn.account.name, MAX_NAME_CHARS) },
+    payee: txn.payee === null ? null : cap(txn.payee),
+    memo: txn.memo === null ? null : cap(txn.memo),
+    category: txn.category ? { ...txn.category, name: cap(txn.category.name, MAX_NAME_CHARS) } : null,
+    bank: bankFacts(raw_payload, txn.amount_milliunits),
+  };
 }
 
 export type CategoryChoice = { id: string; name: string; note: string | null; group_id: string; group_name: string };
 
 /**
- * The categories a suggestion may name: live, not hidden, in a live visible
- * group. Hidden/deleted categories are never offered and ids outside this set
- * are dropped from model answers.
+ * The categories a suggestion may name: live, visible, and ASSIGNABLE. The
+ * app marks card-payment envelopes and its own internal groups/categories
+ * with `is_credit_card_payments` / `internal` (the card-payment setup writes
+ * both: api/src/budget/store/accounts.ts); those are never offered to the
+ * model and never accepted from an answer, because booking a card payment
+ * there would turn the transfer into spending. Hidden/deleted categories are
+ * excluded for the same reason.
  */
 export async function listCategoryChoices(db: Queryable, budgetId: string): Promise<CategoryChoice[]> {
   const { rows } = await db.query<CategoryChoice>(
@@ -301,12 +374,19 @@ export async function listCategoryChoices(db: Queryable, budgetId: string): Prom
        from public.categories c
        join public.category_groups g on g.id = c.group_id and g.budget_id = c.budget_id
       where c.budget_id = $1
-        and c.deleted = false and c.hidden = false
+        and c.deleted = false and c.hidden = false and c.internal = false
         and g.deleted = false and g.hidden = false
-      order by g.sort_order, g.name, c.sort_order, c.name`,
+        and g.is_credit_card_payments = false and g.internal = false
+      order by g.sort_order, g.name, c.sort_order, c.name
+      limit 200`,
     [budgetId],
   );
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    name: cap(row.name, MAX_NAME_CHARS),
+    group_name: cap(row.group_name, MAX_NAME_CHARS),
+    note: row.note === null ? null : cap(row.note),
+  }));
 }
 
 /** How this payee's live transactions were categorized before, most used first. */
@@ -328,7 +408,7 @@ export async function payeeHistory(
       limit 8`,
     [budgetId, payeeId],
   );
-  return rows;
+  return rows.map((row) => ({ ...row, category_name: cap(row.category_name, MAX_NAME_CHARS) }));
 }
 
 export type SimilarTransaction = {
@@ -376,7 +456,7 @@ export async function searchSimilar(
       limit $4`,
     [budgetId, patterns, [...tokens], limit],
   );
-  return rows;
+  return rows.map((row) => ({ ...row, description: cap(row.description) }));
 }
 
 export type NewSuggestion = {
@@ -397,6 +477,116 @@ export async function hasDecidedSuggestion(db: Queryable, transactionId: string)
     [transactionId],
   );
   return rows.length > 0;
+}
+
+export type AttemptOutcome = 'suggested' | 'no_suggestion' | 'failed';
+
+/** One row of public.categorize_attempts (no transaction id: this is the per-row shape). */
+export type CategorizeAttempt = {
+  outcome: AttemptOutcome;
+  error_kind: string | null;
+  attempts: number;
+  model: string | null;
+  last_attempt_at: string;
+};
+
+/**
+ * Record one attempt for a live, still-uncategorized transaction of this
+ * budget. `reset` (an explicit re-classify) restarts the attempt counter; a
+ * normal attempt increments it. Returns false when the transaction is gone,
+ * deleted or already categorized (nothing to record).
+ *
+ * The fingerprint is computed in SQL from the SAME payee/memo expression the
+ * candidate query compares, so "no suggestion" is skipped exactly while the
+ * inputs are unchanged.
+ */
+export async function recordAttempt(
+  db: Queryable,
+  budgetId: string,
+  transactionId: string,
+  attempt: { outcome: AttemptOutcome; errorKind: CategorizeFailureKind | null; model: string | null; reset: boolean },
+): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `insert into public.categorize_attempts
+       (transaction_id, budget_id, outcome, error_kind, attempts, model, input_fingerprint, last_attempt_at)
+     select t.id, t.budget_id, $3, $4, 1, $5, ${ATTEMPT_FINGERPRINT}, now()
+       from public.transactions t
+       left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id
+      where t.id = $1 and t.budget_id = $2 and t.deleted = false and t.category_id is null
+     on conflict (transaction_id) do update
+       set outcome = excluded.outcome,
+           error_kind = excluded.error_kind,
+           attempts = case when $6::boolean then 1 else public.categorize_attempts.attempts + 1 end,
+           model = excluded.model,
+           input_fingerprint = excluded.input_fingerprint,
+           last_attempt_at = now()`,
+    [transactionId, budgetId, attempt.outcome, attempt.errorKind, attempt.model, attempt.reset],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+export type AttemptRow = CategorizeAttempt & {
+  transaction_id: string;
+  date: string;
+  amount_milliunits: number;
+  payee: string | null;
+  account_id: string;
+  account_name: string;
+  memo: string | null;
+};
+
+export type AttemptListOptions = {
+  /** Restrict to one transaction (the page's one-by-one view); must be a uuid. */
+  transactionId?: string;
+  limit: number;
+  offset: number;
+};
+
+/**
+ * The attempts the queue reads to tell "not classified yet" (no row for the
+ * transaction) from "classified, no suggestion" (outcome no_suggestion) and
+ * "failed" (with its kind). Per-transaction, newest date first.
+ */
+export async function listAttempts(
+  db: Queryable,
+  budgetId: string,
+  options: AttemptListOptions,
+): Promise<{ rows: AttemptRow[]; total: number }> {
+  if (options.transactionId !== undefined && !UUID_RE.test(options.transactionId)) {
+    throw new HttpError(400, 'transaction id must be a uuid', 'invalid_transaction_id');
+  }
+  const where = `t.budget_id = $1 and t.deleted = false
+    ${options.transactionId ? 'and t.id = $2' : ''}`;
+  const args: unknown[] = [budgetId];
+  if (options.transactionId) args.push(options.transactionId);
+  const limitAt = args.length + 1;
+  const offsetAt = args.length + 2;
+  const from = `from public.categorize_attempts ca
+    join public.transactions t on t.id = ca.transaction_id and t.budget_id = ca.budget_id
+    join public.accounts a on a.id = t.account_id and a.budget_id = ca.budget_id
+    left join public.payees p on p.id = t.payee_id and p.budget_id = ca.budget_id`;
+  const total = await db.query<{ n: number }>(`select count(*)::int as n ${from} where ${where}`, args);
+  const { rows } = await db.query<AttemptRow & { account_name: string }>(
+    `select ca.transaction_id, ca.outcome, ca.error_kind, ca.attempts, ca.model,
+            ca.last_attempt_at::text as last_attempt_at,
+            t.date::text as date, t.amount as amount_milliunits,
+            coalesce(p.name, t.import_payee_name) as payee,
+            t.account_id, a.name as account_name, t.memo
+       ${from}
+      where ${where}
+      order by t.date desc, t.id
+      limit $${limitAt} offset $${offsetAt}`,
+    [...args, options.limit, options.offset],
+  );
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      payee: row.payee === null ? null : cap(row.payee),
+      account_name: cap(row.account_name, MAX_NAME_CHARS),
+      memo: row.memo === null ? null : cap(row.memo),
+    })),
+    total: total.rows[0]?.n ?? 0,
+  };
 }
 
 /**
@@ -491,6 +681,8 @@ export type SuggestionRow = {
   memo: string | null;
   /** Bank facts the queue's merchant panel shows; null when the row is not bank-imported. */
   bank: BankFacts | null;
+  /** The latest attempt for the transaction; null while it was never attempted. */
+  attempt: CategorizeAttempt | null;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -520,11 +712,13 @@ export async function listSuggestions(
     join public.category_groups g on g.id = c.group_id and g.budget_id = s.budget_id
     join public.accounts a on a.id = t.account_id and a.budget_id = s.budget_id
     left join public.payees p on p.id = t.payee_id and p.budget_id = s.budget_id
-    left join public.connection_transactions ct on ct.transaction_id = t.id and ct.budget_id = s.budget_id`;
+    left join public.connection_transactions ct on ct.transaction_id = t.id and ct.budget_id = s.budget_id
+    left join public.categorize_attempts ca on ca.transaction_id = t.id and ca.budget_id = s.budget_id`;
   const where = `s.budget_id = $1 and s.status = $2 and s.confidence >= $3
     and t.deleted = false and t.category_id is null
-    and c.deleted = false and c.hidden = false
+    and c.deleted = false and c.hidden = false and c.internal = false
     and g.deleted = false and g.hidden = false
+    and g.is_credit_card_payments = false and g.internal = false
     and a.deleted = false
     ${options.transactionId ? 'and s.transaction_id = $4' : ''}`;
   const args: unknown[] = [budgetId, options.status ?? 'pending', options.minConfidence];
@@ -538,7 +732,11 @@ export async function listSuggestions(
             s.confidence, s.reason, s.source, s.provider, s.model, s.status,
             t.date::text as date, t.amount as amount_milliunits,
             coalesce(p.name, t.import_payee_name) as payee,
-            t.account_id, a.name as account_name, t.memo, ct.raw_payload
+            t.account_id, a.name as account_name, t.memo, ct.raw_payload,
+            case when ca.transaction_id is null then null else
+              json_build_object('outcome', ca.outcome, 'error_kind', ca.error_kind, 'attempts', ca.attempts,
+                                'model', ca.model, 'last_attempt_at', ca.last_attempt_at::text)
+            end as attempt
        ${from}
       where ${where}
       order by t.date desc, t.id, s.rank
@@ -546,7 +744,15 @@ export async function listSuggestions(
     [...args, options.limit, options.offset],
   );
   return {
-    rows: rows.map(({ raw_payload, ...row }) => ({ ...row, bank: bankFacts(raw_payload, row.amount_milliunits) })),
+    rows: rows.map(({ raw_payload, ...row }) => ({
+      ...row,
+      category_name: cap(row.category_name, MAX_NAME_CHARS),
+      group_name: cap(row.group_name, MAX_NAME_CHARS),
+      account_name: cap(row.account_name, MAX_NAME_CHARS),
+      payee: row.payee === null ? null : cap(row.payee),
+      memo: row.memo === null ? null : cap(row.memo),
+      bank: bankFacts(raw_payload, row.amount_milliunits),
+    })),
     total: total.rows[0]?.n ?? 0,
   };
 }

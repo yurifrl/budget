@@ -21,6 +21,14 @@ const DEFAULT_MAX_TOKENS = 16_000;
 /** Anthropic's model list is small; a bounded walk covers it even with pagination. */
 const MAX_MODEL_PAGES = 5;
 
+/**
+ * Models whose Messages API documents `output_config.effort`
+ * (platform.claude.com/docs/en/build-with-claude/effort, supported models):
+ * Opus 4.5+, Sonnet 4.6+, Haiku 5.5+ and the Fable/Mythos 5+ families. An
+ * older model gets no effort field (some reject unknown output_config keys).
+ */
+const EFFORT_MODELS = /^claude-(?:fable|mythos)-[5-9]|^claude-opus-(?:4-[5-9]|[5-9])|^claude-sonnet-(?:4-[6-9]|[5-9])|^claude-haiku-(?:5-[5-9]|[6-9])/;
+
 type Json = Record<string, unknown>;
 type WireMessage = { role: 'user' | 'assistant'; content: unknown[] };
 
@@ -62,7 +70,12 @@ export class AnthropicProvider implements AiProvider {
       // tool calls doc). Disallowing a new call keeps the final answer textual.
       if (request.toolChoice === 'none') body.tool_choice = { type: 'none' };
     }
-    if (request.jsonSchema) body.output_config = { format: { type: 'json_schema', schema: request.jsonSchema.schema } };
+    if (request.jsonSchema || (request.reasoningEffort && EFFORT_MODELS.test(request.model))) {
+      body.output_config = {
+        ...(request.jsonSchema ? { format: { type: 'json_schema', schema: request.jsonSchema.schema } } : {}),
+        ...(request.reasoningEffort && EFFORT_MODELS.test(request.model) ? { effort: request.reasoningEffort } : {}),
+      };
+    }
     const json = await requestJson({
       provider: this.id,
       url: `${this.baseUrl.replace(/\/+$/, '')}/messages`,

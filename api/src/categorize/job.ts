@@ -28,6 +28,18 @@ export type StartCategorizeRunParams = {
  * budget owner, whose key pays) and the ledger tenant is that same person.
  * Pass a transaction client to make the enqueue part of the caller's
  * transaction (outbox).
+ *
+ * RE-RUN RULE (also in docs/decisions.md): once a person accepted or dismissed
+ * any suggestion for a transaction, that transaction is FROZEN for good. A
+ * normal run skips it because it has suggestion rows; an explicit re-classify
+ * (`force`) skips it too (`hasDecidedSuggestion`), and `replaceSuggestions`
+ * refuses every write for it. This holds when the accepted category is later
+ * cleared, when every suggestion was dismissed, and when the only pending
+ * suggestion points at a since-hidden category. A future "unfreeze" is a
+ * product change, not a flag on this call. An attempt that ended with no
+ * suggestion or a failure is NOT a decision: it can be retried (failed, after
+ * a backoff) or re-asked by `force`, and a payee/memo change re-asks a
+ * no_suggestion row.
  */
 export async function startCategorizeRun(
   db: Queryable,

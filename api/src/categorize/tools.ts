@@ -20,6 +20,19 @@ export const GET_TRANSACTION = 'get_transaction';
 export const PAYEE_HISTORY = 'payee_history';
 export const SEARCH_SIMILAR_TRANSACTIONS = 'search_similar_transactions';
 
+/**
+ * Hard size of one tool result the model may receive. Store functions cap every
+ * untrusted string; this is the backstop that keeps a whole result (many
+ * categories, many matches) from blowing the input side of the token budget.
+ * list_categories drops its notes before giving up.
+ */
+export const MAX_TOOL_RESULT_CHARS = 40_000;
+
+const bounded = (json: string): string =>
+  json.length <= MAX_TOOL_RESULT_CHARS
+    ? json
+    : JSON.stringify({ error: 'tool result too large; answer with what you have' });
+
 export const TOOL_DEFINITIONS: readonly AiTool[] = [
   {
     name: LIST_CATEGORIES,
@@ -100,28 +113,38 @@ export function createTools(db: Queryable, budgetId: string): CategorizeTools {
     switch (call.name) {
       case LIST_CATEGORIES: {
         const categories = await store.listCategoryChoices(db, budgetId);
-        const groups = new Map<string, { group_id: string; group_name: string; categories: { category_id: string; name: string; note: string | null }[] }>();
-        for (const category of categories) {
-          const group = groups.get(category.group_id) ?? { group_id: category.group_id, group_name: category.group_name, categories: [] };
-          group.categories.push({ category_id: category.id, name: category.name, note: category.note });
-          groups.set(category.group_id, group);
-        }
-        return JSON.stringify({ groups: [...groups.values()] });
+        // Notes are the optional, largest part of the answer: drop them rather
+        // than the ids when a big budget would exceed the result cap.
+        const serialize = (includeNotes: boolean) => {
+          const groups = new Map<string, { group_id: string; group_name: string; categories: { category_id: string; name: string; note?: string | null }[] }>();
+          for (const category of categories) {
+            const group = groups.get(category.group_id) ?? { group_id: category.group_id, group_name: category.group_name, categories: [] };
+            group.categories.push(
+              includeNotes
+                ? { category_id: category.id, name: category.name, note: category.note }
+                : { category_id: category.id, name: category.name },
+            );
+            groups.set(category.group_id, group);
+          }
+          return JSON.stringify({ groups: [...groups.values()] });
+        };
+        const withNotes = serialize(true);
+        return bounded(withNotes.length <= MAX_TOOL_RESULT_CHARS ? withNotes : serialize(false));
       }
       case GET_TRANSACTION: {
         const args = getTransactionArgs.parse(call.arguments);
         const transaction = await store.getAgentTransaction(db, budgetId, args.transaction_id);
-        return JSON.stringify(transaction ?? { found: false });
+        return bounded(JSON.stringify(transaction ?? { found: false }));
       }
       case PAYEE_HISTORY: {
         const args = payeeHistoryArgs.parse(call.arguments);
         const history = await store.payeeHistory(db, budgetId, args.payee_id);
-        return JSON.stringify({ history, total: history.reduce((sum, row) => sum + row.transactions, 0) });
+        return bounded(JSON.stringify({ history, total: history.reduce((sum, row) => sum + row.transactions, 0) }));
       }
       case SEARCH_SIMILAR_TRANSACTIONS: {
         const args = searchArgs.parse(call.arguments);
         const transactions = await store.searchSimilar(db, budgetId, searchTokens(args.description), args.limit ?? 8);
-        return JSON.stringify({ transactions });
+        return bounded(JSON.stringify({ transactions }));
       }
       default:
         return JSON.stringify({ error: `unknown tool ${call.name}` });

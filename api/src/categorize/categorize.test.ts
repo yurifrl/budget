@@ -54,6 +54,14 @@ const run = (fx: BudgetFixture, params: Partial<ChunkParams> = {}) =>
 const uncategorized = (fx: BudgetFixture, date = '2026-11-01', extra: Partial<Parameters<typeof newTransaction>[0]> = {}) =>
   newTransaction({ budgetId: fx.budgetId, accountId: fx.accountId, date, amount: -2500, ...extra });
 
+const attemptOf = async (transactionId: string) =>
+  (
+    await pool.query(
+      'select outcome, error_kind, attempts, model, last_attempt_at from public.categorize_attempts where transaction_id = $1',
+      [transactionId],
+    )
+  ).rows[0];
+
 describe.skipIf(!dbReady)('categorizer run', () => {
   test('stores the model suggestion and a forced re-run upserts in place', async () => {
     const fake = fakeProviders(() => answer([{ category_id: a.food, confidence: 0.9, reason: 'grocery store' }]));
@@ -619,4 +627,98 @@ describe.skipIf(!dbReady)('cancellation and key handling', () => {
     for (const value of [prepared, chunk]) expect(JSON.stringify(value)).not.toContain(KEY);
     for (const call of fake.calls) expect(JSON.stringify(call.request)).not.toContain(KEY);
   });
+  test('an empty answer is recorded and not re-billed by a normal run', async () => {
+    const fake = fakeProviders(() => answer([]));
+    setProviders(fake.table);
+    const txn = await uncategorized(a);
+
+    expect(await run(a)).toMatchObject({ examined: 1, empty: 1, failed: 0 });
+    const attempt = await attemptOf(txn);
+    expect(attempt).toMatchObject({ outcome: 'no_suggestion', error_kind: null, attempts: 1, model: 'fake-model' });
+
+    // A normal run has nothing to do: the transaction was already classified.
+    expect(await run(a)).toMatchObject({ examined: 0, empty: 0 });
+    expect(fake.calls).toHaveLength(1);
+
+    // An explicit re-classify (force) asks again without growing the counter.
+    expect(await run(a, { force: true })).toMatchObject({ examined: 1, empty: 1 });
+    expect(fake.calls).toHaveLength(2);
+    expect(await attemptOf(txn)).toMatchObject({ outcome: 'no_suggestion', attempts: 1 });
+  });
+
+  test('a no_suggestion row is re-asked once its memo (or payee) changes', async () => {
+    const fake = fakeProviders(() => answer([]));
+    setProviders(fake.table);
+    const txn = await uncategorized(a, '2026-11-02', { memo: 'old memo' });
+    await run(a);
+    expect(fake.calls).toHaveLength(1);
+
+    await pool.query('update public.transactions set memo = $2 where id = $1', [txn, 'new memo']);
+    expect(await run(a)).toMatchObject({ examined: 1, empty: 1 });
+    expect(fake.calls).toHaveLength(2);
+    expect(await attemptOf(txn)).toMatchObject({ outcome: 'no_suggestion', attempts: 2 });
+  });
+
+  test('a truncated answer is its own failure kind, recorded, and retried only after the backoff', async () => {
+    const fake = fakeProviders(() => ({ ...answer([{ category_id: a.food, confidence: 0.9 }]), finishReason: 'length' }));
+    setProviders(fake.table);
+    const txn = await uncategorized(a);
+
+    expect(await run(a)).toMatchObject({ examined: 1, failed: 1, suggested: 0 });
+    expect(await attemptOf(txn)).toMatchObject({ outcome: 'failed', error_kind: 'truncated', attempts: 1 });
+
+    // Still inside the failure backoff: not re-billed.
+    expect(await run(a)).toMatchObject({ examined: 0, failed: 0 });
+    expect(fake.calls).toHaveLength(1);
+
+    // After the backoff it is retried, and the attempt counter grows.
+    await pool.query(`update public.categorize_attempts set last_attempt_at = now() - interval '1 hour' where transaction_id = $1`, [txn]);
+    expect(await run(a)).toMatchObject({ examined: 1, failed: 1 });
+    expect(fake.calls).toHaveLength(2);
+    expect(await attemptOf(txn)).toMatchObject({ outcome: 'failed', error_kind: 'truncated', attempts: 2 });
+
+    // Out of attempts: only force asks again.
+    await pool.query(
+      `update public.categorize_attempts set attempts = 3, last_attempt_at = now() - interval '1 day' where transaction_id = $1`,
+      [txn],
+    );
+    expect(await run(a)).toMatchObject({ examined: 0, failed: 0 });
+    expect(fake.calls).toHaveLength(2);
+    expect(await run(a, { force: true })).toMatchObject({ examined: 1, failed: 1 });
+    expect(fake.calls).toHaveLength(3);
+    expect(await attemptOf(txn)).toMatchObject({ attempts: 1 });
+  });
+
+  test('the run cap walks the backlog across runs instead of re-billing the same rows', async () => {
+    const fake = fakeProviders((_request, call) => {
+      if (call === 1) return answer([]); // newest: classified, no suggestion
+      if (call === 2) return { ...answer([{ category_id: a.food, confidence: 0.5 }]), finishReason: 'max_tokens' }; // middle: failed
+      return answer([{ category_id: a.food, confidence: 0.9 }]); // oldest: suggested
+    });
+    setProviders(fake.table);
+    const newest = await uncategorized(a, '2026-11-03');
+    const middle = await uncategorized(a, '2026-11-02');
+    const oldest = await uncategorized(a, '2026-11-01');
+
+    expect(await run(a, { limit: 2 })).toMatchObject({ examined: 2, empty: 1, failed: 1, suggested: 0 });
+    // The next run must reach the third row, not pay for the first two again.
+    expect(await run(a, { limit: 2 })).toMatchObject({ examined: 1, suggested: 1, empty: 0, failed: 0 });
+    expect(fake.calls).toHaveLength(3);
+    expect((await suggestionsOf(oldest)).map((row) => row.category_id)).toEqual([a.food]);
+    expect(await attemptOf(newest)).toMatchObject({ outcome: 'no_suggestion' });
+    expect(await attemptOf(middle)).toMatchObject({ outcome: 'failed', error_kind: 'truncated' });
+    expect(await attemptOf(oldest)).toMatchObject({ outcome: 'suggested' });
+  });
+
+  test('three consecutive request failures stop the run with the systematic failure', async () => {
+    setProviders(fakeProviders(() => {
+      throw new AiProviderError('permanent', 'bad request', 400);
+    }).table);
+    await uncategorized(a, '2026-11-03');
+    await uncategorized(a, '2026-11-02');
+    await uncategorized(a, '2026-11-01');
+
+    await expect(run(a)).rejects.toMatchObject({ kind: 'systematic' });
+  });
+
 });

@@ -437,3 +437,44 @@ describe('OpenAI-compatible tool_choice on the final answer turn', () => {
     expect(body).not.toHaveProperty('tool_choice');
   });
 });
+
+describe('OpenAI-compatible reasoning effort', () => {
+  test('openai sends reasoning_effort for reasoning models and omits it for older chat models', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
+    const provider = createProvider('openai', 'sk-test-123', { baseUrl });
+    await provider.chat({ model: 'gpt-5.5', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    await provider.chat({ model: 'gpt-4o', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    expect(captured[0]!.body).toMatchObject({ model: 'gpt-5.5', reasoning_effort: 'low' });
+    expect(captured[1]!.body).not.toHaveProperty('reasoning_effort');
+  });
+
+  test('openrouter uses the documented reasoning map', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
+    const provider = createProvider('openrouter', 'sk-or-v1-test', { baseUrl });
+    await provider.chat({ model: 'some/model', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    expect(captured[0]!.body).toMatchObject({ reasoning: { effort: 'low' } });
+  });
+
+  test('deepseek sends reasoning_effort', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
+    const provider = createProvider('deepseek', 'sk-ds-test', { baseUrl });
+    await provider.chat({ model: 'deepseek-flash', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    expect(captured[0]!.body).toMatchObject({ reasoning_effort: 'low' });
+  });
+
+  test('zai documents reasoning_effort on GLM-5.3 only', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
+    const provider = createProvider('zai', 'zai-key', { baseUrl });
+    await provider.chat({ model: 'glm-5.3', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    await provider.chat({ model: 'glm-4.6', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    expect(captured[0]!.body).toMatchObject({ reasoning_effort: 'low' });
+    expect(captured[1]!.body).not.toHaveProperty('reasoning_effort');
+  });
+
+  test('omits the field when the caller does not ask for effort', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
+    const provider = createProvider('openai', 'sk-test-123', { baseUrl });
+    await provider.chat({ model: 'gpt-5.5', messages: [{ role: 'user', content: 'x' }] });
+    expect(captured[0]!.body).not.toHaveProperty('reasoning_effort');
+  });
+});

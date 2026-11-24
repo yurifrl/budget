@@ -16,7 +16,7 @@ import { HttpError } from '../core/validate';
 import { runChunk } from './chunk';
 import { answer, fakeProviders } from './testing';
 import { categorizeRunStatus, startCategorizeRun } from './job';
-import { listSuggestions } from './store';
+import { listAttempts, listCategoryChoices, listSuggestions } from './store';
 import { cleanupFixtures, newAccount, newBudget, newTransaction, newUser, type BudgetFixture } from './testing';
 
 const KEY = 'sk-test-read-0123456789abcdef';
@@ -79,6 +79,8 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
       payee: 'MERCADO',
       account_name: 'Checking',
       memo: 'weekly shop',
+      // The latest attempt, so the page can show "classified" next to the row.
+      attempt: { outcome: 'suggested', error_kind: null, attempts: 1, model: 'fake-model', last_attempt_at: expect.any(String) },
       // The merchant panel's facts, typed and optional, straight from
       // raw_payload; no location fields exist in the provider payload.
       bank: {
@@ -96,6 +98,49 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
     expect((await listSuggestions(pool, fixture.budgetId, { ...options, minConfidence: 0.85 })).total).toBe(0);
     expect((await listSuggestions(pool, fixture.budgetId, { ...options, transactionId: txn })).total).toBe(1);
     expect((await listSuggestions(pool, fixture.budgetId, { ...options, transactionId: crypto.randomUUID() })).total).toBe(0);
+  });
+
+  test('a classified-empty row is distinguishable from one never classified', async () => {
+    setProviders(fakeProviders(() => answer([])).table);
+    const empty = await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-06', amount: -110 });
+    await run();
+
+    // No suggestion row to show...
+    expect(await listSuggestions(pool, fixture.budgetId, options)).toEqual({ rows: [], total: 0 });
+    // ...but the attempt says it WAS classified, with no suggestion.
+    const attempts = await listAttempts(pool, fixture.budgetId, { limit: 50, offset: 0 });
+    expect(attempts.total).toBe(1);
+    expect(attempts.rows[0]).toMatchObject({
+      transaction_id: empty,
+      outcome: 'no_suggestion',
+      error_kind: null,
+      attempts: 1,
+      model: 'fake-model',
+    });
+    expect((await listAttempts(pool, fixture.budgetId, { transactionId: empty, limit: 10, offset: 0 })).total).toBe(1);
+
+    // A transaction with no attempt row is "not classified yet".
+    const never = await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-07', amount: -120 });
+    expect(await listAttempts(pool, fixture.budgetId, { transactionId: never, limit: 10, offset: 0 })).toEqual({ rows: [], total: 0 });
+  });
+
+  test('card-payment envelopes and internal categories are not offered to the model', async () => {
+    const { newCategory, newGroup } = await import('./testing');
+    const ccpGroup = await newGroup(fixture.budgetId, 'Credit Card Payments');
+    await pool.query('update public.category_groups set is_credit_card_payments = true, internal = true where id = $1', [ccpGroup]);
+    const payment = await newCategory(fixture.budgetId, ccpGroup, 'Nubank');
+    const internalGroup = await newGroup(fixture.budgetId, 'System');
+    await pool.query('update public.category_groups set internal = true where id = $1', [internalGroup]);
+    const internalCategory = await newCategory(fixture.budgetId, internalGroup, 'Hidden system');
+    const flagged = await newCategory(fixture.budgetId, fixture.groupId, 'Internal flag');
+    await pool.query('update public.categories set internal = true where id = $1', [flagged]);
+
+    const choices = await listCategoryChoices(pool, fixture.budgetId);
+    const ids = new Set(choices.map((choice) => choice.id));
+    expect(ids.has(payment)).toBe(false);
+    expect(ids.has(internalCategory)).toBe(false);
+    expect(ids.has(flagged)).toBe(false);
+    expect(ids.has(fixture.food)).toBe(true);
   });
 
   test('another budget never sees these suggestions', async () => {
@@ -155,6 +200,14 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
 
   test('migration 0111 adds the category_id index', async () => {
     const { rows } = await pool.query(`select to_regclass('public.category_suggestions_category_idx') as idx`);
+    expect(rows[0].idx).not.toBeNull();
+  });
+
+  test('migration 0112 adds the attempts table and its budget index', async () => {
+    const { rows } = await pool.query(
+      `select to_regclass('public.categorize_attempts') as tbl, to_regclass('public.categorize_attempts_budget_outcome_idx') as idx`,
+    );
+    expect(rows[0].tbl).not.toBeNull();
     expect(rows[0].idx).not.toBeNull();
   });
 });

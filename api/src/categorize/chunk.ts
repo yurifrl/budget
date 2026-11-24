@@ -8,8 +8,13 @@
  *  - timeout      retried once for that transaction, then counted failed and
  *                 the chunk continues (a timed-out generation may be billed).
  *  - bad_response counted failed, chunk continues.
+ *  - truncated    the provider cut the answer off at the output cap: counted
+ *                 failed (recorded, so it is not re-billed blindly).
  *  - request      the provider refused THIS request (400/413/422): counted
- *                 failed, chunk continues.
+ *                 failed, chunk continues — but three IN A ROW stop the run
+ *                 with the user-safe systematic failure.
+ * Every classification attempt is recorded in public.categorize_attempts, so
+ * a no_suggestion row or a failed row is not re-billed by the next run.
  *  - budget       the transaction spent its token cap: counted failed.
  *  - rate_limited waited out once for the transaction (up to
  *                 IN_CHUNK_RATE_LIMIT_WAIT_MS, provider delay otherwise), then
@@ -28,6 +33,7 @@ import type { Queryable } from '../core/db';
 import { classifyTransaction, type ClassifyRequest, type ClassifyResult } from './agent';
 import { CategorizeError } from './errors';
 import {
+  CATEGORIZE_MAX_CONSECUTIVE_REQUEST_FAILURES,
   CATEGORIZE_RUN_LIMIT,
   DEFAULT_RATE_LIMIT_DELAY_MS,
   IN_CHUNK_RATE_LIMIT_WAIT_MS,
@@ -146,7 +152,7 @@ async function classifyWithPolicy(
   signal: AbortSignal | undefined,
   addUsage: (usage: AiTokenUsage) => AiTokenUsage,
 ): Promise<
-  { ok: true; result: ClassifyResult } | { ok: false; failure: 'timeout' | 'bad_response' | 'request' | 'budget' }
+  { ok: true; result: ClassifyResult } | { ok: false; failure: 'timeout' | 'bad_response' | 'truncated' | 'request' | 'budget' }
 > {
   // One budget for the whole transaction — timeout and rate-limit retries
   // included — so the call/token caps are per transaction and usage is
@@ -181,7 +187,13 @@ async function classifyWithPolicy(
         if (signal?.aborted) throw new CancelledFailure('categorize run cancelled');
         continue;
       }
-      if (error.kind === 'timeout' || error.kind === 'bad_response' || error.kind === 'request' || error.kind === 'budget') {
+      if (
+        error.kind === 'timeout' ||
+        error.kind === 'bad_response' ||
+        error.kind === 'truncated' ||
+        error.kind === 'request' ||
+        error.kind === 'budget'
+      ) {
         return { ok: false, failure: error.kind };
       }
       throw error;
@@ -241,6 +253,7 @@ export async function runChunk(pool: Pool, params: ChunkParams): Promise<ChunkRe
   const allowedCategoryIds = new Set(choices.map((choice) => choice.id));
   const tools = createTools(pool, params.budgetId);
   const provider = providerFor(key);
+  let consecutiveRequestFailures = 0;
 
   for (const transaction of candidates) {
     if (params.signal?.aborted) throw new CancelledFailure('categorize run cancelled');
@@ -265,7 +278,15 @@ export async function runChunk(pool: Pool, params: ChunkParams): Promise<ChunkRe
       written = await store.replaceSuggestions(pool, params.budgetId, transaction.id, [
         { categoryId: ruleCategory, confidence: 1, reason: null, source: 'payee_rule', provider: null, model: null },
       ]);
-      if (written) progress.rule++;
+      if (written) {
+        progress.rule++;
+        await store.recordAttempt(pool, params.budgetId, transaction.id, {
+          outcome: 'suggested',
+          errorKind: null,
+          model: null,
+          reset: params.force,
+        });
+      }
     } else {
       const outcome = await withKeyLock(owner, () =>
         classifyWithPolicy(
@@ -285,7 +306,25 @@ export async function runChunk(pool: Pool, params: ChunkParams): Promise<ChunkRe
       if (!outcome.ok) {
         progress.failed++;
         progress.failedIds.push(transaction.id);
+        await store.recordAttempt(pool, params.budgetId, transaction.id, {
+          outcome: 'failed',
+          errorKind: outcome.failure,
+          model,
+          reset: params.force,
+        });
+        if (outcome.failure === 'request') {
+          consecutiveRequestFailures++;
+          // The same request-shape 400 on N transactions is a request bug, not
+          // N bad transactions: stop instead of recording a successful run
+          // where every transaction failed.
+          if (consecutiveRequestFailures >= CATEGORIZE_MAX_CONSECUTIVE_REQUEST_FAILURES) {
+            throw new CategorizeError('systematic', usage);
+          }
+        } else {
+          consecutiveRequestFailures = 0;
+        }
       } else {
+        consecutiveRequestFailures = 0;
         written = await store.replaceSuggestions(
           pool,
           params.budgetId,
@@ -300,8 +339,23 @@ export async function runChunk(pool: Pool, params: ChunkParams): Promise<ChunkRe
           })),
         );
         if (written) {
-          if (outcome.result.suggestions.length > 0) progress.suggested++;
-          else progress.empty++;
+          if (outcome.result.suggestions.length > 0) {
+            progress.suggested++;
+            await store.recordAttempt(pool, params.budgetId, transaction.id, {
+              outcome: 'suggested',
+              errorKind: null,
+              model: outcome.result.model,
+              reset: params.force,
+            });
+          } else {
+            progress.empty++;
+            await store.recordAttempt(pool, params.budgetId, transaction.id, {
+              outcome: 'no_suggestion',
+              errorKind: null,
+              model: outcome.result.model,
+              reset: params.force,
+            });
+          }
         }
       }
     }

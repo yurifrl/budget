@@ -18,8 +18,8 @@
  * Retry policy for provider-calling activities lives on the proxy below (the
  * `-ai` queue): its start-to-close is derived from the per-call deadline, the
  * per-transaction call cap and the chunk size (CATEGORIZE_CHUNK_TIMEOUT_MS =
- * 31 min), so a slow model cannot make Temporal time out a chunk that is still
- * within its own budget. A retried attempt resumes from its heartbeat cursor
+ * 81 min at the current 4000-token cap), so a slow model cannot make Temporal
+ * time out a chunk that is still within its own budget. A retried attempt resumes from its heartbeat cursor
  * and token totals. Auth/permanent are non-retryable ApplicationFailures; rate
  * limits carry the provider's own retry-after; timeouts never reach this
  * policy — the chunk retries a timeout once per transaction (see ./chunk.ts).

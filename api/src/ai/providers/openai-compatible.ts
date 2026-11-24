@@ -28,6 +28,15 @@ export type KeyCheck = (model: string | null) => {
   body?: unknown;
 };
 
+/**
+ * How this provider documents reasoning effort:
+ *  - `reasoning_effort`: the OpenAI Chat Completions field, also documented by
+ *    DeepSeek and Z.ai (GLM-5.3);
+ *  - `openrouter`: OpenRouter's normalized `reasoning: { effort }` map.
+ * Omitted entirely by providers that document neither.
+ */
+export type ReasoningEffortParam = 'reasoning_effort' | 'openrouter';
+
 export type OpenAiCompatibleConfig = {
   id: AiProviderId;
   /** Name used in error messages ("OpenRouter API 429: ..."). */
@@ -50,6 +59,16 @@ export type OpenAiCompatibleConfig = {
   toolChoiceNone?: boolean;
   /** Drop ids this provider lists but this adapter cannot chat with (OpenAI's embeddings, audio, image). */
   filterModel?: (id: string) => boolean;
+  /**
+   * Documented reasoning-effort parameter. Absent = the provider documents
+   * none here and the field is omitted.
+   */
+  reasoningEffort?: ReasoningEffortParam;
+  /**
+   * Models that document the parameter (default: all). OpenAI supports
+   * `reasoning_effort` only on reasoning models; Z.ai documents it on GLM-5.3.
+   */
+  supportsReasoningEffort?: (id: string) => boolean;
 };
 
 type Json = Record<string, unknown>;
@@ -79,6 +98,16 @@ const OPENAI_NON_CHAT =
   /(^|[-/])(?:embedding|moderation|tts|whisper|transcribe|audio|realtime|image|sora|dall-e|codex|deep-research|instruct|pro|search-preview|chatgpt)(?:$|[-/])/;
 const OPENAI_CHAT_FAMILY = /^(?:gpt-|o\d|ft:)/;
 
+/**
+ * Chat models whose API documents `reasoning_effort`
+ * (developers.openai.com/api/docs/guides/reasoning, Chat Completions): the
+ * gpt-5+ families and the o-series. Earlier gpt-4 models and fine-tunes do not
+ * document it, so the adapter omits the field for them.
+ */
+export function isOpenAiReasoningModel(id: string): boolean {
+  return !id.startsWith('ft:') && /^(?:gpt-[5-9]|o\d)/.test(id);
+}
+
 export function isOpenAiChatModel(id: string): boolean {
   if (OPENAI_COMPLETIONS_FINE_TUNE.test(id)) return false;
   if (id.startsWith('ft:')) return !OPENAI_NON_CHAT.test(id.split(':')[1] ?? '');
@@ -106,6 +135,14 @@ export class OpenAiCompatibleProvider implements AiProvider {
     const body: Json = { model: request.model, messages: this.wireMessages(request) };
     if (request.temperature !== undefined) body.temperature = request.temperature;
     if (request.maxTokens !== undefined) body[this.config.tokenParam] = request.maxTokens;
+    if (
+      request.reasoningEffort &&
+      this.config.reasoningEffort &&
+      (this.config.supportsReasoningEffort?.(request.model) ?? true)
+    ) {
+      if (this.config.reasoningEffort === 'openrouter') body.reasoning = { effort: request.reasoningEffort };
+      else body.reasoning_effort = request.reasoningEffort;
+    }
     if (request.tools?.length) {
       body.tools = request.tools.map((tool) => ({
         type: 'function',

@@ -26,12 +26,24 @@ export type CategorizeFailureKind =
   /** The answer is not the schema (or names no known category): that transaction fails. */
   | 'bad_response'
   /**
+   * The provider cut the answer off at the output cap (`max_tokens` /
+   * `length`): the answer is incomplete, the call was billed, and retrying the
+   * same cap blindly would only bill it again.
+   */
+  | 'truncated'
+  /**
    * A 4xx about the request itself (400/413/422: context length, request size,
    * content filter). Scoped to this transaction, so the run continues.
    */
   | 'request'
   /** The transaction spent CLASSIFY_MAX_TOKENS_PER_TRANSACTION: it fails, the run continues. */
-  | 'budget';
+  | 'budget'
+  /**
+   * Too many consecutive `request` failures: the provider is refusing every
+   * request, so the run stops with this (non-retryable) failure instead of
+   * recording a "successful" run where every transaction failed.
+   */
+  | 'systematic';
 
 const SAFE_MESSAGES: Record<CategorizeFailureKind, string> = {
   auth: 'the AI provider refused the key',
@@ -40,8 +52,10 @@ const SAFE_MESSAGES: Record<CategorizeFailureKind, string> = {
   transient: 'the AI provider is unavailable',
   timeout: 'the AI provider did not answer in time',
   bad_response: 'the AI provider answered something that is not a category suggestion',
+  truncated: 'the AI provider cut its answer off at the output limit',
   request: 'the AI provider refused that transaction',
   budget: 'that transaction exceeded its token budget',
+  systematic: 'the AI provider refused the request repeatedly',
 };
 
 /**
