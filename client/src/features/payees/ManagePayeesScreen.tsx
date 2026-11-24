@@ -17,7 +17,7 @@
  */
 
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { tCommon } from '@shared/i18n/common';
 
@@ -43,6 +43,8 @@ export function ManagePayeesBody({
   const { search, setSearch, error } = admin;
   // Payees › Rules (budget-mit6): the transfer rules list; a row opens its payee.
   const [tab, setTab] = useState<'payees' | 'rules'>('payees');
+  // Phone width: one pane at a time (the list, or the selected payee with a back link).
+  const narrow = useWindowDimensions().width < 700;
 
   return (
     <View style={[styles.screen, contentTopPad > 0 && { paddingTop: contentTopPad }]}>
@@ -98,9 +100,14 @@ export function ManagePayeesBody({
         </Text>
       ) : null}
 
+      {narrow && admin.selected ? (
+        <Pressable onPress={admin.clearSelected} accessibilityRole="button" style={{ marginBottom: 6 }}>
+          <Text style={styles.linkText}>{t('screen.back')}</Text>
+        </Pressable>
+      ) : null}
       <View style={styles.body}>
-        <PayeeListPane admin={admin} />
-        <PayeeDetailPane admin={admin} />
+        {!narrow || !admin.selected ? <PayeeListPane admin={admin} fill={narrow} /> : null}
+        {!narrow || admin.selected ? <PayeeDetailPane admin={admin} /> : null}
       </View>
       </>
       )}

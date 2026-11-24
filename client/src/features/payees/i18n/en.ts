@@ -3,6 +3,7 @@ export default {
   'screen.search': 'Search by name',
   'tabs.payees': 'Payees',
   'tabs.rules': 'Transfer rules',
+  'screen.back': '‹ All payees',
 
   'list.addPlaceholder': 'Add a payee…',
   'list.newNameLabel': 'New payee name',

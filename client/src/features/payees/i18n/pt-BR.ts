@@ -6,6 +6,7 @@ const m: Translation<typeof en> = {
   'screen.search': 'Buscar por nome',
   'tabs.payees': 'Favorecidos',
   'tabs.rules': 'Regras de transferência',
+  'screen.back': '‹ Todos os favorecidos',
 
   'list.addPlaceholder': 'Adicionar um favorecido…',
   'list.newNameLabel': 'Nome do novo favorecido',

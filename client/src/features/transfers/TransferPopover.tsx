@@ -18,7 +18,7 @@ import { TransferCheckbox } from './TransferBits';
 import { popoverSides, transferTargets, whyLine, type TransferLeg } from './transfers.logic';
 import type { TransfersState } from './useTransfers';
 
-const WIDTH = 360;
+const WIDTH = 392;
 
 function LegBox({ leg, selected, onPress }: { leg: TransferLeg; selected?: boolean; onPress?: () => void }) {
   const { formatMoney, formatDate } = useMoneyFormat();
@@ -130,7 +130,7 @@ export function TransferPopover({
                     </View>
                   </Pressable>
                 ) : null}
-                <View style={styles.actions}>
+                <View style={[styles.actions, isPhone && styles.actionsPhone]}>
                   <Pressable style={styles.btn} accessibilityRole="button" onPress={() => void actions.dismiss([sides.row.transaction_id]).then(done)}>
                     <Text style={styles.btnText}>{t('popover.notTransfer')}</Text>
                   </Pressable>
@@ -215,12 +215,13 @@ const styles = StyleSheet.create({
   neg: { color: colors.redFg, fontWeight: '600' },
   pos: { color: colors.greenPillFg, fontWeight: '600' },
   choices: { gap: 6, marginBottom: 8 },
-  choice: { flex: 0 },
+  choice: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' },
   choiceOn: { borderColor: colors.blue, backgroundColor: colors.blueSoft },
   why: { color: colors.muted, fontSize: 11, marginVertical: 6 },
   check: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginVertical: 8 },
   checkText: { color: colors.text, fontSize: 12 },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, flexWrap: 'wrap' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  actionsPhone: { flexWrap: 'wrap', rowGap: 8 },
   btn: { borderWidth: 1, borderColor: colors.border, borderRadius: 7, paddingVertical: 5, paddingHorizontal: 9 },
   btnText: { color: colors.text, fontSize: 12, fontWeight: '600' },
   primary: { backgroundColor: colors.indigo, borderColor: colors.indigo },

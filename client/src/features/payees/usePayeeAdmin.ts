@@ -235,6 +235,7 @@ export function usePayeeAdmin() {
     budgetId,
     all,
     selectById,
+    clearSelected: () => setSelectedId(null),
     pickerBudget,
     activeMonth,
     addCategory,
