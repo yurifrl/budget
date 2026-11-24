@@ -1853,3 +1853,35 @@ app. The two now ship independently.
 - Rejected: one version with an "app too" flag. The App Store marketing
   version only needs to move when the app changes, and a flag on a shared
   version keeps the two coupled.
+
+## Transfers between own accounts (budget-mit6)
+
+- The card-payment pairing became a general transfer matcher
+  (`api/src/budget/domain/transfer-matcher.ts`, pure; `transfer-links.ts`
+  loads/writes). Pairs cash↔cash, cash→card, card↔card in one budget: equal
+  and opposite amounts, ≤3 days. Resolution per amount bucket: unique pair,
+  then Pluggy evidence (`category` / `operationType` in the raw payload) as a
+  tie-break, then ordinal pairing of repeats inside one account pair (date,
+  bank time, id), then a payee rule takes the closest candidate. Auto-link
+  needs both rows untouched and: unique, or ordinal with transfer evidence on
+  both sides, or evidence with strong evidence ("Same person transfer",
+  "Credit card payment", `PAGAMENTO_FATURA`) on both. A contradicting bank
+  category vetoes auto-link except cash→card. Everything else is a
+  suggestion (`sure` / `choose` / `one_side`). Payee text is never read.
+- Suggestions are computed at read time (register list and
+  `GET /transfers/suggestions`), never stored: editing or categorizing a row
+  updates them with no invalidation logic. Stored are only decisions
+  (`transfer_marks`: dismissed / outside / manual) and links with their undo
+  state (`transfer_links`: previous payee, category, shadow `blocked`).
+- A payee rule row with no other side yet is derived as `transfer_pending:
+  waiting` while within `wait_days`: the client engine skips it like an
+  on-budget transfer (no category, no Ready to Assign effect). After the
+  window, policy `outside` makes it a transfer to an account outside the
+  budget: no category asked, but it moves Ready to Assign like any money
+  leaving or entering the budget (same as a transfer to an off-budget
+  account); policy `review` turns it into a one-side suggestion. Chosen over
+  a synthetic "outside" account: no fake account rows, nothing to clean up,
+  and a later-arriving other side still links.
+- A rule covers rows created after it was set (`transfer_rule_since`);
+  "Apply to past rows" clears it. Undone links are marked `manual`: still
+  suggested, never auto-linked again.
