@@ -278,6 +278,30 @@ describe('formerly hand-written URLs now come from contracts (same routes)', () 
       '/connections/c-1/settings',
       { syncWindowDays: null },
     ],
+    ['getAiCredentials', () => budgetApi.endpoints.getAiCredentials.initiate(), 'GET', '/ai/credentials', null],
+    [
+      'saveAiCredentials',
+      () => budgetApi.endpoints.saveAiCredentials.initiate({ apiKey: 'sk-or-secret-1', provider: 'openrouter', model: 'openai/gpt-4o-mini' }),
+      'PUT',
+      '/ai/credentials',
+      { api_key: 'sk-or-secret-1', provider: 'openrouter', model: 'openai/gpt-4o-mini' },
+    ],
+    ['deleteAiCredentials', () => budgetApi.endpoints.deleteAiCredentials.initiate(), 'DELETE', '/ai/credentials', null],
+    ['testAiCredentials', () => budgetApi.endpoints.testAiCredentials.initiate(), 'GET', '/ai/credentials/test', null],
+    [
+      'detectAiProvider',
+      () => budgetApi.endpoints.detectAiProvider.initiate({ apiKey: 'sk-ant-secret-1' }),
+      'POST',
+      '/ai/provider-detect',
+      { api_key: 'sk-ant-secret-1' },
+    ],
+    [
+      'listAiModels',
+      () => budgetApi.endpoints.listAiModels.initiate({ apiKey: 'sk-or-secret-1', provider: 'openrouter' }),
+      'POST',
+      '/ai/models',
+      { api_key: 'sk-or-secret-1', provider: 'openrouter' },
+    ],
   ];
   // Endpoints with a transformResponse need a body to transform.
   const replies: Record<string, unknown> = { registerConnection: { connection: {}, accounts: [] }, getUpstreamAccounts: [] };
@@ -295,7 +319,7 @@ describe('the split slice is still one api', () => {
   test('one reducer path, the same tag types, every endpoint reachable from budgetApi', () => {
     expect(budgetApi.reducerPath).toBe('budgetApi');
     const endpoints = Object.keys(budgetApi.endpoints);
-    expect(endpoints).toHaveLength(92);
+    expect(endpoints).toHaveLength(98);
     for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget', 'getTransferSuggestions', 'setPayeeTransferRule']) {
       expect(endpoints).toContain(name);
     }

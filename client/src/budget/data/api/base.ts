@@ -45,6 +45,6 @@ export const baseApi = createApi({
   // connectivity (core/state/listeners wires focus/online for web AND native).
   refetchOnFocus: true,
   refetchOnReconnect: true,
-  tagTypes: ['Budgets', 'Groups', 'Categories', 'Bundles', 'Accounts', 'Transactions', 'Assignments', 'MonthNotes', 'Payees', 'Targets', 'CategoryNotes', 'Connections', 'ConnectionCredentials', 'Members'],
+  tagTypes: ['Budgets', 'Groups', 'Categories', 'Bundles', 'Accounts', 'Transactions', 'Assignments', 'MonthNotes', 'Payees', 'Targets', 'CategoryNotes', 'Connections', 'ConnectionCredentials', 'Members', 'AiCredentials'],
   endpoints: () => ({}),
 });
