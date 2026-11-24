@@ -1890,16 +1890,21 @@ app. The two now ship independently.
 
 - `connection_transactions.raw_payload` (0105) is the provider transaction
   object verbatim (Pluggy's `.passthrough()` schema). The documented Pluggy
-  transaction object has **no location**: `merchant` is
-  `{name, businessName, cnpj, cnae, category}` and `paymentData` carries
-  participant bank identifiers, not an address. The Categorize page's map
-  panel therefore cannot be built from the payload as it stands. The useful
-  classifier facts are `descriptionRaw`, `category`/`categoryId` (Pluggy
-  Enrichment), `operationType`, `merchant.*`, `paymentData.paymentMethod`/
-  `reason`/participant names and `creditCardMetadata` (installments, MCC);
-  the tool layer whitelists exactly those and drops account/branch/routing
-  numbers, CPF/CNPJ, reference ids and card numbers before text leaves the
-  server.
+  transaction object has **no location** (no latitude/longitude, no address):
+  `merchant` is `{name, businessName, cnpj, cnae, category}` and
+  `paymentData` carries participant bank identifiers. **Decision: there is no
+  map panel.** The Categorize page shows a merchant panel instead, so the bank
+  facts exposed to the queue and to the model are, when the bank sent them:
+  merchant trade name, merchant legal name (`businessName`), merchant CNPJ,
+  business category (and CNAE), the provider operation type and the PIX
+  counterparty name of the row (receiver for money out, payer for money in).
+  `SuggestionRow.bank` (`BankFacts`, every field optional, null for
+  hand-entered rows) carries them to budget-edxg and `get_transaction`
+  returns the same shape. No location fields are invented. The merchant CNPJ
+  is exposed by this product decision; participant document numbers (CPF),
+  bank branch/account/routing numbers, reference ids, boleto lines and card
+  numbers are still dropped before text leaves the server. The tool layer
+  whitelists exactly those facts.
 - The candidate set is the app's own "needs a category" rule, not a second
   definition: live, uncategorized, non-upcoming outflows (`amount <= 0`;
   inflows go to Ready to Assign) on live, open, on-budget accounts, without
@@ -1987,11 +1992,12 @@ app. The two now ship independently.
   provider error text is kept, `redactSecrets` has nothing to redact. The
   registry swap (`setProviders`) is a deep-import test seam, not part of the
   AI barrel: it hands the decrypted key to its caller.
-- Who a run acts for is ONE function, `store.runActorForBudget`: today the
-  budget owner (the owner's own key pays, or the shared key when enabled for
-  them) and the ledger tenant is the owner. `startCategorizeRun` does not take
-  an owner from its caller. A member of a shared budget triggering a run that
-  spends the owner's key is the accepted product behaviour for now.
+- Whose key a run spends is ONE function, `store.runActorForBudget`: the
+  budget OWNER's key (own, else the shared AI key when the owner has the
+  feature), whoever starts the run, and the ledger tenant is that owner.
+  `startCategorizeRun` does not take an owner from its caller. This is a
+  confirmed product decision: a member of a shared budget triggering a run
+  spends the owner's key; changing it is a change to this one function.
 - `readCategorySuggestions` is scoped by budget id only; the HTTP layer
   checks budget access. A non-uuid `transactionId` is a 400
   (`invalid_transaction_id`), not a driver error.

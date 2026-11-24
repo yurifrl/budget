@@ -52,6 +52,11 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
       amount: -4200,
       memo: 'weekly shop',
       importPayeeName: 'MERCADO',
+      rawPayload: {
+        operationType: 'PIX',
+        merchant: { name: 'Mercado Central', businessName: 'Mercado Central LTDA', cnpj: '12.345.678/0001-90', category: 'Groceries' },
+        paymentData: { paymentMethod: 'PIX', receiver: { name: 'Mercado Central' } },
+      },
     });
     await run();
 
@@ -74,6 +79,18 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
       payee: 'MERCADO',
       account_name: 'Checking',
       memo: 'weekly shop',
+      // The merchant panel's facts, typed and optional, straight from
+      // raw_payload; no location fields exist in the provider payload.
+      bank: {
+        operation_type: 'PIX',
+        merchant: {
+          name: 'Mercado Central',
+          legal_name: 'Mercado Central LTDA',
+          cnpj: '12.345.678/0001-90',
+          category: 'Groceries',
+        },
+        payment: { method: 'PIX', counterparty_name: 'Mercado Central' },
+      },
     });
 
     expect((await listSuggestions(pool, fixture.budgetId, { ...options, minConfidence: 0.85 })).total).toBe(0);
@@ -87,6 +104,13 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
     await run();
     const other = await newBudget('read-b');
     expect(await listSuggestions(pool, other.budgetId, options)).toEqual({ rows: [], total: 0 });
+
+    // A hand-entered row has no bank payload: the panel fields are absent.
+    await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-07', amount: -150 });
+    setProviders(fakeProviders(() => answer([{ category_id: fixture.food, confidence: 0.8 }])).table);
+    await run(2);
+    const manual = (await listSuggestions(pool, fixture.budgetId, options)).rows.find((row) => row.amount_milliunits === -150);
+    expect(manual?.bank).toBeNull();
   });
 
   test('decided rows leave the pending queue; a categorized transaction drops out', async () => {

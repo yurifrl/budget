@@ -12,6 +12,7 @@
 export { startCategorizeRun, categorizeRunStatus, type StartCategorizeRunParams } from './job';
 export {
   listSuggestions as readCategorySuggestions,
+  type BankFacts,
   type SuggestionListOptions,
   type SuggestionRow,
   type SuggestionSource,

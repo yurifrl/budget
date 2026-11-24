@@ -234,9 +234,13 @@ start at `0100`). One image runs both the API and the worker
   and logs carry counts, ids, cursor and Postgres codes only; no provider
   text or key is kept. `AiChatResult.usage` (provider-reported input/output
   tokens) was added to the AI port so the ledger reports token usage per run.
-  Imports for the next task: `startCategorizeRun`, `categorizeRunStatus`,
-  `readCategorySuggestions` (threshold at read time; caller checks budget
-  access).
+  `SuggestionRow.bank` (`BankFacts`, optional fields, null for hand-entered
+  rows) carries the merchant panel facts from `raw_payload` — merchant trade
+  and legal name, CNPJ, business category/CNAE, operation type and the PIX
+  counterparty — to `readCategorySuggestions` and `get_transaction`; there is
+  no map panel and no location data. Imports for the next task:
+  `startCategorizeRun`, `categorizeRunStatus`, `readCategorySuggestions`
+  (threshold at read time; caller checks budget access).
 - **Repeat-rule tick.** Still an in-process interval in the API
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.

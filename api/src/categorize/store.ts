@@ -16,7 +16,20 @@ import { HttpError } from '../core/validate';
 export type SuggestionSource = 'payee_rule' | 'ai';
 export type SuggestionStatus = 'pending' | 'accepted' | 'dismissed';
 
-/** Bank facts worth showing the model, whitelisted from the provider payload. */
+/**
+ * Bank facts worth showing the model and the queue's merchant panel,
+ * whitelisted from the provider payload. Every field is optional: the bank
+ * sends what it sends, nothing is synthesized. There are deliberately no
+ * location fields (the provider payload has none).
+ *
+ * `merchant` is the business side: trade name, legal name (`businessName`),
+ * CNPJ and its CNAE/category (Pluggy merchant enrichment). `payment.
+ * counterparty_name` is the PIX counterparty of THIS row (receiver for money
+ * out, payer for money in). `operation_type` is the provider's operation
+ * (PIX, TED, CARD …). Dropped: participant document numbers (CPF), bank
+ * branch/account/routing numbers, reference ids, boleto lines and card
+ * numbers — personal or bank identifiers, not evidence about the category.
+ */
 export type BankFacts = {
   description_raw?: string;
   category?: string;
@@ -24,8 +37,8 @@ export type BankFacts = {
   operation_type?: string;
   status?: string;
   type?: string;
-  merchant?: { name?: string; business_name?: string; category?: string; cnae?: string };
-  payment?: { method?: string; reason?: string; payer_name?: string; receiver_name?: string };
+  merchant?: { name?: string; legal_name?: string; cnpj?: string; category?: string; cnae?: string };
+  payment?: { method?: string; reason?: string; counterparty_name?: string };
   card?: { installment_number?: number; total_installments?: number; payee_mcc?: number; purchase_date?: string };
 };
 
@@ -56,17 +69,17 @@ const int = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : undefined;
 
 /**
- * The provider payload is reduced to facts a classifier may use. Deliberately
- * dropped: participant document numbers, bank branch/account/routing numbers,
- * payment reference ids and boleto lines — they are personal or bank
- * identifiers, not evidence about the category, and this text leaves the
- * server for a third-party model.
+ * The provider payload is reduced to facts a classifier may use and the
+ * queue's merchant panel shows. `amountMilliunits` picks the PIX counterparty:
+ * the receiver for money out, the payer for money in.
  */
-export function bankFacts(raw: Record<string, unknown> | null): BankFacts | null {
+export function bankFacts(raw: Record<string, unknown> | null, amountMilliunits: number): BankFacts | null {
   if (!raw) return null;
   const merchant = record(raw.merchant);
   const payment = record(raw.paymentData);
   const card = record(raw.creditCardMetadata);
+  const payerName = text(record(payment?.payer)?.name);
+  const receiverName = text(record(payment?.receiver)?.name);
   const facts: BankFacts = {
     description_raw: text(raw.descriptionRaw),
     category: text(raw.category),
@@ -77,7 +90,8 @@ export function bankFacts(raw: Record<string, unknown> | null): BankFacts | null
     merchant: merchant
       ? {
           name: text(merchant.name),
-          business_name: text(merchant.businessName),
+          legal_name: text(merchant.businessName),
+          cnpj: text(merchant.cnpj),
           category: text(merchant.category),
           cnae: text(merchant.cnae),
         }
@@ -86,8 +100,7 @@ export function bankFacts(raw: Record<string, unknown> | null): BankFacts | null
       ? {
           method: text(payment.paymentMethod),
           reason: text(payment.reason),
-          payer_name: text(record(payment.payer)?.name),
-          receiver_name: text(record(payment.receiver)?.name),
+          counterparty_name: amountMilliunits < 0 ? receiverName : payerName,
         }
       : undefined,
     card: card
@@ -249,7 +262,7 @@ export async function listCandidates(
       limit $${args.length}`,
     args,
   );
-  return rows.map(({ raw_payload, ...row }) => ({ ...row, bank: bankFacts(raw_payload) }));
+  return rows.map(({ raw_payload, ...row }) => ({ ...row, bank: bankFacts(raw_payload, row.amount_milliunits) }));
 }
 
 /** One live transaction of the budget, whatever its category state. Null when it is not this budget's. */
@@ -272,7 +285,7 @@ export async function getAgentTransaction(db: Queryable, budgetId: string, trans
   const row = rows[0];
   if (!row) return null;
   const { raw_payload, ...txn } = row;
-  return { ...txn, bank: bankFacts(raw_payload) };
+  return { ...txn, bank: bankFacts(raw_payload, txn.amount_milliunits) };
 }
 
 export type CategoryChoice = { id: string; name: string; note: string | null; group_id: string; group_name: string };
@@ -476,6 +489,8 @@ export type SuggestionRow = {
   account_id: string;
   account_name: string;
   memo: string | null;
+  /** Bank facts the queue's merchant panel shows; null when the row is not bank-imported. */
+  bank: BankFacts | null;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -504,7 +519,8 @@ export async function listSuggestions(
     join public.categories c on c.id = s.category_id and c.budget_id = s.budget_id
     join public.category_groups g on g.id = c.group_id and g.budget_id = s.budget_id
     join public.accounts a on a.id = t.account_id and a.budget_id = s.budget_id
-    left join public.payees p on p.id = t.payee_id and p.budget_id = s.budget_id`;
+    left join public.payees p on p.id = t.payee_id and p.budget_id = s.budget_id
+    left join public.connection_transactions ct on ct.transaction_id = t.id and ct.budget_id = s.budget_id`;
   const where = `s.budget_id = $1 and s.status = $2 and s.confidence >= $3
     and t.deleted = false and t.category_id is null
     and c.deleted = false and c.hidden = false
@@ -516,18 +532,21 @@ export async function listSuggestions(
   const limitAt = args.length + 1;
   const offsetAt = args.length + 2;
   const total = await db.query<{ n: number }>(`select count(*)::int as n ${from} where ${where}`, args);
-  const { rows } = await db.query<SuggestionRow>(
+  const { rows } = await db.query<Omit<SuggestionRow, 'bank'> & { raw_payload: Record<string, unknown> | null }>(
     `select s.transaction_id, s.rank, s.category_id, c.name as category_name,
             g.id as group_id, g.name as group_name,
             s.confidence, s.reason, s.source, s.provider, s.model, s.status,
             t.date::text as date, t.amount as amount_milliunits,
             coalesce(p.name, t.import_payee_name) as payee,
-            t.account_id, a.name as account_name, t.memo
+            t.account_id, a.name as account_name, t.memo, ct.raw_payload
        ${from}
       where ${where}
       order by t.date desc, t.id, s.rank
       limit $${limitAt} offset $${offsetAt}`,
     [...args, options.limit, options.offset],
   );
-  return { rows, total: total.rows[0]?.n ?? 0 };
+  return {
+    rows: rows.map(({ raw_payload, ...row }) => ({ ...row, bank: bankFacts(raw_payload, row.amount_milliunits) })),
+    total: total.rows[0]?.n ?? 0,
+  };
 }

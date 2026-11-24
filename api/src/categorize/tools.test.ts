@@ -52,7 +52,7 @@ describe.skipIf(!dbReady)('categorize tools are budget-scoped', () => {
     expect(JSON.stringify(other)).not.toContain('secret');
   });
 
-  test('get_transaction exposes whitelisted bank facts and no bank identifiers', async () => {
+  test('get_transaction exposes the merchant panel facts and no personal/bank identifiers', async () => {
     const txn = await newTransaction({
       budgetId: a.budgetId,
       accountId: a.accountId,
@@ -60,7 +60,7 @@ describe.skipIf(!dbReady)('categorize tools are budget-scoped', () => {
       amount: -5000,
       rawPayload: {
         descriptionRaw: 'UBER *TRIP SAO PAULO',
-        merchant: { name: 'Uber', businessName: 'Uber do Brasil', category: 'Transport', cnpj: '00.000.000/0001-00' },
+        merchant: { name: 'Uber', businessName: 'Uber do Brasil', category: 'Transport', cnpj: '00.000.000/0001-00', cnae: '4924-8/00' },
         paymentData: {
           paymentMethod: 'PIX',
           reason: 'ride',
@@ -80,14 +80,41 @@ describe.skipIf(!dbReady)('categorize tools are budget-scoped', () => {
       category: 'Transport',
       operation_type: 'PIX',
       status: 'POSTED',
-      merchant: { name: 'Uber', business_name: 'Uber do Brasil', category: 'Transport' },
-      payment: { method: 'PIX', reason: 'ride', payer_name: 'Me', receiver_name: 'Uber' },
+      merchant: {
+        name: 'Uber',
+        legal_name: 'Uber do Brasil',
+        cnpj: '00.000.000/0001-00',
+        category: 'Transport',
+        cnae: '4924-8/00',
+      },
+      // Money out: the PIX counterparty is the receiver.
+      payment: { method: 'PIX', reason: 'ride', counterparty_name: 'Uber' },
       card: { installment_number: 2, total_installments: 6, payee_mcc: 4121 },
     });
     const serialized = JSON.stringify(detail);
-    for (const secret of ['1234-5', '123.456.789-00', 'E123456789', '00.000.000/0001-00', '0001']) {
+    // The owner's merchant panel needs the business CNPJ; personal documents,
+    // account/branch numbers, reference ids and card numbers stay out.
+    for (const secret of ['1234-5', '123.456.789-00', 'E123456789', 'cardNumber']) {
       expect(serialized).not.toContain(secret);
     }
+  });
+
+  test('an inflow names the payer as the PIX counterparty', async () => {
+    const txn = await newTransaction({
+      budgetId: a.budgetId,
+      accountId: a.accountId,
+      date: '2026-11-06',
+      amount: 120_000,
+      rawPayload: {
+        operationType: 'PIX',
+        paymentData: { paymentMethod: 'PIX', payer: { name: 'Ana Souza' }, receiver: { name: 'Me' } },
+      },
+    });
+    const detail = await call(createTools(pool, a.budgetId), 'get_transaction', { transaction_id: txn });
+    expect(detail.bank).toEqual({
+      operation_type: 'PIX',
+      payment: { method: 'PIX', counterparty_name: 'Ana Souza' },
+    });
   });
 
   test('payee_history is empty for another budget\'s payee and non-empty for this budget\'s', async () => {
