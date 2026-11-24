@@ -29,6 +29,7 @@ export default {
   'root.freshStart': 'Make a Fresh Start',
   'root.payees': 'Manage Payees',
   'root.banks': 'Linked banks',
+  'root.aiKey': 'AI key',
   'root.backup': 'Export / Import',
   'root.flags': 'Edit Flags',
   'root.display': 'Display Options',

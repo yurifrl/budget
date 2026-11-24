@@ -114,6 +114,14 @@ export function BudgetTabs({ isPhone }: { isPhone: boolean }) {
           tabBarItemStyle: { display: 'none' },
         }}
       />
+      {/* Own AI key: opened from Settings, never a tab. */}
+      <Tabs.Screen
+        name="ai-keys"
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
       {/* Transaction page: pushed with ?id=<transaction id> (row menu Details), never a tab. */}
       <Tabs.Screen
         name="transaction"

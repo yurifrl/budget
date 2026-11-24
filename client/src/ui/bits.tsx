@@ -14,3 +14,14 @@ export { MoneyInput } from './primitives/MoneyInput';
 export { OverlaySheet } from './primitives/OverlaySheet';
 export { Pill } from './primitives/Pill';
 export { SheetItem } from './primitives/SheetItem';
+export {
+  SettingsCard,
+  SettingsCardActions,
+  SettingsCardButton,
+  SettingsCardFailed,
+  SettingsCardLoading,
+  SettingsCardRow,
+  SettingsCardSection,
+  SettingsConfirm,
+  settingsCardText,
+} from './primitives/settingsCard';

@@ -1,11 +1,12 @@
 /**
  * Wiring of the "Your Pluggy keys" screen: the key status query, the save /
  * remove mutations, the form fields and the inline error. Rules live in
- * pluggyKeys.logic.ts. The secret is held only in this component's state
- * while typed; the save mutation is reset as soon as it settles so the
- * request arguments (the secret) do not stay in the redux store.
+ * pluggyKeys.logic.ts. The secret is held only while this screen is focused
+ * (leaving resets the fields) and the save mutation is reset as soon as it
+ * settles so the request arguments (the secret) do not stay in the redux store.
  */
 
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import {
@@ -30,6 +31,19 @@ export function usePluggyKeys() {
   const [clientSecret, setClientSecret] = useState('');
   const [error, setError] = useState<KeysFormError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // The route stays mounted in the tab navigator: leaving drops the typed
+  // client id, secret and messages, so reopening never shows them pre-filled.
+  useFocusEffect(
+    useCallback(() => () => {
+      setClientId('');
+      setClientSecret('');
+      setError(null);
+      setNotice(null);
+      setConfirmingRemove(false);
+      setReplacing(false);
+    }, []),
+  );
 
   const mode = keysScreenMode({
     credentials: query.data,
