@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ErrorNotice, FIELD_HINTS, newPasswordHint, PasswordField } from '@/features/auth';
+import { ErrorNotice, FIELD_HINTS, newPasswordHint } from '@/features/auth';
+import { PasswordField } from '@/ui/PasswordField';
 import { colors } from '@/ui/theme';
 import { tCommon } from '@shared/i18n/common';
 import { t } from './i18n';

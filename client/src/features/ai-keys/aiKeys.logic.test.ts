@@ -1,9 +1,10 @@
 /**
  * Rules of the AI key screen: state derivation, the fixed provider table,
- * detection hints, save-time checks, model rows and one message per AI error
- * code. Tests run in English (docs/i18n.md).
+ * detection hints, save-time checks, model rows, the error-code message map,
+ * the model-list failure classification and the one-at-a-time credential
+ * action. Tests run in English unless they switch locale (docs/i18n.md).
  */
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 import {
   AI_ENCRYPTION_MISSING,
@@ -16,17 +17,23 @@ import {
   AI_SHARED_KEY_MISSING,
   AI_SHARED_MODEL_MISSING,
 } from '@shared/contracts/ai';
+import { setLocale } from '@shared/i18n';
 
 import type { AiCredentialStatus } from '@/budget/data/api';
+import { apiErrorMessage } from '@/platform/api/baseQuery';
 import {
+  aiErrorKey,
   aiErrorView,
   aiKeysScreenMode,
   checkSaveInput,
   detectionHint,
+  modelListFailure,
   modelOptions,
   ownKeyUnreadable,
   providerLabel,
   providerOptions,
+  runCredentialAction,
+  type AiErrorKey,
 } from './aiKeys.logic';
 import { t } from './i18n';
 
@@ -66,10 +73,20 @@ describe('aiKeysScreenMode', () => {
     const shared = { available: false, provider: 'openrouter' as const, model: 'openai/gpt-4o-mini' };
     expect(aiKeysScreenMode({ status: rawStatus({ shared }), isError: false })).toBe('empty');
   });
+
+  test('a stored row the server cannot use blocks the shared fallback', () => {
+    // own null + effective null + shared available: an unknown-provider row.
+    const shared = { available: true, provider: 'openrouter' as const, model: 'openai/gpt-4o-mini' };
+    expect(aiKeysScreenMode({ status: rawStatus({ shared, effective: null }), isError: false })).toBe('blocked');
+    // The same shape with effective 'shared' is real shared AI.
+    expect(aiKeysScreenMode({ status: rawStatus({ shared, effective: 'shared' }), isError: false })).toBe('shared');
+  });
 });
 
 describe('ownKeyUnreadable', () => {
   test('an own key the server cannot open is not the key in use', () => {
+    // Reachable once budget-ucyr's ownKeyUsable lands: main answers 'own' for
+    // any own row. The screen is written ahead of it on purpose.
     expect(ownKeyUnreadable(status(own, false))).toBe(false);
     expect(ownKeyUnreadable(rawStatus({ own, effective: null }))).toBe(true);
     expect(ownKeyUnreadable(status(null, true))).toBe(false);
@@ -135,41 +152,109 @@ describe('modelOptions', () => {
   });
 });
 
-describe('aiErrorView', () => {
-  const codes = [
-    AI_KEY_REJECTED,
-    AI_PROVIDER_UNKNOWN,
-    AI_PROVIDER_MISMATCH,
-    AI_MODEL_UNKNOWN,
-    AI_KEY_REQUIRED,
-    'rate_limited',
-    'upstream_error',
-    AI_ENCRYPTION_MISSING,
-    AI_KEY_UNREADABLE,
-    AI_SHARED_KEY_MISSING,
-    AI_SHARED_MODEL_MISSING,
-  ];
+describe('error codes', () => {
+  // The exact wire code → catalog key mapping. A swapped entry fails here.
+  const expected: Record<string, AiErrorKey> = {
+    [AI_KEY_REJECTED]: 'error.keyRejected',
+    [AI_PROVIDER_UNKNOWN]: 'error.providerUnknown',
+    [AI_PROVIDER_MISMATCH]: 'error.providerMismatch',
+    [AI_MODEL_UNKNOWN]: 'error.modelUnknown',
+    [AI_KEY_REQUIRED]: 'error.keyRequired',
+    [AI_ENCRYPTION_MISSING]: 'error.encryptionMissing',
+    [AI_KEY_UNREADABLE]: 'error.keyUnreadable',
+    [AI_SHARED_KEY_MISSING]: 'error.sharedKeyMissing',
+    [AI_SHARED_MODEL_MISSING]: 'error.sharedModelMissing',
+    rate_limited: 'error.rateLimited',
+    upstream_error: 'error.providerUnavailable',
+  };
 
-  test('every required code has its own message, never the generic fallback', () => {
-    const generic = t('error.generic');
-    const messages = codes.map((code) => aiErrorView({ status: 400, code }));
-    for (const message of messages) expect(message).not.toBe(generic);
-    expect(new Set(messages).size).toBe(codes.length);
+  test('every required code maps to its own message key', () => {
+    for (const [code, key] of Object.entries(expected)) expect(aiErrorKey(code)).toBe(key);
+    expect(aiErrorKey(undefined)).toBeUndefined();
+    expect(aiErrorKey('some_other_code')).toBeUndefined();
   });
 
-  test('the message follows the code, not the HTTP status', () => {
-    expect(aiErrorView({ status: 429, code: 'rate_limited' })).toBe(t('error.rateLimited'));
-    expect(aiErrorView({ status: 502, code: 'upstream_error' })).toBe(t('error.providerUnavailable'));
-    // Same code, another status: the code still decides.
-    expect(aiErrorView({ status: 500, code: 'rate_limited' })).toBe(t('error.rateLimited'));
-    // No code: the generic sentence, never a guess from the status.
+  test('the message is the key translated, and follows the code, not the HTTP status', () => {
+    for (const [code, key] of Object.entries(expected)) {
+      expect(aiErrorView({ status: 418, code })).toBe(t(key));
+    }
+    // A bare 429/502 is not guessed from the status.
     expect(aiErrorView({ status: 429, message: 'HTTP 429' })).toBe(t('error.generic'));
     expect(aiErrorView({ status: 502, message: 'HTTP 502' })).toBe(t('error.generic'));
-    expect(aiErrorView({ status: 'FETCH_ERROR', message: 'Failed to fetch' })).toBe(t('error.unreachable'));
   });
 
-  test('an unknown failure falls back to the generic sentence', () => {
-    expect(aiErrorView({ status: 500, code: 'internal' })).toBe(t('error.generic'));
-    expect(aiErrorView(null)).toBe(t('error.generic'));
+  test('codes outside the AI set go through apiErrorMessage, never raw server text', () => {
+    const invalid = { status: 400, code: 'invalid_input', message: 'api_key is invalid' };
+    expect(aiErrorView(invalid)).toBe(apiErrorMessage(invalid, t('error.generic')));
+    expect(aiErrorView(invalid)).not.toContain('api_key is invalid');
+    const timeout = { status: 504, code: 'upstream_timeout', message: 'The upstream timed out' };
+    expect(aiErrorView(timeout)).toBe(apiErrorMessage(timeout, t('error.generic')));
+    expect(aiErrorView({ status: 'FETCH_ERROR', message: 'Failed to fetch' })).toBe(
+      apiErrorMessage({ status: 'FETCH_ERROR', message: 'Failed to fetch' }, t('error.generic')),
+    );
+  });
+
+  test('pt-BR has its own message, not the English one', () => {
+    const english = aiErrorView({ code: AI_KEY_REJECTED });
+    setLocale('pt-BR');
+    try {
+      const portuguese = aiErrorView({ code: AI_KEY_REJECTED });
+      expect(portuguese).toBe(t.for('pt-BR')('error.keyRejected'));
+      expect(portuguese).not.toBe(english);
+    } finally {
+      setLocale('en');
+    }
+  });
+});
+
+afterEach(() => setLocale('en'));
+
+describe('modelListFailure', () => {
+  test('retries only rate limits, upstream failures and a dead connection', () => {
+    expect(modelListFailure({ status: 429, code: 'rate_limited' })).toEqual({
+      message: t('error.rateLimited'),
+      retryable: true,
+    });
+    expect(modelListFailure({ status: 502, code: 'upstream_error' }).retryable).toBe(true);
+    expect(modelListFailure({ status: 'FETCH_ERROR', message: 'Failed to fetch' }).retryable).toBe(true);
+    expect(modelListFailure({ status: 400, code: AI_KEY_REJECTED }).retryable).toBe(false);
+    expect(modelListFailure({ status: 400, code: AI_PROVIDER_UNKNOWN }).retryable).toBe(false);
+  });
+});
+
+describe('runCredentialAction', () => {
+  test('runs once at a time and clears the mutation args when it settles', async () => {
+    const pending = Promise.withResolvers<string>();
+    const inFlight = { current: false };
+    // A minimal stand-in for the RTK mutation: args live in the store, reset drops them.
+    const store: { args: { apiKey: string } | null } = { args: { apiKey: 'secret-key' } };
+    const reset = () => {
+      store.args = null;
+    };
+    const run = () => ({ unwrap: () => pending.promise });
+    const first = runCredentialAction(inFlight, run, reset);
+    expect(inFlight.current).toBe(true);
+    const second = await runCredentialAction(inFlight, run, reset);
+    expect(second).toEqual({ ran: false });
+    pending.resolve('saved');
+    expect(await first).toEqual({ ran: true, ok: true, value: 'saved' });
+    expect(inFlight.current).toBe(false);
+    expect(store.args).toBeNull();
+  });
+
+  test('reports the failure and still resets (and unlocks)', async () => {
+    const inFlight = { current: false };
+    let resets = 0;
+    const result = await runCredentialAction(
+      inFlight,
+      () => ({ unwrap: () => Promise.reject(new Error('nope')) }),
+      () => {
+        resets++;
+      },
+    );
+    expect(result.ran).toBe(true);
+    expect(result.ran && result.ok).toBe(false);
+    expect(resets).toBe(1);
+    expect(inFlight.current).toBe(false);
   });
 });

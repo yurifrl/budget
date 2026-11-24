@@ -1,68 +1,125 @@
 /**
- * The saved-state card of the AI key screen: the own credential as the server
- * reports it (provider and chosen model; never the key), when it was saved,
- * and Test / Replace / Remove (Remove confirms inline). Second card: the
- * installation's shared AI, shown when no own key is saved and the feature
- * makes it available to this account.
+ * The status cards of the AI key screen: the own credential as the server
+ * reports it (provider and chosen model; never the key), the blocked row it
+ * cannot use, and the installation's shared AI when it is available. Card,
+ * rows, buttons and the inline confirm are the shared credential-card pieces.
  */
 
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { tCommon } from '@shared/i18n/common';
 
 import type { AiCredentialStatus } from '@/budget/data/api';
-import { colors, radius } from '@/ui/theme';
+import {
+  SettingsCard,
+  SettingsCardActions,
+  SettingsCardButton,
+  SettingsCardRow,
+  SettingsCardSection,
+  SettingsConfirm,
+  settingsCardText,
+} from '@/ui/bits';
+import { useMoneyFormat } from '@/ui/moneyFormat';
+import { colors } from '@/ui/theme';
 import { providerLabel } from './aiKeys.logic';
-import { AiKeyButton } from './AiKeyButton';
 import { t } from './i18n';
 import type { AiKeysState } from './useAiKeys';
 
 export function AiKeySavedCard({ keys }: { keys: AiKeysState }) {
   const own = keys.status?.own;
+  const fmt = useMoneyFormat();
   if (!own) return null;
   return (
-    <View style={styles.card}>
-      <Text style={styles.section}>{t('state.ownTitle')}</Text>
-      {keys.unreadable ? <Text style={styles.warnText}>{t('state.unreadable')}</Text> : null}
-      <Row label={t('state.provider')} value={providerLabel(own.provider)} />
-      <Row label={t('state.model')} value={own.model ?? t('state.none')} />
-      {own.model === null ? <Text style={styles.body}>{t('state.noModel')}</Text> : null}
-      <Text style={styles.muted}>{t('state.savedAt', { date: own.updated_at.slice(0, 10) })}</Text>
+    <SettingsCard>
+      <SettingsCardSection label={t('state.ownTitle')} />
+      {keys.unreadable ? (
+        <Text style={styles.warn} accessibilityLiveRegion="polite">
+          {t('state.unreadable')}
+        </Text>
+      ) : null}
+      <SettingsCardRow label={t('state.provider')} value={providerLabel(own.provider)} />
+      <SettingsCardRow label={t('state.model')} value={own.model ?? t('state.none')} lines={2} />
+      {own.model === null ? <Text style={settingsCardText.body}>{t('state.noModel')}</Text> : null}
+      <Text style={settingsCardText.muted}>{t('state.savedAt', { date: fmt.formatDate(own.updated_at.slice(0, 10)) })}</Text>
 
-      {keys.notice ? <Text style={styles.okText}>{keys.notice}</Text> : null}
+      {keys.notice ? (
+        <Text style={settingsCardText.ok} accessibilityLiveRegion="polite">
+          {keys.notice}
+        </Text>
+      ) : null}
       {keys.testResult ? (
-        <Text style={styles.okText}>
+        <Text style={settingsCardText.ok} accessibilityLiveRegion="polite">
           {t('state.testOk', { count: keys.testResult.models, provider: providerLabel(keys.testResult.provider) })}
         </Text>
       ) : null}
-      {keys.testError ? <Text style={styles.errorText}>{keys.testError}</Text> : null}
-      {keys.error?.field === 'form' ? <Text style={styles.errorText}>{keys.error.message}</Text> : null}
+      {keys.testError ? (
+        <Text style={settingsCardText.error} accessibilityLiveRegion="polite">
+          {keys.testError}
+        </Text>
+      ) : null}
+      {keys.error?.field === 'form' ? (
+        <Text style={settingsCardText.error} accessibilityLiveRegion="polite">
+          {keys.error.message}
+        </Text>
+      ) : null}
 
       {keys.confirmingRemove ? (
-        <View style={styles.confirm}>
-          <Text style={styles.body}>{t('state.removeConfirm')}</Text>
-          <View style={styles.row}>
-            <AiKeyButton label={tCommon('cancel')} onPress={() => keys.setConfirmingRemove(false)} />
-            <AiKeyButton
-              label={keys.removing ? t('state.removing') : t('state.remove')}
-              danger
-              busy={keys.removing}
-              onPress={() => void keys.remove()}
-            />
-          </View>
-        </View>
+        <SettingsConfirm
+          message={t('state.removeConfirm')}
+          cancelLabel={tCommon('cancel')}
+          confirmLabel={keys.removing ? t('state.removing') : t('state.remove')}
+          busy={keys.removing}
+          onCancel={() => keys.setConfirmingRemove(false)}
+          onConfirm={() => void keys.remove()}
+        />
       ) : (
-        <View style={styles.row}>
-          <AiKeyButton
+        <SettingsCardActions wrap>
+          <SettingsCardButton
             label={keys.testing ? t('state.testing') : t('state.test')}
             busy={keys.testing}
             onPress={() => void keys.test()}
           />
-          <AiKeyButton label={t('state.replace')} onPress={keys.startReplace} />
-          <AiKeyButton label={t('state.remove')} danger onPress={() => keys.setConfirmingRemove(true)} />
-        </View>
+          <SettingsCardButton label={t('state.replace')} onPress={keys.startReplace} />
+          <SettingsCardButton label={t('state.remove')} danger onPress={() => keys.setConfirmingRemove(true)} />
+        </SettingsCardActions>
       )}
-    </View>
+    </SettingsCard>
+  );
+}
+
+/**
+ * A stored row this server cannot use (unknown provider / unreadable secret).
+ * The shared fallback is blocked by it, so this must not read as "shared AI in
+ * use": offer saving a new key or removing the row (Remove works without it).
+ */
+export function BlockedAiCard({ keys }: { keys: AiKeysState }) {
+  return (
+    <SettingsCard>
+      <SettingsCardSection label={t('state.blockedTitle')} />
+      <Text style={styles.warn} accessibilityLiveRegion="polite">
+        {t('state.blocked')}
+      </Text>
+      {keys.error?.field === 'form' ? (
+        <Text style={settingsCardText.error} accessibilityLiveRegion="polite">
+          {keys.error.message}
+        </Text>
+      ) : null}
+      {keys.confirmingRemove ? (
+        <SettingsConfirm
+          message={t('state.removeConfirm')}
+          cancelLabel={tCommon('cancel')}
+          confirmLabel={keys.removing ? t('state.removing') : t('state.remove')}
+          busy={keys.removing}
+          onCancel={() => keys.setConfirmingRemove(false)}
+          onConfirm={() => void keys.remove()}
+        />
+      ) : (
+        <SettingsCardActions wrap>
+          <SettingsCardButton label={t('state.saveNewKey')} primary onPress={keys.startReplace} />
+          <SettingsCardButton label={t('state.remove')} danger onPress={() => keys.setConfirmingRemove(true)} />
+        </SettingsCardActions>
+      )}
+    </SettingsCard>
   );
 }
 
@@ -74,42 +131,13 @@ export function SharedAiCard({ status }: { status: AiCredentialStatus }) {
       ? t('shared.body', { provider: providerLabel(shared.provider), model: shared.model })
       : t('shared.bodyNoModel');
   return (
-    <View style={styles.card}>
-      <Text style={styles.section}>{t('shared.title')}</Text>
-      <Text style={styles.body}>{body}</Text>
-    </View>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.kv}>
-      <Text style={styles.kvLabel}>{label}</Text>
-      <Text style={styles.kvValue} selectable numberOfLines={2}>
-        {value}
-      </Text>
-    </View>
+    <SettingsCard>
+      <SettingsCardSection label={t('shared.title')} />
+      <Text style={settingsCardText.body}>{body}</Text>
+    </SettingsCard>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radius.card10,
-    padding: 16,
-    gap: 10,
-  },
-  section: { color: colors.muted, fontSize: 12, fontWeight: '700', letterSpacing: 0.6 },
-  body: { color: colors.text, fontSize: 14, lineHeight: 20 },
-  muted: { color: colors.muted, fontSize: 12, lineHeight: 17 },
-  okText: { color: colors.greenPillFg, fontSize: 13, fontWeight: '600' },
-  warnText: { color: colors.yellowPillFg, fontSize: 13, lineHeight: 18, fontWeight: '600' },
-  errorText: { color: colors.redFg, fontSize: 13, lineHeight: 18 },
-  kv: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 4 },
-  kvLabel: { color: colors.muted, fontSize: 14 },
-  kvValue: { color: colors.text, fontSize: 14, fontWeight: '600', flexShrink: 1, textAlign: 'right' },
-  confirm: { gap: 10, backgroundColor: colors.redPillBg, borderRadius: radius.sm, padding: 12 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
+  warn: { color: colors.yellowPillFg, fontSize: 13, lineHeight: 18, fontWeight: '600' },
 });

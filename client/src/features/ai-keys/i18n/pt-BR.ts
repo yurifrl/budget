@@ -14,6 +14,10 @@ const m: Translation<typeof en> = {
   'state.noModel': 'Nenhum modelo escolhido ainda. Troque a chave para escolher um.',
   'state.unreadable':
     'Esta chave salva não pode mais ser aberta neste servidor (a chave de criptografia pode ter mudado). Salve a chave de novo.',
+  'state.blockedTitle': 'CHAVE SALVA',
+  'state.blocked':
+    'Uma chave salva na sua conta não pode mais ser usada (este servidor não reconhece o provedor dela, ou não consegue abri-la). Enquanto ela estiver guardada, as sugestões de categoria não usam a IA compartilhada. Salve uma nova chave ou remova-a.',
+  'state.saveNewKey': 'Salvar uma nova chave',
   'state.savedAt': 'Salva em {date}',
   'state.test': 'Testar chave',
   'state.testing': 'Testando…',
@@ -51,7 +55,7 @@ const m: Translation<typeof en> = {
   'form.modelsEmpty': 'Este provedor não retornou modelos.',
   'form.manualModelHint':
     'Não foi possível carregar a lista de modelos. Digite o id de um modelo, se souber, ou salve a chave sem modelo.',
-  'form.zaiTypedHint': 'O Z.ai não tem lista de modelos: estes são sugestões. Digite qualquer id de modelo para usá-lo.',
+  'form.zaiTypedHint': 'A lista é uma sugestão; você também pode digitar qualquer id de modelo.',
   'form.useTypedModel': 'Usar "{model}"',
   'form.saveWithoutModel': 'Nenhum modelo escolhido — você pode salvar a chave sem um.',
   'form.keyTooShort': 'A chave parece curta demais. Cole a chave inteira.',
@@ -78,7 +82,6 @@ const m: Translation<typeof en> = {
   'error.sharedModelMissing': 'A IA compartilhada está ligada e tem chave, mas nenhum modelo foi escolhido. Peça ao admin.',
   'error.rateLimited': 'O provedor de IA está limitando requisições. Espere um momento e tente de novo.',
   'error.providerUnavailable': 'O provedor de IA está indisponível agora. Tente mais tarde.',
-  'error.unreachable': 'Não foi possível falar com o servidor. Confira sua conexão e tente de novo.',
   'error.generic': 'Não foi possível completar a requisição. Tente de novo.',
 };
 

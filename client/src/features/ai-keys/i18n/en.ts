@@ -13,6 +13,10 @@ export default {
   'state.noModel': 'No model chosen yet. Replace the key to pick one.',
   'state.unreadable':
     'This saved key can no longer be opened on this server (the encryption key may have changed). Save the key again.',
+  'state.blockedTitle': 'SAVED KEY',
+  'state.blocked':
+    'A key saved for your account can no longer be used (this server does not recognize its provider, or cannot open it). While it is stored, category suggestions will not use the shared AI. Save a new key or remove it.',
+  'state.saveNewKey': 'Save a new key',
   'state.savedAt': 'Saved {date}',
   'state.test': 'Test key',
   'state.testing': 'Testing…',
@@ -52,7 +56,7 @@ export default {
   'form.modelsEmpty': 'This provider returned no models.',
   'form.manualModelHint':
     'The model list could not be loaded. Type a model id if you know one, or save the key without a model.',
-  'form.zaiTypedHint': 'Z.ai has no model list: these are suggestions. Type any model id to use it.',
+  'form.zaiTypedHint': 'The list is a suggestion; you can also type any model id.',
   'form.useTypedModel': 'Use "{model}"',
   'form.saveWithoutModel': 'No model chosen — you can save the key without one.',
   'form.keyTooShort': 'The key looks too short. Paste the whole key.',
@@ -81,6 +85,5 @@ export default {
   'error.sharedModelMissing': 'The shared AI is turned on and has a key, but no model is chosen. Ask the admin.',
   'error.rateLimited': 'The AI provider is rate limiting requests. Wait a moment and try again.',
   'error.providerUnavailable': 'The AI provider is unavailable right now. Try again later.',
-  'error.unreachable': 'Could not reach the server. Check your connection and try again.',
   'error.generic': 'Could not complete the request. Try again.',
 } as const;
