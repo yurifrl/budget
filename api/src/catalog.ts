@@ -5,6 +5,7 @@
  * stay private to each feature's routers.
  */
 import type { OperationContract } from '@shared/operation-contract';
+import { contracts as aiContracts } from '@shared/contracts/ai';
 import { contracts as budgetContracts } from '@shared/contracts/budget';
 import { contracts as connectionsContracts } from '@shared/contracts/connections';
 import { contracts as featuresContracts } from '@shared/contracts/features';
@@ -14,6 +15,7 @@ import { contracts as ratesContracts } from '@shared/contracts/rates';
 import { contracts as userContracts } from '@shared/contracts/user';
 
 export const contracts: readonly OperationContract[] = [
+  ...aiContracts,
   ...budgetContracts,
   ...connectionsContracts,
   ...featuresContracts,

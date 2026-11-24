@@ -1,7 +1,7 @@
 /**
- * Contract outputs (G9), catalog-level: every budget, connections and features
- * operation declares an `output` schema, and every READ operation, called
- * over HTTP on seeded data, answers 200 with a body that parses with it.
+ * Contract outputs (G9), catalog-level: every ai, budget, connections and
+ * features operation declares an `output` schema, and every READ operation,
+ * called over HTTP on seeded data, answers 200 with a body that parses with it.
  * Lists are seeded so each one validates real rows, never just `[]`.
  *
  * (Writes are covered too: the bun test preload turns on output validation
@@ -17,16 +17,21 @@ import { dbReady } from './core/test-gate';
 import { makeOpCaller } from './core/test-op';
 import { httpOnError } from './core/validate';
 import budget from './budget';
+import ai from './ai';
 import connections from './connections';
 import { featuresRoutes } from './features';
 import { setAggregators } from './connections/registry';
+import { setProviders, type ProviderEntry } from './ai/providers';
+import type { AiProviderId } from '@shared/contracts/ai';
 import { configureSecretBox } from './core/secret-box';
 import * as connStore from './connections/store';
 import { syncConnectionTransactions } from './connections/sync';
 import type { AggregatedTransaction, BankAggregator, ExternalAccount } from './connections/types';
 import { authConfig, configureAuth, type IdentityUser } from './user';
 
-const covered = contracts.filter((c) => c.name.startsWith('budget_') || c.name.startsWith('connections_') || c.name.startsWith('features_'));
+const covered = contracts.filter(
+  (c) => c.name.startsWith('ai_') || c.name.startsWith('budget_') || c.name.startsWith('connections_') || c.name.startsWith('features_'),
+);
 const reads = covered.filter((c) => c.kind === 'read' && c.expose.api);
 
 const user: IdentityUser = {
@@ -83,6 +88,27 @@ const aggregator = {
   verifyWebhookHeaders: () => false,
 } as unknown as BankAggregator;
 
+/** Fake AI providers: the key routes only need listModels; no provider is called. */
+const aiModels = [{ id: 'catalog-model', name: 'Catalog Model', contextLength: 128_000 }];
+const fakeAiEntry = (id: AiProviderId): ProviderEntry => ({
+  baseUrl: `https://${id}.test`,
+  create: () => ({
+    id,
+    chat: async () => {
+      throw new Error('chat is not used by the catalog outputs test');
+    },
+    verifyKey: async () => {},
+    listModels: async () => aiModels,
+  }),
+});
+const aiProviders: Record<AiProviderId, ProviderEntry> = {
+  openrouter: fakeAiEntry('openrouter'),
+  anthropic: fakeAiEntry('anthropic'),
+  openai: fakeAiEntry('openai'),
+  zai: fakeAiEntry('zai'),
+  deepseek: fakeAiEntry('deepseek'),
+};
+
 const app = new Hono();
 app.onError(httpOnError);
 app.use('*', (c, next) => {
@@ -90,6 +116,7 @@ app.use('*', (c, next) => {
   return next();
 });
 app.route('/connections', connections);
+app.route('/ai', ai);
 app.route('/', budget);
 app.route('/', featuresRoutes());
 const op = makeOpCaller(app, contracts);
@@ -116,6 +143,7 @@ beforeAll(async () => {
   if (!dbReady) return;
   await cleanup();
   setAggregators({ pluggy: { create: () => aggregator, configured: () => true } });
+  setProviders(aiProviders);
   // The harness sets the user with no session principal: the first-party guard of /admin/features passes only with auth off.
   authBefore = authConfig();
   configureAuth({ ...authBefore, authDisabled: true });
@@ -208,11 +236,13 @@ beforeAll(async () => {
   // The user's own key set, saved through the operation (checked with the fake provider, stored encrypted).
   configureSecretBox({ current: 1, keys: new Map([[1, crypto.getRandomValues(new Uint8Array(32))]]) });
   await ok('connections_credentials_save', { clientId: 'catalog-client-id', clientSecret: 'catalog-client-secret' });
+  await ok('ai_credentials_save', { api_key: 'sk-or-v1-catalogoutputs0123456789', model: 'catalog-model' });
 });
 
 afterAll(async () => {
   if (!dbReady) return;
   setAggregators(null);
+  setProviders(null);
   configureSecretBox(null);
   await cleanup();
   if (authBefore) configureAuth(authBefore);
@@ -222,6 +252,9 @@ afterAll(async () => {
 function sampleInput(name: string): Record<string, unknown> | undefined {
   const month = `${today.slice(0, 7)}-01`;
   const samples: Record<string, Record<string, unknown>> = {
+    ai_credentials_get: {},
+    ai_credentials_test: {},
+    ai_models_list: {},
     budget_list: {},
     budget_revision_get: { budget_id: B },
     budget_groups_list: { budget_id: B },

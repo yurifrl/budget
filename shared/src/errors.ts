@@ -84,6 +84,16 @@ export const SPECIFIC_ERROR_CODES = [
   'connection_already_registered',
   'connection_disconnected',
   'connection_still_linked',
+  // AI keys (category suggestions).
+  'own_ai_key_required',
+  'ai_key_rejected',
+  'ai_provider_unknown',
+  'ai_provider_mismatch',
+  'ai_model_unknown',
+  'ai_key_encryption_missing',
+  'ai_key_unreadable',
+  'ai_shared_key_missing',
+  'ai_shared_model_missing',
   // Budget: accounts, transactions, transfers, repeats.
   'cannot_transfer_to_same_account',
   'transfer_account_not_in_budget',

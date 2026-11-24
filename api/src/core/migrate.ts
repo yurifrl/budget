@@ -68,6 +68,7 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0106_connection_transactions_per_budget.sql': ['column:public.connection_transactions.budget_id', 'index:public.connection_transactions_budget_key'],
   '0107_connection_account_backfill.sql': 'table:public.connection_account_backfill',
   '0108_transfer_suggestions.sql': ['column:public.payees.transfer_rule', 'table:public.transfer_marks', 'table:public.transfer_links'],
+  '0109_ai_credentials.sql': 'table:public.ai_credentials',
 };
 
 /**
