@@ -20,6 +20,11 @@ export const styles = StyleSheet.create({
     letterSpacing: 1.2,
     fontWeight: '700',
   },
+  tabs: { flexDirection: 'row', gap: 6, marginBottom: 8 },
+  tab: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingVertical: 4, paddingHorizontal: 12 },
+  tabOn: { borderColor: colors.blue, backgroundColor: colors.bluePillBg },
+  tabText: { color: colors.muted, fontSize: 12, fontWeight: '600' },
+  tabTextOn: { color: colors.blue },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',

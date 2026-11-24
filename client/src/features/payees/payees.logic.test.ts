@@ -16,6 +16,8 @@ const payee = (over: Partial<PayeeAdminRow> = {}): PayeeAdminRow => ({
   id: 'p1',
   name: 'Padaria',
   transfer_account_id: null,
+  transfer_rule: null,
+  transfer_rule_account_id: null,
   deleted: false,
   hidden: false,
   categorization_mode: 'auto',

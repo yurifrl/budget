@@ -1,6 +1,8 @@
 export default {
   'screen.title': 'Manage Payees',
   'screen.search': 'Search by name',
+  'tabs.payees': 'Payees',
+  'tabs.rules': 'Transfer rules',
 
   'list.addPlaceholder': 'Add a payee…',
   'list.newNameLabel': 'New payee name',

@@ -38,6 +38,8 @@ const m: Translation<typeof en> = {
   'register.readyToAssign': 'Pronto para atribuir',
   'register.split': 'Divisão ({count})',
   'register.transfer': 'Transferência',
+  'register.transferWaiting': 'Transferência · aguardando o outro lado',
+  'register.transferOutside': 'Transferência · fora do orçamento',
   'register.needsCategory': 'precisa de categoria',
 
   'flag.red': 'Vermelho',

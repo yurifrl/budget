@@ -37,6 +37,7 @@ export function RegisterList({
   onApprove,
   onToggleCleared,
   onOpenMenu,
+  onOpenTransfer,
 }: {
   budget: Budget;
   budgetId: string;
@@ -64,6 +65,7 @@ export function RegisterList({
   onApprove: (txn: Transaction) => void;
   onToggleCleared: (txn: Transaction) => void;
   onOpenMenu: (txn: Transaction, pageX: number, pageY: number) => void;
+  onOpenTransfer: (txn: Transaction, pageX: number, pageY: number) => void;
 }) {
   return (
     <FlatList
@@ -118,6 +120,7 @@ export function RegisterList({
               onApprove={onApprove}
               onToggleCleared={onToggleCleared}
               onOpenMenu={onOpenMenu}
+              onOpenTransfer={onOpenTransfer}
             />
           );
         }
@@ -150,6 +153,7 @@ export function RegisterList({
             onApprove={onApprove}
             onToggleCleared={onToggleCleared}
             onOpenMenu={onOpenMenu}
+            onOpenTransfer={onOpenTransfer}
           />
         );
       }}

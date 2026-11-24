@@ -19,7 +19,7 @@ import type { Account, Budget, Cents, Transaction } from './types';
  */
 export function registerCategoryCell(
   budget: Pick<Budget, 'accounts' | 'categories'>,
-  t: Pick<Transaction, 'payee' | 'categoryId' | 'splits' | 'inflow'>,
+  t: Pick<Transaction, 'payee' | 'categoryId' | 'splits' | 'inflow' | 'transferPending'>,
   { transfers = true }: { transfers?: boolean } = {},
 ): { text: string; warn: boolean } {
   if (isReconciliationAdjustmentPayee(t.payee) || t.payee === 'Balance Adjustment') {
@@ -27,6 +27,8 @@ export function registerCategoryCell(
   }
   if (!t.categoryId) {
     if (t.splits?.length) return { text: tr('register.split', { count: t.splits.length }), warn: false };
+    if (t.transferPending === 'waiting') return { text: tr('register.transferWaiting'), warn: false };
+    if (t.transferPending === 'outside') return { text: tr('register.transferOutside'), warn: false };
     if (transfers && isInternalTransferPayee(t.payee, budget.accounts)) return { text: tr('register.transfer'), warn: false };
     return t.inflow > 0 ? { text: tr('register.readyToAssign'), warn: false } : { text: tr('register.needsCategory'), warn: true };
   }

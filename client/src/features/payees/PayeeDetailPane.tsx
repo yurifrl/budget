@@ -16,6 +16,7 @@ import { PayeeTxnsPane } from './PayeeTxnsPane';
 import { styles } from './styles';
 import type { PayeeAdmin } from './usePayeeAdmin';
 import { displaySystemName } from '@/domain/systemNames';
+import { TransferRuleSection } from '@/features/transfers';
 
 const CATEGORIZATION_LABELS: Record<CategorizationMode, { title: string; sub: string }> = {
   auto: labels(t, { title: 'mode.auto.title', sub: 'mode.auto.sub' }),
@@ -152,6 +153,8 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
               />
             </>
           ) : null}
+
+          <TransferRuleSection budgetId={budgetId} payee={selected} accounts={pickerBudget?.accounts ?? []} />
 
           <Text style={styles.sectionLabel}>{t('detail.renaming')}</Text>
           <Text style={styles.radioSub}>

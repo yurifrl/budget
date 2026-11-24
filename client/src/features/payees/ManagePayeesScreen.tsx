@@ -16,7 +16,8 @@
  * mutations live in data/api.ts.
  */
 
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { tCommon } from '@shared/i18n/common';
 
@@ -27,6 +28,7 @@ import { PayeeListPane } from './PayeeListPane';
 import { styles } from './styles';
 import { usePayeeAdmin } from './usePayeeAdmin';
 import { useBudgetShell } from '@/shell/context';
+import { TransferRulesList } from '@/features/transfers';
 
 export function ManagePayeesBody({
   /** Native top inset — page only; the modal sheet floats with its own padding. */
@@ -39,6 +41,8 @@ export function ManagePayeesBody({
 }) {
   const admin = usePayeeAdmin();
   const { search, setSearch, error } = admin;
+  // Payees › Rules (budget-mit6): the transfer rules list; a row opens its payee.
+  const [tab, setTab] = useState<'payees' | 'rules'>('payees');
 
   return (
     <View style={[styles.screen, contentTopPad > 0 && { paddingTop: contentTopPad }]}>
@@ -51,6 +55,32 @@ export function ManagePayeesBody({
         ) : null}
       </View>
 
+      <View style={styles.tabs}>
+        {(['payees', 'rules'] as const).map((k) => (
+          <Pressable
+            key={k}
+            onPress={() => setTab(k)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === k }}
+            style={[styles.tab, tab === k && styles.tabOn]}>
+            <Text style={[styles.tabText, tab === k && styles.tabTextOn]}>{k === 'payees' ? t('tabs.payees') : t('tabs.rules')}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {tab === 'rules' ? (
+        <ScrollView>
+          <TransferRulesList
+            payees={admin.all}
+            accounts={admin.pickerBudget?.accounts ?? []}
+            onOpen={(id) => {
+              admin.selectById(id);
+              setTab('payees');
+            }}
+          />
+        </ScrollView>
+      ) : (
+      <>
       <View style={styles.searchWrap}>
         <Text style={styles.searchIcon}>⌕</Text>
         <TextInput
@@ -72,6 +102,8 @@ export function ManagePayeesBody({
         <PayeeListPane admin={admin} />
         <PayeeDetailPane admin={admin} />
       </View>
+      </>
+      )}
     </View>
   );
 }

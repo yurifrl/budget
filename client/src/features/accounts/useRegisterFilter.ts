@@ -5,11 +5,12 @@
  * pure rules in domain/register.
  */
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { todayIso } from '@/domain/format';
-import { filterRegisterTxns, scopeRegisterTxns, splitScheduled } from '@/domain/register';
-import type { Budget, Cents } from '@/domain/types';
+import { filterRegisterTxns, registerCategoryCell, scopeRegisterTxns, splitScheduled } from '@/domain/register';
+import { filterByChip, type RegisterChip } from '@/features/transfers';
+import type { Budget, Cents, Transaction } from '@/domain/types';
 import type { RegisterDensity } from './AccountsToolbar';
 
 /** Stable empty array so `visibleTxns` deps stay referentially equal while loading. */
@@ -42,6 +43,8 @@ export function useRegisterFilter({
   const [showRunningBalance, setShowRunningBalance] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // Filter chips (budget-mit6): Needs category / Looks like a transfer / Transfers.
+  const [chip, setChip] = useState<RegisterChip>('all');
 
   const transactions = useMemo(
     () => (budget ? scopeRegisterTxns(budget, selectedAccountId, showClosedTxns) : []),
@@ -67,12 +70,20 @@ export function useRegisterFilter({
     [transactions, categories, showReconciled, showUnapprovedOnly, dateFrom, dateTo, searchQuery, parseMoney],
   );
 
+  const needsCategory = useCallback(
+    (tx: Transaction) => !!budget && registerCategoryCell(budget, tx).warn,
+    [budget],
+  );
+
   const { register: registerTxns, scheduled: scheduledTxns } = useMemo(
-    () => splitScheduled(visibleTxns, todayIso()),
-    [visibleTxns],
+    () => splitScheduled(filterByChip(visibleTxns, chip, needsCategory), todayIso()),
+    [visibleTxns, chip, needsCategory],
   );
 
   return {
+    chip,
+    setChip,
+    needsCategory,
     transactions,
     unapprovedTxns,
     categories,

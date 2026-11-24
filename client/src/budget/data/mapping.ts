@@ -192,6 +192,17 @@ export function assembleBudget(src: BudgetSource): Budget {
       importId: t.import_id ?? null,
       matchedTransactionId: t.matched_transaction_id ?? null,
       transferAccountId: t.transfer_account_id ?? transferPeerAccountId(payee, src.accounts, t.account_id) ?? null,
+      ...(t.transfer_suggestion
+        ? {
+            transferSuggestion: {
+              confidence: t.transfer_suggestion.confidence === 'one_side' ? ('oneSide' as const) : t.transfer_suggestion.confidence,
+              candidateCount: t.transfer_suggestion.candidate_count,
+              counterpartId: t.transfer_suggestion.counterpart_id,
+            },
+          }
+        : {}),
+      ...(t.transfer_pending ? { transferPending: t.transfer_pending } : {}),
+      ...(t.transfer_link_method ? { transferLinkMethod: t.transfer_link_method } : {}),
       // Only real splits: the engine treats an empty `splits` array as a split
       // with no legs (the transaction would vanish from every figure).
       splits: t.subtransactions?.length

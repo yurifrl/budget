@@ -233,6 +233,8 @@ export function usePayeeAdmin() {
 
   return {
     budgetId,
+    all,
+    selectById,
     pickerBudget,
     activeMonth,
     addCategory,

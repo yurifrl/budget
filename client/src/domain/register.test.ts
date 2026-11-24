@@ -36,6 +36,10 @@ describe('registerCategoryCell', () => {
     expect(registerCategoryCell(budget, row({ payee: 'Transfer : Savings' }))).toEqual({ text: 'Transfer', warn: false });
     expect(registerCategoryCell(budget, row({ payee: 'Transfer : Savings' }), { transfers: false })).toEqual({ text: 'needs category', warn: true });
   });
+  test('payee-rule transfers without their other side need no category (budget-mit6)', () => {
+    expect(registerCategoryCell(budget, row({ transferPending: 'waiting' }))).toEqual({ text: 'Transfer · waiting for the other side', warn: false });
+    expect(registerCategoryCell(budget, row({ transferPending: 'outside' }))).toEqual({ text: 'Transfer · outside the budget', warn: false });
+  });
   test('categorized rows show the category name, ? when unknown', () => {
     expect(registerCategoryCell(budget, row({ categoryId: 'c1' }))).toEqual({ text: 'Mercado', warn: false });
     expect(registerCategoryCell(budget, row({ categoryId: 'zz' }))).toEqual({ text: '?', warn: false });

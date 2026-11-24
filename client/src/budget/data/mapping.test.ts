@@ -260,6 +260,17 @@ describe('transfer links (spec T1)', () => {
     expect(t.transferAccountId).toBe('a-nubank');
   });
 
+  test('transfer matcher fields map to the domain (budget-mit6)', () => {
+    const [t, u] = map([
+      transferTxn({ id: 'm1', transfer_account_id: null, transfer_suggestion: { confidence: 'one_side', candidate_count: 0, counterpart_id: null }, transfer_pending: 'waiting' }),
+      transferTxn({ id: 'm2', transfer_account_id: 'a-nubank', transfer_link_method: 'rule' }),
+    ]);
+    expect(t.transferSuggestion).toEqual({ confidence: 'oneSide', candidateCount: 0, counterpartId: null });
+    expect(t.transferPending).toBe('waiting');
+    expect(u.transferLinkMethod).toBe('rule');
+    expect(u.transferSuggestion).toBeUndefined();
+  });
+
   test('legacy "Transfer : <account name>" payee resolves to the account id when the column is null', () => {
     const [t] = map([transferTxn({ id: 'x2', payee_id: 'p-tr', transfer_account_id: null })], [
       { id: 'p-tr', name: 'Transfer : Nubank', transfer_account_id: null, deleted: false },

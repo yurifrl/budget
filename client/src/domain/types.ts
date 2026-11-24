@@ -207,6 +207,21 @@ export interface Transaction {
    * null/absent = not a transfer.
    */
   transferAccountId?: string | null;
+  /**
+   * Transfer matcher (budget-mit6): this row looks like one leg of a transfer
+   * between own accounts. `sure` = one proposed other side (`counterpartId`),
+   * `choose` = several possible, `oneSide` = no matching row. Absent = no.
+   */
+  transferSuggestion?: { confidence: 'sure' | 'choose' | 'oneSide'; candidateCount: number; counterpartId: string | null };
+  /**
+   * A "treat as transfer" payee's row with no linked other side: `waiting` =
+   * the other side has not arrived yet (a transfer in flight: no category, no
+   * budget effect); `outside` = a transfer to an account outside the budget
+   * (no category asked; moves Ready to Assign like any money leaving the budget).
+   */
+  transferPending?: 'waiting' | 'outside';
+  /** Who linked this transfer leg (`rule` shows "auto · payee rule"). */
+  transferLinkMethod?: 'auto' | 'rule' | 'user';
 }
 
 /** One split leg: category + memo + one-way cents amount (syscd-app-rlt). */

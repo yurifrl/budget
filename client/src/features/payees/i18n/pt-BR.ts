@@ -4,6 +4,8 @@ import type en from './en';
 const m: Translation<typeof en> = {
   'screen.title': 'Gerenciar favorecidos',
   'screen.search': 'Buscar por nome',
+  'tabs.payees': 'Favorecidos',
+  'tabs.rules': 'Regras de transferência',
 
   'list.addPlaceholder': 'Adicionar um favorecido…',
   'list.newNameLabel': 'Nome do novo favorecido',
