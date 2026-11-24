@@ -238,6 +238,23 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     expect((await queueJson(ownerUser())).rows).toEqual([]);
   });
 
+  test('two concurrent accepts for one transaction: exactly one wins, the other sees it no longer needs a category', async () => {
+    const t = await txn({ payeeId: await newPayee('Race') });
+    await suggest(t, a.food, { rank: 1 });
+    await suggest(t, a.dining, { rank: 2 });
+    const [one, two] = await Promise.all([
+      accept(ownerUser(), [{ transaction_id: t, category_id: a.food }]),
+      accept(ownerUser(), [{ transaction_id: t, category_id: a.dining }]),
+    ]);
+    expect([one.status, two.status].sort()).toEqual([200, 409]);
+    const loser = one.status === 409 ? one : two;
+    expect((await loser.json()).code).toBe('categorize_already_categorized');
+    const winnerCategory = (await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id;
+    expect([a.food, a.dining]).toContain(winnerCategory);
+    const rows = (await pool.query('select category_id, status from public.category_suggestions where transaction_id = $1 order by rank', [t])).rows;
+    expect(rows.filter((r) => r.status === 'accepted')).toEqual([{ category_id: winnerCategory, status: 'accepted' }]);
+  });
+
   test('rejects a foreign category and a foreign transaction without applying anything', async () => {
     const t = await txn({ payeeId: await newPayee('Guard') });
     const foreignCategory = await newCategory(other.budgetId, (await newGroup(other.budgetId, 'G')), 'Foreign');
@@ -284,18 +301,50 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
 
     const back = await undo(ownerUser(), accepted.items);
     expect(back.status).toBe(200);
-    expect(await back.json()).toEqual({ restored: 1, transaction_ids: [t] });
+    expect(await back.json()).toEqual({ restored: 1, transaction_ids: [t], skipped: [] });
     expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBeNull();
     expect((await pool.query('select rank, status from public.category_suggestions where transaction_id = $1 order by rank', [t])).rows)
       .toEqual([{ rank: 1, status: 'pending' }, { rank: 2, status: 'pending' }]);
     expect((await undo(ownerUser(), accepted.items)).status).toBe(200); // idempotent
 
-    // Accept again, then change the category behind the page's back: undo refuses.
+    // Accept again, then change the category behind the page's back: undo
+    // leaves it alone and reports it skipped.
     await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
     await pool.query('update public.transactions set category_id = $2 where id = $1', [t, a.dining]);
     const stale = await undo(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
-    expect(stale.status).toBe(409);
-    expect((await stale.json()).code).toBe('categorize_undo_stale');
+    expect(stale.status).toBe(200);
+    expect(await stale.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [t] });
+    expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBe(a.dining);
+    expect((await pool.query('select status from public.category_suggestions where transaction_id = $1 order by rank', [t])).rows.map((r) => r.status))
+      .toEqual(['accepted', 'dismissed']);
+  });
+
+  test('undo applies eligible items and skips a changed one in the same batch', async () => {
+    const changed = await txn({ payeeId: await newPayee('Changed') });
+    const eligible = await txn({ payeeId: await newPayee('Eligible') });
+    await accept(ownerUser(), [
+      { transaction_id: changed, category_id: a.food },
+      { transaction_id: eligible, category_id: a.dining },
+    ]);
+    await pool.query('update public.transactions set category_id = $2 where id = $1', [changed, a.dining]);
+    const res = await undo(ownerUser(), [
+      { transaction_id: changed, category_id: a.food },
+      { transaction_id: eligible, category_id: a.dining },
+    ]);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ restored: 1, transaction_ids: [eligible], skipped: [changed] });
+    const after = (await pool.query('select id, category_id from public.transactions where id = any($1)', [[changed, eligible]])).rows;
+    expect(Object.fromEntries(after.map((r) => [r.id, r.category_id]))).toEqual({ [changed]: a.dining, [eligible]: null });
+  });
+
+  test('accept refuses a skipped transaction (the decision freezes it)', async () => {
+    const t = await txn({ payeeId: await newPayee('Frozen') });
+    await suggest(t, a.food);
+    await skip(ownerUser(), t);
+    const res = await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('categorize_already_categorized');
+    expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBeNull();
   });
 
   test('skip dismisses every suggestion, removes the row from the queue and is idempotent', async () => {

@@ -119,6 +119,16 @@ export async function acceptCategories(
         if (!(await stillNeedsCategory(client, budgetId, item.transaction_id, pending))) {
           throw new HttpError(409, 'transaction no longer needs a category', 'categorize_not_needing_category');
         }
+        // A skipped (or otherwise decided) transaction is frozen: accept must
+        // not resurrect it, which also keeps undo's "previous status" = pending.
+        const decided = await client.query(
+          `select 1 from public.category_suggestions
+            where transaction_id = $1 and budget_id = $2 and status <> 'pending' limit 1`,
+          [item.transaction_id, budgetId],
+        );
+        if ((decided.rowCount ?? 0) > 0) {
+          throw new HttpError(409, 'transaction already has a decision', 'categorize_already_categorized');
+        }
         await updateTransactionInClient(client, {
           budgetId,
           id: item.transaction_id,
@@ -135,20 +145,25 @@ export async function acceptCategories(
 
 /**
  * Clear the categories applied by accept and make the transaction's
- * suggestions pending again (a recorded manual choice is deleted). A
- * transaction that moved to another category since then is a 409, not a
- * silent overwrite; already-clear is idempotent.
+ * suggestions pending again (a recorded manual choice is deleted). An item
+ * whose category is no longer the one accept set is left untouched and
+ * returned in `skipped`; every other item is reverted, and the batch is one
+ * transaction (a database error reverts all of it). Already-clear is
+ * idempotent.
  */
 export async function undoAccept(
   pool: Pool,
   budgetId: string,
   items: readonly DecisionItem[],
-): Promise<{ restored: number; transaction_ids: string[] }> {
+): Promise<{ restored: number; transaction_ids: string[]; skipped: string[] }> {
   return withTransaction(pool, async (client) => {
+    const restored: DecisionItem[] = [];
+    const skipped: string[] = [];
     for (const item of items) {
       const row = await lockLiveTransaction(client, budgetId, item.transaction_id);
       if (row.category_id !== null && row.category_id !== item.category_id) {
-        throw new HttpError(409, 'transaction changed since it was categorized', 'categorize_undo_stale');
+        skipped.push(item.transaction_id);
+        continue;
       }
       if (row.category_id !== null) {
         await updateTransactionInClient(client, {
@@ -169,8 +184,9 @@ export async function undoAccept(
           where transaction_id = $1 and budget_id = $2 and source <> 'manual'`,
         [item.transaction_id, budgetId],
       );
+      restored.push(item);
     }
-    return { restored: items.length, transaction_ids: items.map((item) => item.transaction_id) };
+    return { restored: restored.length, transaction_ids: restored.map((item) => item.transaction_id), skipped };
   });
 }
 

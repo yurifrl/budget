@@ -124,7 +124,8 @@ describe('Categorize contracts', () => {
     expect(categorizeAccept.input.safeParse({ budget_id: b, items: [{ transaction_id: 'nope', category_id: c }] }).success).toBe(false);
     expect(categorizeAccept.output!.safeParse({ accepted: 1, items }).success).toBe(true);
     expect(categorizeUndo.input.safeParse({ budget_id: b, items }).success).toBe(true);
-    expect(categorizeUndo.output!.safeParse({ restored: 1, transaction_ids: [t] }).success).toBe(true);
+    expect(categorizeUndo.output!.safeParse({ restored: 1, transaction_ids: [t], skipped: [] }).success).toBe(true);
+    expect(categorizeUndo.output!.safeParse({ restored: 1, transaction_ids: [t] }).success).toBe(false);
   });
 
   test('skip names one transaction; settings are a 0..1 number', () => {

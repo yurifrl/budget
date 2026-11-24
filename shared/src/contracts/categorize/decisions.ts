@@ -32,7 +32,7 @@ export const categorizeAccept = defineOperation({
 export const categorizeUndo = defineOperation({
   name: 'categorize_undo',
   description:
-    'Undo a previous categorize_accept in one round trip: pass the items it returned. Clears the category through the same transaction update path and restores the transaction\'s suggestions to pending (a recorded manual choice is removed). Idempotent when the category is already clear; 409 categorize_undo_stale when the transaction changed to another category since the accept. All items are applied atomically.',
+    'Undo a previous categorize_accept in one round trip: pass the items it returned. Clears the category through the same transaction update path and restores the transaction\'s suggestions to pending (a recorded manual choice is removed). Idempotent when the category is already clear. An item whose category changed since the accept is left untouched and listed in `skipped`; every other item is applied atomically.',
   input: z.object({ budget_id: budgetId, items }),
   output: categorizeUndoResultSchema,
   method: 'POST',

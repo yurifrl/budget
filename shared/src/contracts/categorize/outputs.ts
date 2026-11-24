@@ -189,6 +189,8 @@ export const categorizeAcceptResultSchema = z.object({
 export const categorizeUndoResultSchema = z.object({
   restored: z.number().int().min(0),
   transaction_ids: z.array(uuidSchema),
+  /** Items left untouched because their category changed since the accept. */
+  skipped: z.array(uuidSchema),
 });
 
 export const categorizeSkipResultSchema = z.object({

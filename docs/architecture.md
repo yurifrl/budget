@@ -194,9 +194,17 @@ start at `0100`). One image runs both the API and the worker
   Operations:
   `GET|PUT|DELETE /ai/credentials`, `GET /ai/credentials/test`,
   `POST /ai/provider-detect`, `POST /ai/models`; the key is never returned.
-- **Category suggestions.** `api/src/categorize/` is a new feature with no
-  HTTP surface yet; the queue/accept contracts are budget-edxg. A
-  `categorize_run` job (one per budget: subject key = budget id, so triggers
+- **Category suggestions.** `api/src/categorize/` owns the engine and the
+  Categorize page's HTTP surface (`/categorize`, behind budgetAccess; contracts
+  in `shared/src/contracts/categorize/`): `GET /queue` (the owner's own text
+  unmasked, merchant panel, states, suggestions at/above the threshold, and
+  whole-queue bundles/counts), `POST /run` + `GET /run` (any member starts the
+  owner-key run; status gives done/total from `categorize_run_progress` (0114),
+  the last run, and why AI is unavailable), `POST /accept` (atomic batch through
+  the transaction update path), `POST /undo` (one round trip; rows whose
+  category changed are skipped), `POST /skip` (dismisses, freezing the row),
+  and `GET|PUT /settings` (confidence threshold, read at queue time; 0113).
+  A `categorize_run` job (one per budget: subject key = budget id, so triggers
   coalesce; `force` re-asks rows that already have suggestions) has a prepare
   activity resolve the run's key through one `runActorForBudget` function
   (today the budget owner: own key, else the shared key when the flag is on;

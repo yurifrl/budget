@@ -79,7 +79,6 @@ export default {
   categorize_already_categorized: 'One of these transactions already has a category. Reload the page and try again.',
   categorize_not_needing_category: 'One of these transactions no longer needs a category. Reload the page and try again.',
   categorize_nothing_to_skip: 'This transaction has no suggestions to skip. Categorize it by hand instead.',
-  categorize_undo_stale: 'This transaction changed since it was categorized, so it cannot be undone here.',
   category_not_assignable: 'That category cannot be used here. Choose a regular category, not a card-payment or internal one.',
   cannot_transfer_to_same_account: 'Choose a different account: a transfer cannot go to the same account.',
   transfer_account_not_in_budget: 'The account you are transferring to is not in this budget.',

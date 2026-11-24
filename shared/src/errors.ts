@@ -99,7 +99,6 @@ export const SPECIFIC_ERROR_CODES = [
   'categorize_already_categorized',
   'categorize_not_needing_category',
   'categorize_nothing_to_skip',
-  'categorize_undo_stale',
   'category_not_assignable',
   // Budget: accounts, transactions, transfers, repeats.
   'cannot_transfer_to_same_account',
