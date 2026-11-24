@@ -922,6 +922,17 @@ describe("section 4: transfers", () => {
     });
   });
 
+  it("a payee-rule transfer waiting for its other side moves no Ready to Assign; outside the budget it does (budget-mit6)", () => {
+    const waiting = scenario({ cash: ["Checking", "Savings"], cards: [], categories: ["Mercado"] })
+      .startingBalance("Checking", R(1000), d(JUN, 1))
+      .add({ accountId: "Checking", date: d(JUN, 5), outflow: R(300), inflow: 0, categoryId: null, transferPending: "waiting" });
+    expect(computeBudgetMonth(waiting.build(), JUN).readyToAssign).toBe(R(1000));
+    const outside = scenario({ cash: ["Checking", "Savings"], cards: [], categories: ["Mercado"] })
+      .startingBalance("Checking", R(1000), d(JUN, 1))
+      .add({ accountId: "Checking", date: d(JUN, 5), outflow: R(300), inflow: 0, categoryId: null, transferPending: "outside" });
+    expect(computeBudgetMonth(outside.build(), JUN).readyToAssign).toBe(R(700));
+  });
+
   describe("T4 off-budget accounts", () => {
     const withInvest = (): Scenario =>
       scenario({ cash: ["Checking"], cards: ["Card"], categories: ["Mercado"], offBudget: ["Invest"] }).startingBalance(

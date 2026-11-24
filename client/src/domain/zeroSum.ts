@@ -89,6 +89,11 @@ function buildLedgers(budget: Budget, spendingIds: ReadonlySet<string>): Map<Mon
     const total = t.inflow - t.outflow;
     if (card) addTo(ledger.balanceDelta, account.id, total);
 
+    // A rule-made transfer still waiting for its other side is money in flight
+    // between budget accounts: like a linked transfer, it moves no category
+    // and no Ready to Assign (budget-mit6).
+    if (t.transferPending === 'waiting') continue;
+
     const counterpart = t.transferAccountId ? accounts.get(t.transferAccountId) : undefined;
     if (counterpart?.onBudget) {
       // T2/T3/P6: transfers between budget accounts only matter as a payment

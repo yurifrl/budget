@@ -156,6 +156,45 @@ const AUTH_TIMEOUT_MS = 10_000;
 /** Safety cap for page loops — aggregates hundreds of rows without runaway calls. */
 const MAX_PAGES = 20;
 
+/**
+ * Page valve for /v2/transactions, a runaway-cursor guard only: the real
+ * bound is the caller's `maxResults` (the sync's per-account row cap).
+ */
+export const TRANSACTIONS_MAX_PAGES = 1_000;
+
+/** Pagination keys Pluggy has used for the transactions continuation. */
+const CURSOR_KEYS = ['after', 'cursor'] as const;
+
+/**
+ * The continuation in a /v2/transactions response, normalized to a query
+ * fragment (`after=x` / `cursor=x`). Pluggy has sent it as `next` (a query
+ * string, `accountId=..&after=x`), as `nextPage` (a relative URL,
+ * `/v2/transactions?cursor=x`) and as a bare token; all three are accepted.
+ * Only the pagination key is kept: the request re-adds `accountId`.
+ */
+export function continuationFrom(next: string | undefined): string | undefined {
+  if (next === undefined || next.trim() === '') return undefined;
+  const queryForm = next.includes('?') || CURSOR_KEYS.some((k) => next.startsWith(`${k}=`) || next.includes(`&${k}=`));
+  if (!queryForm) return new URLSearchParams({ cursor: next }).toString();
+  const params = new URLSearchParams(next.includes('?') ? next.slice(next.indexOf('?') + 1) : next);
+  for (const key of CURSOR_KEYS) {
+    const value = params.get(key);
+    if (value) return new URLSearchParams({ [key]: value }).toString();
+  }
+  return undefined;
+}
+
+/** Query params for a continuation fragment (empty for the first page). */
+function cursorQuery(cursor: string | undefined): Record<string, string> {
+  if (cursor === undefined) return {};
+  if (!cursor.includes('=')) return { cursor };
+  return Object.fromEntries(new URLSearchParams(cursor));
+}
+
+/** Pluggy refused a stored continuation (expired or malformed). */
+const isRejectedCursor = (err: unknown): boolean =>
+  err instanceof PluggyError && [400, 404, 410, 422].includes(err.status);
+
 export interface PageLoop {
   maxPages?: number;
 }
@@ -426,53 +465,75 @@ export class PluggyClient {
   // ---- transactions ---------------------------------------------------------
 
   /**
-   * Cursor-paginated /v2/transactions. The v2 endpoint accepts only
-   * `accountId` + `cursor` — `from`/`to` bounds are applied client-side
+   * Cursor-paginated /v2/transactions. The endpoint takes no page size (it
+   * rejects `pageSize`; its default page is used) and no `from`/`to` here:
+   * only `accountId` + the continuation. Bounds are applied client-side
    * (date-only comparison) over the newest-first pages, stopping as soon as
    * a page dips below `from` since older pages cannot re-enter the window.
-   * Collects up to `maxResults` and reports `hasMore` whenever the window is
-   * not provably exhausted (cap or page valve hit).
+   *
+   * `maxResults` is a soft cap: the loop stops after the page that reaches it
+   * and keeps that whole page, so the returned `cursor` resumes exactly after
+   * the last row returned. `hasMore` is set whenever the window is not
+   * provably exhausted (cap or page valve hit). `cursor` (opaque, a query
+   * fragment such as `after=x`) continues a previous pull; when Pluggy
+   * refuses it (expired: 400/404/410/422) the walk restarts from the newest
+   * page and `to` bounds what is collected.
    */
-  async listTransactions(input: { accountId: string; from?: string; to?: string; maxResults?: number }): Promise<{ results: TransactionT[]; hasMore: boolean }> {
+  async listTransactions(input: {
+    accountId: string;
+    from?: string;
+    to?: string;
+    maxResults?: number;
+    cursor?: string;
+    /** Page valve (runaway-cursor guard); defaults to TRANSACTIONS_MAX_PAGES. */
+    maxPages?: number;
+    onPage?: () => void;
+  }): Promise<{ results: TransactionT[]; hasMore: boolean; cursor: string | null; pages: number; oldestDate: string | null }> {
     const maxResults = input.maxResults ?? 1_000;
+    const maxPages = input.maxPages ?? TRANSACTIONS_MAX_PAGES;
     const out: TransactionT[] = [];
-    let cursor: string | undefined;
+    let cursor = input.cursor;
     let windowExhausted = false;
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      const body = await this.request<{ results: unknown[]; nextPage?: string | null }>('GET', '/v2/transactions', {
-        query: {
-          accountId: input.accountId,
-          ...(cursor !== undefined ? { cursor } : {}),
-        },
-      });
+    let oldestDate: string | null = null;
+    let pages = 0;
+    while (pages < maxPages) {
+      let body: { results?: unknown[]; next?: string | null; nextPage?: string | null };
+      try {
+        body = await this.request('GET', '/v2/transactions', {
+          query: { accountId: input.accountId, ...cursorQuery(cursor) },
+        });
+      } catch (err) {
+        // An expired resume point: walk again from the newest page.
+        if (pages === 0 && cursor !== undefined && cursor === input.cursor && isRejectedCursor(err)) {
+          console.warn(`Pluggy listTransactions(${input.accountId}): resume cursor refused (${(err as PluggyError).status}); restarting from the newest page`);
+          cursor = undefined;
+          continue;
+        }
+        throw err;
+      }
+      pages += 1;
+      input.onPage?.();
       const parsed = z.array(Transaction).parse(body.results ?? []);
+      let pageOldest: string | null = null;
       for (const t of parsed) {
         const day = t.date.slice(0, 10);
+        if (pageOldest == null || day < pageOldest) pageOldest = day;
         if ((input.from == null || day >= input.from) && (input.to == null || day <= input.to)) out.push(t);
       }
-      const next = body.nextPage ?? undefined;
-      // nextPage is a relative URL carrying the cursor (`/v2/transactions?cursor=x`);
-      // tolerate a bare cursor token too — both shapes exist across API versions.
-      cursor =
-        next === undefined
-          ? undefined
-          : next.includes('?')
-            ? (new URL(next, 'https://pluggy.invalid').searchParams.get('cursor') ?? undefined)
-            : next;
+      if (pageOldest != null && (oldestDate == null || pageOldest < oldestDate)) oldestDate = pageOldest;
+      cursor = continuationFrom(body.next ?? body.nextPage ?? undefined);
       if (cursor === undefined) {
         windowExhausted = true;
         break;
       }
-      if (out.length >= maxResults) break;
       // Newest-first: once a page dips below `from`, no older page re-enters.
-      const oldestDay = parsed.at(-1)?.date.slice(0, 10);
-      if (input.from != null && oldestDay != null && oldestDay < input.from) {
+      if (input.from != null && pageOldest != null && pageOldest < input.from) {
         windowExhausted = true;
         break;
       }
+      if (out.length >= maxResults) break;
     }
-    const results = out.slice(0, maxResults);
-    return { results, hasMore: !windowExhausted };
+    return { results: out, hasMore: !windowExhausted, cursor: windowExhausted ? null : (cursor ?? null), pages, oldestDate };
   }
 
   // ---- investments ----------------------------------------------------------

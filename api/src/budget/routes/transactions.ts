@@ -23,11 +23,12 @@ import {
   resolvePayeeId,
   upsertPayee,
 } from '../domain/transactions';
-import { linkCardPayments } from '../domain/card-payments';
+import { linkTransfers, transferOverview } from '../domain/transfer-links';
 import { deleteMirror, insertMirror, resolveTransferPeer, syncMirror } from '../domain/transfers';
 import { advanceOccurrence } from '../domain/repeat-schedule';
 import { applyRules } from '@shared/domain/payees';
-import { getImportMetadata } from '../../connections';
+import { getImportMetadata, listInstallmentSources } from '../../connections';
+import { upcomingInstallmentRows } from '../domain/upcoming-installments';
 import { budgetRouter } from '../router';
 import { findAccountInBudget } from '../store/accounts';
 import { categoryInBudget } from '../store/categories';
@@ -35,6 +36,9 @@ import { getRepeatRuleSchedule, skipRepeatRulePast } from '../store/repeat-rules
 import * as txnStore from '../store/transactions';
 
 type CreateTxn = z.output<typeof createTxnSchema>;
+
+/** `YYYY-MM-DD` of a list row's date (pg hands DATE columns over as a Date). */
+const dateOf = (d: unknown): string => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
 
 /** Insert one transaction (+ split legs / transfer mirror) and apply balance deltas, atomically. */
 async function createTransaction(
@@ -117,7 +121,25 @@ export const operations = [
       list.push(row);
       byTxn.set(row.transaction_id, list);
     }
-    return rows.map((t) => ({ ...t, subtransactions: byTxn.get(t.id) ?? [] }));
+    // Transfer matcher view (budget-mit6): suggestion icon, pending rule rows, who linked.
+    const transfers = await transferOverview(pool, budgetId);
+    const stored = rows.map((t) => {
+      const s = transfers.rows.get(t.id);
+      return {
+        ...t,
+        subtransactions: byTxn.get(t.id) ?? [],
+        transfer_suggestion: s
+          ? { confidence: s.confidence, candidate_count: s.candidateCount, counterpart_id: s.counterpartId }
+          : null,
+        transfer_pending: transfers.pending.get(t.id) ?? null,
+        transfer_link_method: t.transfer_transaction_id ? (transfers.methods.get(t.id) ?? null) : null,
+      };
+    });
+    // Card installments the bank has not billed yet: derived per read, never
+    // stored (see domain/upcoming-installments), merged newest first.
+    const upcoming = upcomingInstallmentRows(await listInstallmentSources(pool, budgetId));
+    if (upcoming.length === 0) return stored;
+    return [...upcoming.reverse(), ...stored].sort((a, b) => dateOf(b.date).localeCompare(dateOf(a.date)));
   }),
 
   // Detail read: the row is re-scoped by budget_id in SQL before its import
@@ -288,8 +310,8 @@ export const operations = [
           { account_id, cleared_delta: 0, uncleared_delta: unclearedDelta },
         ]);
       }
-      // Imported statement payments (cash outflow + card inflow) become transfers.
-      if (imported > 0) await linkCardPayments(client, budget_id);
+      // Imported rows that pair with another own account's row become transfers.
+      if (imported > 0) await linkTransfers(client, budget_id);
       return { imported, duplicates };
     });
   }),

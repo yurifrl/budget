@@ -98,6 +98,9 @@ export function syncSkipLines(run: SyncRunJson | null | undefined): string[] {
     lines.push(t('syncRun.skippedOtherAccount', { count: skipped.count, account: skipped.name }));
   }
   if ((result.skipped_deleted ?? 0) > 0) lines.push(t('syncRun.skippedDeleted', { count: result.skipped_deleted ?? 0 }));
+  if ((result.skipped_paid_installment ?? 0) > 0) {
+    lines.push(t('syncRun.skippedPaidInstallment', { count: result.skipped_paid_installment ?? 0 }));
+  }
   if ((result.failed ?? 0) > 0) lines.push(t('syncRun.failedRows', { count: result.failed ?? 0 }));
   return lines;
 }

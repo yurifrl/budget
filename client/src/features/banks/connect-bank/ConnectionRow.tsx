@@ -76,6 +76,10 @@ export function ConnectionRow({
       <Text style={styles.connSub} numberOfLines={2}>
         {storedServerMessage(row.status_message, row.status_message_code)}
       </Text>
+    ) : row.history_loading ? (
+      <Text style={styles.connSub} numberOfLines={2}>
+        {t('row.historyLoading')}
+      </Text>
     ) : null;
   return (
     // iOS: long-press opens the system context menu over the row;

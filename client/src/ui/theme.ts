@@ -31,6 +31,11 @@ export const colors = {
   redPillBg: '#3a1f1b',
   grayPillBg: '#252c3b',
   grayPillFg: '#8a93a6',
+  /** Transfers between own accounts (budget-mit6): ⇄ suggestion icon, transfer pills, active filter chip. */
+  blue: '#6cb6ff',
+  bluePillBg: '#14263d',
+  blueBorder: '#3d6ea8',
+  blueSoft: '#141c2a',
 
   indigo: '#6c5ce7',
   indigo2: '#7d6ff0',

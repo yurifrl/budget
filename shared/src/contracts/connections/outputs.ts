@@ -47,6 +47,8 @@ export const connectionSchema = z.object({
   last_synced_at: nullableString,
   /** Per-bank sync-window override in days; null inherits the app-wide default. */
   sync_window_days: z.number().nullable(),
+  /** True while a linked account's history import is still in progress: the first import hit its per-sync row cap and the next syncs continue with older rows. Additive (always sent by the API; optional so older fixtures still compile). */
+  history_loading: z.boolean().optional(),
   /** Who linked the bank. */
   linked_by: linkedBySchema.nullable(),
   created_at: z.string(),
@@ -112,6 +114,8 @@ export const syncCountsSchema = z.object({
   skipped_other_account: z.number(),
   /** Per account, where the `skipped_other_account` rows live. */
   skipped_accounts: z.array(syncSkippedAccountSchema),
+  /** PENDING card installments already imported as POSTED (the bank's leftover copy after an early payment): not imported. Optional: runs recorded before it existed lack it. */
+  skipped_paid_installment: z.number().optional(),
   /** Bank transactions that failed to import (each rolled back alone; the rest of the sync committed). */
   failed: z.number(),
 });

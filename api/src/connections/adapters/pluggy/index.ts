@@ -22,6 +22,7 @@ import type {
   ExternalAccount,
   ItemState,
   ListTransactionsInput,
+  TransactionPull,
 } from '../../types';
 import { AggregatorError } from '../../errors';
 
@@ -342,7 +343,7 @@ export class PluggyAggregator implements BankAggregator {
   async listTransactions(
     externalAccountId: string,
     input: ListTransactionsInput = {},
-  ): Promise<{ transactions: AggregatedTransaction[]; hasMore: boolean }> {
+  ): Promise<TransactionPull> {
     let upstream: Awaited<ReturnType<PluggyClient['listTransactions']>>;
     let type: ExternalAccountType;
     try {
@@ -351,6 +352,9 @@ export class PluggyAggregator implements BankAggregator {
         accountId: externalAccountId,
         ...(input.from !== undefined ? { from: input.from } : {}),
         ...(input.to !== undefined ? { to: input.to } : {}),
+        ...(input.maxResults !== undefined ? { maxResults: input.maxResults } : {}),
+        ...(input.cursor !== undefined ? { cursor: input.cursor } : {}),
+        ...(input.onPage ? { onPage: input.onPage } : {}),
       });
     } catch (e) {
       throw classifyPluggyError(e);
@@ -358,6 +362,9 @@ export class PluggyAggregator implements BankAggregator {
     return {
       transactions: upstream.results.map((txn) => toAggregatedTransaction(txn, type)),
       hasMore: upstream.hasMore,
+      cursor: upstream.cursor,
+      pages: upstream.pages,
+      oldestDate: upstream.oldestDate,
     };
   }
 

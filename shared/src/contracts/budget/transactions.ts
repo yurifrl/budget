@@ -22,7 +22,7 @@ import { bulkImportResultSchema, noContent, transactionDetailsSchema, transactio
 
 export const transactionsList = defineOperation({
   name: 'budget_transactions_list',
-  description: 'List all live transactions of a budget (newest first) with their split legs. `amount` fields (parent and split legs) are signed milliunits (1/1000 of the currency unit, 12.34 = 12340; negative = money out).',
+  description: 'List all live transactions of a budget (newest first) with their split legs, plus the not-yet-billed installments of card installment purchases as derived rows (`upcoming` true, `installment` set; never stored, in no balance). `amount` fields (parent and split legs) are signed milliunits (1/1000 of the currency unit, 12.34 = 12340; negative = money out).',
   input: z.object({ budget_id: budgetId }),
   output: z.array(transactionRowSchema),
   method: 'GET',

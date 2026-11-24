@@ -7,7 +7,8 @@
  * - payees: `loadRenameRules` + `applyRules` + `upsertPayee`
  *   (domain/transactions.ts), the /bulk import and transaction-create path;
  * - balances: `applyBalanceDeltas` (domain/transactions.ts);
- * - card payments: `linkCardPayments` (domain/card-payments.ts);
+ * - transfers between own accounts: `linkTransfers` (domain/transfer-links.ts;
+ *   `linkCardPayments` is its former name, kept for callers);
  * - row writes: store/transactions.ts;
  * - account currency (G1): `adoptAccountCurrency` (store/accounts.ts), set
  *   from the provider only while the account has none.
@@ -24,7 +25,7 @@ import { applyRules, type RenameRule } from '@shared/domain/payees';
 import { loadRenameRules, upsertPayee } from './domain/transactions';
 
 export { applyBalanceDeltas, type BalanceDelta } from './domain/transactions';
-export { linkCardPayments } from './domain/card-payments';
+export { linkTransfers, linkTransfers as linkCardPayments } from './domain/transfer-links';
 export { adoptAccountCurrency } from './store/accounts';
 export {
   insertImportedTransaction,

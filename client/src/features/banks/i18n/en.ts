@@ -14,6 +14,7 @@ export default {
   'page.lastSync': 'Last sync: {stamp}',
   'page.lastSyncSandbox': 'Last sync: {stamp} · sandbox',
   'page.added': 'Last sync: added {stamp}',
+  'page.historyLoading': 'Importing older history — it continues with the next syncs.',
   'page.addedSandbox': 'Last sync: added {stamp} · sandbox',
   'page.syncNow': 'Sync now',
   'page.syncing': 'Syncing…',
@@ -107,6 +108,10 @@ export default {
   'syncRun.skippedDeleted': {
     one: '{count} skipped: it was deleted before and stays deleted',
     other: '{count} skipped: they were deleted before and stay deleted',
+  },
+  'syncRun.skippedPaidInstallment': {
+    one: '{count} skipped: a pending card installment that was already paid',
+    other: '{count} skipped: pending card installments that were already paid',
   },
   'syncRun.failedRows': {
     one: '{count} bank transaction could not be imported',

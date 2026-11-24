@@ -182,6 +182,13 @@ export interface Transaction {
    */
   upcoming: boolean;
   /**
+   * Set only on a derived upcoming card installment (budget-lubt): installment
+   * `number` of `total` of a purchase the bank has not billed yet. Read-only:
+   * the server computes it per read (it has no stored row to edit or delete);
+   * `upcoming` is true, so it stays out of balances and budget activity.
+   */
+  installment?: { number: number; total: number };
+  /**
    * Split legs (syscd-app-rlt), each owning its own category. Present only on
    * split transactions; the parent then carries categoryId null ("Split").
    */
@@ -200,6 +207,21 @@ export interface Transaction {
    * null/absent = not a transfer.
    */
   transferAccountId?: string | null;
+  /**
+   * Transfer matcher (budget-mit6): this row looks like one leg of a transfer
+   * between own accounts. `sure` = one proposed other side (`counterpartId`),
+   * `choose` = several possible, `oneSide` = no matching row. Absent = no.
+   */
+  transferSuggestion?: { confidence: 'sure' | 'choose' | 'oneSide'; candidateCount: number; counterpartId: string | null };
+  /**
+   * A "treat as transfer" payee's row with no linked other side: `waiting` =
+   * the other side has not arrived yet (a transfer in flight: no category, no
+   * budget effect); `outside` = a transfer to an account outside the budget
+   * (no category asked; moves Ready to Assign like any money leaving the budget).
+   */
+  transferPending?: 'waiting' | 'outside';
+  /** Who linked this transfer leg (`rule` shows "auto · payee rule"). */
+  transferLinkMethod?: 'auto' | 'rule' | 'user';
 }
 
 /** One split leg: category + memo + one-way cents amount (syscd-app-rlt). */

@@ -9,10 +9,10 @@ import type { PayeeAdmin } from './usePayeeAdmin';
 import { displaySystemName } from '@/domain/systemNames';
 
 /** Left pane: the inline add row and the searchable payee list with usage counts. */
-export function PayeeListPane({ admin }: { admin: PayeeAdmin }) {
+export function PayeeListPane({ admin, fill }: { admin: PayeeAdmin; /** Phone: the list takes the whole width. */ fill?: boolean }) {
   const { newName, setNewName, addNewPayee, busy, filtered, search, select, selectedId } = admin;
   return (
-    <ScrollView style={styles.listPane} contentContainerStyle={styles.listContent}>
+    <ScrollView style={[styles.listPane, fill && { width: '100%', flexGrow: 1 }]} contentContainerStyle={styles.listContent}>
       <View style={styles.addRow}>
         <TextInput
           value={newName}
