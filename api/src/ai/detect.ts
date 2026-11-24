@@ -1,7 +1,7 @@
 /**
- * Provider detection from the key's shape. A guess, never a validation: all
- * five providers verify the key themselves on save (`listModels`), and the
- * caller may always choose a provider explicitly — save overrides this guess.
+ * Provider detection from the key's shape. A guess, never a validation: the
+ * provider verifies the key itself on save (`verifyKey`), and the caller may
+ * always choose a provider explicitly — save overrides this guess.
  *
  * Rules, in order:
  *   sk-or-...            OpenRouter  (sk-or-v1- prefix)
@@ -9,8 +9,11 @@
  *   sk-proj- / sk-svcacct- / sk-admin-   OpenAI (project/service/admin keys)
  *   sk-<32 hex>          DeepSeek (its keys are sk- + 32 hex)
  *   sk-...               OpenAI (legacy keys; anything sk-shaped left)
- *   <id>.<secret>        Z.ai (Zhipu: numeric id, dot, secret)
- * Anything else: unknown (null).
+ *
+ * Z.ai (Zhipu) is absent on purpose: its documentation does not state a key
+ * shape, and public reports disagree on the id before the dot, so a Z.ai key
+ * cannot be guessed safely. The caller picks `zai` (and a shared Z.ai key
+ * needs AI_SHARED_PROVIDER=zai). Anything else: unknown (null).
  */
 import type { AiProviderId } from '@shared/contracts/ai';
 
@@ -20,7 +23,6 @@ const RULES: ReadonlyArray<readonly [AiProviderId, RegExp]> = [
   ['openai', /^sk-(proj|svcacct|admin)-[A-Za-z0-9_-]{16,}$/],
   ['deepseek', /^sk-[0-9a-f]{32}$/i],
   ['openai', /^sk-[A-Za-z0-9_-]{20,}$/],
-  ['zai', /^\d{6,}\.[A-Za-z0-9_-]{6,}$/],
 ];
 
 export function detectProvider(apiKey: string): AiProviderId | null {

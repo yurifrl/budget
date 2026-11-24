@@ -9,6 +9,8 @@ import { z } from '../../zod';
  * Providers the installation can talk to. `zai` is Z.ai (Zhipu GLM), `deepseek`
  * DeepSeek; both speak an OpenAI-compatible chat API. The value is also the
  * prefix of the provider's adapter folder (`api/src/ai/providers/<id>`).
+ * Z.ai keys have no documented shape, so detection never returns `zai`; the
+ * caller offers it as an explicit choice.
  */
 export const AI_PROVIDERS = ['openrouter', 'anthropic', 'openai', 'zai', 'deepseek'] as const;
 export const aiProviderSchema = z.enum(AI_PROVIDERS);
@@ -26,7 +28,7 @@ export const aiOwnCredentialSchema = z.object({
 
 /** The installation's shared key as far as this caller may use it. */
 export const aiSharedCredentialSchema = z.object({
-  /** True when feature 'shared-ai-key' is on for the caller AND a usable shared key is configured. */
+  /** True when feature 'shared-ai-key' is on for the caller AND the shared key and its model are configured. */
   available: z.boolean(),
   provider: aiProviderSchema.nullable(),
   model: z.string().nullable(),

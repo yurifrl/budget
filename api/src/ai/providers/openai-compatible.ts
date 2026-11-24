@@ -21,15 +21,30 @@ export type OpenAiCompatibleConfig = {
   /** Name used in error messages ("OpenRouter API 429: ..."). */
   label: string;
   baseUrl: string;
+  /** GET path of an authenticated, side-effect-free key check: /key on OpenRouter, /models elsewhere. */
+  keyCheckPath: string;
   /** json_schema = response_format json_schema; json_object = JSON mode + schema in a system message. */
   structured: StructuredOutput;
   /** OpenAI's newer models want max_completion_tokens; the other three accept max_tokens. */
   tokenParam: 'max_tokens' | 'max_completion_tokens';
+  /** Drop ids this provider lists but this adapter cannot chat with (OpenAI's embeddings, audio, image). */
+  filterModel?: (id: string) => boolean;
 };
 
 type Json = Record<string, unknown>;
 
 const asRecord = (value: unknown): Json | null => (typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Json) : null);
+
+/**
+ * OpenAI's /models has no capability field and includes embedding, audio,
+ * image and moderation models. This adapter only speaks Chat Completions, so
+ * keep the chat families and drop the known non-chat ones. Heuristic by
+ * design: an unknown new chat family is dropped, never a non-chat one added.
+ */
+const OPENAI_NON_CHAT = /(^|[-/])(?:embedding|moderation|tts|whisper|transcribe|audio|realtime|image|sora|search|dall-e|codex|deep-research)(?:$|[-/])/;
+const OPENAI_CHAT_FAMILY = /^(?:gpt-|chatgpt-|o\d)/;
+
+export const isOpenAiChatModel = (id: string): boolean => OPENAI_CHAT_FAMILY.test(id) && !OPENAI_NON_CHAT.test(id);
 
 export class OpenAiCompatibleProvider implements AiProvider {
   readonly id: AiProviderId;
@@ -69,6 +84,16 @@ export class OpenAiCompatibleProvider implements AiProvider {
     return this.parseChat(json, request.model);
   }
 
+  async verifyKey(): Promise<void> {
+    await requestJson({
+      provider: this.id,
+      url: `${this.config.baseUrl.replace(/\/+$/, '')}${this.config.keyCheckPath}`,
+      headers: this.auth,
+      timeoutMs: DEFAULT_MODELS_TIMEOUT_MS,
+      fetch: this.fetchImpl,
+    });
+  }
+
   async listModels(): Promise<AiModel[]> {
     const json = await requestJson({
       provider: this.id,
@@ -83,6 +108,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
     for (const entry of data) {
       const model = asRecord(entry);
       if (typeof model?.id !== 'string' || !model.id) continue;
+      if (this.config.filterModel && !this.config.filterModel(model.id)) continue;
       const context = model.context_length ?? model.context_window;
       models.push({
         id: model.id,

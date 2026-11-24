@@ -14,6 +14,7 @@ import {
   AI_KEY_REQUIRED,
   AI_KEY_UNREADABLE,
   AI_SHARED_KEY_MISSING,
+  AI_SHARED_MODEL_MISSING,
   isAiProviderId,
   type AiProviderId,
 } from '@shared/contracts/ai';
@@ -29,9 +30,11 @@ import * as store from './store';
 /**
  * Bound into the ciphertext (AES-GCM additional data; the box adds the key
  * version): a secret opens only on the row it was sealed for, i.e. the same
- * user. JSON so no value can run into the next.
+ * user AND provider. JSON so no value can run into the next. A ciphertext
+ * copied onto another provider's row does not open, so a database writer
+ * cannot redirect a key to another vendor.
  */
-const secretContext = (userId: string): string => JSON.stringify(['ai_credentials', userId]);
+const secretContext = (userId: string, provider: string): string => JSON.stringify(['ai_credentials', userId, provider]);
 
 /** Encrypt and store the caller's key, replacing any earlier one. */
 export async function storeOwnKey(
@@ -41,7 +44,7 @@ export async function storeOwnKey(
   apiKey: string,
   model: string | null,
 ): Promise<store.AiCredentialRow> {
-  const sealed = await sealSecret(apiKey, secretContext(userId));
+  const sealed = await sealSecret(apiKey, secretContext(userId, provider));
   return store.saveCredential(db, {
     userId,
     provider,
@@ -56,7 +59,7 @@ export async function storeOwnKey(
 export async function openOwnKey(row: store.AiCredentialRow): Promise<string> {
   return openSecret(
     { ciphertext: new Uint8Array(row.secret_ciphertext), nonce: new Uint8Array(row.secret_nonce), keyVersion: row.key_version },
-    secretContext(row.user_id),
+    secretContext(row.user_id, row.provider),
   );
 }
 
@@ -69,6 +72,8 @@ export type AiKeyProblem =
   | 'own_key_required'
   /** Feature on, but the server has no valid shared key configured. */
   | 'shared_key_missing'
+  /** Feature on and a shared key configured, but no model chosen for it. */
+  | 'shared_model_missing'
   /** No master key here: own keys cannot be sealed or opened. */
   | 'encryption_missing'
   /** The stored secret does not open (master key changed, wrong row). */
@@ -104,7 +109,9 @@ export async function resolveAiKey(db: Queryable, userId: string): Promise<AiKey
   if (!(await sharedAiAllowed(db, userId))) return { ok: false, problem: 'own_key_required' };
   const shared = sharedAiConfig();
   if (!shared) return { ok: false, problem: 'shared_key_missing' };
-  return { ok: true, key: { source: 'shared', provider: shared.provider, model: await getSharedAiModel(db), apiKey: shared.apiKey, updatedAt: null } };
+  const model = await getSharedAiModel(db);
+  if (!model) return { ok: false, problem: 'shared_model_missing' };
+  return { ok: true, key: { source: 'shared', provider: shared.provider, model, apiKey: shared.apiKey, updatedAt: null } };
 }
 
 /**
@@ -131,6 +138,8 @@ export function aiKeyHttpError(problem: AiKeyProblem): HttpError {
       return new HttpError(403, AI_KEY_REQUIRED_MESSAGE, AI_KEY_REQUIRED);
     case 'shared_key_missing':
       return new HttpError(503, 'The shared AI key is not configured on this server.', AI_SHARED_KEY_MISSING);
+    case 'shared_model_missing':
+      return new HttpError(503, 'The shared AI key is configured, but no model is chosen for it.', AI_SHARED_MODEL_MISSING);
     case 'encryption_missing':
       return new HttpError(503, 'AI keys cannot be stored or read: this server has no encryption key configured.', AI_ENCRYPTION_MISSING);
     case 'unreadable':

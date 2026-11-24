@@ -28,22 +28,32 @@ function stub(respond: (req: Request, body: unknown) => Response | Promise<Respo
 }
 
 afterEach(async () => {
-  await server?.stop(true);
-  server = null;
+  await stopStub();
 });
+
+async function stopStub(): Promise<void> {
+  const current = server;
+  server = null;
+  if (current) await current.stop(true);
+}
 
 describe('Anthropic chat request', () => {
   test('system, tool blocks, structured output and headers map to the Messages API', async () => {
-    const baseUrl = stub(() =>
-      Response.json({
+    // 2026-10-21 rejects sampling parameters with a 400, so the stub does too.
+    const baseUrl = stub((_req, body) => {
+      const sent = body as Record<string, unknown>;
+      if ('temperature' in sent || 'top_p' in sent || 'top_k' in sent) {
+        return Response.json({ error: { type: 'invalid_request_error', message: 'sampling parameters are not supported' } }, { status: 400 });
+      }
+      return Response.json({
         model: 'claude-test',
         stop_reason: 'tool_use',
         content: [
           { type: 'text', text: 'Let me check.' },
           { type: 'tool_use', id: 'toolu_1', name: 'list_categories', input: { budget_id: 'b1' } },
         ],
-      }),
-    );
+      });
+    });
     const provider = createProvider('anthropic', 'sk-ant-test', { baseUrl });
     const result = await provider.chat({
       model: 'claude-test',
@@ -69,7 +79,6 @@ describe('Anthropic chat request', () => {
     expect(request.body).toMatchObject({
       model: 'claude-test',
       max_tokens: 512,
-      temperature: 0.1,
       system: 'You are a categorizer.',
       tools: [{ name: 'list_categories', description: 'List categories', input_schema: { type: 'object' } }],
       output_config: { format: { type: 'json_schema', schema: { type: 'object', properties: {} } } },
@@ -89,41 +98,90 @@ describe('Anthropic chat request', () => {
         },
       ],
     });
+    expect(request.body).not.toHaveProperty('temperature');
+    expect(request.body).not.toHaveProperty('top_p');
+    expect(request.body).not.toHaveProperty('top_k');
 
     expect(result.text).toBe('Let me check.');
     expect(result.toolCalls).toEqual([{ id: 'toolu_1', name: 'list_categories', arguments: { budget_id: 'b1' } }]);
     expect(result.finishReason).toBe('tool_use');
   });
 
-  test('a plain JSON-mode turn (no tools) uses max_tokens default and no output_config when unset', async () => {
+  test('a plain turn with no tools uses the thinking-ready max_tokens default and no output_config when unset', async () => {
     const baseUrl = stub(() => Response.json({ content: [{ type: 'text', text: 'hi' }], stop_reason: 'end_turn' }));
     const result = await createProvider('anthropic', 'sk-ant-test', { baseUrl }).chat({
       model: 'claude-test',
       messages: [{ role: 'user', content: 'hi' }],
     });
-    expect(captured[0]!.body).toMatchObject({ max_tokens: 4096 });
+    expect(captured[0]!.body).toMatchObject({ max_tokens: 16_000 });
     expect(captured[0]!.body).not.toHaveProperty('output_config');
     expect(result.text).toBe('hi');
     expect(result.finishReason).toBe('end_turn');
   });
+
+  test('a tool loop echoes thinking blocks back unchanged', async () => {
+    const thinking = { type: 'thinking', thinking: 'reasoning summary', signature: 'sig-1' };
+    const text = { type: 'text', text: 'Checking.' };
+    const toolUse = { type: 'tool_use', id: 'toolu_1', name: 'lookup', input: { id: 't1' } };
+    const baseUrl = stub(() =>
+      Response.json({ model: 'claude-test', stop_reason: 'tool_use', content: [thinking, text, toolUse] }),
+    );
+    const provider = createProvider('anthropic', 'sk-ant-test', { baseUrl });
+    const first = await provider.chat({ model: 'claude-test', messages: [{ role: 'user', content: 'go' }] });
+    expect(first.rawContent).toEqual([thinking, text, toolUse]);
+
+    await provider.chat({
+      model: 'claude-test',
+      messages: [
+        { role: 'user', content: 'go' },
+        { role: 'assistant', content: first.text, toolCalls: first.toolCalls, rawContent: first.rawContent },
+        { role: 'tool', toolCallId: 'toolu_1', content: '{"ok":true}' },
+      ],
+    });
+    const second = captured[1]!.body as { messages: Array<{ role: string; content: unknown }> };
+    expect(second.messages[1]).toEqual({ role: 'assistant', content: [thinking, text, toolUse] });
+    expect(second.messages[2]).toEqual({
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: '{"ok":true}' }],
+    });
+  });
+});
+
+describe('Anthropic key check', () => {
+  test('verifyKey calls the authenticated Models API with limit=1', async () => {
+    const baseUrl = stub(() => Response.json({ data: [], has_more: false, last_id: null }));
+    await createProvider('anthropic', 'sk-ant-test', { baseUrl }).verifyKey();
+    expect(captured[0]!.method).toBe('GET');
+    expect(captured[0]!.path).toBe('/models?limit=1');
+    expect(captured[0]!.headers['x-api-key']).toBe('sk-ant-test');
+  });
+
+  test('a refused key fails verifyKey as auth', async () => {
+    const baseUrl = stub(() => Response.json({ error: { type: 'authentication_error', message: 'invalid x-api-key' } }, { status: 401 }));
+    await expect(createProvider('anthropic', 'bad', { baseUrl }).verifyKey()).rejects.toMatchObject({ kind: 'auth', status: 401 });
+  });
 });
 
 describe('Anthropic model listing', () => {
-  test('walks has_more pages with after_id, maps display_name, sorts', async () => {
+  test('walks has_more pages with after_id, maps display_name and max_input_tokens, sorts', async () => {
     let page = 0;
     const baseUrl = stub(() => {
       page += 1;
       if (page === 1) {
-        return Response.json({ data: [{ id: 'claude-b', display_name: 'Claude B' }], has_more: true, last_id: 'claude-b' });
+        return Response.json({
+          data: [{ id: 'claude-b', display_name: 'Claude B', max_input_tokens: 200_000 }],
+          has_more: true,
+          last_id: 'claude-b',
+        });
       }
-      return Response.json({ data: [{ id: 'claude-a' }], has_more: false, last_id: 'claude-a' });
+      return Response.json({ data: [{ id: 'claude-a', max_input_tokens: null }], has_more: false, last_id: 'claude-a' });
     });
     const models = await createProvider('anthropic', 'sk-ant-test', { baseUrl }).listModels();
     expect(captured[0]!.path).toBe('/models?limit=100');
     expect(captured[1]!.path).toBe('/models?limit=100&after_id=claude-b');
     expect(models).toEqual([
       { id: 'claude-a', name: 'claude-a', contextLength: null },
-      { id: 'claude-b', name: 'Claude B', contextLength: null },
+      { id: 'claude-b', name: 'Claude B', contextLength: 200_000 },
     ]);
   });
 });

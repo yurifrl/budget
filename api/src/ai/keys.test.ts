@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { pool } from '../core/db';
-import { configureSecretBox, SecretBoxUnavailable } from '../core/secret-box';
+import { configureSecretBox, SecretBoxOpenError, SecretBoxUnavailable } from '../core/secret-box';
 import { dbReady } from '../core/test-gate';
 import type { IdentityUser } from '../user';
 import { configureAiEnv } from './env';
@@ -93,6 +93,15 @@ describe.skipIf(!dbReady)('sealing own keys', () => {
     expect(resolution).toEqual({ ok: false, problem: 'unreadable' });
   });
 
+  test('changing the provider on a row makes the key unreadable (the provider is bound in)', async () => {
+    const user = await newUser('provider');
+    await storeOwnKey(pool, user.id, 'openai', KEY, null);
+    await pool.query('update public.ai_credentials set provider = $1 where user_id = $2', ['anthropic', user.id]);
+    const stored = await store.getCredential(pool, user.id);
+    await expect(openOwnKey(stored!)).rejects.toBeInstanceOf(SecretBoxOpenError);
+    expect(await resolveAiKey(pool, user.id)).toEqual({ ok: false, problem: 'unreadable' });
+  });
+
   test('without a master key, sealing fails and an existing row is unreadable', async () => {
     const user = await newUser('nokey');
     await storeOwnKey(pool, user.id, 'openai', KEY, null);
@@ -153,6 +162,15 @@ describe.skipIf(!dbReady)('key resolution', () => {
     expect(await sharedAiStatus(pool, user.id)).toEqual({ available: false, provider: 'openrouter', model: null });
     await pool.query(`insert into public.app_settings (key, value) values ($1, $2::jsonb)`, [AI_SHARED_MODEL_SETTING, JSON.stringify('model/x')]);
     expect(await sharedAiStatus(pool, user.id)).toEqual({ available: true, provider: 'openrouter', model: 'model/x' });
+  });
+
+  test('a configured shared key with no model does not resolve, matching the status', async () => {
+    const user = await newUser('nomodel');
+    await setSharedFeature(user.id, true);
+    configureAiEnv({ AI_SHARED_API_KEY: SHARED_KEY, AI_SHARED_PROVIDER: 'openrouter' });
+    expect(await resolveAiKey(pool, user.id)).toEqual({ ok: false, problem: 'shared_model_missing' });
+    expect(await sharedAiStatus(pool, user.id)).toEqual({ available: false, provider: 'openrouter', model: null });
+    expect(aiKeyHttpError('shared_model_missing').status).toBe(503);
   });
 
   test('the shared provider falls back to detection from the key shape', async () => {

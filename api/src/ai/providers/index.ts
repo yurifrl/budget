@@ -10,7 +10,7 @@ import type { AiProviderId } from '@shared/contracts/ai';
 import type { FetchLike } from '../http';
 import type { AiProvider } from '../types';
 import { AnthropicProvider } from './anthropic';
-import { OpenAiCompatibleProvider } from './openai-compatible';
+import { isOpenAiChatModel, OpenAiCompatibleProvider } from './openai-compatible';
 
 export type ProviderOptions = {
   /** Override the provider's API origin (tests point this at a stub server). */
@@ -34,6 +34,8 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           id: 'openrouter',
           label: 'OpenRouter',
           baseUrl: options?.baseUrl ?? entries.openrouter.baseUrl,
+          // /models is public; /key authenticates the key.
+          keyCheckPath: '/key',
           structured: 'json_schema',
           tokenParam: 'max_tokens',
         },
@@ -53,8 +55,10 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           id: 'openai',
           label: 'OpenAI',
           baseUrl: options?.baseUrl ?? entries.openai.baseUrl,
+          keyCheckPath: '/models',
           structured: 'json_schema',
           tokenParam: 'max_completion_tokens',
+          filterModel: isOpenAiChatModel,
         },
         apiKey,
         options?.fetch,
@@ -68,6 +72,7 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           id: 'zai',
           label: 'Z.ai',
           baseUrl: options?.baseUrl ?? entries.zai.baseUrl,
+          keyCheckPath: '/models',
           structured: 'json_object',
           tokenParam: 'max_tokens',
         },
@@ -83,6 +88,7 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           id: 'deepseek',
           label: 'DeepSeek',
           baseUrl: options?.baseUrl ?? entries.deepseek.baseUrl,
+          keyCheckPath: '/models',
           structured: 'json_object',
           tokenParam: 'max_tokens',
         },

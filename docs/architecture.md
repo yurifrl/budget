@@ -157,11 +157,14 @@ start at `0100`). One image runs both the API and the worker
   `app_settings.aiSharedModel` admin setting, falling back to
   `AI_SHARED_MODEL`). Own wins; with neither, 403 `own_ai_key_required` (no
   paused state). `api/src/ai/` is the provider port (`chat` with tool calls and
-  structured output, `listModels`) plus five adapters — OpenRouter, Anthropic,
-  OpenAI, Z.ai, DeepSeek — with the provider guessed from the key shape and
-  overridable. Operations: `GET|PUT|DELETE /ai/credentials`,
-  `GET /ai/credentials/test`, `POST /ai/provider-detect`, `POST /ai/models`;
-  the key is never returned.
+  structured output, authenticated `verifyKey`, `listModels`) plus five
+  adapters — OpenRouter, Anthropic, OpenAI, Z.ai, DeepSeek — with the provider
+  guessed from the key shape and overridable (Z.ai keys have no documented
+  shape, so that provider is chosen by hand). Saving checks the key with an
+  authenticated call (OpenRouter's `/key`; the others' model list) and never
+  sends a stored key to another provider's host. Operations:
+  `GET|PUT|DELETE /ai/credentials`, `GET /ai/credentials/test`,
+  `POST /ai/provider-detect`, `POST /ai/models`; the key is never returned.
 - **Repeat-rule tick.** Still an in-process interval in the API
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.

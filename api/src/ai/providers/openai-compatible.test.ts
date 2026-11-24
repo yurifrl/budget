@@ -33,9 +33,14 @@ function stub(respond: (req: Request, body: unknown) => Response | Promise<Respo
 }
 
 afterEach(async () => {
-  await server?.stop(true);
-  server = null;
+  await stopStub();
 });
+
+async function stopStub(): Promise<void> {
+  const current = server;
+  server = null;
+  if (current) await current.stop(true);
+}
 
 const chatReply = (message: unknown, extra: Record<string, unknown> = {}) =>
   Response.json({ model: 'stub-model', choices: [{ message, finish_reason: 'stop', ...extra }] });
@@ -123,17 +128,16 @@ describe('OpenAI-compatible chat request', () => {
       });
       expect(captured[0]!.body).not.toHaveProperty('max_tokens');
       expect(result.text).toBe('{"ok":true}');
-      await server?.stop(true);
-      server = null;
+      await stopStub();
     }
   });
 });
 
 describe('OpenAI-compatible model listing', () => {
-  test('all four ask /models with bearer auth and parse id/name/context_length, sorted', async () => {
+  test('asks /models with bearer auth and parses id/name/context_length, sorted', async () => {
     const baseUrl = stub(() =>
       Response.json({
-        data: [{ id: 'b-model', name: 'Bee', context_length: 128_000 }, { id: 'a-model' }, { id: 42 }],
+        data: [{ id: 'gpt-b', name: 'Bee', context_length: 128_000 }, { id: 'gpt-a' }, { id: 42 }],
       }),
     );
     for (const id of ['openai', 'openrouter', 'deepseek', 'zai'] as const) {
@@ -141,15 +145,63 @@ describe('OpenAI-compatible model listing', () => {
       expect(captured[0]!.path).toBe('/models');
       expect(captured[0]!.headers.authorization).toBe('Bearer key-123');
       expect(models).toEqual([
-        { id: 'a-model', name: 'a-model', contextLength: null },
-        { id: 'b-model', name: 'Bee', contextLength: 128_000 },
+        { id: 'gpt-a', name: 'gpt-a', contextLength: null },
+        { id: 'gpt-b', name: 'Bee', contextLength: 128_000 },
       ]);
+      captured = [];
     }
+  });
+
+  test('openai drops models the Chat Completions API cannot chat with', async () => {
+    const baseUrl = stub(() =>
+      Response.json({
+        data: [
+          { id: 'gpt-4.1' },
+          { id: 'o3-mini' },
+          { id: 'chatgpt-4o-latest' },
+          { id: 'text-embedding-3-small' },
+          { id: 'gpt-4o-audio-preview' },
+          { id: 'gpt-image-1' },
+          { id: 'omni-moderation-latest' },
+          { id: 'gpt-5-codex' },
+        ],
+      }),
+    );
+    const models = await createProvider('openai', 'key-123', { baseUrl }).listModels();
+    expect(models.map((model) => model.id)).toEqual(['chatgpt-4o-latest', 'gpt-4.1', 'o3-mini']);
+    // The filter is OpenAI's only: another provider's list is passed through.
+    captured = [];
+    const openrouterModels = await createProvider('openrouter', 'key-123', { baseUrl }).listModels();
+    expect(openrouterModels).toHaveLength(8);
   });
 
   test('a model list without data is a bad_response', async () => {
     const baseUrl = stub(() => Response.json({ models: [] }));
     await expect(createProvider('openai', 'key-123', { baseUrl }).listModels()).rejects.toMatchObject({ kind: 'bad_response' });
+  });
+});
+
+describe('OpenAI-compatible key check', () => {
+  test('OpenRouter authenticates with /key; the others with /models', async () => {
+    let baseUrl = stub(() => Response.json({ data: {} }));
+    await createProvider('openrouter', 'sk-or-v1-test', { baseUrl }).verifyKey();
+    expect(captured[0]!.method).toBe('GET');
+    expect(captured[0]!.path).toBe('/key');
+    expect(captured[0]!.headers.authorization).toBe('Bearer sk-or-v1-test');
+    await stopStub();
+
+    for (const id of ['openai', 'deepseek', 'zai'] as const) {
+      baseUrl = stub(() => Response.json({ data: [] }));
+      await createProvider(id, 'key-123', { baseUrl }).verifyKey();
+      expect(captured[0]!.path).toBe('/models');
+      expect(captured[0]!.headers.authorization).toBe('Bearer key-123');
+      await stopStub();
+    }
+  });
+
+  test('an OpenRouter key rejected by /key fails as auth even though /models is public', async () => {
+    const baseUrl = stub(() => Response.json({ error: { message: 'Invalid API key' } }, { status: 401 }));
+    await expect(createProvider('openrouter', 'junk', { baseUrl }).verifyKey()).rejects.toMatchObject({ kind: 'auth', status: 401 });
   });
 });
 
@@ -167,12 +219,11 @@ describe('provider error mapping', () => {
       kind: 'rate_limited',
       retryAfterMs: 7000,
     });
-    await server?.stop(true);
+    await stopStub();
 
     baseUrl = stub(() => new Response('boom', { status: 503 }));
     await expect(createProvider('deepseek', 'key', { baseUrl }).listModels()).rejects.toMatchObject({ kind: 'transient', status: 503 });
-    await server?.stop(true);
-    server = null;
+    await stopStub();
 
     await expect(
       createProvider('openai', 'key', { baseUrl: 'http://127.0.0.1:1', fetch: () => Promise.reject(new Error('ECONNREFUSED')) }).listModels(),
@@ -182,7 +233,7 @@ describe('provider error mapping', () => {
   test('invalid JSON and a chat without choices are bad_response', async () => {
     let baseUrl = stub(() => new Response('not json', { status: 200 }));
     await expect(createProvider('openai', 'key', { baseUrl }).listModels()).rejects.toMatchObject({ kind: 'bad_response' });
-    await server?.stop(true);
+    await stopStub();
 
     baseUrl = stub(() => Response.json({ choices: [] }));
     await expect(createProvider('openai', 'key', { baseUrl }).chat({ model: 'm', messages: [] })).rejects.toMatchObject({

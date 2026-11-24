@@ -6,7 +6,9 @@
  *   AI_SHARED_API_KEY   the installation's AI key. Empty/unset = no shared key.
  *   AI_SHARED_PROVIDER  provider id for that key; when empty it is detected
  *                       from the key's shape. An unknown value means the shared
- *                       key is misconfigured and is treated as absent.
+ *                       key is misconfigured and is treated as absent. Z.ai
+ *                       keys have no documented shape, so a shared Z.ai key
+ *                       must set this to `zai`.
  *   AI_SHARED_MODEL     default model id for the shared key. The admin setting
  *                       `app_settings.aiSharedModel` overrides it at read time
  *                       (see ./settings.ts), so a model can change without a

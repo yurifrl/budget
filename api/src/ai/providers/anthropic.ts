@@ -10,7 +10,13 @@ import type { AiChatRequest, AiChatResult, AiModel, AiProvider, AiToolCall } fro
 
 /** API version that carries structured outputs (`output_config.format`). */
 export const ANTHROPIC_VERSION = '2026-10-21';
-const DEFAULT_MAX_TOKENS = 4096;
+/**
+ * Cap when the caller does not set one. Thinking is on by default on current
+ * models and its tokens count toward max_tokens; Anthropic's tool-loop
+ * examples use 16000, and a smaller cap can be spent on thinking before the
+ * answer. Callers may set a lower cap for a model with a smaller output limit.
+ */
+const DEFAULT_MAX_TOKENS = 16_000;
 /** Anthropic's model list is small; a bounded walk covers it even with pagination. */
 const MAX_MODEL_PAGES = 5;
 
@@ -43,7 +49,7 @@ export class AnthropicProvider implements AiProvider {
       messages: this.wireMessages(request.messages),
     };
     if (system) body.system = system;
-    if (request.temperature !== undefined) body.temperature = request.temperature;
+    // 2026-10-21 rejects temperature/top_p/top_k with a 400 even at defaults.
     if (request.tools?.length) {
       body.tools = request.tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.parameters }));
     }
@@ -58,6 +64,19 @@ export class AnthropicProvider implements AiProvider {
       fetch: this.fetchImpl,
     });
     return this.parseChat(json, request.model);
+  }
+
+  /** A one-item Models call is authenticated and costs no inference tokens. */
+  async verifyKey(): Promise<void> {
+    const url = new URL(`${this.baseUrl.replace(/\/+$/, '')}/models`);
+    url.searchParams.set('limit', '1');
+    await requestJson({
+      provider: this.id,
+      url: url.toString(),
+      headers: this.headers,
+      timeoutMs: DEFAULT_MODELS_TIMEOUT_MS,
+      fetch: this.fetchImpl,
+    });
   }
 
   async listModels(): Promise<AiModel[]> {
@@ -80,7 +99,7 @@ export class AnthropicProvider implements AiProvider {
       for (const entry of data) {
         const model = asRecord(entry);
         if (typeof model?.id !== 'string' || !model.id) continue;
-        const context = model.context_window ?? model.context_length;
+        const context = model.max_input_tokens;
         models.push({
           id: model.id,
           name: typeof model.display_name === 'string' && model.display_name.trim() ? model.display_name : model.id,
@@ -105,6 +124,12 @@ export class AnthropicProvider implements AiProvider {
         continue;
       }
       if (message.role === 'assistant') {
+        // Echo the assistant turn exactly as received when continuing a tool
+        // loop: thinking blocks (with their signature) must come back intact.
+        if (message.rawContent && message.rawContent.length > 0) {
+          out.push({ role: 'assistant', content: message.rawContent });
+          continue;
+        }
         const content: unknown[] = [];
         if (message.content) content.push({ type: 'text', text: message.content });
         for (const call of message.toolCalls ?? []) content.push({ type: 'tool_use', id: call.id, name: call.name, input: call.arguments });
@@ -136,11 +161,11 @@ export class AnthropicProvider implements AiProvider {
         }
         toolCalls.push({ id: block.id, name: block.name, arguments: asRecord(block.input) ?? {} });
       }
-      // thinking / redacted_thinking blocks are not part of the port.
     }
     return {
       text: texts.length > 0 ? texts.join('') : null,
       toolCalls,
+      rawContent: content,
       model: typeof root?.model === 'string' ? root.model : requestedModel,
       finishReason: typeof root?.stop_reason === 'string' ? root.stop_reason : null,
     };

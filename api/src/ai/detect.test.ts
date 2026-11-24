@@ -9,7 +9,12 @@ describe('provider detection from the key shape', () => {
     expect(detectProvider('sk-proj-abcdefghijklmnopqrstuvwxyz')).toBe('openai');
     expect(detectProvider('sk-svcacct-abcdefghijklmnopqrstuvwxyz')).toBe('openai');
     expect(detectProvider('sk-0123456789abcdef0123456789abcdef')).toBe('deepseek');
-    expect(detectProvider('1234567890.abcdefghijklmnop')).toBe('zai');
+  });
+
+  test('Z.ai keys are not guessed: its docs state no shape, so the caller picks it', () => {
+    // Public reports disagree on the id (digits vs 32 hex), so no rule.
+    expect(detectProvider('0123456789abcdef0123456789abcdef.AbCdEfGhIjKlMnOp')).toBeNull();
+    expect(detectProvider('1234567890.abcdefghijklmnop')).toBeNull();
   });
 
   test('legacy sk- keys are OpenAI; anything else is unknown', () => {
