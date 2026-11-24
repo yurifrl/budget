@@ -24,7 +24,10 @@ export function AiKeySavedCard({ keys }: { keys: AiKeysState }) {
     <View style={styles.card}>
       <Text style={styles.section}>{t('state.ownTitle')}</Text>
       <Row label={t('state.provider')} value={providerLabel(own.provider)} />
-      <Row label={t('state.model')} value={own.model ?? t('state.noModel')} />
+      <Row label={t('state.model')} value={own.model ?? t('state.none')} />
+      {own.model === null ? (
+        <Text style={styles.body}>{keys.savedForbidden ? t('state.modelForbidden') : t('state.noModel')}</Text>
+      ) : null}
       <Text style={styles.muted}>{t('state.savedAt', { date: own.updated_at.slice(0, 10) })}</Text>
 
       {keys.notice ? <Text style={styles.okText}>{keys.notice}</Text> : null}

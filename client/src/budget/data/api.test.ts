@@ -286,6 +286,14 @@ describe('formerly hand-written URLs now come from contracts (same routes)', () 
       '/ai/credentials',
       { api_key: 'sk-or-secret-1', provider: 'openrouter', model: 'openai/gpt-4o-mini' },
     ],
+    [
+      // The model is optional (a key the provider forbids listing models with can still be saved).
+      'saveAiCredentialsWithoutModel',
+      () => budgetApi.endpoints.saveAiCredentials.initiate({ apiKey: 'sk-or-secret-1', provider: 'openrouter' }),
+      'PUT',
+      '/ai/credentials',
+      { api_key: 'sk-or-secret-1', provider: 'openrouter' },
+    ],
     ['deleteAiCredentials', () => budgetApi.endpoints.deleteAiCredentials.initiate(), 'DELETE', '/ai/credentials', null],
     ['testAiCredentials', () => budgetApi.endpoints.testAiCredentials.initiate(), 'GET', '/ai/credentials/test', null],
     [

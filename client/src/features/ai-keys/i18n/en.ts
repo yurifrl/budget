@@ -9,7 +9,10 @@ export default {
   'state.ownTitle': 'YOUR AI KEY',
   'state.provider': 'Provider',
   'state.model': 'Model',
-  'state.noModel': 'Not chosen yet — replace the key to pick one.',
+  'state.none': 'Not chosen',
+  'state.noModel': 'No model chosen yet. Replace the key to pick one.',
+  'state.modelForbidden':
+    'The provider accepted this key but does not allow listing models (an OpenAI restricted key needs Models Read). Category suggestions need a model: enable that permission and save the key again.',
   'state.savedAt': 'Saved {date}',
   'state.test': 'Test key',
   'state.testing': 'Testing…',
@@ -47,7 +50,9 @@ export default {
   'form.modelPlaceholder': 'Search models',
   'form.modelsLoading': 'Loading models…',
   'form.modelsEmpty': 'This provider returned no models.',
-  'form.modelRequired': 'Choose a model before saving.',
+  'form.manualModelHint':
+    'The model list could not be loaded. Type a model id if you know one, or save the key without a model.',
+  'form.saveWithoutModel': 'No model chosen — you can save the key without one.',
   'form.keyTooShort': 'The key looks too short. Paste the whole key.',
   'form.save': 'Save key',
   'form.saving': 'Checking and saving…',
@@ -64,6 +69,8 @@ export default {
 
   // One message per AI error code (shared/src/contracts/ai/credentials.ts) plus transport failures.
   'error.keyRejected': 'The AI provider did not accept this key. Check it and try again.',
+  'error.keyForbidden':
+    'The AI provider accepted this key, but the key is not allowed to list models. An OpenAI restricted key needs the Models Read permission.',
   'error.providerUnknown': 'Could not tell which provider this key belongs to. Choose the provider and try again.',
   'error.providerMismatch': 'The saved key belongs to a different provider. Save a key for this provider instead.',
   'error.modelUnknown': 'The provider does not offer that model. Pick one from the list.',

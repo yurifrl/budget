@@ -71,20 +71,19 @@ export function providerOptions(): readonly { id: AiProviderId; label: string }[
 }
 
 export interface AiKeyFormError {
-  /** 'key' / 'model' sit under their field; 'form' under the buttons. */
-  field: 'key' | 'model' | 'form';
+  /** 'key' sits under the key field; 'form' under the buttons. */
+  field: 'key' | 'form';
   message: string;
 }
 
-/** Save-time checks (the server validates too; this keeps the button honest). */
-export function checkSaveInput(input: {
-  apiKey: string;
-  provider: AiProviderId | null;
-  model: string | null;
-}): AiKeyFormError | null {
+/**
+ * Save-time checks (the server validates too; this keeps the button honest).
+ * The model is optional in the contract and here: a key whose provider forbids
+ * listing models (403 ai_key_forbidden) can still be saved without one.
+ */
+export function checkSaveInput(input: { apiKey: string; provider: AiProviderId | null }): AiKeyFormError | null {
   if (input.apiKey.trim().length < MIN_AI_KEY_LENGTH) return { field: 'key', message: t('form.keyTooShort') };
   if (input.provider === null) return { field: 'form', message: t('form.providerRequired') };
-  if (input.model === null) return { field: 'model', message: t('form.modelRequired') };
   return null;
 }
 
@@ -125,6 +124,21 @@ function asApiError(error: unknown): ApiErrorLike {
   return typeof error === 'object' && error !== null ? (error as ApiErrorLike) : {};
 }
 
+/** The stable error code of a rejected request, when the API sent one. */
+export function aiErrorCode(error: unknown): string | undefined {
+  const code = asApiError(error).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+/**
+ * `ai_key_forbidden` (403: the provider accepts the key but it may not do this,
+ * e.g. an OpenAI restricted key without Models Read) is added to the shared AI
+ * contracts by budget-ucyr. That branch is not merged into this one yet, so its
+ * `AI_KEY_FORBIDDEN` constant cannot be imported here; the wire value is fixed
+ * by the contract and this literal matches it.
+ */
+export const AI_KEY_FORBIDDEN_CODE = 'ai_key_forbidden';
+
 /**
  * One sentence for a failed AI request. Every code the AI contracts define
  * has its own message; a provider 429 and upstream failures (502) are the
@@ -135,6 +149,8 @@ export function aiErrorView(error: unknown): string {
   switch (e.code) {
     case AI_KEY_REJECTED:
       return t('error.keyRejected');
+    case AI_KEY_FORBIDDEN_CODE:
+      return t('error.keyForbidden');
     case AI_PROVIDER_UNKNOWN:
       return t('error.providerUnknown');
     case AI_PROVIDER_MISMATCH:

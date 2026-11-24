@@ -31,9 +31,11 @@ export const aiApi = transfersApi.injectEndpoints({
 
     /**
      * Save or replace the own key. The server checks it with its provider
-     * before storing it encrypted; the answer is the new status.
+     * before storing it encrypted; the answer is the new status. The model is
+     * optional: a key the provider will not let us list models with (403
+     * ai_key_forbidden) can still be saved, and the card explains it.
      */
-    saveAiCredentials: b.mutation<AiCredentialStatus, { apiKey: string; provider: AiProviderId; model: string }>({
+    saveAiCredentials: b.mutation<AiCredentialStatus, { apiKey: string; provider: AiProviderId; model?: string }>({
       query: ({ apiKey, provider, model }) => contractRequest(aiCredentialsSave, { api_key: apiKey, provider, model }),
       invalidatesTags: ['AiCredentials'],
     }),

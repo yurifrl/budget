@@ -3,10 +3,12 @@
  * provider (Z.ai is never detected, so an unknown shape asks the user to
  * choose instead of failing), switch the provider by hand, then pick one of
  * that provider's models and save. Detection and the model list are
- * best-effort reads of the candidate key; only Save sends it for keeps.
+ * best-effort reads of the candidate key; only Save sends it for keeps. When
+ * the provider refuses to list models (403 ai_key_forbidden) the form shows
+ * why, takes a typed model id, and still lets the key be saved without one.
  */
 
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { tCommon } from '@shared/i18n/common';
 
@@ -23,7 +25,6 @@ export function AiKeyForm({ keys }: { keys: AiKeysState }) {
   const canSave =
     keys.apiKey.trim().length >= MIN_AI_KEY_LENGTH &&
     keys.provider !== null &&
-    keys.model !== null &&
     !keys.saving &&
     !keys.modelsLoading;
   return (
@@ -72,6 +73,18 @@ export function AiKeyForm({ keys }: { keys: AiKeysState }) {
           {!keys.modelsLoading && keys.modelsError ? (
             <>
               <Text style={styles.errorText}>{keys.modelsError}</Text>
+              <TextInput
+                value={keys.modelQuery}
+                onChangeText={keys.editManualModel}
+                placeholder={t('form.modelPlaceholder')}
+                placeholderTextColor={colors.faint}
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                accessibilityLabel={t('form.modelLabel')}
+                style={styles.input}
+              />
+              <Text style={styles.muted}>{t('form.manualModelHint')}</Text>
               <View style={styles.retry}>
                 <GhostButton label={tCommon('retry')} onPress={keys.retryModels} />
               </View>
@@ -91,8 +104,11 @@ export function AiKeyForm({ keys }: { keys: AiKeysState }) {
           {!keys.modelsLoading && !keys.modelsError && keys.models.length === 0 ? (
             <Text style={styles.muted}>{t('form.modelsEmpty')}</Text>
           ) : null}
-          {keys.error?.field === 'model' ? <Text style={styles.errorText}>{keys.error.message}</Text> : null}
         </View>
+      ) : null}
+
+      {keys.model === null && keys.apiKey.trim().length >= MIN_AI_KEY_LENGTH && !keys.modelsLoading ? (
+        <Text style={styles.muted}>{t('form.saveWithoutModel')}</Text>
       ) : null}
 
       {keys.error?.field === 'form' ? <Text style={styles.errorText}>{keys.error.message}</Text> : null}
@@ -139,6 +155,17 @@ const styles = StyleSheet.create({
   chipText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   chipTextSelected: { color: colors.white },
   models: { gap: 8 },
+  input: {
+    backgroundColor: colors.bg2,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    borderRadius: radius.card10,
+    color: colors.text,
+    fontSize: 16,
+    minHeight: 48,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
   retry: { alignSelf: 'flex-start' },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4, alignItems: 'center' },
 });

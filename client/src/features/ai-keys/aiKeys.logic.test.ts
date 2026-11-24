@@ -19,6 +19,8 @@ import {
 
 import type { AiCredentialStatus } from '@/budget/data/api';
 import {
+  AI_KEY_FORBIDDEN_CODE,
+  aiErrorCode,
   aiErrorView,
   aiKeysScreenMode,
   checkSaveInput,
@@ -89,11 +91,10 @@ describe('detectionHint', () => {
 });
 
 describe('checkSaveInput', () => {
-  test('requires a plausible key, a provider and a model', () => {
-    expect(checkSaveInput({ apiKey: '  short ', provider: 'openai', model: 'gpt' })?.field).toBe('key');
-    expect(checkSaveInput({ apiKey: 'sk-1234567890', provider: null, model: 'gpt' })?.field).toBe('form');
-    expect(checkSaveInput({ apiKey: 'sk-1234567890', provider: 'openai', model: null })?.field).toBe('model');
-    expect(checkSaveInput({ apiKey: '  sk-1234567890  ', provider: 'openai', model: 'gpt-4o-mini' })).toBeNull();
+  test('requires a plausible key and a provider; the model is optional', () => {
+    expect(checkSaveInput({ apiKey: '  short ', provider: 'openai' })?.field).toBe('key');
+    expect(checkSaveInput({ apiKey: 'sk-1234567890', provider: null })?.field).toBe('form');
+    expect(checkSaveInput({ apiKey: '  sk-1234567890  ', provider: 'openai' })).toBeNull();
   });
 });
 
@@ -116,6 +117,7 @@ describe('modelOptions', () => {
 describe('aiErrorView', () => {
   const codes = [
     AI_KEY_REJECTED,
+    AI_KEY_FORBIDDEN_CODE,
     AI_PROVIDER_UNKNOWN,
     AI_PROVIDER_MISMATCH,
     AI_MODEL_UNKNOWN,
@@ -131,6 +133,16 @@ describe('aiErrorView', () => {
     const messages = codes.map((code) => aiErrorView({ status: 400, code }));
     for (const message of messages) expect(message).not.toBe(generic);
     expect(new Set(messages).size).toBe(codes.length);
+  });
+
+  test('a forbidden key (valid but not permitted) is not read as a rejected key', () => {
+    // budget-ucyr adds AI_KEY_FORBIDDEN; the wire value is the contract's.
+    expect(AI_KEY_FORBIDDEN_CODE).toBe('ai_key_forbidden');
+    const forbidden = aiErrorView({ status: 403, code: AI_KEY_FORBIDDEN_CODE });
+    expect(forbidden).toBe(t('error.keyForbidden'));
+    expect(forbidden).not.toBe(t('error.keyRejected'));
+    expect(aiErrorCode({ status: 403, code: AI_KEY_FORBIDDEN_CODE })).toBe('ai_key_forbidden');
+    expect(aiErrorCode(null)).toBeUndefined();
   });
 
   test('a provider 429, an upstream 502 and a dead connection read clearly', () => {
