@@ -26,32 +26,34 @@ import {
 
 import { pool } from '../core/db';
 import { implement, mountOperations, type AnyOperation } from '../core/operation';
-import { secretBoxConfigured, SecretBoxUnavailable } from '../core/secret-box';
+import { secretBoxConfigured, SecretBoxOpenError, SecretBoxUnavailable } from '../core/secret-box';
 import { HttpError } from '../core/validate';
 import { noStore, requireUserId } from '../user';
 import { detectProvider } from './detect';
 import { AiProviderError } from './errors';
-import { aiKeyHttpError, resolveAiKey, sharedAiStatus, storeOwnKey } from './keys';
-import { createProvider } from './providers';
+import { aiKeyHttpError, openOwnKey, resolveAiKey, sharedAiStatus, storeOwnKey } from './keys';
+import { makeResolvedAiKey, providerFor, type ResolvedAiKey } from './providers';
 import * as store from './store';
 import type { AiModel } from './types';
 
 /**
- * Provider text is for the server log only, and the key is removed before it
- * can reach a log line. Users get a fixed message per error kind: an upstream
- * body can carry account, quota or organization details (and, on some
- * providers, part of the key).
+ * Provider text stays out of logs: it can contain account, quota or
+ * organization details, and any signed-in user can trigger these calls.
+ * Provider/kind/status are enough to diagnose; the categorizer redacts any
+ * text it records with the exported `redactSecrets`.
  */
-function logProviderError(err: unknown, apiKey: string): void {
-  const detail = err instanceof Error ? err.message : String(err);
-  const redacted = detail.replaceAll(apiKey, '[redacted]').replaceAll(/sk-[A-Za-z0-9_-]{8,}/g, '[redacted]');
-  console.error(`[ai] ${redacted}`);
+function logProviderError(err: unknown): void {
+  if (err instanceof AiProviderError) {
+    console.error(`[ai] provider failure provider=${err.provider ?? 'unknown'} kind=${err.kind} status=${err.status ?? 'none'}`);
+    return;
+  }
+  console.error('[ai] provider failure provider=unknown kind=unknown status=none');
 }
 
 /** Provider failures → HTTP: a refused key is the user's to fix; the rest is upstream. */
-function providerHttpError(c: Context, err: unknown, apiKey: string): never {
+function providerHttpError(c: Context, err: unknown): never {
   if (err instanceof HttpError) throw err;
-  logProviderError(err, apiKey);
+  logProviderError(err);
   if (err instanceof AiProviderError) {
     switch (err.kind) {
       case 'auth':
@@ -61,6 +63,8 @@ function providerHttpError(c: Context, err: unknown, apiKey: string): never {
           c.header('Retry-After', String(Math.max(1, Math.ceil(err.retryAfterMs / 1000))));
         }
         throw new HttpError(429, 'The AI provider is rate limiting requests. Try again in a moment.');
+      case 'timeout':
+        throw new HttpError(502, 'The AI provider took too long to answer. Try again later.');
       case 'transient':
         throw new HttpError(502, 'The AI provider is unavailable right now. Try again later.');
       case 'permanent':
@@ -72,34 +76,37 @@ function providerHttpError(c: Context, err: unknown, apiKey: string): never {
   throw new HttpError(502, 'The AI provider request failed. Try again later.');
 }
 
+/** Run one provider call, turning every failure into the fixed HTTP answer. */
+async function aiCall<T>(c: Context, call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    throw providerHttpError(c, err);
+  }
+}
+
+/** True when the stored secret still opens on this server (master key unchanged). */
+async function ownKeyUsable(row: store.AiCredentialRow): Promise<boolean> {
+  try {
+    await openOwnKey(row);
+    return true;
+  } catch (err) {
+    if (err instanceof SecretBoxOpenError || err instanceof SecretBoxUnavailable) return false;
+    throw err;
+  }
+}
+
 /** The status shape every key operation answers with (never the secret). */
 async function credentialStatus(userId: string) {
   const ownRow = await store.getCredential(pool, userId);
   const ownProvider = ownRow && isAiProviderId(ownRow.provider) ? ownRow.provider : null;
   const own = ownProvider ? { provider: ownProvider, model: ownRow!.model, updated_at: ownRow!.updated_at.toISOString() } : null;
   const shared = await sharedAiStatus(pool, userId);
-  // A row with an unknown provider blocks the shared fallback in resolveAiKey
-  // (unreadable), so status must not advertise 'shared' for it either.
-  const effective = ownProvider ? ('own' as const) : ownRow ? null : shared.available ? ('shared' as const) : null;
+  // `effective` must match resolveAiKey: a row with an unknown provider, or a
+  // secret that no longer opens, blocks the shared fallback (unreadable).
+  const effective =
+    ownProvider && ownRow && (await ownKeyUsable(ownRow)) ? ('own' as const) : !ownRow && shared.available ? ('shared' as const) : null;
   return { own, shared, effective };
-}
-
-async function listModelsOrFail(c: Context, provider: AiProviderId, apiKey: string) {
-  let models: AiModel[];
-  try {
-    models = await createProvider(provider, apiKey).listModels();
-  } catch (err) {
-    throw providerHttpError(c, err, apiKey);
-  }
-  return models;
-}
-
-async function verifyKeyOrFail(c: Context, provider: AiProviderId, apiKey: string): Promise<void> {
-  try {
-    await createProvider(provider, apiKey).verifyKey();
-  } catch (err) {
-    throw providerHttpError(c, err, apiKey);
-  }
 }
 
 export const operations: readonly AnyOperation[] = [
@@ -118,10 +125,15 @@ export const operations: readonly AnyOperation[] = [
     // Refuse before any upstream call when this server cannot store secrets.
     if (!secretBoxConfigured()) throw aiKeyHttpError('encryption_missing');
     // An authenticated call proves the key. Listing models is not enough: on
-    // OpenRouter that list is public, so a junk key would pass.
-    await verifyKeyOrFail(c, provider, input.api_key);
-    if (input.model) {
-      const models = await listModelsOrFail(c, provider, input.api_key);
+    // OpenRouter that list is public, so a junk key would pass. Adapters that
+    // checked via their (authenticated) model list return it, so it is not
+    // fetched twice. Z.ai has no model-list endpoint: its list is a
+    // suggestion, so a typed id outside it is accepted after the check.
+    const candidate = makeResolvedAiKey({ source: 'own', provider, model: input.model ?? null, apiKey: input.api_key, updatedAt: null });
+    const adapter = providerFor(candidate);
+    const checked = await aiCall(c, () => adapter.verifyKey(input.model));
+    if (input.model && provider !== 'zai') {
+      const models = checked ?? (await aiCall(c, () => adapter.listModels()));
       if (!models.some((model) => model.id === input.model)) {
         throw new HttpError(400, `The provider does not list the model "${input.model}". Choose one from the list.`, AI_MODEL_UNKNOWN);
       }
@@ -140,23 +152,36 @@ export const operations: readonly AnyOperation[] = [
   implement(aiCredentialsTest, async (c) => {
     const resolved = await resolveAiKey(pool, requireUserId(c));
     if (!resolved.ok) throw aiKeyHttpError(resolved.problem);
-    await verifyKeyOrFail(c, resolved.key.provider, resolved.key.apiKey);
-    const models = await listModelsOrFail(c, resolved.key.provider, resolved.key.apiKey);
-    return { provider: resolved.key.provider, models: models.length };
+    const key: ResolvedAiKey = resolved.key;
+    const adapter = providerFor(key);
+    // Z.ai's check is a chat call: use the saved model, not the fallback.
+    const checked = await aiCall(c, () => adapter.verifyKey(key.model ?? undefined));
+    const models = checked ?? (await aiCall(c, () => adapter.listModels()));
+    return { provider: key.provider, models: models.length };
   }),
 
   implement(aiProviderDetect, (_c, { api_key }) => ({ provider: detectProvider(api_key) })),
 
   implement(aiModelsList, async (c, input) => {
+    let models: AiModel[];
     let provider: AiProviderId;
-    let apiKey: string;
     if (input.api_key) {
-      const detected = input.provider ?? detectProvider(input.api_key);
+      const candidate = input.api_key;
+      const detected = input.provider ?? detectProvider(candidate);
       if (!detected) {
         throw new HttpError(400, 'Could not tell which AI provider this key belongs to. Choose the provider and try again.', AI_PROVIDER_UNKNOWN);
       }
       provider = detected;
-      apiKey = input.api_key;
+      const resolvedCandidate = makeResolvedAiKey({
+        source: 'own',
+        provider: detected,
+        model: null,
+        apiKey: candidate,
+        updatedAt: null,
+      });
+      const adapter = providerFor(resolvedCandidate);
+      const checked = await aiCall(c, () => adapter.verifyKey());
+      models = checked ?? (await aiCall(c, () => adapter.listModels()));
     } else {
       const resolved = await resolveAiKey(pool, requireUserId(c));
       if (!resolved.ok) throw aiKeyHttpError(resolved.problem);
@@ -167,10 +192,13 @@ export const operations: readonly AnyOperation[] = [
           AI_PROVIDER_MISMATCH,
         );
       }
-      provider = resolved.key.provider;
-      apiKey = resolved.key.apiKey;
+      const key: ResolvedAiKey = resolved.key;
+      provider = key.provider;
+      const adapter = providerFor(key);
+      // Z.ai's check is a chat call: use the saved model, not the fallback.
+      const checked = await aiCall(c, () => adapter.verifyKey(key.model ?? undefined));
+      models = checked ?? (await aiCall(c, () => adapter.listModels()));
     }
-    const models = await listModelsOrFail(c, provider, apiKey);
     return {
       provider,
       models: models.map((model) => ({ id: model.id, name: model.name, context_length: model.contextLength })),

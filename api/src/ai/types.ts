@@ -63,6 +63,12 @@ export type AiChatRequest = {
   temperature?: number;
   /** Upper bound of the answer (thinking tokens included). Adapters pick a documented default when omitted. */
   maxTokens?: number;
+  /**
+   * Caller cancellation (for example a cancelled Temporal activity). The
+   * adapter combines it with its deadline; either rejects with
+   * `AiProviderError` kind `timeout`. Retry policy stays with the caller.
+   */
+  signal?: AbortSignal;
 };
 
 export type AiChatResult = {
@@ -91,15 +97,30 @@ export type AiModel = {
 /** The provider-neutral AI port. */
 export interface AiProvider {
   readonly id: AiProviderId;
-  /** One chat completion, with optional tool calls and structured output. */
+  /**
+   * One chat completion, with optional tool calls and structured output.
+   * A deadline or a `signal` abort rejects with `AiProviderError` kind
+   * `timeout`; the caller decides whether to retry (a non-streaming
+   * generation may already have been billed).
+   */
   chat(request: AiChatRequest): Promise<AiChatResult>;
   /**
-   * Prove the key is accepted with an authenticated, side-effect-free request
-   * (no chat tokens spent). Throws `AiProviderError('auth')` when the provider
-   * refuses it. A model list is NOT a check on every provider: OpenRouter's is
-   * public. Adapters know their own authenticated endpoint.
+   * Prove the key is accepted with an authenticated request. Most checks are
+   * side-effect-free; Z.ai has no model-list endpoint and checks with a small
+   * paid chat completion (`max_tokens: 1`), so it is a real, billable call.
+   * Throws `AiProviderError('auth')` when the provider refuses it. A model
+   * list is NOT a check on every provider: OpenRouter's is public. Adapters
+   * know their own authenticated endpoint. `model` lets a provider whose
+   * check is a chat call (Z.ai) use the model the user chose; model-list
+   * checks ignore it.
+   *
+   * Returns the models the check already fetched when the check IS the model
+   * list (OpenAI, DeepSeek, Anthropic) or the provider's documented suggestion
+   * list after a successful chat check (Z.ai), so callers that also need the
+   * list do not ask twice; null when the check was something else (OpenRouter
+   * `/key`).
    */
-  verifyKey(): Promise<void>;
+  verifyKey(model?: string): Promise<AiModel[] | null>;
   /** Every model this key can chat with, sorted by id. */
   listModels(): Promise<AiModel[]>;
 }

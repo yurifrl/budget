@@ -4,7 +4,7 @@
  * status, test, model listing, delete and the shared-key fallback. No
  * provider is ever called.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { Hono } from 'hono';
 
 import { contracts as aiContracts, type AiProviderId } from '@shared/contracts/ai';
@@ -16,7 +16,8 @@ import { dbReady } from '../core/test-gate';
 import { makeOpCaller } from '../core/test-op';
 import { httpOnError } from '../core/validate';
 import type { IdentityUser } from '../user';
-import ai from './index';
+import ai, { providerFor } from './index';
+import * as aiModule from './index';
 import { operations } from './routes';
 import { AiProviderError } from './errors';
 import { configureAiEnv } from './env';
@@ -49,10 +50,12 @@ const MODELS: AiModel[] = [
   { id: 'model-a', name: 'Model A', contextLength: 128_000 },
   { id: 'model-b', name: 'Model B', contextLength: null },
 ];
-type Call = { kind: 'verify' | 'list'; provider: AiProviderId; apiKey: string };
+type Call = { kind: 'verify' | 'list'; provider: AiProviderId; apiKey: string; model?: string };
 let calls: Call[] = [];
 let verifyFailure: unknown = null;
 let listFailure: unknown = null;
+/** When set, the fake key check returns this list (the OpenAI/DeepSeek shape). */
+let verifyModels: AiModel[] | null = null;
 
 const fakeEntry = (id: AiProviderId): ProviderEntry => ({
   baseUrl: `https://${id}.test`,
@@ -61,9 +64,10 @@ const fakeEntry = (id: AiProviderId): ProviderEntry => ({
     chat: async () => {
       throw new Error('chat is not used by the key routes');
     },
-    verifyKey: async () => {
-      calls.push({ kind: 'verify', provider: id, apiKey });
+    verifyKey: async (model?: string) => {
+      calls.push({ kind: 'verify', provider: id, apiKey, ...(model === undefined ? {} : { model }) });
       if (verifyFailure) throw verifyFailure;
+      return verifyModels;
     },
     listModels: async () => {
       calls.push({ kind: 'list', provider: id, apiKey });
@@ -97,6 +101,7 @@ beforeEach(async () => {
   calls = [];
   verifyFailure = null;
   listFailure = null;
+  verifyModels = null;
   acting = user;
   await store.deleteCredential(pool, user.id);
   await pool.query(`delete from public.feature_overrides where feature_key = 'shared-ai-key' and user_id = $1`, [user.id]);
@@ -151,7 +156,7 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     });
     expect(JSON.stringify(res.json)).not.toContain(KEY);
     expect(calls).toEqual([
-      { kind: 'verify', provider: 'openrouter', apiKey: KEY },
+      { kind: 'verify', provider: 'openrouter', apiKey: KEY, model: 'model-a' },
       { kind: 'list', provider: 'openrouter', apiKey: KEY },
     ]);
     const row = await store.getCredential(pool, user.id);
@@ -256,13 +261,19 @@ describe.skipIf(!dbReady)('AI key operations', () => {
       ],
     });
     expect(JSON.stringify(candidate.json)).not.toContain(KEY);
-    expect(calls).toEqual([{ kind: 'list', provider: 'openrouter', apiKey: KEY }]);
+    expect(calls).toEqual([
+      { kind: 'verify', provider: 'openrouter', apiKey: KEY },
+      { kind: 'list', provider: 'openrouter', apiKey: KEY },
+    ]);
 
     await op('ai_credentials_save', { api_key: KEY });
     calls = [];
     const saved = await op('ai_models_list', {});
     expect(saved.json.provider).toBe('openrouter');
-    expect(calls).toEqual([{ kind: 'list', provider: 'openrouter', apiKey: KEY }]);
+    expect(calls).toEqual([
+      { kind: 'verify', provider: 'openrouter', apiKey: KEY },
+      { kind: 'list', provider: 'openrouter', apiKey: KEY },
+    ]);
 
     // A stored key never goes to another provider's host.
     calls = [];
@@ -275,7 +286,10 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     calls = [];
     const candidateOverride = await op('ai_models_list', { api_key: KEY, provider: 'openai' });
     expect(candidateOverride.json.provider).toBe('openai');
-    expect(calls).toEqual([{ kind: 'list', provider: 'openai', apiKey: KEY }]);
+    expect(calls).toEqual([
+      { kind: 'verify', provider: 'openai', apiKey: KEY },
+      { kind: 'list', provider: 'openai', apiKey: KEY },
+    ]);
   });
 
   test('models with an undetectable candidate key is 400 ai_provider_unknown', async () => {
@@ -301,7 +315,7 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     const tested = await op('ai_credentials_test', {});
     expect(tested.json).toEqual({ provider: 'anthropic', models: 2 });
     expect(calls).toEqual([
-      { kind: 'verify', provider: 'anthropic', apiKey: SHARED_KEY },
+      { kind: 'verify', provider: 'anthropic', apiKey: SHARED_KEY, model: SHARED_MODEL },
       { kind: 'list', provider: 'anthropic', apiKey: SHARED_KEY },
     ]);
 
@@ -350,5 +364,120 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     expect(status.json.shared.available).toBe(true);
     expect(status.json.effective).toBeNull();
     expect(await resolveAiKey(pool, user.id)).toEqual({ ok: false, problem: 'unreadable' });
+  });
+
+  test('a valid-provider row whose secret no longer opens is not effective own', async () => {
+    const sealedBox = { current: 1, keys: new Map([[1, crypto.getRandomValues(new Uint8Array(32))]]) };
+    configureSecretBox(sealedBox);
+    try {
+      expect((await op('ai_credentials_save', { api_key: KEY })).status).toBe(200);
+      expect((await op('ai_credentials_get', {})).json.effective).toBe('own');
+
+      // A different master key: the stored ciphertext no longer opens here.
+      configureSecretBox({ current: 1, keys: new Map([[1, crypto.getRandomValues(new Uint8Array(32))]]) });
+      const status = await op('ai_credentials_get', {});
+      expect(status.json.own.provider).toBe('openrouter');
+      expect(status.json.effective).toBeNull();
+      expect(await resolveAiKey(pool, user.id)).toEqual({ ok: false, problem: 'unreadable' });
+    } finally {
+      configureSecretBox({ current: 1, keys: new Map([[1, crypto.getRandomValues(new Uint8Array(32))]]) });
+    }
+  });
+
+  test('providerFor builds the adapter for the resolved key; the raw pair is not exported', async () => {
+    expect('createProvider' in aiModule).toBe(false);
+    expect('makeResolvedAiKey' in aiModule).toBe(false);
+    expect(() => providerFor({ provider: 'openai', apiKey: KEY } as never)).toThrow(TypeError);
+    await op('ai_credentials_save', { api_key: KEY });
+    const resolved = await resolveAiKey(pool, user.id);
+    if (!resolved.ok) throw new Error('expected a resolved key');
+    calls = [];
+    const provider = providerFor(resolved.key);
+    expect(provider.id).toBe('openrouter');
+    await provider.listModels();
+    expect(calls).toEqual([{ kind: 'list', provider: 'openrouter', apiKey: KEY }]);
+  });
+
+  test('save and test reuse the models the key check fetched', async () => {
+    verifyModels = MODELS;
+    const saved = await op('ai_credentials_save', { api_key: KEY, model: 'model-a' });
+    expect(saved.status).toBe(200);
+    expect(calls).toEqual([{ kind: 'verify', provider: 'openrouter', apiKey: KEY, model: 'model-a' }]);
+
+    calls = [];
+    const tested = await op('ai_credentials_test', {});
+    expect(tested.json).toEqual({ provider: 'openrouter', models: 2 });
+    expect(calls).toEqual([{ kind: 'verify', provider: 'openrouter', apiKey: KEY, model: 'model-a' }]);
+  });
+
+  test('a 403 is a refused key, not a special permission case', async () => {
+    verifyFailure = new AiProviderError('auth', 'unsupported_country_region_territory', 403, null, 'openai');
+    const save = await op('ai_credentials_save', { api_key: KEY, provider: 'openai' });
+    expect(save.status).toBe(400);
+    expect(save.json.code).toBe('ai_key_rejected');
+    expect(save.json.error).not.toContain('Models Read');
+    expect(await store.getCredential(pool, user.id)).toBeNull();
+  });
+
+  test('zai accepts a typed model outside the suggestion list after the key check', async () => {
+    const res = await op('ai_credentials_save', { api_key: 'zai-custom-key-123456', provider: 'zai', model: 'glm-future' });
+    expect(res.status).toBe(200);
+    expect(res.json.own).toMatchObject({ provider: 'zai', model: 'glm-future' });
+    expect(calls).toEqual([{ kind: 'verify', provider: 'zai', apiKey: 'zai-custom-key-123456', model: 'glm-future' }]);
+  });
+
+  test('models with a zai candidate verifies the key before returning its list', async () => {
+    verifyFailure = new AiProviderError('auth', 'bad zai key', 401, null, 'zai');
+    const res = await op('ai_models_list', { api_key: 'zai-candidate-key-123456', provider: 'zai' });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe('ai_key_rejected');
+    expect(calls).toEqual([{ kind: 'verify', provider: 'zai', apiKey: 'zai-candidate-key-123456' }]);
+  });
+
+  test('zai test and saved-key listing pass the saved model to the key check', async () => {
+    const saved = await op('ai_credentials_save', { api_key: 'zai-saved-key-123456', provider: 'zai', model: 'glm-4.7' });
+    expect(saved.status).toBe(200);
+    const expected: Call[] = [
+      { kind: 'verify', provider: 'zai', apiKey: 'zai-saved-key-123456', model: 'glm-4.7' },
+      { kind: 'list', provider: 'zai', apiKey: 'zai-saved-key-123456' },
+    ];
+
+    calls = [];
+    const tested = await op('ai_credentials_test', {});
+    expect(tested.status).toBe(200);
+    expect(tested.json).toEqual({ provider: 'zai', models: 2 });
+    expect(calls).toEqual(expected);
+
+    calls = [];
+    const listed = await op('ai_models_list', {});
+    expect(listed.status).toBe(200);
+    expect(listed.json).toEqual({
+      provider: 'zai',
+      models: MODELS.map((model) => ({ id: model.id, name: model.name, context_length: model.contextLength })),
+    });
+    expect(calls).toEqual(expected);
+  });
+
+  test('provider log lines name provider, kind and status but never upstream text or the key', async () => {
+    verifyFailure = new AiProviderError(
+      'rate_limited',
+      `quota exceeded for org org-secret key ${KEY}`,
+      429,
+      7000,
+      'openrouter',
+    );
+    const spy = spyOn(console, 'error').mockImplementation(() => {});
+    let logged = '';
+    try {
+      await op('ai_credentials_save', { api_key: KEY });
+      logged = spy.mock.calls.map((call) => call.join(' ')).join(' ');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(logged).toContain('provider=openrouter');
+    expect(logged).toContain('kind=rate_limited');
+    expect(logged).toContain('status=429');
+    expect(logged).not.toContain('org-secret');
+    expect(logged).not.toContain(KEY);
   });
 });

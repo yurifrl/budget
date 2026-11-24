@@ -3,10 +3,20 @@
  * (system, tool_use/tool_result blocks, structured output), model pagination
  * and error mapping. No real provider is called.
  */
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import type { Server } from 'bun';
+import type { AiProviderId } from '@shared/contracts/ai';
 
-import { createProvider } from './index';
+import type { FetchInit, FetchLike } from '../http';
+import { builtinProviders, makeResolvedAiKey, providerFor, setProviders, type ProviderOptions } from './index';
+
+const createProvider = (id: AiProviderId, apiKey: string, options?: ProviderOptions) => {
+  setProviders({
+    ...builtinProviders,
+    [id]: { ...builtinProviders[id], create: (key: string) => builtinProviders[id].create(key, options) },
+  });
+  return providerFor(makeResolvedAiKey({ source: 'own', provider: id, model: null, apiKey, updatedAt: null }));
+};
 
 type Captured = { method: string; path: string; headers: Record<string, string>; body: unknown };
 let server: Server<undefined> | null = null;
@@ -28,6 +38,7 @@ function stub(respond: (req: Request, body: unknown) => Response | Promise<Respo
 }
 
 afterEach(async () => {
+  setProviders(null);
   await stopStub();
 });
 
@@ -148,17 +159,63 @@ describe('Anthropic chat request', () => {
 });
 
 describe('Anthropic key check', () => {
-  test('verifyKey calls the authenticated Models API with limit=1', async () => {
-    const baseUrl = stub(() => Response.json({ data: [], has_more: false, last_id: null }));
-    await createProvider('anthropic', 'sk-ant-test', { baseUrl }).verifyKey();
+  test('verifyKey is the authenticated Models list, returned so save/test use one call', async () => {
+    const baseUrl = stub(() =>
+      Response.json({
+        data: [{ id: 'claude-a', display_name: 'Claude A', max_input_tokens: 1000 }],
+        has_more: false,
+        last_id: 'claude-a',
+      }),
+    );
+    const models = await createProvider('anthropic', 'sk-ant-test', { baseUrl }).verifyKey();
+    expect(models).toEqual([{ id: 'claude-a', name: 'Claude A', contextLength: 1000 }]);
+    expect(captured).toHaveLength(1);
     expect(captured[0]!.method).toBe('GET');
-    expect(captured[0]!.path).toBe('/models?limit=1');
+    expect(captured[0]!.path).toBe('/models?limit=100');
     expect(captured[0]!.headers['x-api-key']).toBe('sk-ant-test');
   });
 
   test('a refused key fails verifyKey as auth', async () => {
     const baseUrl = stub(() => Response.json({ error: { type: 'authentication_error', message: 'invalid x-api-key' } }, { status: 401 }));
     await expect(createProvider('anthropic', 'bad', { baseUrl }).verifyKey()).rejects.toMatchObject({ kind: 'auth', status: 401 });
+  });
+});
+
+describe('Anthropic chat deadline and cancellation', () => {
+  test('the deadline follows the 16k cap (640 s) and disables Bun\'s idle timer', async () => {
+    const seen: number[] = [];
+    let init: FetchInit | undefined;
+    const fetchImpl: FetchLike = async (_input, requestInit) => {
+      init = requestInit;
+      return Response.json({ content: [{ type: 'text', text: 'hi' }], stop_reason: 'end_turn' });
+    };
+    const spy = spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      seen.push(ms);
+      return new AbortController().signal;
+    });
+    try {
+      const provider = createProvider('anthropic', 'sk-ant-test', { baseUrl: 'https://stub.test', fetch: fetchImpl });
+      await provider.chat({ model: 'claude-test', messages: [{ role: 'user', content: 'hi' }], maxTokens: 16_000 });
+      await provider.chat({ model: 'claude-test', messages: [{ role: 'user', content: 'hi' }] });
+    } finally {
+      spy.mockRestore();
+    }
+    // A fixed 60 s deadline (or a 60 s floor when maxTokens is unset) fails here.
+    expect(seen).toEqual([640_000, 640_000]);
+    expect(init?.timeout).toBe(false);
+  });
+
+  test('a caller abort reaches the chat fetch and rejects as timeout', async () => {
+    const controller = new AbortController();
+    const fetchImpl: FetchLike = (_input, requestInit) =>
+      new Promise((_resolve, reject) => {
+        requestInit!.signal!.addEventListener('abort', () => reject(requestInit!.signal!.reason));
+        queueMicrotask(() => controller.abort());
+      });
+    const failure = await createProvider('anthropic', 'sk-ant-test', { baseUrl: 'https://stub.test', fetch: fetchImpl })
+      .chat({ model: 'claude-test', messages: [], signal: controller.signal })
+      .catch((err: unknown) => err);
+    expect(failure).toMatchObject({ kind: 'timeout', provider: 'anthropic' });
   });
 });
 

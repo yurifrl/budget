@@ -24,6 +24,7 @@ import { openSecret, sealSecret, SecretBoxOpenError, SecretBoxUnavailable } from
 import { HttpError } from '../core/validate';
 import { isEnabled } from '../features';
 import { sharedAiConfig } from './env';
+import { makeResolvedAiKey, type ResolvedAiKey } from './providers';
 import { getSharedAiModel } from './settings';
 import * as store from './store';
 
@@ -79,16 +80,6 @@ export type AiKeyProblem =
   /** The stored secret does not open (master key changed, wrong row). */
   | 'unreadable';
 
-/** The key a run would use, decrypted. `model` is null until one is chosen. */
-export type ResolvedAiKey = {
-  source: 'own' | 'shared';
-  provider: AiProviderId;
-  model: string | null;
-  apiKey: string;
-  /** Own keys only; null for the shared key. */
-  updatedAt: string | null;
-};
-
 export type AiKeyResolution = { ok: true; key: ResolvedAiKey } | { ok: false; problem: AiKeyProblem };
 
 /** Own key wins, else the shared key when feature + env allow it. */
@@ -99,7 +90,7 @@ export async function resolveAiKey(db: Queryable, userId: string): Promise<AiKey
     if (!provider) return { ok: false, problem: 'unreadable' };
     try {
       const apiKey = await openOwnKey(own);
-      return { ok: true, key: { source: 'own', provider, model: own.model, apiKey, updatedAt: own.updated_at.toISOString() } };
+      return { ok: true, key: makeResolvedAiKey({ source: 'own', provider, model: own.model, apiKey, updatedAt: own.updated_at.toISOString() }) };
     } catch (err) {
       if (err instanceof SecretBoxUnavailable) return { ok: false, problem: 'encryption_missing' };
       if (err instanceof SecretBoxOpenError) return { ok: false, problem: 'unreadable' };
@@ -111,7 +102,7 @@ export async function resolveAiKey(db: Queryable, userId: string): Promise<AiKey
   if (!shared) return { ok: false, problem: 'shared_key_missing' };
   const model = await getSharedAiModel(db);
   if (!model) return { ok: false, problem: 'shared_model_missing' };
-  return { ok: true, key: { source: 'shared', provider: shared.provider, model, apiKey: shared.apiKey, updatedAt: null } };
+  return { ok: true, key: makeResolvedAiKey({ source: 'shared', provider: shared.provider, model, apiKey: shared.apiKey, updatedAt: null }) };
 }
 
 /**
