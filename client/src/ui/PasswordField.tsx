@@ -9,10 +9,16 @@ interface Props extends TextInputProps {
   inputRef?: Ref<InputRef>;
   label: string;
   invalid?: boolean;
+  /**
+   * A stored credential secret (Pluggy secret, AI API key), never a login
+   * password: web browsers get autocomplete="new-password" so they do not
+   * offer to save or fill it as the site's password.
+   */
+  credential?: boolean;
 }
 
 /** A labelled text input in the app's look (also used for the e-mail). Pass FIELD_HINTS for autofill. */
-export function PasswordField({ label, invalid, inputRef, style, ...rest }: Props) {
+export function PasswordField({ label, invalid, inputRef, style, credential, autoComplete, ...rest }: Props) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
@@ -20,6 +26,7 @@ export function PasswordField({ label, invalid, inputRef, style, ...rest }: Prop
         ref={inputRef}
         accessibilityLabel={label}
         placeholderTextColor={colors.faint}
+        autoComplete={autoComplete ?? (credential ? 'new-password' : undefined)}
         {...rest}
         style={[styles.input, invalid ? styles.invalid : null, style]}
       />

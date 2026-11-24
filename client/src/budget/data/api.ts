@@ -2,7 +2,7 @@
  * budgetApi — the Budget app's RTK Query api, assembled from per-area slices
  * under `./api/` (phase 5c, G9): `base` creates the api (reducer path
  * `budgetApi`, base query, tags, refetch policy) and `budgets`, `members`,
- * `plan`, `payees`, `register`, `connections` and `transfers` inject their endpoints, in
+ * `plan`, `payees`, `register`, `connections`, `transfers` and `ai` inject their endpoints, in
  * that order. This file is the only import path the app uses: the api, every
  * hook and the endpoint types are re-exported here under their original
  * names, so splitting the slice changed no import outside `data/`.
@@ -11,8 +11,9 @@
  * amount on the wire is milliunits, and the app-facing inputs stay in cents
  * (see `./api/base.ts`).
  */
-import { transfersApi } from './api/transfers';
+import { aiApi } from './api/ai';
 
+export type { AiCredentialStatus, AiModel } from './api/ai';
 export type { BudgetScope } from './api/base';
 export type { TransactionDetails } from './api/register';
 export type {
@@ -34,7 +35,7 @@ export {
 } from './api/types';
 
 /** The fully injected api: every endpoint of every area slice. */
-export const budgetApi = transfersApi;
+export const budgetApi = aiApi;
 
 export const {
   useGetBudgetsQuery,
@@ -125,6 +126,12 @@ export const {
   useSyncConnectionMutation,
   useDisconnectConnectionMutation,
   useLinkAccountMutation,
+  useGetAiCredentialsQuery,
+  useSaveAiCredentialsMutation,
+  useDeleteAiCredentialsMutation,
+  useTestAiCredentialsMutation,
+  useDetectAiProviderMutation,
+  useListAiModelsMutation,
   useGetTransferSuggestionsQuery,
   useLinkTransfersMutation,
   useUnlinkTransfersMutation,

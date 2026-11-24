@@ -4,7 +4,12 @@ import { colors, radius } from '@/ui/theme';
 
 export function IndigoButton({ label, onPress, disabled, style }: { label: string; onPress?: () => void; disabled?: boolean; style?: StyleProp<ViewStyle> }) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={[styles.btnIndigo, style, disabled && styles.btnIndigoOff]} accessibilityRole="button">
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      style={[styles.btnIndigo, style, disabled && styles.btnIndigoOff]}>
       <Text style={[styles.btnIndigoText, disabled && styles.btnIndigoTextOff]}>{label}</Text>
     </Pressable>
   );
