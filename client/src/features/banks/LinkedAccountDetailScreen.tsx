@@ -88,7 +88,9 @@ export function LinkedAccountDetailScreen() {
   // Hooks must precede the loading guard below (rules of hooks).
   const txns = useMemo(() => {
     if (!budget || !accountId) return EMPTY_TXNS;
-    return budget.transactions.filter((txn) => txn.accountId === accountId);
+    // Derived upcoming card installments are a register projection, not
+    // bank rows: this view lists what the bank sent.
+    return budget.transactions.filter((txn) => txn.accountId === accountId && !txn.installment);
   }, [budget, accountId]);
 
   const runningBalances = useMemo(() => {

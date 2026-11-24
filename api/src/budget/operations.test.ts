@@ -76,9 +76,9 @@ describe('budget operation catalog', () => {
     expect(new Set(fullCatalog.filter((c) => c.name.startsWith('budget_')))).toEqual(new Set(operations.map((o) => o.contract)));
   });
 
-  test('every routes/*.ts file contributes its operations to the catalog (18 routers)', async () => {
+  test('every routes/*.ts file contributes its operations to the catalog (19 routers)', async () => {
     const files = readdirSync(join(import.meta.dir, 'routes')).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
-    expect(files.length).toBe(18);
+    expect(files.length).toBe(19);
     const listed = new Set(catalog);
     for (const file of files) {
       const mod = (await import(`./routes/${file}`)) as { operations: unknown[] };

@@ -109,12 +109,14 @@ describe('syncSkipLines', () => {
           { account_id: 'a3', name: null, count: 1 },
         ],
         skipped_deleted: 3,
+        skipped_paid_installment: 1,
         failed: 1,
       },
     });
     expect(syncSkipLines(r)).toEqual([
       '97 skipped: already imported in “Itaú conta (old)”',
       '3 skipped: they were deleted before and stay deleted',
+      '1 skipped: a pending card installment that was already paid',
       '1 bank transaction could not be imported',
     ]);
   });

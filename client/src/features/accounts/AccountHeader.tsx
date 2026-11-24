@@ -43,6 +43,7 @@ export function AccountHeader({
   showReconciled,
   onToggleReconciled,
   totals,
+  futureInstallments,
   unapprovedCount,
   showUnapprovedOnly,
   onToggleUnapprovedOnly,
@@ -63,11 +64,13 @@ export function AccountHeader({
   showReconciled: boolean;
   onToggleReconciled: (next: boolean) => void;
   totals: { cleared: Cents; uncleared: Cents; working: Cents };
+  /** Sum of the selected card's upcoming installments (amount owed, cents); 0 hides the line. */
+  futureInstallments: Cents;
   unapprovedCount: number;
   showUnapprovedOnly: boolean;
   onToggleUnapprovedOnly: () => void;
 }) {
-  const { formatDate } = useMoneyFormat();
+  const { formatDate, formatMoney } = useMoneyFormat();
   return (
     <View style={styles.topbar}>
       <View ref={topbarRef} collapsable={false} style={styles.topbarRow}>
@@ -123,6 +126,11 @@ export function AccountHeader({
               {selectedAccount.lastReconciledAt
                 ? t('header.lastReconciled', { date: formatDate(selectedAccount.lastReconciledAt.slice(0, 10)) })
                 : t('header.notReconciled')}
+            </Text>
+          ) : null}
+          {selectedAccount && futureInstallments > 0 ? (
+            <Text style={styles.futureInstallments} numberOfLines={1} ellipsizeMode="tail">
+              {t('header.futureInstallments', { amount: formatMoney(futureInstallments) })}
             </Text>
           ) : null}
           {selectedAccount ? (
@@ -197,6 +205,7 @@ const styles = StyleSheet.create({
   unclearedTextOn: { color: colors.white },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   subtitle: { color: colors.faint, fontSize: 12, marginTop: 2 },
+  futureInstallments: { color: colors.muted, fontSize: 12, fontWeight: '600', marginTop: 2, fontVariant: ['tabular-nums'] },
   iconBtn: { padding: 4, borderRadius: radius.sm },
   // Reconcile sits at the trailing edge of the title row.
   reconcileBtnWrap: { marginLeft: 'auto' },

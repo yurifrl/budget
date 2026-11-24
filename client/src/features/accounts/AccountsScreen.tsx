@@ -27,9 +27,17 @@ import { workingBalance } from "@/domain/engine";
 import { todayIso } from "@/domain/format";
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import type { Transaction } from "@/domain/types";
-import { registerRunningBalances, scopeBalances } from "@/domain/register";
+import { futureInstallmentsTotal, registerRunningBalances, scopeBalances } from "@/domain/register";
 import { colors, radius } from "@/ui/theme";
 import { usePeople } from "@/features/people";
+import {
+  chipCounts,
+  TransferChips,
+  TransferPopover,
+  TransferReviewList,
+  TransferToast,
+  useTransfers,
+} from "@/features/transfers";
 import { useBudgetModel } from "@/state/useBudgetModel";
 import { useBudgetShell } from "@/shell/context";
 import { AccountHeader } from "./AccountHeader";
@@ -78,6 +86,12 @@ export function AccountsScreen() {
   // optional-chained and the hooks tolerate a budget that is still loading.
   const filter = useRegisterFilter({ budget, selectedAccountId, parseMoney });
   const { transactions, registerTxns, scheduledTxns } = filter;
+  // Transfers between own accounts (budget-mit6): chip count, review list, popover, toast.
+  const transfers = useTransfers({ budgetId, accountId: selectedAccountId });
+  const counts = useMemo(
+    () => chipCounts(transactions, filter.needsCategory, transfers.scoped),
+    [transactions, filter.needsCategory, transfers.scoped],
+  );
 
   const [inlineAddOpen, setInlineAddOpen] = useState(false);
   const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
@@ -199,6 +213,7 @@ export function AccountsScreen() {
             showReconciled={filter.showReconciled}
             onToggleReconciled={filter.setShowReconciled}
             totals={totals}
+            futureInstallments={selectedAccount ? futureInstallmentsTotal(transactions) : 0}
             unapprovedCount={unapprovedCount}
             showUnapprovedOnly={filter.showUnapprovedOnly}
             onToggleUnapprovedOnly={filter.toggleUnapprovedOnly}
@@ -239,8 +254,10 @@ export function AccountsScreen() {
             />
           ) : null}
 
+          <TransferChips chip={filter.chip} counts={counts} onChange={filter.setChip} />
+
           {/* register header */}
-          {showWide ? (
+          {showWide && filter.chip !== "suggested" ? (
             <RegisterHeader
               allSelected={selection.allRegisterSelected}
               onToggleAll={selection.toggleSelectAllVisible}
@@ -258,6 +275,15 @@ export function AccountsScreen() {
             />
           ) : null}
 
+          {filter.chip === "suggested" ? (
+            <TransferReviewList
+              suggestions={transfers.scoped}
+              loading={transfers.loading}
+              isPhone={shell.isPhone}
+              actions={transfers}
+              onOpenPopover={transfers.openPopover}
+            />
+          ) : (
           <RegisterList
             budget={budget}
             budgetId={budgetId}
@@ -280,8 +306,10 @@ export function AccountsScreen() {
             onApprove={approveTxn}
             onToggleCleared={toggleCleared}
             onOpenMenu={openRowMenu}
+            onOpenTransfer={(t, x, y) => transfers.openPopover(t.id, x, y)}
           />
-          {selectedTxns.length > 0 ? (
+          )}
+          {selectedTxns.length > 0 && filter.chip !== "suggested" ? (
             <SelectionBar
               count={selectedTxns.length}
               categories={filter.categories}
@@ -335,6 +363,18 @@ export function AccountsScreen() {
           onClose={() => setEditingAccount(null)}
         />
       ) : null}
+      {transfers.popover && transfers.popoverItem ? (
+        <TransferPopover
+          item={transfers.popoverItem}
+          txnId={transfers.popover.txnId}
+          anchor={transfers.popover}
+          isPhone={shell.isPhone}
+          accounts={budget.accounts}
+          actions={transfers}
+          onClose={transfers.closePopover}
+        />
+      ) : null}
+      <TransferToast toast={transfers.toast} />
       {/* reconcile success toast (syscd-app-qfr) */}
       {toast ? (
         <View

@@ -1,0 +1,627 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-mit6",
+  "title": "Transfers between own accounts: suggestions (⇄ icon + popover), filter + bulk link, payee 'treat as transfer' rule, smarter auto-matching",
+  "description": "",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-24T01:28:52.939Z",
+  "updated_at": "2026-11-24T15:20:37.037Z",
+  "started_at": null,
+  "closed_at": "2026-11-24T15:20:23.347Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Built matcher (cash/card, ordinal, Pluggy evidence, payee rules, waiting/outside), migration 0108, 6 endpoints, register ⇄ popover, chips, review list + bulk + undo toast, payee Treat-as-transfer + Transfer rules. Tests: shared 194, api 1273 (DB on :55432), client 1267, admin 20 all green.\nlanded outside tk close at a824f81 (branch tk/budget-mit6 merged into main by hand)\nApproved by user 2026-11-24; merged to main and released server-only (web+api+admin). u5yt: full vs 30-day pulls with resume (0107). lubt: derived upcoming installments + phantom pending skip. mit6: transfer matcher, suggestions/popover/filters/bulk, payee transfer rules (0108). Tests: shared 194, api 1273, client 1267, admin 20.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-mit6",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-mit6",
+    "changeset": {
+      "base": "6d92eab2b5113e59e7cc6e1c9d8f8291c195d3eb",
+      "head": "062c751dc40dce3cfaed3ad12e3e06ad439b7e19",
+      "commits": [
+        {
+          "sha": "062c751",
+          "subject": "docs: transfer matcher decisions (budget-mit6)"
+        },
+        {
+          "sha": "7d77ffc",
+          "subject": "feat(transfers): phone layouts for the popover and payees, review polish"
+        },
+        {
+          "sha": "f6ff8cd",
+          "subject": "feat(transfers): register suggestions, popover, review list with bulk link, payee transfer rules (client)"
+        },
+        {
+          "sha": "276d331",
+          "subject": "feat(transfers): match transfers between own accounts, suggestions, payee transfer rules (api + contracts)"
+        },
+        {
+          "sha": "86a78b2",
+          "subject": "fix(installments): no selection checkbox on derived installment rows in Scheduled"
+        },
+        {
+          "sha": "8f36a94",
+          "subject": "fix(installments): phone Scheduled row stacks the purchase name over fraction and date"
+        },
+        {
+          "sha": "6d8fe4b",
+          "subject": "feat(installments): derive upcoming card installments; skip phantom pending after anticipation"
+        },
+        {
+          "sha": "6af9897",
+          "subject": "connections: full history import with resume, 30-day daily pulls (budget-u5yt)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0107_connection_account_backfill.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0108_transfer_suggestions.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/card-payments.test.ts",
+          "status": "D"
+        },
+        {
+          "path": "api/src/budget/domain/card-payments.ts",
+          "status": "D"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-links.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/upcoming-installments.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/operations.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/installments.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/ledger-reads.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-history.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-installments.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-transfers.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/transfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/mapping.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/mapping.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/zeroSum.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/zeroSum.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountHeader.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/RegisterList.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/RegisterRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/ScheduledSection.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/useRegisterFilter.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/ConnectionSettingsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/LinkedAccountDetailScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/ConnectionRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/flow/importFlow.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/ManagePayeesScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/PayeeDetailPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/PayeeListPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/payees.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/styles.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/usePayeeAdmin.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/TransferBits.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferChips.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferPopover.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferReviewList.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferRuleSection.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/transfers.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/transfers.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/useTransfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/theme.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/domain/installments.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/domain/installments.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 6122,
+        "deletions": 558
+      }
+    },
+    "agent_session": "mit6-transfers-agent",
+    "finished_at": "2026-11-24T02:21:11.577Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 8,
+        "files": 97,
+        "additions": 6122,
+        "deletions": 558
+      },
+      "head": "062c751dc40dce3cfaed3ad12e3e06ad439b7e19",
+      "at": "2026-11-24T02:21:11.577Z"
+    },
+    "landedOutside": {
+      "commit": "a824f813154936721b155ec076816f2910bee2ec",
+      "branchHead": "062c751dc40dce3cfaed3ad12e3e06ad439b7e19",
+      "baseBranch": "main",
+      "at": "2026-11-24T15:20:23.319Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-87fa75",
+      "name": "transfers-mock.html",
+      "mime": "application/octet-stream",
+      "size": 13305,
+      "sha256": "bd4334863789c4d45c47ac1f56416148e62138babec425594757f993b35947f6",
+      "metadata": {
+        "evidence_kind": "mock"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-90b59a",
+      "name": "transfers.png",
+      "mime": "image/png",
+      "size": 293442,
+      "sha256": "a8b93e436f97bcbb8f1132a37e9833458930666727cacb58aeeb8a80562c060d",
+      "metadata": {
+        "evidence_kind": "mock"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d8d6a2",
+      "name": "popover-1400.png",
+      "mime": "image/png",
+      "size": 193915,
+      "sha256": "8c383520ffef7c0e22b4dcd1522b707bbfaae36c5c5739c960efcb6c85246354",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f30145",
+      "name": "popover-375.png",
+      "mime": "image/png",
+      "size": 68742,
+      "sha256": "c85317f8179d5eff09031402060f6fd0a2fb1427fcb8a21cd6a891e448f06cd9",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-30a08a",
+      "name": "popover-choose-375.png",
+      "mime": "image/png",
+      "size": 60182,
+      "sha256": "595de4659f5054ee376b702b9069360b961d26864f25e4389debeae7c615be48",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-03d060",
+      "name": "bulk-1400.png",
+      "mime": "image/png",
+      "size": 134051,
+      "sha256": "404ddd9d729668deb13a60d3fc2d1fc0cadbb67274060417d8c4e0eeb90133ab",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-54b97e",
+      "name": "bulk-375.png",
+      "mime": "image/png",
+      "size": 80265,
+      "sha256": "884d5774156ba4807f875493617e622b071870c9437e310ab65df5e01493ffcd",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-2d1715",
+      "name": "linked-toast-1400.png",
+      "mime": "image/png",
+      "size": 99610,
+      "sha256": "d3c5d44c5336c97b8cabac1e527e290a9981f44f798986829e7f0f90c4bd8f82",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-8f0160",
+      "name": "payee-1400.png",
+      "mime": "image/png",
+      "size": 170644,
+      "sha256": "29b222b7af1162ff1354d38a9c6e77c233c8dcabb21684f614f510edc3a07bd3",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-df55f1",
+      "name": "payee-375.png",
+      "mime": "image/png",
+      "size": 62815,
+      "sha256": "a23df1927f32d9330645a96c590feb97104d3d6c45c78ef61bc8179233ea887f",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-e3aab5",
+      "name": "rules-1400.png",
+      "mime": "image/png",
+      "size": 62550,
+      "sha256": "868a17cd63806db9aac9f2a446086a91fe7131b93111f9f6fbdd2c3afe582780",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f66358",
+      "name": "rules-375.png",
+      "mime": "image/png",
+      "size": 32630,
+      "sha256": "b27e8fad9851a19c817b30d59a61dcbbdbca313c26c58189cbfce07066db33c3",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

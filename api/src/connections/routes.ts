@@ -111,6 +111,8 @@ const connectionJson = (row: ConnectionWithLinker) => ({
   institution: row.institution,
   last_synced_at: row.last_synced_at,
   sync_window_days: row.sync_window_days,
+  /** A linked account's history import is still in progress (resumes on the next syncs). */
+  history_loading: row.history_loading,
   /** Who linked the bank (their name/email/avatar). */
   linked_by: row.linked_by,
   created_at: row.created_at,

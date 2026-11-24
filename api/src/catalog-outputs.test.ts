@@ -188,6 +188,9 @@ beforeAll(async () => {
     ],
   });
   await ok('budget_transactions_create', { budget_id: B, txn: txn({ payee: 'Transfer : Catalog Card', outflow: 50_000 }) });
+  // An uncategorized checking outflow and an equal card inflow: a transfer suggestion (hand-entered, so never auto-linked).
+  await ok('budget_transactions_create', { budget_id: B, txn: txn({ payee: 'Pix enviado', outflow: 77_000 }) });
+  await ok('budget_transactions_create', { budget_id: B, txn: txn({ account_id: card.id, payee: 'Pagamento recebido', inflow: 77_000 }) });
   seeded.payee = rent.payee_id;
   await ok('budget_payees_set_rename_rule', { id: rent.payee_id, budget_id: B, match_type: 'contains', condition: 'landlord co' });
   await ok('budget_assignments_set', { budget_id: B, month: `${today.slice(0, 7)}-01`, category_id: c1.id, budgeted: 1_500_000 });
@@ -266,6 +269,8 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     budget_payees_list: { budget_id: B },
     budget_payees_transactions: { id: seeded.payee, budget_id: B },
     budget_payee_suggestions_get: { id: seeded.payee, budget_id: B },
+    budget_payees_transfer_rule_get: { id: seeded.payee, budget_id: B },
+    budget_transfer_suggestions_list: { budget_id: B },
     budget_category_targets_list: { budget_id: B },
     budget_category_notes_list: { budget_id: B, month },
     budget_members_list: { budget_id: B },

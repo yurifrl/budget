@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-u5yt",
+  "title": "Pluggy pull stops at 500 rows per account; older history never imported",
+  "description": "Prod 2026-11-23: Nubank Conta Corrente and Nubank Cartão have exactly 500 Pluggy rows each (MAX_PAGES=20 in api/src/connections/adapters/pluggy/client.ts x Pluggy v2 default page size). listTransactions walks newest-first and returns hasMore; the next sync re-pulls the same newest window, so older rows are never reached. Need: paginate to the end of the window on first import/reimport (with a high safety cap), and resume older pages across syncs when hasMore.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-24T00:34:40.417Z",
+  "updated_at": "2026-11-24T15:20:08.463Z",
+  "started_at": null,
+  "closed_at": "2026-11-24T15:19:54.891Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Built: full/resume/daily pull modes in sync.ts; FULL_IMPORT_MAX_ROWS=10000 resume via connection_account_backfill (0107); DAILY_SYNC_DAYS=30; Pluggy v2 has no pageSize param (default page). Client now accepts next/after as well as nextPage/cursor. Existing prod accounts (500 rows, already imported) go daily: run Re-import history once to backfill. Validated api tsc/eslint/1227 tests, shared, client.\nlanded outside tk close at a824f81 (branch tk/budget-u5yt merged into main by hand)\nApproved by user 2026-11-24; merged to main and released server-only (web+api+admin). u5yt: full vs 30-day pulls with resume (0107). lubt: derived upcoming installments + phantom pending skip. mit6: transfer matcher, suggestions/popover/filters/bulk, payee transfer rules (0108). Tests: shared 194, api 1273, client 1267, admin 20.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-u5yt",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-u5yt",
+    "changeset": {
+      "base": "6d92eab2b5113e59e7cc6e1c9d8f8291c195d3eb",
+      "head": "6af98971747b6819917b57f164b6fbb786939811",
+      "commits": [
+        {
+          "sha": "6af9897",
+          "subject": "connections: full history import with resume, 30-day daily pulls (budget-u5yt)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0107_connection_account_backfill.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-history.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/ConnectionSettingsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/ConnectionRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 730,
+        "deletions": 73
+      }
+    },
+    "agent_session": "budget-u5yt-pluggy-history",
+    "finished_at": "2026-11-24T01:00:37.527Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 18,
+        "additions": 730,
+        "deletions": 73
+      },
+      "head": "6af98971747b6819917b57f164b6fbb786939811",
+      "at": "2026-11-24T01:00:37.527Z"
+    },
+    "landedOutside": {
+      "commit": "a824f813154936721b155ec076816f2910bee2ec",
+      "branchHead": "6af98971747b6819917b57f164b6fbb786939811",
+      "baseBranch": "main",
+      "at": "2026-11-24T15:19:54.864Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

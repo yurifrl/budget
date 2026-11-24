@@ -17,6 +17,7 @@ const m: Translation<typeof en> = {
   'page.lastSync': 'Última sincronização: {stamp}',
   'page.lastSyncSandbox': 'Última sincronização: {stamp} · sandbox',
   'page.added': 'Última sincronização: adicionado em {stamp}',
+  'page.historyLoading': 'Importando o histórico mais antigo — continua nas próximas sincronizações.',
   'page.addedSandbox': 'Última sincronização: adicionado em {stamp} · sandbox',
   'page.syncNow': 'Sincronizar agora',
   'page.syncing': 'Sincronizando…',
@@ -114,6 +115,10 @@ const m: Translation<typeof en> = {
   'syncRun.skippedDeleted': {
     one: '{count} ignorada: foi excluída antes e continua excluída',
     other: '{count} ignoradas: foram excluídas antes e continuam excluídas',
+  },
+  'syncRun.skippedPaidInstallment': {
+    one: '{count} ignorada: parcela pendente do cartão que já foi paga',
+    other: '{count} ignoradas: parcelas pendentes do cartão que já foram pagas',
   },
   'syncRun.failedRows': {
     one: '{count} transação do banco não pôde ser importada',

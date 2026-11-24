@@ -35,6 +35,8 @@ export default {
   'register.readyToAssign': 'Ready to Assign',
   'register.split': 'Split ({count})',
   'register.transfer': 'Transfer',
+  'register.transferWaiting': 'Transfer · waiting for the other side',
+  'register.transferOutside': 'Transfer · outside the budget',
   'register.needsCategory': 'needs category',
 
   'flag.red': 'Red',

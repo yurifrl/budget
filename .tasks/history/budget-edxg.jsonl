@@ -1,0 +1,2 @@
+{"issue_id":"budget-edxg","action":"save","at":"2026-11-24T14:36:43.584Z","actor":null,"data":{"status":"open","title":"Categorize contracts + handlers: queue with bundles, run start/status, accept batch, skip, threshold settings"}}
+{"issue_id":"budget-edxg","action":"dependency_added","at":"2026-11-24T14:36:43.587Z","actor":"yuri","data":{"target":"budget-fvtx","type":"blocks"}}

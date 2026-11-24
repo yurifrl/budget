@@ -13,6 +13,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { AccountOwnerFace } from '@/ui/PersonFace';
 import { colors, radius } from '@/ui/theme';
 import { ClearedBadge } from '@/ui/ClearedBadge';
+import { TransferAutoLabel, TransferIcon } from '@/features/transfers';
 import { TxnMenuKebab } from './register/TxnMenuKebab';
 import { TxnMenuTrigger } from './register/TxnMenuTrigger';
 import type { RegisterDensity } from './AccountsToolbar';
@@ -36,6 +37,23 @@ interface RowBaseProps {
   onToggleCleared: (txn: Transaction) => void;
   /** Kebab / right-click: open the row menu at this page point. */
   onOpenMenu: (txn: Transaction, pageX: number, pageY: number) => void;
+  /** ⇄ on a row that looks like a transfer: open the transfer popover at this page point. */
+  onOpenTransfer?: (txn: Transaction, pageX: number, pageY: number) => void;
+}
+
+/** Category pill plus the transfer bits (⇄ suggestion icon, "auto · payee rule"). */
+function CategoryCell({ txn, category, onOpenTransfer }: Pick<RowBaseProps, 'txn' | 'category' | 'onOpenTransfer'>) {
+  return (
+    <>
+      <Text style={[styles.tagPill, category.warn && styles.tagPillWarn, txn.transferAccountId && styles.tagPillTransfer]} numberOfLines={1}>
+        {category.text}
+      </Text>
+      {txn.transferSuggestion && onOpenTransfer ? (
+        <TransferIcon onOpen={(x, y) => onOpenTransfer(txn, x, y)} />
+      ) : null}
+      {txn.transferLinkMethod === 'rule' ? <TransferAutoLabel /> : null}
+    </>
+  );
 }
 
 /** Signed amount pill (import-style): − red / + green, single AMOUNT column. */
@@ -116,6 +134,7 @@ export function RegisterCard({
   onApprove,
   onToggleCleared,
   onOpenMenu,
+  onOpenTransfer,
 }: RowBaseProps & {
   /** All Accounts: name the row's account on line 2. */
   showAccount: boolean;
@@ -144,9 +163,7 @@ export function RegisterCard({
           <TxnMenuKebab onOpen={(px, py) => onOpenMenu(tx, px, py)} />
         </View>
         <View style={styles.txnL2Phone}>
-          <Text style={[styles.tagPill, cat.warn && styles.tagPillWarn]} numberOfLines={1}>
-            {cat.text}
-          </Text>
+          <CategoryCell txn={tx} category={cat} onOpenTransfer={onOpenTransfer} />
           {showAccount && acct ? (
             <Text style={styles.txnAcct} numberOfLines={1}>
               {acct.name}
@@ -177,6 +194,7 @@ export function RegisterRow({
   onApprove,
   onToggleCleared,
   onOpenMenu,
+  onOpenTransfer,
 }: RowBaseProps & {
   selected: boolean;
   /** All Accounts with people in use: reserve the owner-face slot. */
@@ -236,10 +254,8 @@ export function RegisterRow({
           </Text>
           {tx.upcoming ? <Text style={styles.upcomingPill}>{t('register.repeat')}</Text> : null}
         </View>
-        <View style={{ flex: 1.4, flexDirection: 'row' }}>
-          <Text style={[styles.tagPill, cat.warn && styles.tagPillWarn]} numberOfLines={1}>
-            {cat.text}
-          </Text>
+        <View style={{ flex: 1.4, flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <CategoryCell txn={tx} category={cat} onOpenTransfer={onOpenTransfer} />
         </View>
         <Text style={[styles.regText, { flex: 1.2, color: colors.faint }]} numberOfLines={1}>
           {tx.memo}
@@ -336,6 +352,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.yellowPillBg,
     color: colors.yellowPillFg,
   },
+  tagPillTransfer: { backgroundColor: colors.bluePillBg, color: colors.blue },
   txnCard: {
     paddingHorizontal: 20,
     paddingVertical: 7,

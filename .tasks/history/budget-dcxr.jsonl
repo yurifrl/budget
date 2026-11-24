@@ -1,0 +1,2 @@
+{"issue_id":"budget-dcxr","action":"save","at":"2026-11-24T14:36:42.350Z","actor":null,"data":{"status":"open","title":"AI keys screen (client): save key, detect or choose provider, pick model, test, remove"}}
+{"issue_id":"budget-dcxr","action":"dependency_added","at":"2026-11-24T14:36:42.352Z","actor":"yuri","data":{"target":"budget-q8kf","type":"blocks"}}

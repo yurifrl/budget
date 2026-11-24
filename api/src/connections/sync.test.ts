@@ -14,7 +14,7 @@ import { HttpError } from '../core/validate';
 import { getImportMetadata } from './ledger-reads';
 import * as store from './store';
 import { effectiveSyncWindowDays } from './settings';
-import { emptySyncResult, pullFrom, refreshConnection, syncConnectionTransactions } from './sync';
+import { DAILY_SYNC_DAYS, emptySyncResult, pullFrom, refreshConnection, syncConnectionTransactions } from './sync';
 import type { AggregatedTransaction, BankAggregator, ConnectTokenInput } from './types';
 
 const PROVIDER = 'testprovider';
@@ -298,7 +298,7 @@ describe.skipIf(!dbReady)('connections sync', () => {
     expect(meta!.rawReceivedAt).toBeInstanceOf(Date);
   });
 
-  test('refreshConnection stamps the watermark and pulls incrementally', async () => {
+  test('refreshConnection stamps the watermark and pulls the daily window', async () => {
     if (!dbReady) return;
     const row = await store.listConnectionsByUser(userId);
     const conn = row.find((r) => r.external_id === EXTERNAL_ITEM)!;
@@ -314,12 +314,10 @@ describe.skipIf(!dbReady)('connections sync', () => {
     expect(initial.transactions.added).toBe(0);
     expect(initial.row.last_synced_at).not.toBeNull();
 
-    // Incremental window starts one day before the watermark (same-day
-    // edits are re-checked), not the 365-day fallback.
+    // An account with imported rows gets a daily pull: the last
+    // DAILY_SYNC_DAYS days (re-pulled whole), not a watermark-based window.
     expect(seen.length).toBe(1);
-    expect(seen[0]!.from).toBe(
-      new Date(initial.row.last_synced_at!.getTime() - 86_400_000).toISOString().slice(0, 10),
-    );
+    expect(seen[0]!.from).toBe(new Date(Date.now() - DAILY_SYNC_DAYS * 86_400_000).toISOString().slice(0, 10));
   });
 
   test('refreshConnection backfills the institution when the row has none', async () => {

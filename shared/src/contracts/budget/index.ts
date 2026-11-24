@@ -19,6 +19,7 @@ import * as planAutoAssignContracts from './plan-auto-assign';
 import * as repeatRulesContracts from './repeat-rules';
 import * as revisionContracts from './revision';
 import * as transactionsContracts from './transactions';
+import * as transfersContracts from './transfers';
 
 export const contracts = collectContracts(
   accountsContracts,
@@ -39,6 +40,7 @@ export const contracts = collectContracts(
   repeatRulesContracts,
   revisionContracts,
   transactionsContracts,
+  transfersContracts,
 );
 
 // Named contract exports for typed access (the app builds requests with them).
@@ -60,4 +62,5 @@ export * from './plan-auto-assign';
 export * from './repeat-rules';
 export * from './revision';
 export * from './transactions';
+export * from './transfers';
 export * from './outputs';

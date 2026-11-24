@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-lubt",
+  "title": "Card installments: show the remaining installments as future (upcoming) transactions; drop phantom pending installments after anticipation",
+  "description": "Prod data (Itaú card): Pluggy sends one row per installment only when it is billed, with creditCardMetadata.installmentNumber/totalInstallments/purchaseDate (e.g. ACADEMIA ACQUA 02/12, CCT CLINICA CIR 01/04). Generate the remaining installments (n+1..N) as upcoming rows (same amount, monthly by bill cycle, not counted in the current balance), keyed idempotently by (card account, purchaseDate, description stem, installment k); when the real installment k arrives, it replaces its placeholder. Also: after an anticipation (DESC ANTECIPA PARCELAS), Itaú still lists the original installment as PENDING with a different id (PortovalleAcabame 04/04: POSTED 2026-09-06 and PENDING 2026-11-05, -13.339,13 counted twice); detect same purchaseDate+stem+installmentNumber already POSTED and skip the pending copy. Reuse the existing upcoming-occurrence concept (outputs.ts) for display.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-24T00:38:57.793Z",
+  "updated_at": "2026-11-24T15:20:22.475Z",
+  "started_at": null,
+  "closed_at": "2026-11-24T15:20:09.615Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Built: read-time derived upcoming installments (shared/src/domain/installments.ts; list handler merges rows flagged installment {number,total}, upcoming true; never stored). Sync skips PENDING installment already POSTED (skipped_paid_installment). Client: installment rows always in Scheduled (read-only, dimmed, kk/NN pill, phone stacked layout), header 'Future installments: R$ X'. Tests: shared 190, api 1221 (compose PG :55432, BUDGET_REQUIRE_TEST_DB=1), client 1251; tsc+eslint clean. budget-restore.test.ts has a pre-existing order flake (passes on rerun; also fails alone on main with an import-cycle ReferenceError). Follow-up: budget-3t4z\nRebased tk/budget-lubt onto tk/budget-u5yt (6af9897); new tip 86a78b2. Only conflict: api/src/connections/sync.ts import line (u5yt added TransactionPull to the ./types import; lubt added the ./installments import) - kept both. The PENDING-installment-with-POSTED-twin check sits unchanged in u5yt's per-row new-import path after findImportedBankId; SyncResult/emptySyncResult carry skipped_paid_installment alongside u5yt's fields. outputs.ts (u5yt history_loading on connectionSchema, lubt skipped_paid_installment on syncCountsSchema), banks i18n and syncRun.ts auto-merged with no overlap; lubt adds no migration (0107 is u5yt's only). New commit 86a78b2: Scheduled section hides the selection checkbox on derived installment rows (same-size spacer keeps alignment; such rows can never be checked). tsc + eslint clean in shared/api/client/admin; bun test: shared 190, api 1232 (BUDGET_REQUIRE_TEST_DB=1, compose PG :55432), client 1251, admin 20, all pass, 0 fail. Not merged/pushed.\nlanded outside tk close at a824f81 (branch tk/budget-lubt merged into main by hand)\nApproved by user 2026-11-24; merged to main and released server-only (web+api+admin). u5yt: full vs 30-day pulls with resume (0107). lubt: derived upcoming installments + phantom pending skip. mit6: transfer matcher, suggestions/popover/filters/bulk, payee transfer rules (0108). Tests: shared 194, api 1273, client 1267, admin 20.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-lubt",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-lubt",
+    "changeset": {
+      "base": "6d92eab2b5113e59e7cc6e1c9d8f8291c195d3eb",
+      "head": "86a78b262fa11c1ce604e3a28b01fb521adf0883",
+      "commits": [
+        {
+          "sha": "86a78b2",
+          "subject": "fix(installments): no selection checkbox on derived installment rows in Scheduled"
+        },
+        {
+          "sha": "8f36a94",
+          "subject": "fix(installments): phone Scheduled row stacks the purchase name over fraction and date"
+        },
+        {
+          "sha": "6d8fe4b",
+          "subject": "feat(installments): derive upcoming card installments; skip phantom pending after anticipation"
+        },
+        {
+          "sha": "6af9897",
+          "subject": "connections: full history import with resume, 30-day daily pulls (budget-u5yt)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0107_connection_account_backfill.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/upcoming-installments.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/installments.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/ledger-reads.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-history.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-installments.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/mapping.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountHeader.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/ScheduledSection.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/ConnectionSettingsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/LinkedAccountDetailScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/ConnectionRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/domain/installments.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/domain/installments.ts",
+          "status": "A"
+        }
+      ],
+      "counts": {
+        "additions": 1794,
+        "deletions": 115
+      }
+    },
+    "agent_session": "budget-lubt-installments-agent",
+    "finished_at": "2026-11-24T01:07:27.592Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 2,
+        "files": 26,
+        "additions": 1042,
+        "deletions": 29
+      },
+      "head": "dfa8ddc28971e56d3fcd01fad746e670695b4412",
+      "at": "2026-11-24T01:07:27.592Z"
+    },
+    "landedOutside": {
+      "commit": "a824f813154936721b155ec076816f2910bee2ec",
+      "branchHead": "86a78b262fa11c1ce604e3a28b01fb521adf0883",
+      "baseBranch": "main",
+      "at": "2026-11-24T15:20:09.595Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-639989",
+      "name": "register-1400.png",
+      "mime": "image/png",
+      "size": 170312,
+      "sha256": "fbd38e37406de6a85b6b16b96af6bbfb72db62432e8240739f2ef4651a09191b",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a9b3e2",
+      "name": "register-375.png",
+      "mime": "image/png",
+      "size": 77891,
+      "sha256": "ca703b8afea02160588706c21f75fba95520773f5b0f35e20aec2986f03c2608",
+      "metadata": {
+        "evidence_kind": "after"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

@@ -1,5 +1,15 @@
 # Changelog
 
+## v2026.11.23-04 2026-11-23 release
+
+### Changed
+
+- release: v2026.11.23-04
+- tasks: close budget-qerr, budget-vnma
+- release: split server and iOS app releases
+- fix(connections): heartbeat per row during sync, 30m sync timeout, phase timings
+
+
 ## v2026.11.23-03 2026-11-23 release
 
 ### Changed

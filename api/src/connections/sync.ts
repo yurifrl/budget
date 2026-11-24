@@ -32,7 +32,8 @@ import { ledger } from '../budget';
 import { HttpError } from '../core/validate';
 import { getConnectionByUser, setConnectionInstitution, withLinkedBy, type ConnectionRow, type ConnectionWithLinker } from './store';
 import { ALL_HISTORY_DAYS, effectiveSyncWindowDays, getSyncWindowDays } from './settings';
-import type { AggregatedTransaction, BankAggregator } from './types';
+import type { AggregatedTransaction, BankAggregator, TransactionPull } from './types';
+import { isPaidInstallmentCopy, PAID_INSTALLMENT_REASON } from './installments';
 
 /** Counts reported to the caller. */
 export interface SyncResult {
@@ -49,6 +50,8 @@ export interface SyncResult {
   skipped_other_account: number;
   /** Where the `skipped_other_account` rows live (always accounts of the same budget). */
   skipped_accounts: SkippedAccount[];
+  /** PENDING card installments already imported as POSTED (Itaú's copy after an early payment): not imported. */
+  skipped_paid_installment: number;
   /** Rows that failed unexpectedly; each rolled back alone, the rest committed. */
   failed: number;
   /** The first failures (capped at MAX_RECORDED_FAILURES), for the job log. Not user-facing. */
@@ -78,6 +81,7 @@ export const emptySyncResult = (): SyncResult => ({
   skipped_deleted: 0,
   skipped_other_account: 0,
   skipped_accounts: [],
+  skipped_paid_installment: 0,
   failed: 0,
   failures: [],
 });
@@ -279,8 +283,109 @@ async function serialized<T>(key: string, fn: () => Promise<T>): Promise<T> {
 interface FetchedAccount {
   acc: LinkedAccountRow;
   transactions: AggregatedTransaction[];
-  /** True only when upstream reported the requested window fully paginated. */
+  /** True only when upstream reported the swept window [sweepFrom, to] fully paginated. */
   complete: boolean;
+  /** Lower bound of the tombstone sweep: exactly what the window pull covered. */
+  sweepFrom: string;
+  /** History-import resume point to store; null = clear it (done); undefined = leave as is. */
+  backfill: BackfillPoint | null | undefined;
+}
+
+// ---- pull modes ------------------------------------------------------------
+//
+// full:   first sync of an account (nothing imported into it yet) or Re-import
+//         history. Pages until the provider has nothing older or the sync
+//         window starts, up to FULL_IMPORT_MAX_ROWS rows. Hitting the cap
+//         stores a resume point (connection_account_backfill).
+// resume: an account with a stored resume point: a daily pull, plus the next
+//         older pages from the resume point (again up to the cap) until done.
+// daily:  every other sync (poller, webhook, Sync now): only the last
+//         DAILY_SYNC_DAYS days, re-pulled whole so pending→posted changes and
+//         late rows are caught. The sweep covers only that window.
+
+export type PullMode = 'full' | 'resume' | 'daily';
+
+/** Days a daily (regular) sync re-pulls, ending today. */
+export const DAILY_SYNC_DAYS = 30;
+/**
+ * Safety cap on rows one history pull collects per account per sync (whole
+ * provider pages, so it can overshoot by one page). Past it, the pull stops,
+ * stores where it got to and the next syncs continue from there.
+ */
+export const FULL_IMPORT_MAX_ROWS = 10_000;
+/** Upper bound for one account's history pull (all pages; the job heartbeats meanwhile). */
+export const FULL_IMPORT_TIMEOUT_MS = 10 * 60_000;
+
+/** Where a capped history import continues (one row per account in connection_account_backfill). */
+export interface BackfillPoint {
+  cursor: string | null;
+  /** Oldest date reached (YYYY-MM-DD), the inclusive upper bound still to import. */
+  before_date: string;
+  rows_pulled: number;
+}
+
+/** Lower bound of a daily pull: the last DAILY_SYNC_DAYS days, never past the sync window. */
+export function dailyPullFrom(windowDays: number): string {
+  const daily = isoDaysAgo(DAILY_SYNC_DAYS);
+  const windowFloor = pullFrom(null, windowDays);
+  return windowFloor != null && windowFloor > daily ? windowFloor : daily;
+}
+
+/** Which pull each account gets this sync. */
+export function choosePullMode(input: { reimport: boolean; hasBackfill: boolean; hasImports: boolean }): PullMode {
+  if (input.reimport) return 'full';
+  if (input.hasBackfill) return 'resume';
+  return input.hasImports ? 'daily' : 'full';
+}
+
+/** Resume points and "has anything been imported" per account. */
+async function loadPullState(
+  pg: Queryable,
+  accountIds: readonly string[],
+): Promise<{ backfill: Map<string, BackfillPoint>; imported: Set<string> }> {
+  const backfill = new Map<string, BackfillPoint>();
+  const imported = new Set<string>();
+  if (accountIds.length === 0) return { backfill, imported };
+  const points = await pg.query<{ account_id: string } & BackfillPoint>(
+    `SELECT account_id, cursor, before_date::text AS before_date, rows_pulled
+     FROM public.connection_account_backfill WHERE account_id = ANY($1::uuid[])`,
+    [accountIds],
+  );
+  for (const { account_id, ...point } of points.rows) backfill.set(account_id, point);
+  const withRows = await pg.query<{ id: string }>(
+    `SELECT a.id FROM unnest($1::uuid[]) AS a(id)
+     WHERE EXISTS (SELECT 1 FROM public.transactions t
+                   JOIN public.connection_transactions s ON s.transaction_id = t.id
+                   WHERE t.account_id = a.id)`,
+    [accountIds],
+  );
+  for (const { id } of withRows.rows) imported.add(id);
+  return { backfill, imported };
+}
+
+async function saveBackfill(pg: Queryable, accountId: string, point: BackfillPoint | null): Promise<void> {
+  if (point == null) {
+    await pg.query('DELETE FROM public.connection_account_backfill WHERE account_id = $1', [accountId]);
+    return;
+  }
+  await pg.query(
+    `INSERT INTO public.connection_account_backfill (account_id, cursor, before_date, rows_pulled)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (account_id) DO UPDATE
+       SET cursor = EXCLUDED.cursor, before_date = EXCLUDED.before_date,
+           rows_pulled = EXCLUDED.rows_pulled, updated_at = now()`,
+    [accountId, point.cursor, point.before_date, point.rows_pulled],
+  );
+}
+
+/** Where a history pull that stopped early continues; null when it reached the end. */
+function nextBackfill(pull: TransactionPull, to: string, previousRows: number): BackfillPoint | null {
+  if (!pull.hasMore) return null;
+  return {
+    cursor: pull.cursor ?? null,
+    before_date: pull.oldestDate ?? to,
+    rows_pulled: previousRows + pull.transactions.length,
+  };
 }
 
 /**
@@ -301,10 +406,12 @@ export async function syncConnectionTransactions(input: {
   userId: string;
   connectionId: string;
   aggregator: BankAggregator;
-  /** Re-import: ignore the watermark so the pull reaches the full window. */
+  /** Re-import history: every account gets a full pull (see PullMode), resume points restart. */
   ignoreWatermark?: boolean;
-  /** Per-account upstream pull timeout (test seam; defaults to UPSTREAM_TIMEOUT_MS). */
+  /** Per-account upstream pull timeout (test seam; defaults to UPSTREAM_TIMEOUT_MS, FULL_IMPORT_TIMEOUT_MS for history pulls). */
   upstreamTimeoutMs?: number;
+  /** Per-account row cap of a history pull (test seam; defaults to FULL_IMPORT_MAX_ROWS). */
+  fullImportMaxRows?: number;
   /** Called between accounts and per upstream row in phase 2 (job heartbeat; keep it cheap). */
   onProgress?: () => void;
   /**
@@ -340,15 +447,13 @@ async function syncOnce(
     'SELECT last_synced_at FROM public.connections WHERE id = $1',
     [row.id],
   );
+  // Kept only for the race check in phase 2; pull windows come from the mode.
   const snapshotAt = snapshot.rows[0]?.last_synced_at ?? null;
-  const from = pullFrom(
-    input.ignoreWatermark ? null : snapshotAt,
-    effectiveSyncWindowDays(row.sync_window_days, await getSyncWindowDays()),
-  );
-  // The tombstone sweep compares dates in SQL — All history is expressed
-  // there as an arbitrarily old floor rather than a NULL bound.
-  const sweepFrom = from ?? '0001-01-01';
+  const windowDays = effectiveSyncWindowDays(row.sync_window_days, await getSyncWindowDays());
+  const windowFrom = pullFrom(null, windowDays);
+  const dailyFrom = dailyPullFrom(windowDays);
   const to = today();
+  const maxRows = input.fullImportMaxRows ?? FULL_IMPORT_MAX_ROWS;
 
   // Budget accounts linked to upstream accounts of this connection:
   // unlinked accounts are skipped — mirroring is a budget-module concern.
@@ -360,21 +465,72 @@ async function syncOnce(
   const linked = (await pool.query<LinkedAccountRow>(linkedSql, [row.id])).rows;
 
   const timeoutMs = input.upstreamTimeoutMs ?? UPSTREAM_TIMEOUT_MS;
+  const historyTimeoutMs = input.upstreamTimeoutMs ?? FULL_IMPORT_TIMEOUT_MS;
+  const pullState = await loadPullState(pool, linked.map((a) => a.id));
   const fetched = new Map<string, FetchedAccount>();
   // Phase timings, logged once per pass so a slow sync is diagnosable from logs.
   const startedAt = Date.now();
   const timings: Record<string, unknown> = { pull_ms: {} as Record<string, number> };
   for (const acc of linked) {
     const pullStart = Date.now();
-    const upstream = await withTimeout(
-      aggregator.listTransactions(acc.external_account_id, {
-        ...(from != null ? { from } : {}),
-        to,
-      }),
-      timeoutMs,
-      `upstream listTransactions(${acc.external_account_id})`,
+    const point = pullState.backfill.get(acc.id);
+    const mode = choosePullMode({
+      reimport: input.ignoreWatermark === true,
+      hasBackfill: point !== undefined,
+      hasImports: pullState.imported.has(acc.id),
+    });
+    const pull = (window: { from: string | null; to: string; cursor?: string | null }, ms: number) =>
+      withTimeout(
+        aggregator.listTransactions(acc.external_account_id, {
+          ...(window.from != null ? { from: window.from } : {}),
+          to: window.to,
+          maxResults: maxRows,
+          ...(window.cursor != null ? { cursor: window.cursor } : {}),
+          ...(input.onProgress ? { onPage: input.onProgress } : {}),
+        }),
+        ms,
+        `upstream listTransactions(${acc.external_account_id})`,
+      );
+
+    let entry: FetchedAccount;
+    let history: TransactionPull | undefined;
+    if (mode === 'full') {
+      // The whole window, newest first. Complete = the sweep may cover it all
+      // (All history is an arbitrarily old floor in SQL rather than NULL).
+      history = await pull({ from: windowFrom, to }, historyTimeoutMs);
+      entry = {
+        acc,
+        transactions: history.transactions,
+        complete: !history.hasMore,
+        sweepFrom: windowFrom ?? '0001-01-01',
+        backfill: nextBackfill(history, to, 0),
+      };
+    } else {
+      const daily = await pull({ from: dailyFrom, to }, timeoutMs);
+      entry = { acc, transactions: daily.transactions, complete: !daily.hasMore, sweepFrom: dailyFrom, backfill: undefined };
+      if (mode === 'resume' && point) {
+        // Older pages from the stored point. Never swept: this pull covers
+        // only part of the window.
+        history = await pull({ from: windowFrom, to: point.before_date, cursor: point.cursor }, historyTimeoutMs);
+        const have = new Set(entry.transactions.map((t) => t.externalId));
+        entry.transactions = [...entry.transactions, ...history.transactions.filter((t) => !have.has(t.externalId))];
+        entry.backfill = nextBackfill(history, point.before_date, point.rows_pulled);
+      }
+      if (mode === 'daily') history = daily;
+    }
+    fetched.set(acc.id, entry);
+    console.info(
+      `Connections sync ${row.id}: pull ${JSON.stringify({
+        account: acc.external_account_id,
+        mode,
+        from: mode === 'full' ? windowFrom : mode === 'daily' ? dailyFrom : point?.before_date,
+        pages: history?.pages ?? null,
+        rows: history?.transactions.length ?? 0,
+        oldest: history?.oldestDate ?? null,
+        hit_cap: history?.hasMore ?? false,
+        ...(mode === 'resume' ? { daily_rows: entry.transactions.length - (history?.transactions.length ?? 0) } : {}),
+      })}`,
     );
-    fetched.set(acc.id, { acc, transactions: upstream.transactions, complete: !upstream.hasMore });
     (timings.pull_ms as Record<string, number>)[acc.external_account_id] = Date.now() - pullStart;
     input.onProgress?.();
   }
@@ -457,6 +613,11 @@ async function syncOnce(
             const prior = await findImportedBankId(pg, acc.budget_id, row.provider, txn.externalId);
             if (prior) {
               recordSkip(result, prior, acc);
+              continue;
+            }
+            if (await isPaidInstallmentCopy(pg, acc.id, txn)) {
+              result.skipped_paid_installment += 1;
+              console.info(`Connections sync: bank transaction ${txn.externalId} skipped: ${PAID_INSTALLMENT_REASON}`);
               continue;
             }
             // Fresh import — bank-confirmed rows land cleared (the user-visible
@@ -593,7 +754,7 @@ async function syncOnce(
            JOIN public.connection_transactions s ON s.transaction_id = t.id
            WHERE t.account_id = $1 AND NOT t.deleted AND NOT s.blocked
              AND t.cleared <> 'reconciled' AND t.date >= $2 AND t.date <= $3`,
-          [acc.id, sweepFrom, to],
+          [acc.id, pulled.sweepFrom, to],
         )
       ).rows : [];
       for (const trackedRow of tracked) {
@@ -604,6 +765,7 @@ async function syncOnce(
         deltas[bucket] -= Number(trackedRow.amount);
         result.deleted += 1;
       }
+      if (pulled.backfill !== undefined) await saveBackfill(pg, acc.id, pulled.backfill);
 
       if (deltas.cleared_delta !== 0 || deltas.uncleared_delta !== 0) {
         await ledger.applyBalanceDeltas(pg, acc.budget_id, [
@@ -619,14 +781,15 @@ async function syncOnce(
     timings.rows = rowCount;
     timings.rows_ms = Date.now() - rowsStart;
 
-    // Pair imported card-statement payments (cash outflow + card inflow) as
-    // transfers; idempotent, so it also backfills rows imported earlier.
+    // Pair transfers between the budget's own accounts (card payments, PIX/TED
+    // between own accounts, payee rules); idempotent, so it also backfills
+    // rows imported earlier.
     const linkStart = Date.now();
     for (const budgetId of new Set(stillLinked.filter((a) => fetched.has(a.id)).map((a) => a.budget_id))) {
       input.onProgress?.();
-      await ledger.linkCardPayments(pg, budgetId);
+      await ledger.linkTransfers(pg, budgetId);
     }
-    timings.link_card_payments_ms = Date.now() - linkStart;
+    timings.link_transfers_ms = Date.now() - linkStart;
 
     await pg.query(
       'UPDATE public.connections SET last_synced_at = now(), updated_at = now() WHERE id = $1',
@@ -667,7 +830,7 @@ export async function refreshConnection(input: {
   userId: string;
   connectionId: string;
   aggregator: BankAggregator;
-  /** Re-import: ignore the watermark so the pull reaches the full window. */
+  /** Re-import history: a full pull of every account (see PullMode). */
   ignoreWatermark?: boolean;
   onProgress?: () => void;
   beforeCommit?: () => void | Promise<void>;

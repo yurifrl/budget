@@ -1,0 +1,2 @@
+{"issue_id":"budget-mjug","action":"save","at":"2026-11-24T14:36:44.122Z","actor":null,"data":{"status":"open","title":"Categorize page (web): bundles view + one-by-one view per the mock"}}
+{"issue_id":"budget-mjug","action":"dependency_added","at":"2026-11-24T14:36:44.124Z","actor":"yuri","data":{"target":"budget-edxg","type":"blocks"}}

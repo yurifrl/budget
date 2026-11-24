@@ -458,19 +458,33 @@ describe('pagination', () => {
     expect(pulled.results).toHaveLength(1);
   });
 
-  it('listTransactions stops at the MAX_PAGES cap when cursors never end', async () => {
+  it('listTransactions stops at the page valve when cursors never end', async () => {
     const { calls, fetchImpl } = makeFetch((url) => {
       if (url.pathname === '/auth') return authJson('key-1', 2 * 60 * 60 * 1000, 1_000_000);
       if (url.pathname === '/v2/transactions') return txnResult('cur-forever');
       return unexpected(url);
     });
     const client = new PluggyClient(cfg, fetchImpl, () => 1_000_000);
-    const capped = await client.listTransactions({ accountId: 'ac1' });
-    expect(capped.hasMore).toBe(true); // cursor never ended within the cap
+    const capped = await client.listTransactions({ accountId: 'ac1', maxPages: 20 });
+    expect(capped.hasMore).toBe(true); // cursor never ended within the valve
+    expect(capped.cursor).toBe('cursor=cur-forever');
+    expect(capped.pages).toBe(20);
     expect(callsTo(calls, '/v2/transactions')).toHaveLength(20);
   });
 
-  it('listTransactions slices to maxResults and stops early', async () => {
+  it('listTransactions pages past the old 20-page cap up to maxResults', async () => {
+    const { calls, fetchImpl } = makeFetch((url) => {
+      if (url.pathname === '/auth') return authJson('key-1', 2 * 60 * 60 * 1000, 1_000_000);
+      if (url.pathname === '/v2/transactions') return txnResult('cur-forever');
+      return unexpected(url);
+    });
+    const client = new PluggyClient(cfg, fetchImpl, () => 1_000_000);
+    const pulled = await client.listTransactions({ accountId: 'ac1', maxResults: 60 });
+    expect(pulled.results).toHaveLength(60);
+    expect(callsTo(calls, '/v2/transactions')).toHaveLength(60);
+  });
+
+  it('listTransactions stops after the page that reaches maxResults and returns where to resume', async () => {
     const { calls, fetchImpl } = makeFetch((url) => {
       if (url.pathname === '/auth') return authJson('key-1', 2 * 60 * 60 * 1000, 1_000_000);
       if (url.pathname === '/v2/transactions') return txnResult('cur2');
@@ -481,7 +495,51 @@ describe('pagination', () => {
     const sliced = await client.listTransactions({ accountId: 'ac1', maxResults: 1 });
     expect(sliced.results).toHaveLength(1);
     expect(sliced.hasMore).toBe(true); // a second transaction exists beyond the cap
+    expect(sliced.cursor).toBe('cursor=cur2');
     expect(callsTo(calls, '/v2/transactions')).toHaveLength(1);
+  });
+
+  it('listTransactions follows the `next` query-string shape with `after`', async () => {
+    let n = 0;
+    const { calls, fetchImpl } = makeFetch((url) => {
+      if (url.pathname === '/auth') return authJson('key-1', 2 * 60 * 60 * 1000, 1_000_000);
+      if (url.pathname === '/v2/transactions') {
+        n++;
+        return n === 1
+          ? { json: { results: [{ id: 'tx2', accountId: 'ac1', amount: -1, date: '2026-02-05', description: 'b' }], next: 'accountId=ac1&after=abc%3D%3D' } }
+          : { json: { results: [{ id: 'tx1', accountId: 'ac1', amount: -1, date: '2026-01-05', description: 'a' }], next: null } };
+      }
+      return unexpected(url);
+    });
+    const client = new PluggyClient(cfg, fetchImpl, () => 1_000_000);
+    const pulled = await client.listTransactions({ accountId: 'ac1' });
+    expect(pulled.results.map((t) => t.id)).toEqual(['tx2', 'tx1']);
+    expect(pulled.hasMore).toBe(false);
+    expect(pulled.oldestDate).toBe('2026-01-05');
+    const tx = callsTo(calls, '/v2/transactions');
+    expect(tx[1].url.searchParams.get('after')).toBe('abc==');
+    expect(tx[1].url.searchParams.get('accountId')).toBe('ac1');
+    expect(tx[1].url.searchParams.get('cursor')).toBeNull();
+  });
+
+  it('listTransactions resumes from a stored cursor, and restarts from the newest page when it is refused', async () => {
+    const { calls, fetchImpl } = makeFetch((url) => {
+      if (url.pathname === '/auth') return authJson('key-1', 2 * 60 * 60 * 1000, 1_000_000);
+      if (url.pathname === '/v2/transactions') {
+        const after = url.searchParams.get('after');
+        if (after === 'good') return { json: { results: [{ id: 'old', accountId: 'ac1', amount: -1, date: '2025-01-01', description: 'old' }], next: null } };
+        if (after === 'expired') return { status: 400, json: { message: 'Invalid cursor' } };
+        return { json: { results: [{ id: 'new', accountId: 'ac1', amount: -1, date: '2026-01-01', description: 'new' }, { id: 'mid', accountId: 'ac1', amount: -1, date: '2025-06-01', description: 'mid' }], next: null } };
+      }
+      return unexpected(url);
+    });
+    const client = new PluggyClient(cfg, fetchImpl, () => 1_000_000);
+    const resumed = await client.listTransactions({ accountId: 'ac1', cursor: 'after=good' });
+    expect(resumed.results.map((t) => t.id)).toEqual(['old']);
+    const restarted = await client.listTransactions({ accountId: 'ac1', cursor: 'after=expired', to: '2025-06-01' });
+    // Rows newer than `to` (already imported) are not collected.
+    expect(restarted.results.map((t) => t.id)).toEqual(['mid']);
+    expect(callsTo(calls, '/v2/transactions')).toHaveLength(3);
   });
 });
 

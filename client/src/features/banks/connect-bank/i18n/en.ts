@@ -38,6 +38,7 @@ export default {
   'row.reauthAdded': 'Reconnect to refresh credentials · added {stamp}',
   'row.reauthSandbox': 'Reconnect to refresh credentials · sandbox',
   'row.lastSync': 'Last sync: {stamp}',
+  'row.historyLoading': 'Importing older history — it continues with the next syncs.',
   'row.lastSyncSandbox': 'Last sync: {stamp} · sandbox',
   'row.lastAdded': 'Last sync: added {stamp}',
   'row.lastAddedSandbox': 'Last sync: added {stamp} · sandbox',

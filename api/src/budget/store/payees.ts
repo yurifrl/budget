@@ -73,6 +73,8 @@ export async function listPayees(db: Queryable, budgetId: string, hidden: string
     `SELECT p.id, p.name, p.transfer_account_id, p.deleted, p.hidden,
               p.categorization_mode, p.default_category_id,
               p.rename_match_type, p.rename_condition,
+              CASE WHEN p.transfer_rule IN ('auto','account','never') THEN p.transfer_rule END AS transfer_rule,
+              p.transfer_rule_account_id,
               coalesce(s.txn_count, 0) as transaction_count, s.last_used_date,
               inf.inferred_category_id, ic.name as inferred_category_name
        FROM payees p ${listStats} ${inferredStats}

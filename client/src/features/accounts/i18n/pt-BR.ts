@@ -22,6 +22,7 @@ const m: Translation<typeof en> = {
   'header.editAccount': 'Editar conta {name}',
   'header.lastReconciled': 'Última conciliação em {date}',
   'header.notReconciled': '🔒 Ainda não conciliada',
+  'header.futureInstallments': 'Parcelas futuras: {amount}',
   'header.toApprove': '{count} para aprovar',
   'header.toApproveLabel': {
     one: '{count} transação para aprovar',
@@ -142,6 +143,7 @@ const m: Translation<typeof en> = {
   'scheduled.title': 'Transações agendadas',
   'scheduled.rowLabel': 'Transação agendada {name}',
   'scheduled.selectLabel': 'Selecionar transação agendada {name}',
+  'scheduled.installmentLabel': 'Parcela futura do cartão {name}, ainda não faturada',
 
   // Selection bar
   'selection.closeMenu': 'Fechar menu',
