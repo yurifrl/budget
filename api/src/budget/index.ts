@@ -65,6 +65,12 @@ export { default as accountsRouter } from './routes/accounts';
 /** "May this user reach this budget" as SQL, for features that read budget rows by another key (connections). */
 export { accessibleBudgetSql } from './ownership';
 
+/** The existing payee categorization rule (fixed/auto/history), for features that answer it before the model (categorize). */
+export { suggestedCategoryForPayee } from './domain/categorization';
+
+/** The register's transfer plan (pending rows / suggestions), for features that read the same rows (categorize). */
+export { transferOverview } from './domain/transfer-links';
+
 /** Ledger write API for the connections sync engine (imported rows, payees, balances, card payments). */
 export * as ledger from './ledger';
 

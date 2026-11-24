@@ -13,6 +13,7 @@ import type { AiProviderId } from '@shared/contracts/ai';
 import { AiProviderError } from '../errors';
 import { chatTimeoutMs, DEFAULT_MODELS_TIMEOUT_MS, requestJson, type FetchLike } from '../http';
 import type { AiChatRequest, AiChatResult, AiJsonSchema, AiModel, AiProvider, AiToolCall } from '../types';
+import { tokenUsage } from './usage';
 
 export type StructuredOutput = 'json_schema' | 'json_object';
 
@@ -27,6 +28,15 @@ export type KeyCheck = (model: string | null) => {
   body?: unknown;
 };
 
+/**
+ * How this provider documents reasoning effort:
+ *  - `reasoning_effort`: the OpenAI Chat Completions field, also documented by
+ *    DeepSeek and Z.ai (GLM-5.3);
+ *  - `openrouter`: OpenRouter's normalized `reasoning: { effort }` map.
+ * Omitted entirely by providers that document neither.
+ */
+export type ReasoningEffortParam = 'reasoning_effort' | 'openrouter';
+
 export type OpenAiCompatibleConfig = {
   id: AiProviderId;
   /** Name used in error messages ("OpenRouter API 429: ..."). */
@@ -40,8 +50,25 @@ export type OpenAiCompatibleConfig = {
   structured: StructuredOutput;
   /** OpenAI's newer models want max_completion_tokens; the other three accept max_tokens. */
   tokenParam: 'max_tokens' | 'max_completion_tokens';
+  /**
+   * Whether the provider documents `tool_choice: "none"` (OpenAI family:
+   * function-calling guide; DeepSeek: chat-completion reference). Z.ai's
+   * OpenAPI documents only `"auto"` (`docs.z.ai/openapi.json`), so its entry
+   * sets false and the adapter keeps `tools` without a choice.
+   */
+  toolChoiceNone?: boolean;
   /** Drop ids this provider lists but this adapter cannot chat with (OpenAI's embeddings, audio, image). */
   filterModel?: (id: string) => boolean;
+  /**
+   * Documented reasoning-effort parameter. Absent = the provider documents
+   * none here and the field is omitted.
+   */
+  reasoningEffort?: ReasoningEffortParam;
+  /**
+   * Models that document the parameter (default: all). OpenAI supports
+   * `reasoning_effort` only on reasoning models; Z.ai documents it on GLM-5.3.
+   */
+  supportsReasoningEffort?: (id: string) => boolean;
 };
 
 type Json = Record<string, unknown>;
@@ -71,6 +98,16 @@ const OPENAI_NON_CHAT =
   /(^|[-/])(?:embedding|moderation|tts|whisper|transcribe|audio|realtime|image|sora|dall-e|codex|deep-research|instruct|pro|search-preview|chatgpt)(?:$|[-/])/;
 const OPENAI_CHAT_FAMILY = /^(?:gpt-|o\d|ft:)/;
 
+/**
+ * Chat models whose API documents `reasoning_effort`
+ * (developers.openai.com/api/docs/guides/reasoning, Chat Completions): the
+ * gpt-5+ families and the o-series. Earlier gpt-4 models and fine-tunes do not
+ * document it, so the adapter omits the field for them.
+ */
+export function isOpenAiReasoningModel(id: string): boolean {
+  return !id.startsWith('ft:') && /^(?:gpt-[5-9]|o\d)/.test(id);
+}
+
 export function isOpenAiChatModel(id: string): boolean {
   if (OPENAI_COMPLETIONS_FINE_TUNE.test(id)) return false;
   if (id.startsWith('ft:')) return !OPENAI_NON_CHAT.test(id.split(':')[1] ?? '');
@@ -98,11 +135,20 @@ export class OpenAiCompatibleProvider implements AiProvider {
     const body: Json = { model: request.model, messages: this.wireMessages(request) };
     if (request.temperature !== undefined) body.temperature = request.temperature;
     if (request.maxTokens !== undefined) body[this.config.tokenParam] = request.maxTokens;
+    if (
+      request.reasoningEffort &&
+      this.config.reasoningEffort &&
+      (this.config.supportsReasoningEffort?.(request.model) ?? true)
+    ) {
+      if (this.config.reasoningEffort === 'openrouter') body.reasoning = { effort: request.reasoningEffort };
+      else body.reasoning_effort = request.reasoningEffort;
+    }
     if (request.tools?.length) {
       body.tools = request.tools.map((tool) => ({
         type: 'function',
         function: { name: tool.name, description: tool.description, parameters: tool.parameters },
       }));
+      if (request.toolChoice === 'none' && this.config.toolChoiceNone !== false) body.tool_choice = 'none';
     }
     if (request.jsonSchema) this.applyStructured(body, request.jsonSchema);
     const json = await requestJson({
@@ -220,11 +266,13 @@ export class OpenAiCompatibleProvider implements AiProvider {
         : Array.isArray(content)
           ? content.map((part) => (typeof asRecord(part)?.text === 'string' ? (asRecord(part)!.text as string) : '')).join('')
           : null;
+    const usage = asRecord(root?.usage);
     return {
       text: text === '' ? null : text,
       toolCalls: this.parseToolCalls(message.tool_calls),
       model: typeof root?.model === 'string' ? root.model : requestedModel,
       finishReason: typeof choice.finish_reason === 'string' ? choice.finish_reason : null,
+      usage: tokenUsage(usage?.prompt_tokens, usage?.completion_tokens),
     };
   }
 

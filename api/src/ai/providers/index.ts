@@ -11,7 +11,7 @@ import type { AiProviderId } from '@shared/contracts/ai';
 import type { FetchLike } from '../http';
 import type { AiModel, AiProvider } from '../types';
 import { AnthropicProvider } from './anthropic';
-import { isOpenAiChatModel, OpenAiCompatibleProvider } from './openai-compatible';
+import { isOpenAiChatModel, isOpenAiReasoningModel, OpenAiCompatibleProvider } from './openai-compatible';
 
 /**
  * Test-only factory options: only the provider table sees them;
@@ -72,6 +72,9 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           keyCheck: () => ({ path: '/key' }),
           structured: 'json_schema',
           tokenParam: 'max_tokens',
+          // openrouter.ai/docs/guides/reasoning-tokens: a normalized
+          // `reasoning: {effort}` map; models without reasoning ignore it.
+          reasoningEffort: 'openrouter',
         },
         apiKey,
         options?.fetch,
@@ -95,6 +98,10 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           structured: 'json_schema',
           tokenParam: 'max_completion_tokens',
           filterModel: isOpenAiChatModel,
+          // developers.openai.com/api/docs/guides/reasoning: reasoning models
+          // only; the caller omits it for earlier chat families.
+          reasoningEffort: 'reasoning_effort',
+          supportsReasoningEffort: isOpenAiReasoningModel,
         },
         apiKey,
         options?.fetch,
@@ -123,6 +130,12 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           staticModels: ZAI_MODELS,
           structured: 'json_object',
           tokenParam: 'max_tokens',
+          // Its OpenAPI documents `tool_choice` only as "auto".
+          toolChoiceNone: false,
+          // docs.z.ai/guides/llm/glm-5.3 documents reasoning_effort on
+          // GLM-5.3; earlier models document no effort parameter here.
+          reasoningEffort: 'reasoning_effort',
+          supportsReasoningEffort: (id) => /^glm-5\.3/.test(id),
         },
         apiKey,
         options?.fetch,
@@ -139,6 +152,9 @@ const entries: Record<AiProviderId, ProviderEntry> = {
           keyCheck: () => ({ path: '/models' }),
           structured: 'json_object',
           tokenParam: 'max_tokens',
+          // api-docs.deepseek.com/guides/thinking_mode: thinking is on by
+          // default and reasoning_effort (low/high/max) sets its effort.
+          reasoningEffort: 'reasoning_effort',
         },
         apiKey,
         options?.fetch,

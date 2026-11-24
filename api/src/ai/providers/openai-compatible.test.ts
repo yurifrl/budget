@@ -107,6 +107,23 @@ describe('OpenAI-compatible chat request', () => {
     expect(result.text).toBeNull();
     expect(result.toolCalls).toEqual([{ id: 'call_1', name: 'list_categories', arguments: { budget_id: 'b1' } }]);
     expect(result.model).toBe('stub-model');
+    // The reply carries no usage block: the port reports null, never a guess.
+    expect(result.usage).toBeNull();
+  });
+
+  test('maps provider token usage onto the port', async () => {
+    const baseUrl = stub(() =>
+      Response.json({
+        model: 'stub-model',
+        choices: [{ message: { content: '{}' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 12, completion_tokens: 34 },
+      }),
+    );
+    const result = await createProvider('openai', 'sk-test-123', { baseUrl }).chat({
+      model: 'gpt-test',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect(result.usage).toEqual({ input: 12, output: 34 });
   });
 
   test('openrouter: max_tokens and json_schema', async () => {
@@ -370,5 +387,94 @@ describe('provider error mapping', () => {
     await expect(createProvider('openai', 'key', { baseUrl }).chat({ model: 'm', messages: [] })).rejects.toMatchObject({
       kind: 'bad_response',
     });
+  });
+});
+
+describe('OpenAI-compatible tool_choice on the final answer turn', () => {
+  test('openai: tools stay declared and tool_choice none disallows a new call', async () => {
+    const baseUrl = stub(() =>
+      chatReply({ content: '{"suggestions":[]}' }),
+    );
+    const provider = createProvider('openai', 'sk-test-123', { baseUrl });
+    await provider.chat({
+      model: 'gpt-test',
+      messages: [
+        { role: 'user', content: 'categorize this' },
+        { role: 'assistant', content: null, toolCalls: [{ id: 'call_1', name: 'list_categories', arguments: {} }] },
+        { role: 'tool', toolCallId: 'call_1', content: '{"groups":[]}' },
+        { role: 'user', content: 'answer now' },
+      ],
+      tools: [{ name: 'list_categories', description: 'List categories', parameters: { type: 'object' } }],
+      toolChoice: 'none',
+      jsonSchema: { name: 'category_suggestions', schema: { type: 'object' } },
+      maxTokens: 1024,
+    });
+    expect(captured[0]!.body).toMatchObject({
+      max_completion_tokens: 1024,
+      tools: [{ type: 'function', function: { name: 'list_categories' } }],
+      tool_choice: 'none',
+    });
+  });
+
+  test('zai: its OpenAPI documents only auto, so tools stay and tool_choice is omitted', async () => {
+    const baseUrl = stub(() => chatReply({ content: '{"suggestions":[]}' }));
+    const provider = createProvider('zai', 'sk-zai-123', { baseUrl });
+    await provider.chat({
+      model: 'glm-test',
+      messages: [
+        { role: 'user', content: 'categorize this' },
+        { role: 'assistant', content: null, toolCalls: [{ id: 'call_1', name: 'list_categories', arguments: {} }] },
+        { role: 'tool', toolCallId: 'call_1', content: '{"groups":[]}' },
+        { role: 'user', content: 'answer now' },
+      ],
+      tools: [{ name: 'list_categories', description: 'List categories', parameters: { type: 'object' } }],
+      toolChoice: 'none',
+      jsonSchema: { name: 'category_suggestions', schema: { type: 'object' } },
+      maxTokens: 1024,
+    });
+    const body = captured[0]!.body;
+    expect(body).toMatchObject({ max_tokens: 1024, tools: [{ type: 'function', function: { name: 'list_categories' } }] });
+    expect(body).not.toHaveProperty('tool_choice');
+  });
+});
+
+describe('OpenAI-compatible reasoning effort', () => {
+  test('openai sends reasoning_effort for reasoning models and omits it for older chat models', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
+    const provider = createProvider('openai', 'sk-test-123', { baseUrl });
+    await provider.chat({ model: 'gpt-5.5', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    await provider.chat({ model: 'gpt-4o', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    expect(captured[0]!.body).toMatchObject({ model: 'gpt-5.5', reasoning_effort: 'low' });
+    expect(captured[1]!.body).not.toHaveProperty('reasoning_effort');
+  });
+
+  test('openrouter uses the documented reasoning map', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
+    const provider = createProvider('openrouter', 'sk-or-v1-test', { baseUrl });
+    await provider.chat({ model: 'some/model', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    expect(captured[0]!.body).toMatchObject({ reasoning: { effort: 'low' } });
+  });
+
+  test('deepseek sends reasoning_effort', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
+    const provider = createProvider('deepseek', 'sk-ds-test', { baseUrl });
+    await provider.chat({ model: 'deepseek-flash', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    expect(captured[0]!.body).toMatchObject({ reasoning_effort: 'low' });
+  });
+
+  test('zai documents reasoning_effort on GLM-5.3 only', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
+    const provider = createProvider('zai', 'zai-key', { baseUrl });
+    await provider.chat({ model: 'glm-5.3', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    await provider.chat({ model: 'glm-4.6', messages: [{ role: 'user', content: 'x' }], reasoningEffort: 'low' });
+    expect(captured[0]!.body).toMatchObject({ reasoning_effort: 'low' });
+    expect(captured[1]!.body).not.toHaveProperty('reasoning_effort');
+  });
+
+  test('omits the field when the caller does not ask for effort', async () => {
+    const baseUrl = stub(() => chatReply({ content: 'ok' }));
+    const provider = createProvider('openai', 'sk-test-123', { baseUrl });
+    await provider.chat({ model: 'gpt-5.5', messages: [{ role: 'user', content: 'x' }] });
+    expect(captured[0]!.body).not.toHaveProperty('reasoning_effort');
   });
 });

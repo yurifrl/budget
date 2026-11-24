@@ -9,4 +9,5 @@ export { detectProvider } from './detect';
 export { providerFor, providerBaseUrl, type ResolvedAiKey } from './providers';
 export { redactSecrets } from './redact';
 export { AiProviderError, type AiErrorKind } from './errors';
-export type { AiChatRequest, AiChatResult, AiJsonSchema, AiMessage, AiModel, AiProvider, AiTool, AiToolCall } from './types';
+export { chatTimeoutMs } from './http';
+export type { AiChatRequest, AiChatResult, AiJsonSchema, AiMessage, AiModel, AiProvider, AiTokenUsage, AiTool, AiToolCall } from './types';

@@ -99,6 +99,7 @@ const m: Translation<typeof en> = {
   person_edits_own_name: 'Quem já entrou altera o próprio nome no perfil.',
   owner_cannot_be_removed: 'O dono do orçamento não pode ser removido.',
   invalid_backup: 'Este arquivo de backup não é válido, então nada foi restaurado.',
+  invalid_transaction_id: 'Esse id de transação não é válido.',
   server_reconnect_bank: 'Reconecte o seu banco.',
   server_quota_exhausted: 'O limite do banco foi atingido. Os dados voltam no próximo mês.',
   server_rate_limited: 'O banco está limitando as solicitações no momento. Tentaremos de novo em breve.',

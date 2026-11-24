@@ -128,6 +128,23 @@ describe('Anthropic chat request', () => {
     expect(captured[0]!.body).not.toHaveProperty('output_config');
     expect(result.text).toBe('hi');
     expect(result.finishReason).toBe('end_turn');
+    expect(result.usage).toBeNull();
+  });
+
+  test('maps Anthropic input/output tokens onto the port', async () => {
+    const baseUrl = stub(() =>
+      Response.json({
+        model: 'claude-test',
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: 'hi' }],
+        usage: { input_tokens: 21, output_tokens: 43 },
+      }),
+    );
+    const result = await createProvider('anthropic', 'sk-ant-test', { baseUrl }).chat({
+      model: 'claude-test',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect(result.usage).toEqual({ input: 21, output: 43 });
   });
 
   test('a tool loop echoes thinking blocks back unchanged', async () => {
@@ -254,5 +271,90 @@ describe('Anthropic errors', () => {
     await expect(createProvider('anthropic', 'key', { baseUrl }).chat({ model: 'm', messages: [] })).rejects.toMatchObject({
       kind: 'bad_response',
     });
+  });
+});
+
+describe('Anthropic tool history and the final structured turn', () => {
+  test('a tool_use history without tools is rejected like the documented API; the adapter keeps them', async () => {
+    // Anthropic's handle-tool-calls doc: "Send the request with the same
+    // `tools` as the first request" while tool_use blocks are in the history.
+    const baseUrl = stub((_req, body) => {
+      if (typeof body !== 'object' || body === null || !('messages' in body) || !Array.isArray(body.messages)) {
+        return Response.json({ type: 'error', error: { type: 'invalid_request_error', message: 'no messages' } }, { status: 400 });
+      }
+      const hasToolUse = body.messages.some((message: unknown) => {
+        if (typeof message !== 'object' || message === null || !('content' in message) || !Array.isArray(message.content)) return false;
+        return message.content.some((block: unknown) => typeof block === 'object' && block !== null && 'type' in block && block.type === 'tool_use');
+      });
+      const hasTools = 'tools' in body && Array.isArray(body.tools) && body.tools.length > 0;
+      if (hasToolUse && !hasTools) {
+        return Response.json(
+          { type: 'error', error: { type: 'invalid_request_error', message: 'tool_use ids were found without tool_result blocks' } },
+          { status: 400 },
+        );
+      }
+      return Response.json({
+        model: 'claude-test',
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: '{"suggestions":[]}' }],
+      });
+    });
+    const provider = createProvider('anthropic', 'sk-ant-test', { baseUrl });
+    const result = await provider.chat({
+      model: 'claude-test',
+      messages: [
+        { role: 'user', content: 'categorize this' },
+        { role: 'assistant', content: null, toolCalls: [{ id: 'toolu_1', name: 'list_categories', arguments: {} }] },
+        { role: 'tool', toolCallId: 'toolu_1', content: '{"groups":[]}' },
+        { role: 'user', content: 'answer now with JSON, do not call tools' },
+      ],
+      tools: [{ name: 'list_categories', description: 'List categories', parameters: { type: 'object' } }],
+      toolChoice: 'none',
+      jsonSchema: { name: 'category_suggestions', schema: { type: 'object' } },
+      maxTokens: 1024,
+    });
+
+    expect(result.text).toBe('{"suggestions":[]}');
+    const body = captured[0]!.body;
+    expect(body).toMatchObject({
+      max_tokens: 1024,
+      tools: [{ name: 'list_categories', description: 'List categories', input_schema: { type: 'object' } }],
+      tool_choice: { type: 'none' },
+    });
+  });
+});
+
+describe('Anthropic reasoning effort', () => {
+  const answerBody = () => ({
+    model: 'claude-test',
+    stop_reason: 'end_turn',
+    content: [{ type: 'text', text: 'ok' }],
+  });
+
+  test('sends output_config.effort on a model that documents it, beside the schema', async () => {
+    const baseUrl = stub(() => Response.json(answerBody()));
+    const provider = createProvider('anthropic', 'sk-ant-test', { baseUrl });
+    await provider.chat({
+      model: 'claude-opus-5-5',
+      messages: [{ role: 'user', content: 'categorize' }],
+      maxTokens: 4000,
+      reasoningEffort: 'low',
+      jsonSchema: { name: 'suggestions', schema: { type: 'object', properties: {} } },
+    });
+    expect((captured[0]!.body as Record<string, unknown>).output_config).toMatchObject({
+      effort: 'low',
+      format: { type: 'json_schema' },
+    });
+  });
+
+  test('omits effort for a model whose docs do not list it', async () => {
+    const baseUrl = stub(() => Response.json(answerBody()));
+    const provider = createProvider('anthropic', 'sk-ant-test', { baseUrl });
+    await provider.chat({
+      model: 'claude-3-5-sonnet-20241022',
+      messages: [{ role: 'user', content: 'categorize' }],
+      reasoningEffort: 'low',
+    });
+    expect(captured[0]!.body).not.toHaveProperty('output_config');
   });
 });

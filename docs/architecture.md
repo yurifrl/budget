@@ -194,6 +194,68 @@ start at `0100`). One image runs both the API and the worker
   Operations:
   `GET|PUT|DELETE /ai/credentials`, `GET /ai/credentials/test`,
   `POST /ai/provider-detect`, `POST /ai/models`; the key is never returned.
+- **Category suggestions.** `api/src/categorize/` is a new feature with no
+  HTTP surface yet; the queue/accept contracts are budget-edxg. A
+  `categorize_run` job (one per budget: subject key = budget id, so triggers
+  coalesce; `force` re-asks rows that already have suggestions) has a prepare
+  activity resolve the run's key through one `runActorForBudget` function
+  (today the budget owner: own key, else the shared key when the flag is on;
+  none → the run succeeds with a fixed sentence, no retries) and take a
+  keyset snapshot of candidates, then chunk activities on the `<queue>-ai`
+  task queue (1 activity start/s across pods, one at a time per worker) walk
+  the window below the last processed `(date, id)`. Candidates are the app's
+  "needs a category" rows (outflows, on-budget open accounts, no splits, no
+  transfer link/mark/rule, no adjustment payee; `candidates.test.ts` checks
+  the SQL against the client's `registerCategoryCell`). A chunk asks the
+  existing `suggestedCategoryForPayee` rule first (source `payee_rule`, no
+  model call, visible categories only) and sends only the rest to a bounded
+  tool loop (`get_transaction`, `list_categories`, `payee_history`,
+  `search_similar_transactions`; every query scopes `budget_id` in SQL, tool
+  ids must be uuids and no tool error escapes into the loop). Answers are
+  zod-validated, filtered to visible category ids, sanitized (reason ≤200
+  chars, no control/bidi), confidence capped below the rule's 1, deduped and
+  capped at three; pending rows are upserted by `(transaction_id, rank)` into
+  `public.category_suggestions` (0110, plus the 0111 category index), only
+  while the transaction is still uncategorized, and every attempt is recorded
+  in `public.categorize_attempts` (0112: outcome suggested/no_suggestion/
+  failed, failure kind, counter, model, payee+memo fingerprint) so a normal
+  run skips rows already classified empty (until payee/memo change) or failed
+  (backoff, 3 attempts) and the 100-row cap walks the backlog across runs. A
+  transaction with any decided suggestion is never re-asked or overwritten,
+  even by a forced run; an all-unknown-id answer writes nothing. The job never
+  writes `transactions.category_id`. Cost caps: 4000 output tokens per turn
+  (thinking included; adapters ask for `low` reasoning effort where
+  documented), 6 calls and 80k tokens per transaction, 5 transactions per
+  chunk, 100 per run (remainder next run), and the chunk activity deadline is
+  derived from those (81 min); calls are serialized per key and a retried
+  chunk resumes from its heartbeat cursor and token totals. Retry policy by
+  provider kind lives in the chunk: `timeout` once per transaction,
+  `bad_response`, `truncated` (stop_reason max_tokens / finish_reason length)
+  and request-scoped 4xx (400/413/422) count that transaction failed, one
+  failure never fails the run, and 3 consecutive request failures stop the run
+  with a user-safe systematic failure; `auth`/account-level `permanent` stop
+  the run non-retryably, one 429 retries the transaction after a short wait
+  and a second is retried by Temporal with the provider's retry-after,
+  `transient` retries the activity. Untrusted text is capped (200 chars per
+  string, 40k per tool result) and free bank text has CPF/CNPJ/account-shaped
+  digit runs masked; card-payment/internal categories are never offered.
+  The final structured-output turn keeps the tools declared (Anthropic's
+  tool-use rule) and disables tool choice where documented. Activity results
+  and logs carry counts, ids, cursor and Postgres codes only; no provider
+  text or key is kept. `AiChatResult.usage` (provider-reported input/output
+  tokens) was added to the AI port so the ledger reports token usage per run.
+  `SuggestionRow.bank` (`BankFacts`, optional fields, null for hand-entered
+  rows) carries the merchant panel facts from `raw_payload` — merchant trade
+  and legal name, CNPJ, business category/CNAE, operation type and the PIX
+  counterparty — to `readCategorySuggestions` and `get_transaction`; there is
+  no map panel and no location data. The candidate rule is the shared
+  `needsCategory` (`shared/src/domain/category-needs.ts`), used by the
+  register cell too; transfer-pending comes from `transferOverview` and the
+  equivalence test compares the SQL with the shared predicate. Imports for
+  the next task: `startCategorizeRun`, `categorizeRunStatus`,
+  `readCategorySuggestions`, `readCategorizeAttempts` (threshold at read
+  time; caller checks budget access; attempts distinguish "not classified"
+  from "classified, none").
 - **Repeat-rule tick.** Still an in-process interval in the API
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.
