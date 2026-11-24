@@ -92,3 +92,70 @@ export async function getImportMetadata(db: Queryable, transactionId: string): P
     updatedAt: row.updated_at,
   };
 }
+
+/** One imported card row carrying installment metadata (see `listInstallmentSources`). */
+export type InstallmentSourceRow = {
+  id: string;
+  account_id: string;
+  /** `YYYY-MM-DD`. */
+  date: string;
+  /** Signed milliunits (bigint arrives as a string). */
+  amount: string | number;
+  category_id: string | null;
+  deleted: boolean;
+  /** The bank's description as last received (falls back to the import payee name). */
+  description: string | null;
+  raw_payload: Record<string, unknown>;
+};
+
+/**
+ * Every bank-imported row of the budget's open accounts whose raw payload
+ * says it is a card installment (`creditCardMetadata.totalInstallments`,
+ * either spelling; only card rows carry it, whatever type the budget account
+ * was given), deleted rows
+ * included (they still prove that installment was billed). Input of the
+ * register's derived upcoming installments.
+ */
+export async function listInstallmentSources(db: Queryable, budgetId: string): Promise<InstallmentSourceRow[]> {
+  const r = await db.query<InstallmentSourceRow>(
+    `SELECT t.id, t.account_id, t.date::text AS date, t.amount, t.category_id, t.deleted,
+            COALESCE(s.raw_payload->>'description', t.import_payee_name) AS description,
+            s.raw_payload
+     FROM connection_transactions s
+     JOIN transactions t ON t.id = s.transaction_id
+     JOIN accounts ac ON ac.id = t.account_id
+     WHERE s.budget_id = $1 AND t.budget_id = $1
+       AND NOT ac.deleted AND NOT ac.closed
+       AND COALESCE(s.raw_payload->'creditCardMetadata'->>'totalInstallments',
+                    s.raw_payload->'creditCardMetadata'->>'totalInstalments') IS NOT NULL`,
+    [budgetId],
+  );
+  return r.rows;
+}
+
+/**
+ * Descriptions of the POSTED (billed) live rows of `accountId` that are
+ * installment `number` of `total` of a purchase made on `purchaseDate`. The
+ * sync compares their stems to skip a PENDING copy of an installment that was
+ * already paid (Itaú keeps listing it after an early payment).
+ */
+export async function postedInstallmentDescriptions(
+  db: Queryable,
+  accountId: string,
+  installment: { number: number; total: number; purchaseDate: string | null },
+): Promise<string[]> {
+  const r = await db.query<{ description: string | null }>(
+    `SELECT COALESCE(s.raw_payload->>'description', t.import_payee_name) AS description
+     FROM connection_transactions s
+     JOIN transactions t ON t.id = s.transaction_id
+     WHERE t.account_id = $1 AND NOT t.deleted
+       AND upper(s.raw_payload->>'status') = 'POSTED'
+       AND COALESCE(s.raw_payload->'creditCardMetadata'->>'installmentNumber',
+                    s.raw_payload->'creditCardMetadata'->>'instalmentNumber') = $2
+       AND COALESCE(s.raw_payload->'creditCardMetadata'->>'totalInstallments',
+                    s.raw_payload->'creditCardMetadata'->>'totalInstalments') = $3
+       AND left(COALESCE(s.raw_payload->'creditCardMetadata'->>'purchaseDate', ''), 10) = $4`,
+    [accountId, String(installment.number), String(installment.total), installment.purchaseDate ?? ''],
+  );
+  return r.rows.map((row) => row.description ?? '');
+}

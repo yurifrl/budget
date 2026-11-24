@@ -33,6 +33,7 @@ import { HttpError } from '../core/validate';
 import { getConnectionByUser, setConnectionInstitution, withLinkedBy, type ConnectionRow, type ConnectionWithLinker } from './store';
 import { ALL_HISTORY_DAYS, effectiveSyncWindowDays, getSyncWindowDays } from './settings';
 import type { AggregatedTransaction, BankAggregator, TransactionPull } from './types';
+import { isPaidInstallmentCopy, PAID_INSTALLMENT_REASON } from './installments';
 
 /** Counts reported to the caller. */
 export interface SyncResult {
@@ -49,6 +50,8 @@ export interface SyncResult {
   skipped_other_account: number;
   /** Where the `skipped_other_account` rows live (always accounts of the same budget). */
   skipped_accounts: SkippedAccount[];
+  /** PENDING card installments already imported as POSTED (Itaú's copy after an early payment): not imported. */
+  skipped_paid_installment: number;
   /** Rows that failed unexpectedly; each rolled back alone, the rest committed. */
   failed: number;
   /** The first failures (capped at MAX_RECORDED_FAILURES), for the job log. Not user-facing. */
@@ -78,6 +81,7 @@ export const emptySyncResult = (): SyncResult => ({
   skipped_deleted: 0,
   skipped_other_account: 0,
   skipped_accounts: [],
+  skipped_paid_installment: 0,
   failed: 0,
   failures: [],
 });
@@ -609,6 +613,11 @@ async function syncOnce(
             const prior = await findImportedBankId(pg, acc.budget_id, row.provider, txn.externalId);
             if (prior) {
               recordSkip(result, prior, acc);
+              continue;
+            }
+            if (await isPaidInstallmentCopy(pg, acc.id, txn)) {
+              result.skipped_paid_installment += 1;
+              console.info(`Connections sync: bank transaction ${txn.externalId} skipped: ${PAID_INSTALLMENT_REASON}`);
               continue;
             }
             // Fresh import — bank-confirmed rows land cleared (the user-visible

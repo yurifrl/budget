@@ -182,6 +182,13 @@ export interface Transaction {
    */
   upcoming: boolean;
   /**
+   * Set only on a derived upcoming card installment (budget-lubt): installment
+   * `number` of `total` of a purchase the bank has not billed yet. Read-only:
+   * the server computes it per read (it has no stored row to edit or delete);
+   * `upcoming` is true, so it stays out of balances and budget activity.
+   */
+  installment?: { number: number; total: number };
+  /**
    * Split legs (syscd-app-rlt), each owning its own category. Present only on
    * split transactions; the parent then carries categoryId null ("Split").
    */

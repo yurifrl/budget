@@ -7,6 +7,11 @@
  * right-aligned amount. Selecting the checkbox highlights the row; pressing
  * the row opens the same editor a register row would (inline on desktop, the
  * edit sheet on phone).
+ *
+ * Derived upcoming card installments (budget-lubt) are read-only rows: dimmed,
+ * named by their purchase with the "kk/NN" fraction as a pill that never
+ * truncates, a card glyph instead of the repeat one, and no editor (the
+ * server computes them per read; there is no stored row to edit).
  */
 
 import { useState } from 'react';
@@ -15,7 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import type { Budget, Transaction } from '@/domain/types';
-import { colors } from '@/ui/theme';
+import { installmentParts } from '@/domain/register';
+import { colors, radius } from '@/ui/theme';
 import { InlineAddRow } from './register/InlineAddRow';
 import { t } from './i18n';
 import { displaySystemName } from '@/domain/systemNames';
@@ -79,12 +85,17 @@ export function ScheduledSection({
         ? rows.map((txn) => {
             const checked = selected.has(txn.id);
             const account = budget.accounts.find((a) => a.id === txn.accountId);
+            const installment = installmentParts(txn);
             return (
               <View key={txn.id}>
                 <Pressable
-                  style={[styles.row, checked && styles.rowSelected]}
-                  accessibilityLabel={t('scheduled.rowLabel', { name: displaySystemName(txn.payee) || account?.name || '' })}
-                  onPress={() => openEditor(txn)}
+                  style={[styles.row, checked && styles.rowSelected, installment && !checked && styles.rowInstallment]}
+                  accessibilityLabel={
+                    installment
+                      ? t('scheduled.installmentLabel', { name: displaySystemName(txn.payee) })
+                      : t('scheduled.rowLabel', { name: displaySystemName(txn.payee) || account?.name || '' })
+                  }
+                  onPress={installment ? undefined : () => openEditor(txn)}
                 >
                   <Pressable
                     style={styles.checkHit}
@@ -105,11 +116,17 @@ export function ScheduledSection({
                     style={[styles.name, checked && styles.textOn]}
                     numberOfLines={1}
                   >
-                    {account?.name ?? displaySystemName(txn.payee ?? '')}
+                    {installment ? installment.name : (account?.name ?? displaySystemName(txn.payee ?? ''))}
                   </Text>
+                  {installment ? (
+                    <Text style={[styles.fraction, checked && styles.fractionOn]}>{installment.fraction}</Text>
+                  ) : null}
                   <Text style={[styles.date, checked && styles.textOn]}>
                     {formatDate(txn.date)}
                   </Text>
+                  {installment ? (
+                    <Ionicons name="card-outline" size={13} color={checked ? colors.white : colors.muted} />
+                  ) : null}
                   {txn.repeatRuleId ? (
                     <Ionicons
                       name="repeat"
@@ -166,6 +183,20 @@ const styles = StyleSheet.create({
   rowSelected: {
     backgroundColor: colors.indigo,
   },
+  // Derived card installment: dimmed like an upcoming register row.
+  rowInstallment: { opacity: 0.6 },
+  fraction: {
+    fontSize: 10,
+    fontWeight: '700',
+    paddingVertical: 1,
+    paddingHorizontal: 7,
+    borderRadius: radius.pill,
+    backgroundColor: colors.grayPillBg,
+    color: colors.muted,
+    overflow: 'hidden',
+    fontVariant: ['tabular-nums'],
+  },
+  fractionOn: { backgroundColor: colors.indigo2, color: colors.white },
   checkHit: { padding: 2 },
   box: {
     width: 18,

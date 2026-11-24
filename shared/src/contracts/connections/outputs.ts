@@ -114,6 +114,8 @@ export const syncCountsSchema = z.object({
   skipped_other_account: z.number(),
   /** Per account, where the `skipped_other_account` rows live. */
   skipped_accounts: z.array(syncSkippedAccountSchema),
+  /** PENDING card installments already imported as POSTED (the bank's leftover copy after an early payment): not imported. Optional: runs recorded before it existed lack it. */
+  skipped_paid_installment: z.number().optional(),
   /** Bank transactions that failed to import (each rolled back alone; the rest of the sync committed). */
   failed: z.number(),
 });

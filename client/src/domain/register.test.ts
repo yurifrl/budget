@@ -3,6 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { moneyFormat } from './format';
 import {
   filterRegisterTxns,
+  futureInstallmentsTotal,
+  installmentParts,
   registerCategoryCell,
   registerRunningBalances,
   scopeBalances,
@@ -159,6 +161,32 @@ describe('splitScheduled', () => {
     expect(ids(register)).toEqual(['today', 'past']);
     expect(ids(scheduled)).toEqual(['f']);
   });
+  test('derived upcoming installments always go to Scheduled, even past-dated', () => {
+    const inst = { number: 3, total: 12 };
+    const rows = [
+      txn({ id: 'i-future', date: '2026-04-05', upcoming: true, installment: inst }),
+      txn({ id: 'i-past', date: '2026-03-05', upcoming: true, installment: inst }),
+      txn({ id: 'real', date: '2026-03-05' }),
+    ];
+    const { register, scheduled } = splitScheduled(rows, '2026-03-10');
+    expect(ids(register)).toEqual(['real']);
+    expect(ids(scheduled)).toEqual(['i-future', 'i-past']);
+  });
+});
+
+describe('futureInstallmentsTotal', () => {
+  test('sums the derived installments only, as an amount owed', () => {
+    const inst = { number: 2, total: 4 };
+    expect(
+      futureInstallmentsTotal([
+        txn({ id: 'a', outflow: 1500, upcoming: true, installment: inst }),
+        txn({ id: 'b', outflow: 1500, upcoming: true, installment: inst }),
+        txn({ id: 'repeat', outflow: 9999, upcoming: true }),
+        txn({ id: 'real', outflow: 777 }),
+      ]),
+    ).toBe(3000);
+    expect(futureInstallmentsTotal([txn({ id: 'real', outflow: 777 })])).toBe(0);
+  });
 });
 
 describe('registerRunningBalances', () => {
@@ -178,6 +206,16 @@ describe('registerRunningBalances', () => {
     expect(map.get('n')).toBe(1500);
     expect(map.get('o')).toBe(1800);
   });
+  test('a past-dated derived installment never enters the running balance', () => {
+    const map = registerRunningBalances(
+      true,
+      account,
+      [...rows, txn({ id: 'inst', date: '2026-03-05', outflow: 50, upcoming: true, installment: { number: 2, total: 3 } })],
+      '2026-03-10',
+    );
+    expect(map.has('inst')).toBe(false);
+    expect(map.get('o')).toBe(1800);
+  });
 });
 
 describe('scopeBalances', () => {
@@ -188,5 +226,21 @@ describe('scopeBalances', () => {
     ] as unknown as Account[];
     expect(scopeBalances(accts)).toEqual({ cleared: 105, uncleared: -23, working: 82 });
     expect(scopeBalances([])).toEqual({ cleared: 0, uncleared: 0, working: 0 });
+  });
+});
+
+describe('installmentParts', () => {
+  test('splits the purchase name from the kk/NN fraction', () => {
+    expect(installmentParts({ payee: 'ACADEMIA ACQUA 03/12', installment: { number: 3, total: 12 } })).toEqual({
+      name: 'ACADEMIA ACQUA',
+      fraction: '03/12',
+    });
+    expect(installmentParts({ payee: 'Gym (renamed)', installment: { number: 3, total: 12 } })).toEqual({
+      name: 'Gym (renamed)',
+      fraction: '03/12',
+    });
+  });
+  test('null for a row that is not a derived installment', () => {
+    expect(installmentParts({ payee: 'ACADEMIA ACQUA 03/12' })).toBeNull();
   });
 });

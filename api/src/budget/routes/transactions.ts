@@ -27,7 +27,8 @@ import { linkCardPayments } from '../domain/card-payments';
 import { deleteMirror, insertMirror, resolveTransferPeer, syncMirror } from '../domain/transfers';
 import { advanceOccurrence } from '../domain/repeat-schedule';
 import { applyRules } from '@shared/domain/payees';
-import { getImportMetadata } from '../../connections';
+import { getImportMetadata, listInstallmentSources } from '../../connections';
+import { upcomingInstallmentRows } from '../domain/upcoming-installments';
 import { budgetRouter } from '../router';
 import { findAccountInBudget } from '../store/accounts';
 import { categoryInBudget } from '../store/categories';
@@ -35,6 +36,9 @@ import { getRepeatRuleSchedule, skipRepeatRulePast } from '../store/repeat-rules
 import * as txnStore from '../store/transactions';
 
 type CreateTxn = z.output<typeof createTxnSchema>;
+
+/** `YYYY-MM-DD` of a list row's date (pg hands DATE columns over as a Date). */
+const dateOf = (d: unknown): string => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
 
 /** Insert one transaction (+ split legs / transfer mirror) and apply balance deltas, atomically. */
 async function createTransaction(
@@ -117,7 +121,12 @@ export const operations = [
       list.push(row);
       byTxn.set(row.transaction_id, list);
     }
-    return rows.map((t) => ({ ...t, subtransactions: byTxn.get(t.id) ?? [] }));
+    const stored = rows.map((t) => ({ ...t, subtransactions: byTxn.get(t.id) ?? [] }));
+    // Card installments the bank has not billed yet: derived per read, never
+    // stored (see domain/upcoming-installments), merged newest first.
+    const upcoming = upcomingInstallmentRows(await listInstallmentSources(pool, budgetId));
+    if (upcoming.length === 0) return stored;
+    return [...upcoming.reverse(), ...stored].sort((a, b) => dateOf(b.date).localeCompare(dateOf(a.date)));
   }),
 
   // Detail read: the row is re-scoped by budget_id in SQL before its import

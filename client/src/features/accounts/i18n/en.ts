@@ -19,6 +19,7 @@ export default {
   'header.editAccount': 'Edit account {name}',
   'header.lastReconciled': 'Last reconciled {date}',
   'header.notReconciled': '🔒 Not Yet Reconciled',
+  'header.futureInstallments': 'Future installments: {amount}',
   'header.toApprove': '{count} to approve',
   'header.toApproveLabel': {
     one: '{count} transaction to approve',
@@ -139,6 +140,7 @@ export default {
   'scheduled.title': 'Scheduled Transactions',
   'scheduled.rowLabel': 'Scheduled transaction {name}',
   'scheduled.selectLabel': 'Select scheduled transaction {name}',
+  'scheduled.installmentLabel': 'Future card installment {name}, not billed yet',
 
   // Selection bar
   'selection.closeMenu': 'Close menu',

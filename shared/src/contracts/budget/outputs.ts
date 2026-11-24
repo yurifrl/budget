@@ -311,9 +311,18 @@ export const transactionRowSchema = z.object({
   occurrence_date: nullableString,
   /** Split legs; empty when the transaction is not split (list reads only). */
   subtransactions: z.array(subTransactionRowSchema).optional(),
-  /** Materialized future occurrence of a repeat rule. */
+  /** Materialized future occurrence of a repeat rule, or a derived upcoming card installment (see `installment`). */
   upcoming: z.boolean(),
   deleted: z.boolean(),
+  /**
+   * List reads only, on derived rows: a card installment the bank has not
+   * billed yet (installment `number` of `total` of a purchase whose earlier
+   * installment was imported). Computed at read time, never stored: `id` is
+   * `installment:<source transaction id>:<number>` and is not addressable by
+   * any other operation; `upcoming` is true, so it counts in no balance and
+   * no budget activity. Absent on stored rows.
+   */
+  installment: z.object({ number: z.number().int(), total: z.number().int() }).optional(),
 });
 
 /** A split leg on the detail read, with its category's name. */

@@ -27,7 +27,7 @@ import { workingBalance } from "@/domain/engine";
 import { todayIso } from "@/domain/format";
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import type { Transaction } from "@/domain/types";
-import { registerRunningBalances, scopeBalances } from "@/domain/register";
+import { futureInstallmentsTotal, registerRunningBalances, scopeBalances } from "@/domain/register";
 import { colors, radius } from "@/ui/theme";
 import { usePeople } from "@/features/people";
 import { useBudgetModel } from "@/state/useBudgetModel";
@@ -199,6 +199,7 @@ export function AccountsScreen() {
             showReconciled={filter.showReconciled}
             onToggleReconciled={filter.setShowReconciled}
             totals={totals}
+            futureInstallments={selectedAccount ? futureInstallmentsTotal(transactions) : 0}
             unapprovedCount={unapprovedCount}
             showUnapprovedOnly={filter.showUnapprovedOnly}
             onToggleUnapprovedOnly={filter.toggleUnapprovedOnly}

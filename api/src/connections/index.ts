@@ -16,6 +16,12 @@ export {
   PLUGGY_ACTIVITIES_PER_SECOND,
   PLUGGY_QUEUE_SUFFIX,
 } from './jobspec';
-// What budget reads/writes in the connections tables (account linking, card-payment pairing).
-export { blockImportShadows, blockedImportShadowIds, findUserConnection, getImportMetadata } from './ledger-reads';
-export type { ImportMetadata } from './ledger-reads';
+// What budget reads/writes in the connections tables (account linking, card-payment pairing, card installments).
+export {
+  blockImportShadows,
+  blockedImportShadowIds,
+  findUserConnection,
+  getImportMetadata,
+  listInstallmentSources,
+} from './ledger-reads';
+export type { ImportMetadata, InstallmentSourceRow } from './ledger-reads';

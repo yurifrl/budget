@@ -102,16 +102,45 @@ export function filterRegisterTxns(
 
 /**
  * Future-dated rows leave the register and render in the "Scheduled
- * Transactions" section (syscd-app-5nz); the rest stay in the list.
+ * Transactions" section (syscd-app-5nz); the rest stay in the list. Derived
+ * upcoming card installments always go to Scheduled, even once their
+ * projected date has passed: they are read-only placeholders, never register
+ * rows (selection, bulk actions and the row editor work on stored rows).
  */
 export function splitScheduled(
   rows: Transaction[],
   today: string,
 ): { register: Transaction[]; scheduled: Transaction[] } {
+  const scheduled = (t: Transaction) => t.date > today || t.installment != null;
   return {
-    register: rows.filter((t) => t.date <= today),
-    scheduled: rows.filter((t) => t.date > today),
+    register: rows.filter((t) => !scheduled(t)),
+    scheduled: rows.filter(scheduled),
   };
+}
+
+/**
+ * A derived installment's payee split for display: the purchase name and the
+ * "kk/NN" fraction, so a narrow row can truncate the name and keep the
+ * fraction visible. Null for any other row.
+ */
+export function installmentParts(t: Pick<Transaction, 'payee' | 'installment'>): { name: string; fraction: string } | null {
+  if (!t.installment) return null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const fraction = `${pad(t.installment.number)}/${pad(t.installment.total)}`;
+  const payee = t.payee ?? '';
+  const name = payee.endsWith(fraction) ? payee.slice(0, -fraction.length).trim() : payee.trim();
+  return { name, fraction };
+}
+
+/**
+ * Sum of the derived upcoming card installments in `transactions`, as a
+ * positive amount owed (cents). The account header shows it as "Future
+ * installments" when it is above zero.
+ */
+export function futureInstallmentsTotal(transactions: readonly Transaction[]): Cents {
+  let total = 0;
+  for (const t of transactions) if (t.installment) total += t.outflow - t.inflow;
+  return total;
 }
 
 /**
@@ -129,7 +158,7 @@ export function registerRunningBalances(
 ): Map<string, Cents> {
   if (!show || !account) return new Map<string, Cents>();
   return computeRunningBalances(
-    transactions.filter((t) => t.date <= today),
+    transactions.filter((t) => t.date <= today && t.installment == null),
     workingBalance(account),
   );
 }

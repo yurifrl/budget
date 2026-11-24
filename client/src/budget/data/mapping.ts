@@ -188,6 +188,7 @@ export function assembleBudget(src: BudgetSource): Budget {
       repeat: t.repeat as RepeatCadence,
       repeatRuleId: t.repeat_rule_id ?? null,
       upcoming: t.upcoming,
+      ...(t.installment ? { installment: t.installment } : {}),
       importId: t.import_id ?? null,
       matchedTransactionId: t.matched_transaction_id ?? null,
       transferAccountId: t.transfer_account_id ?? transferPeerAccountId(payee, src.accounts, t.account_id) ?? null,
