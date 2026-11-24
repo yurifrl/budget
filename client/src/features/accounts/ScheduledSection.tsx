@@ -83,9 +83,10 @@ export function ScheduledSection({
       </Pressable>
       {open
         ? rows.map((txn) => {
-            const checked = selected.has(txn.id);
             const account = budget.accounts.find((a) => a.id === txn.accountId);
             const installment = installmentParts(txn);
+            // A derived installment is read-only: it cannot be selected.
+            const checked = !installment && selected.has(txn.id);
             return (
               <View key={txn.id}>
                 <Pressable
@@ -97,19 +98,26 @@ export function ScheduledSection({
                   }
                   onPress={installment ? undefined : () => openEditor(txn)}
                 >
-                  <Pressable
-                    style={styles.checkHit}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked }}
-                    accessibilityLabel={t('scheduled.selectLabel', { name: displaySystemName(txn.payee) || account?.name || '' })}
-                    onPress={() => toggle(txn.id)}
-                  >
-                    <View style={[styles.box, checked && styles.boxChecked]}>
-                      {checked ? (
-                        <Ionicons name="checkmark" size={13} color={colors.white} />
-                      ) : null}
+                  {installment ? (
+                    // Same footprint as the checkbox so the columns stay aligned.
+                    <View style={styles.checkHit}>
+                      <View style={styles.boxSpacer} />
                     </View>
-                  </Pressable>
+                  ) : (
+                    <Pressable
+                      style={styles.checkHit}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked }}
+                      accessibilityLabel={t('scheduled.selectLabel', { name: displaySystemName(txn.payee) || account?.name || '' })}
+                      onPress={() => toggle(txn.id)}
+                    >
+                      <View style={[styles.box, checked && styles.boxChecked]}>
+                        {checked ? (
+                          <Ionicons name="checkmark" size={13} color={colors.white} />
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  )}
                   {installment ? (
                     // In place of the flag/attachment glyphs (a placeholder has neither):
                     // keeps the purchase name readable at phone width.
@@ -224,6 +232,7 @@ const styles = StyleSheet.create({
   },
   fractionOn: { backgroundColor: colors.indigo2, color: colors.white },
   checkHit: { padding: 2 },
+  boxSpacer: { width: 18, height: 18 },
   box: {
     width: 18,
     height: 18,
