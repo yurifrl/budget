@@ -35,14 +35,17 @@ export const DEFAULT_MODELS_TIMEOUT_MS = 15_000;
 const DEFAULT_ASSUMED_MAX_TOKENS = 16_000;
 /** Conservative output speed used to size a chat deadline from its token cap. */
 const CHAT_MIN_OUTPUT_TOKENS_PER_SECOND = 25;
+/** Hard ceiling for one chat turn: a huge cap cannot make the call unbounded. */
+const CHAT_MAX_TIMEOUT_MS = 15 * 60_000;
 
 /**
  * Deadline for one chat call: the 60 s floor, or enough for the requested cap
- * (16k -> 640 s, whether the cap was passed or assumed).
+ * (16k -> 640 s, whether the cap was passed or assumed), capped at 15 minutes.
  */
 export function chatTimeoutMs(maxTokens?: number): number {
   const cap = maxTokens && maxTokens > 0 ? maxTokens : DEFAULT_ASSUMED_MAX_TOKENS;
-  return Math.max(DEFAULT_CHAT_TIMEOUT_MS, Math.ceil((cap / CHAT_MIN_OUTPUT_TOKENS_PER_SECOND) * 1000));
+  const deadline = Math.max(DEFAULT_CHAT_TIMEOUT_MS, Math.ceil((cap / CHAT_MIN_OUTPUT_TOKENS_PER_SECOND) * 1000));
+  return Math.min(deadline, CHAT_MAX_TIMEOUT_MS);
 }
 
 export type JsonRequest = {

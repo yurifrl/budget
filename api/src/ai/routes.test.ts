@@ -50,7 +50,7 @@ const MODELS: AiModel[] = [
   { id: 'model-a', name: 'Model A', contextLength: 128_000 },
   { id: 'model-b', name: 'Model B', contextLength: null },
 ];
-type Call = { kind: 'verify' | 'list'; provider: AiProviderId; apiKey: string };
+type Call = { kind: 'verify' | 'list'; provider: AiProviderId; apiKey: string; model?: string };
 let calls: Call[] = [];
 let verifyFailure: unknown = null;
 let listFailure: unknown = null;
@@ -64,8 +64,8 @@ const fakeEntry = (id: AiProviderId): ProviderEntry => ({
     chat: async () => {
       throw new Error('chat is not used by the key routes');
     },
-    verifyKey: async (_model?: string) => {
-      calls.push({ kind: 'verify', provider: id, apiKey });
+    verifyKey: async (model?: string) => {
+      calls.push({ kind: 'verify', provider: id, apiKey, ...(model === undefined ? {} : { model }) });
       if (verifyFailure) throw verifyFailure;
       return verifyModels;
     },
@@ -156,7 +156,7 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     });
     expect(JSON.stringify(res.json)).not.toContain(KEY);
     expect(calls).toEqual([
-      { kind: 'verify', provider: 'openrouter', apiKey: KEY },
+      { kind: 'verify', provider: 'openrouter', apiKey: KEY, model: 'model-a' },
       { kind: 'list', provider: 'openrouter', apiKey: KEY },
     ]);
     const row = await store.getCredential(pool, user.id);
@@ -315,7 +315,7 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     const tested = await op('ai_credentials_test', {});
     expect(tested.json).toEqual({ provider: 'anthropic', models: 2 });
     expect(calls).toEqual([
-      { kind: 'verify', provider: 'anthropic', apiKey: SHARED_KEY },
+      { kind: 'verify', provider: 'anthropic', apiKey: SHARED_KEY, model: SHARED_MODEL },
       { kind: 'list', provider: 'anthropic', apiKey: SHARED_KEY },
     ]);
 
@@ -402,12 +402,12 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     verifyModels = MODELS;
     const saved = await op('ai_credentials_save', { api_key: KEY, model: 'model-a' });
     expect(saved.status).toBe(200);
-    expect(calls).toEqual([{ kind: 'verify', provider: 'openrouter', apiKey: KEY }]);
+    expect(calls).toEqual([{ kind: 'verify', provider: 'openrouter', apiKey: KEY, model: 'model-a' }]);
 
     calls = [];
     const tested = await op('ai_credentials_test', {});
     expect(tested.json).toEqual({ provider: 'openrouter', models: 2 });
-    expect(calls).toEqual([{ kind: 'verify', provider: 'openrouter', apiKey: KEY }]);
+    expect(calls).toEqual([{ kind: 'verify', provider: 'openrouter', apiKey: KEY, model: 'model-a' }]);
   });
 
   test('a 403 is a refused key, not a special permission case', async () => {
@@ -423,7 +423,7 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     const res = await op('ai_credentials_save', { api_key: 'zai-custom-key-123456', provider: 'zai', model: 'glm-future' });
     expect(res.status).toBe(200);
     expect(res.json.own).toMatchObject({ provider: 'zai', model: 'glm-future' });
-    expect(calls).toEqual([{ kind: 'verify', provider: 'zai', apiKey: 'zai-custom-key-123456' }]);
+    expect(calls).toEqual([{ kind: 'verify', provider: 'zai', apiKey: 'zai-custom-key-123456', model: 'glm-future' }]);
   });
 
   test('models with a zai candidate verifies the key before returning its list', async () => {
@@ -432,6 +432,30 @@ describe.skipIf(!dbReady)('AI key operations', () => {
     expect(res.status).toBe(400);
     expect(res.json.code).toBe('ai_key_rejected');
     expect(calls).toEqual([{ kind: 'verify', provider: 'zai', apiKey: 'zai-candidate-key-123456' }]);
+  });
+
+  test('zai test and saved-key listing pass the saved model to the key check', async () => {
+    const saved = await op('ai_credentials_save', { api_key: 'zai-saved-key-123456', provider: 'zai', model: 'glm-4.7' });
+    expect(saved.status).toBe(200);
+    const expected: Call[] = [
+      { kind: 'verify', provider: 'zai', apiKey: 'zai-saved-key-123456', model: 'glm-4.7' },
+      { kind: 'list', provider: 'zai', apiKey: 'zai-saved-key-123456' },
+    ];
+
+    calls = [];
+    const tested = await op('ai_credentials_test', {});
+    expect(tested.status).toBe(200);
+    expect(tested.json).toEqual({ provider: 'zai', models: 2 });
+    expect(calls).toEqual(expected);
+
+    calls = [];
+    const listed = await op('ai_models_list', {});
+    expect(listed.status).toBe(200);
+    expect(listed.json).toEqual({
+      provider: 'zai',
+      models: MODELS.map((model) => ({ id: model.id, name: model.name, context_length: model.contextLength })),
+    });
+    expect(calls).toEqual(expected);
   });
 
   test('provider log lines name provider, kind and status but never upstream text or the key', async () => {

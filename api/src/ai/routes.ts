@@ -154,7 +154,8 @@ export const operations: readonly AnyOperation[] = [
     if (!resolved.ok) throw aiKeyHttpError(resolved.problem);
     const key: ResolvedAiKey = resolved.key;
     const adapter = providerFor(key);
-    const checked = await aiCall(c, () => adapter.verifyKey());
+    // Z.ai's check is a chat call: use the saved model, not the fallback.
+    const checked = await aiCall(c, () => adapter.verifyKey(key.model ?? undefined));
     const models = checked ?? (await aiCall(c, () => adapter.listModels()));
     return { provider: key.provider, models: models.length };
   }),
@@ -194,7 +195,8 @@ export const operations: readonly AnyOperation[] = [
       const key: ResolvedAiKey = resolved.key;
       provider = key.provider;
       const adapter = providerFor(key);
-      const checked = await aiCall(c, () => adapter.verifyKey());
+      // Z.ai's check is a chat call: use the saved model, not the fallback.
+      const checked = await aiCall(c, () => adapter.verifyKey(key.model ?? undefined));
       models = checked ?? (await aiCall(c, () => adapter.listModels()));
     }
     return {

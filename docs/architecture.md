@@ -163,26 +163,34 @@ start at `0100`). One image runs both the API and the worker
   shape, so that provider is chosen by hand). Saving checks the key with an
   authenticated call (OpenRouter's `/key`; OpenAI and DeepSeek's `/models`;
   Anthropic's Models list, returned so save/test use one call; Z.ai's cheapest
-  documented chat completion with `max_tokens: 1`, on the chosen model or
-  GLM-5.3-Flash, because its API documents neither a model list nor a tokenizer
-  price) and never sends a stored key to another provider's host.
-  `resolveAiKey` returns an opaque `ResolvedAiKey` (private secret, constructor
-  token); `providerFor(resolvedKey)` is the only adapter factory, and
-  `createProvider` is not exported. `POST /ai/models` with a candidate key
-  verifies it before listing. OpenAI documents 401, not a permission-specific
-  403, when a key lacks an endpoint's scope (`/models` needs
-  `api.model.read`), so a chat-only restricted key cannot be verified and is
-  not saved; its 403 is a country/region block. Z.ai's model list is the
-  documented suggestion list (text models plus the FLASH/FLASHX/LEGAL
-  variants); a typed id outside it is accepted, since the real list cannot be
-  fetched. A chat deadline is the 60 s floor or enough for the requested token
-  cap at 25 output tokens/s (16k, assumed when unset → 640 s). A deadline or a
-  caller `AbortSignal` rejects as kind `timeout`; the caller (the categorizer)
-  decides whether to retry, because a non-streaming generation may already be
-  billed. Non-chat deadlines stay `transient`. Bun's 5-minute socket idle
-  timer is disabled on chat calls so the deadline governs. Provider failures
-  are logged as provider/kind/status only (no upstream account text); the
-  barrel exports `redactSecrets` for callers that record error text.
+  documented chat completion with `max_tokens: 1` on the saved or chosen
+  model, falling back to GLM-5.3-Flash only when none is chosen, because its
+  API documents neither a model list nor a tokenizer price) and never sends a
+  stored key to another provider's host. `resolveAiKey` returns a
+  `ResolvedAiKey` whose secret is a private field and whose public fields are
+  frozen: JSON, `util.inspect` and `Bun.inspect` see only
+  source/provider/model/updatedAt, and a structural object is rejected. The
+  adapters also keep the secret in a private field. `providerFor(resolvedKey)`
+  is the only adapter factory on the barrel and takes no options, so a caller
+  cannot re-point a stored key or send it to another host; the provider table
+  is the test seam and `createProvider` is not exported. This guards
+  accidental disclosure and the public factory, not deliberate code: a deep
+  import of `makeResolvedAiKey` can still build a key for any provider.
+  `POST /ai/models` with a candidate key verifies it before listing. OpenAI
+  documents 401, not a permission-specific 403, when a key lacks an endpoint's
+  scope (`/models` needs `api.model.read`), so a chat-only restricted key
+  cannot be verified and is not saved; its 403 is a country/region block.
+  Z.ai's model list is the documented suggestion list (text models plus the
+  FLASH/FLASHX/LEGAL variants); a typed id outside it is accepted, since the
+  real list cannot be fetched. A chat deadline is the 60 s floor or enough for
+  the requested token cap at 25 output tokens/s (16k, assumed when unset →
+  640 s), capped at 15 minutes. A deadline or a caller `AbortSignal` rejects
+  as kind `timeout`; the caller (the categorizer) decides whether to retry,
+  because a non-streaming generation may already be billed. Non-chat
+  deadlines stay `transient`. Bun's 5-minute socket idle timer is disabled on
+  chat calls so the deadline governs. Provider failures are logged as
+  provider/kind/status only (no upstream account text); the barrel exports
+  `redactSecrets` for callers that record error text.
   Operations:
   `GET|PUT|DELETE /ai/credentials`, `GET /ai/credentials/test`,
   `POST /ai/provider-detect`, `POST /ai/models`; the key is never returned.

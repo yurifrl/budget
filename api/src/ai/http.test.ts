@@ -21,6 +21,11 @@ describe('chat deadline', () => {
     expect(chatTimeoutMs(undefined)).toBe(640_000);
     expect(chatTimeoutMs(16_000)).toBeGreaterThan(chatTimeoutMs(4_000));
   });
+
+  test('caps a huge token cap at 15 minutes', () => {
+    expect(chatTimeoutMs(128_000)).toBe(900_000);
+    expect(chatTimeoutMs(1_000_000)).toBe(900_000);
+  });
 });
 
 describe('deadline kind', () => {

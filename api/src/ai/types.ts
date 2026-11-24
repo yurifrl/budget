@@ -105,7 +105,9 @@ export interface AiProvider {
    */
   chat(request: AiChatRequest): Promise<AiChatResult>;
   /**
-   * Prove the key is accepted with an authenticated, side-effect-free request.
+   * Prove the key is accepted with an authenticated request. Most checks are
+   * side-effect-free; Z.ai has no model-list endpoint and checks with a small
+   * paid chat completion (`max_tokens: 1`), so it is a real, billable call.
    * Throws `AiProviderError('auth')` when the provider refuses it. A model
    * list is NOT a check on every provider: OpenRouter's is public. Adapters
    * know their own authenticated endpoint. `model` lets a provider whose

@@ -26,4 +26,19 @@ describe('redactSecrets', () => {
     const text = 'desk-lamp task-force 1732460000.abcdefghij';
     expect(redactSecrets(text, KEY)).toBe(text);
   });
+
+  test('redacts a long key whole and leaves no 8-character run of it', () => {
+    const longKey = `sk-proj-${'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.repeat(5).slice(0, 156)}`;
+    expect(longKey).toHaveLength(164);
+    const out = redactSecrets(`the provider echoed ${longKey} back`, longKey);
+    expect(out).toBe('the provider echoed [redacted] back');
+    for (let start = 0; start + 8 <= longKey.length; start++) {
+      expect(out).not.toContain(longKey.slice(start, start + 8));
+    }
+  });
+
+  test('redacts a long key with no documented shape as a whole value', () => {
+    const longKey = 'Z'.repeat(164);
+    expect(redactSecrets(`echo ${longKey}`, longKey)).toBe('echo [redacted]');
+  });
 });

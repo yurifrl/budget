@@ -79,17 +79,19 @@ export function isOpenAiChatModel(id: string): boolean {
 
 export class OpenAiCompatibleProvider implements AiProvider {
   readonly id: AiProviderId;
+  readonly #apiKey: string;
 
   constructor(
     private readonly config: OpenAiCompatibleConfig,
-    private readonly apiKey: string,
+    apiKey: string,
     private readonly fetchImpl?: FetchLike,
   ) {
     this.id = config.id;
+    this.#apiKey = apiKey;
   }
 
   private get auth(): Record<string, string> {
-    return { authorization: `Bearer ${this.apiKey}` };
+    return { authorization: `Bearer ${this.#apiKey}` };
   }
 
   async chat(request: AiChatRequest): Promise<AiChatResult> {

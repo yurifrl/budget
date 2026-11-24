@@ -9,10 +9,15 @@ import type { AiProviderId } from '@shared/contracts/ai';
 
 import { AiProviderError } from '../errors';
 import type { FetchInit, FetchLike } from '../http';
-import { makeResolvedAiKey, providerFor, type ProviderOptions } from './index';
+import { builtinProviders, makeResolvedAiKey, providerFor, setProviders, type ProviderOptions } from './index';
 
-const createProvider = (id: AiProviderId, apiKey: string, options?: ProviderOptions) =>
-  providerFor(makeResolvedAiKey({ source: 'own', provider: id, model: null, apiKey, updatedAt: null }), options);
+const createProvider = (id: AiProviderId, apiKey: string, options?: ProviderOptions) => {
+  setProviders({
+    ...builtinProviders,
+    [id]: { ...builtinProviders[id], create: (key: string) => builtinProviders[id].create(key, options) },
+  });
+  return providerFor(makeResolvedAiKey({ source: 'own', provider: id, model: null, apiKey, updatedAt: null }));
+};
 
 type Captured = { method: string; path: string; headers: Record<string, string>; body: unknown };
 let server: Server<undefined> | null = null;
@@ -38,6 +43,7 @@ function stub(respond: (req: Request, body: unknown) => Response | Promise<Respo
 }
 
 afterEach(async () => {
+  setProviders(null);
   await stopStub();
 });
 

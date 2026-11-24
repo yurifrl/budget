@@ -27,16 +27,19 @@ const asRecord = (value: unknown): Json | null => (typeof value === 'object' && 
 
 export class AnthropicProvider implements AiProvider {
   readonly id = 'anthropic' as const;
+  readonly #apiKey: string;
 
   constructor(
-    private readonly apiKey: string,
+    apiKey: string,
     private readonly baseUrl: string,
     private readonly fetchImpl?: FetchLike,
     private readonly version = ANTHROPIC_VERSION,
-  ) {}
+  ) {
+    this.#apiKey = apiKey;
+  }
 
   private get headers(): Record<string, string> {
-    return { 'x-api-key': this.apiKey, 'anthropic-version': this.version };
+    return { 'x-api-key': this.#apiKey, 'anthropic-version': this.version };
   }
 
   async chat(request: AiChatRequest): Promise<AiChatResult> {
