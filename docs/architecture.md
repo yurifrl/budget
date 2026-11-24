@@ -194,6 +194,32 @@ start at `0100`). One image runs both the API and the worker
   Operations:
   `GET|PUT|DELETE /ai/credentials`, `GET /ai/credentials/test`,
   `POST /ai/provider-detect`, `POST /ai/models`; the key is never returned.
+- **Category suggestions.** `api/src/categorize/` is a new feature with no
+  HTTP surface yet; the queue/accept contracts are budget-edxg. A
+  `categorize_run` job (one per budget: subject key = budget id, so triggers
+  coalesce) has a prepare activity resolve the budget owner's AI key (own,
+  else shared when the flag is on; none → the run succeeds with a fixed
+  sentence, no retries) and count candidates, then chunk activities on the
+  `<queue>-ai` task queue (1 activity start/s across pods, like `-pluggy`)
+  walk the window. A chunk asks the existing `suggestedCategoryForPayee` rule
+  first (source `payee_rule`, no model call) and sends only the rest to a
+  bounded tool loop (`get_transaction`, `list_categories`, `payee_history`,
+  `search_similar_transactions`; every query scopes `budget_id` in SQL).
+  Answers are zod-validated, filtered to the budget's visible category ids,
+  deduped, capped at three and upserted by `(transaction_id, rank)` into
+  `public.category_suggestions` (migration 0110); a row is written only while
+  the transaction is still uncategorized (row lock). The job never writes
+  `transactions.category_id`. Retry policy by provider kind lives in the
+  chunk: `timeout` is retried once per transaction then counted failed,
+  `bad_response` counts the transaction failed, one failure never fails the
+  run; `auth`/`permanent` fail the run non-retryably, `rate_limited` retries
+  the activity after the provider's retry-after (capped 15m), `transient`
+  retries the activity. Activity results and logs carry counts and ids only;
+  no provider text or key is kept. `AiChatResult.usage` (provider-reported
+  input/output tokens) was added to the AI port so the ledger reports token
+  usage per run. Imports for the next task: `startCategorizeRun`,
+  `categorizeRunStatus`, `readCategorySuggestions` (threshold applied at read
+  time).
 - **Repeat-rule tick.** Still an in-process interval in the API
   (`BUDGET_REPEAT_TICK`, off in production); the generation code is
   `budget/domain/repeat-generation.ts`.

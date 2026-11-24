@@ -128,6 +128,23 @@ describe('Anthropic chat request', () => {
     expect(captured[0]!.body).not.toHaveProperty('output_config');
     expect(result.text).toBe('hi');
     expect(result.finishReason).toBe('end_turn');
+    expect(result.usage).toBeNull();
+  });
+
+  test('maps Anthropic input/output tokens onto the port', async () => {
+    const baseUrl = stub(() =>
+      Response.json({
+        model: 'claude-test',
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: 'hi' }],
+        usage: { input_tokens: 21, output_tokens: 43 },
+      }),
+    );
+    const result = await createProvider('anthropic', 'sk-ant-test', { baseUrl }).chat({
+      model: 'claude-test',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect(result.usage).toEqual({ input: 21, output: 43 });
   });
 
   test('a tool loop echoes thinking blocks back unchanged', async () => {

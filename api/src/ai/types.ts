@@ -71,6 +71,12 @@ export type AiChatRequest = {
   signal?: AbortSignal;
 };
 
+/** Tokens the provider billed for one chat call, as reported by the provider. */
+export type AiTokenUsage = {
+  input: number;
+  output: number;
+};
+
 export type AiChatResult = {
   /** Assistant text; null when the turn was tool calls only. */
   text: string | null;
@@ -85,6 +91,12 @@ export type AiChatResult = {
   model: string;
   /** Provider's stop reason, verbatim (`stop`, `tool_use`, `length`, ...), for logs. */
   finishReason: string | null;
+  /**
+   * Tokens the provider billed for this call. Absent/null when the provider
+   * reported no usage (or only one side); callers that report cost must not
+   * invent a number.
+   */
+  usage?: AiTokenUsage | null;
 };
 
 export type AiModel = {

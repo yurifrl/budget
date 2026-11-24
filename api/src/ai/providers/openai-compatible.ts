@@ -13,6 +13,7 @@ import type { AiProviderId } from '@shared/contracts/ai';
 import { AiProviderError } from '../errors';
 import { chatTimeoutMs, DEFAULT_MODELS_TIMEOUT_MS, requestJson, type FetchLike } from '../http';
 import type { AiChatRequest, AiChatResult, AiJsonSchema, AiModel, AiProvider, AiToolCall } from '../types';
+import { tokenUsage } from './usage';
 
 export type StructuredOutput = 'json_schema' | 'json_object';
 
@@ -220,11 +221,13 @@ export class OpenAiCompatibleProvider implements AiProvider {
         : Array.isArray(content)
           ? content.map((part) => (typeof asRecord(part)?.text === 'string' ? (asRecord(part)!.text as string) : '')).join('')
           : null;
+    const usage = asRecord(root?.usage);
     return {
       text: text === '' ? null : text,
       toolCalls: this.parseToolCalls(message.tool_calls),
       model: typeof root?.model === 'string' ? root.model : requestedModel,
       finishReason: typeof choice.finish_reason === 'string' ? choice.finish_reason : null,
+      usage: tokenUsage(usage?.prompt_tokens, usage?.completion_tokens),
     };
   }
 

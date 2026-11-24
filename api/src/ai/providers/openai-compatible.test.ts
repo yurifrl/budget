@@ -107,6 +107,23 @@ describe('OpenAI-compatible chat request', () => {
     expect(result.text).toBeNull();
     expect(result.toolCalls).toEqual([{ id: 'call_1', name: 'list_categories', arguments: { budget_id: 'b1' } }]);
     expect(result.model).toBe('stub-model');
+    // The reply carries no usage block: the port reports null, never a guess.
+    expect(result.usage).toBeNull();
+  });
+
+  test('maps provider token usage onto the port', async () => {
+    const baseUrl = stub(() =>
+      Response.json({
+        model: 'stub-model',
+        choices: [{ message: { content: '{}' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 12, completion_tokens: 34 },
+      }),
+    );
+    const result = await createProvider('openai', 'sk-test-123', { baseUrl }).chat({
+      model: 'gpt-test',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect(result.usage).toEqual({ input: 12, output: 34 });
   });
 
   test('openrouter: max_tokens and json_schema', async () => {

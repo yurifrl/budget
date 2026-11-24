@@ -7,6 +7,7 @@
 import { AiProviderError } from '../errors';
 import { chatTimeoutMs, DEFAULT_MODELS_TIMEOUT_MS, requestJson, type FetchLike } from '../http';
 import type { AiChatRequest, AiChatResult, AiModel, AiProvider, AiToolCall } from '../types';
+import { tokenUsage } from './usage';
 
 /** API version that carries structured outputs (`output_config.format`). */
 export const ANTHROPIC_VERSION = '2026-10-21';
@@ -164,12 +165,14 @@ export class AnthropicProvider implements AiProvider {
         toolCalls.push({ id: block.id, name: block.name, arguments: asRecord(block.input) ?? {} });
       }
     }
+    const usage = asRecord(root?.usage);
     return {
       text: texts.length > 0 ? texts.join('') : null,
       toolCalls,
       rawContent: content,
       model: typeof root?.model === 'string' ? root.model : requestedModel,
       finishReason: typeof root?.stop_reason === 'string' ? root.stop_reason : null,
+      usage: tokenUsage(usage?.input_tokens, usage?.output_tokens),
     };
   }
 }

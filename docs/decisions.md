@@ -1885,3 +1885,60 @@ app. The two now ship independently.
 - A rule covers rows created after it was set (`transfer_rule_since`);
   "Apply to past rows" clears it. Undone links are marked `manual`: still
   suggested, never auto-linked again.
+
+## Category suggestions engine (budget-fvtx)
+
+- `connection_transactions.raw_payload` (0105) is the provider transaction
+  object verbatim (Pluggy's `.passthrough()` schema). The documented Pluggy
+  transaction object has **no location**: `merchant` is
+  `{name, businessName, cnpj, cnae, category}` and `paymentData` carries
+  participant bank identifiers, not an address. The Categorize page's map
+  panel therefore cannot be built from the payload as it stands. The useful
+  classifier facts are `descriptionRaw`, `category`/`categoryId` (Pluggy
+  Enrichment), `operationType`, `merchant.*`, `paymentData.paymentMethod`/
+  `reason`/participant names and `creditCardMetadata` (installments, MCC);
+  the tool layer whitelists exactly those and drops account/branch/routing
+  numbers, CPF/CNPJ, reference ids and card numbers before text leaves the
+  server.
+- A run walks a snapshot window: live, uncategorized, non-upcoming,
+  non-transfer, non-split transactions of the budget, newest first, in
+  chunks of 10 by offset. If a transaction is categorized while the run is
+  in progress the window shrinks and one row can be skipped; the next run
+  covers it. Writes re-read the transaction under `FOR UPDATE` and refuse to
+  write when it is no longer uncategorized, so a suggestion is never created
+  for a categorized transaction.
+- The existing payee rule (`suggestedCategoryForPayee`) answers first: a
+  payee-rule transaction gets one `payee_rule` suggestion (confidence 1,
+  provider/model null) and the model is not called. The rule is called, never
+  duplicated.
+- `category_suggestions` is keyed `(transaction_id, rank)`, ranks 1..3.
+  Re-runs upsert in place and delete pending ranks above the new answer;
+  decided rows (`status` other than pending, written by budget-edxg) are
+  never deleted. No check constraint on `source`/`status`: the value lists
+  are code.
+- The job never writes `transactions.category_id`; accepting stays the
+  normal transaction update path.
+- Retry policy is in the chunk activity: `timeout` is retried ONCE for that
+  transaction (a timed-out generation may already be billed) and then counted
+  failed; `bad_response` counts the transaction failed without a second
+  attempt; one failing transaction never fails the run. `auth` and
+  `permanent` stop the run as non-retryable ApplicationFailures;
+  `rate_limited` retries the activity after the provider's retry-after
+  (capped at 15m, default 60s); `transient` retries the activity with the
+  worker's backoff. A rate-limit retry re-runs the chunk; writes are
+  idempotent, so only the model calls of that chunk are repeated.
+- No usable key (or a key without a model) ends the run at once as a
+  succeeded run with a fixed user-safe sentence in `job_runs.user_message`,
+  like the connections "paused" notice — not a failed run with retries.
+- The key is resolved inside each activity and never crosses workflow
+  history; activity results carry counts and transaction ids only; failures
+  use fixed sentences, so no provider text (and no key) reaches
+  `job_runs`, `job_attempts`, `job_logs` or the workflow. Because no error
+  text is kept, `redactSecrets` has nothing to redact.
+- `AiChatResult.usage` was added to the AI port (OpenAI-compatible
+  `prompt_tokens`/`completion_tokens`, Anthropic `input_tokens`/`output_tokens`;
+  null when the provider reports none). The run result and each chunk log
+  line report input/output token totals; nothing estimates them.
+- One run per budget: subject key = budget id, so every trigger joins the
+  active run. Provider calls run on the `<queue>-ai` task queue (1 activity
+  start/s across pods), separate from ledger and bank work.
