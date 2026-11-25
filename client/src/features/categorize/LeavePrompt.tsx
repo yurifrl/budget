@@ -11,7 +11,7 @@ import { usePathname, useRouter } from 'expo-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { budgetApi } from '@/budget/data/api';
+import { budgetApi, useGetBudgetsQuery } from '@/budget/data/api';
 import { useAppDispatch, useAppSelector } from '@/state/hooks';
 import { switchBudget } from '@/state/thunks';
 import { selectActiveBudgetId } from '@/state/ui';
@@ -30,6 +30,9 @@ export function CategorizeLeavePrompt() {
   const pathname = usePathname();
   const [sending, setSending] = useState(false);
   const [failedCount, setFailedCount] = useState(0);
+  const [sentCount, setSentCount] = useState(0);
+  const budgets = useGetBudgetsQuery();
+  const budgetName = budgets.data?.find((b) => b.id === held?.budgetId)?.name ?? '';
 
   const count = held?.entries.length ?? 0;
 
@@ -46,17 +49,25 @@ export function CategorizeLeavePrompt() {
     );
     setSending(false);
     setFailedCount(failed.length);
+    setSentCount((n) => n + sent.length);
     // What was sent leaves the prompt and the page's strip; what could not be sent stays for another try.
     leaveStore.settle('sent', sent.map((entry) => entry.item.transactionId));
   };
 
-  const keepAndLeave = () => {
+  const resetResult = () => {
     setFailedCount(0);
+    setSentCount(0);
+  };
+
+  const keepAndLeave = () => {
+    if (sending) return;
+    resetResult();
     if (held) leaveStore.settle('discard', held.entries.map((entry) => entry.item.transactionId));
   };
 
   const stay = () => {
-    setFailedCount(0);
+    if (sending) return;
+    resetResult();
     const stayed = leaveStore.stay();
     if (!stayed) return;
     if (stayed.budgetId !== activeBudgetId) void dispatch(switchBudget(stayed.budgetId));
@@ -67,11 +78,14 @@ export function CategorizeLeavePrompt() {
   return (
     <OverlaySheet visible={held !== null} onClose={stay}>
       <Text style={styles.title}>{t('leave.title')}</Text>
-      <Text style={styles.body}>{t('leave.body', { count })}</Text>
-      {failedCount > 0 ? <Text style={styles.error}>{t('leave.sendFailed', { count: failedCount })}</Text> : null}
+      <Text style={styles.body}>{t('leave.body', { count, budget: budgetName })}</Text>
+      {sending ? <Text style={styles.body}>{t('leave.sending')}</Text> : null}
+      {failedCount > 0 && !sending ? (
+        <Text style={styles.error}>{t('leave.sendFailed', { count: failedCount, sent: sentCount })}</Text>
+      ) : null}
       <View style={styles.actions}>
-        <GhostButton label={t('leave.stay')} onPress={stay} />
-        <GhostButton label={t('leave.keep')} onPress={keepAndLeave} />
+        <GhostButton label={t('leave.stay')} onPress={stay} disabled={sending} />
+        <GhostButton label={t('leave.keep')} onPress={keepAndLeave} disabled={sending} />
         <IndigoButton label={t('leave.send')} onPress={() => void sendAndLeave()} disabled={sending} />
       </View>
     </OverlaySheet>

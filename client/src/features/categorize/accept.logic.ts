@@ -49,6 +49,8 @@ export type UndoEntry =
       label: string;
       item: FiledItem;
       meta: LeavingMeta;
+      /** Done (or "Send and leave") reached for it: Undo is off, the request is queued or out. */
+      sending?: boolean;
     };
 
 export interface ToastState {
@@ -105,8 +107,12 @@ export type AcceptAction =
   | { type: 'skipStarted'; entry: Extract<UndoEntry, { kind: 'skip' }> }
   /** Undone (or cancelled) inside its window: the row comes back. */
   | { type: 'skipCancelled'; transactionId: string }
-  /** Done was pressed: the request goes out and the skip leaves the stack. */
+  /** Done was pressed: these rows are locked (no Undo, Z skips them) until their request has answered. */
+  | { type: 'skipsLocked'; seqs: number[] }
+  /** The request for a locked row goes out now: it leaves the stack. */
   | { type: 'skipSending'; seq: number }
+  /** The send failed for a reason that may pass (network, server): the row stays in the strip for a retry. */
+  | { type: 'skipRetained'; entry: SkipEntry; error: string }
   /** "Stay" after leaving with rows in the strip: they are put back, in the order they were taken. */
   | { type: 'skipsRestored'; entries: SkipEntry[] }
   /** An accept that turned out to hold no rows (all were leaving or gone): no undo entry, no toast. */
@@ -127,6 +133,8 @@ export type AcceptAction =
       message: string;
       tone: 'ok' | 'problem';
     }
+  /** A plain message ("sending…"): not an action, never undoable. */
+  | { type: 'notice'; label: string }
   | { type: 'dismissToast' }
   | { type: 'clearError' }
   /** The queue was re-read: ids it no longer lists need no optimistic hiding. */
@@ -166,8 +174,23 @@ export function withoutPendingSkips<T extends { transaction_id: string }>(
   return leaving.size === 0 ? [...items] : items.filter((item) => !leaving.has(item.transaction_id));
 }
 
+/**
+ * The action Undo and Z reverse: the most recent one that can still be undone.
+ * Rows locked by Done are on their way to the server and are passed over, so Z
+ * goes to the action below them.
+ */
 export function topEntry(state: Pick<AcceptState, 'stack'>): UndoEntry | null {
-  return state.stack[state.stack.length - 1] ?? null;
+  for (let i = state.stack.length - 1; i >= 0; i -= 1) {
+    const entry = state.stack[i]!;
+    if (entry.kind === 'skip' && entry.sending) continue;
+    return entry;
+  }
+  return null;
+}
+
+/** Rows locked by Done: they cannot be undone any more, and Z says so instead of doing nothing. */
+export function sendingCount(state: Pick<AcceptState, 'stack'>): number {
+  return state.stack.filter((e) => e.kind === 'skip' && e.sending).length;
 }
 
 function toastFor(entry: UndoEntry | null): ToastState | null {
@@ -251,7 +274,28 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
         toast: toastAfterRemoval(state, stack, action.seq),
       };
     }
+    case 'skipsLocked': {
+      const locked = new Set(action.seqs);
+      return {
+        ...state,
+        stack: state.stack.map((e) => (e.kind === 'skip' && locked.has(e.seq) ? { ...e, sending: true } : e)),
+      };
+    }
+    case 'skipRetained': {
+      const { sending: _sending, ...entry } = action.entry;
+      return {
+        ...state,
+        pending: settle(state.pending, [entry.item.transactionId]),
+        busy: less(state.busy),
+        stack: insertBySeq(state.stack, entry),
+        error: action.error,
+      };
+    }
     case 'skipCancelled': {
+      const locked = state.stack.find(
+        (e) => e.kind === 'skip' && e.item.transactionId === action.transactionId && e.sending,
+      );
+      if (locked) return state;
       const gone = state.stack.find((e) => e.kind === 'skip' && e.item.transactionId === action.transactionId);
       const stack = state.stack.filter((e) => e !== gone);
       return {
@@ -312,6 +356,8 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
         toast: action.tone === 'ok' ? { label: action.message, seq: 0 } : null,
         error: action.tone === 'problem' ? action.message : null,
       };
+    case 'notice':
+      return { ...state, toast: { label: action.label, seq: 0 } };
     case 'dismissToast':
       return { ...state, toast: null };
     case 'clearError':
@@ -353,13 +399,13 @@ export function acceptIdle(state: Pick<AcceptState, 'busy'>): boolean {
  * still in flight: pressing Z then waits for the answer instead of being ignored.
  */
 export function canUndo(state: Pick<AcceptState, 'stack'>): boolean {
-  return state.stack.length > 0;
+  return topEntry(state) !== null || sendingCount(state) > 0;
 }
 
 /** The toast shows its Undo only while the action it speaks of is the one Undo would reverse. */
 export function toastActionable(state: Pick<AcceptState, 'toast' | 'stack'>): boolean {
-  const top = state.stack[state.stack.length - 1];
-  return state.toast !== null && top !== undefined && top.seq === state.toast.seq;
+  const top = topEntry(state);
+  return state.toast !== null && top !== null && top.seq === state.toast.seq;
 }
 
 /** The skips waiting in the strip for Done, oldest first. */

@@ -149,24 +149,26 @@ export default {
   'one.confirm': 'Confirm {category}',
   'one.filedTo': 'filed to {category}',
   'one.filedLeft': 'in “Leaving uncategorized”',
+  'strip.sending': 'sending…',
   'strip.title': 'LEAVING UNCATEGORIZED',
   'strip.hint':
-    'Nothing is sent until you press Done or leave the page. Close or reload the tab and they are not sent: they come back next visit.',
+    'Nothing is sent until you press Done. If you leave the page you will be asked first. Close or reload the tab and they are not sent: they come back next visit.',
   'strip.done': {
     one: 'Done · remove {count} from the list for everyone in the budget',
     other: 'Done · remove {count} from the list for everyone in the budget',
   },
   'leave.title': 'Rows in “Leaving uncategorized”',
   'leave.body': {
-    one: '{count} transaction is waiting to leave the list for everyone in the budget. Send it now?',
-    other: '{count} transactions are waiting to leave the list for everyone in the budget. Send them now?',
+    one: '{count} transaction of {budget} is waiting to leave the list for everyone in that budget. Send it now?',
+    other: '{count} transactions of {budget} are waiting to leave the list for everyone in that budget. Send them now?',
   },
+  'leave.sending': 'Sending…',
   'leave.send': 'Send and leave',
   'leave.keep': 'Keep them and leave',
   'leave.stay': 'Stay',
   'leave.sendFailed': {
-    one: '{count} could not be sent. Try again, or keep it and leave: it comes back next visit.',
-    other: '{count} could not be sent. Try again, or keep them and leave: they come back next visit.',
+    one: '{sent} sent, {count} could not be sent. Try again, or keep it and leave: it comes back next visit.',
+    other: '{sent} sent, {count} could not be sent. Try again, or keep them and leave: they come back next visit.',
   },
   'one.skip': 'Leave uncategorized',
   'one.skipHint': 'Takes it off this list for everyone in the budget. You can still categorize it in the register.',
@@ -178,6 +180,8 @@ export default {
   // Actions and outcomes
   undo: 'Undo',
   'error.accept': 'Could not file these transactions.',
+  'error.skipRefused': '{subject} was already categorized elsewhere, so it left the list on its own.',
+  'toast.sending': 'These rows are being sent: they can no longer be undone.',
   'error.skip': 'Could not skip this transaction.',
   'error.bundleChanged':
     'That bundle changed from {expected} to {actual} transactions. The list is updated: check it and accept again.',

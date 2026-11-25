@@ -37,7 +37,7 @@ export function PendingSkipsStrip({
         <IndigoButton
           label={t('strip.done', { count: skips.length })}
           onPress={onDone}
-          disabled={busy}
+          disabled={busy || skips.some((skip) => skip.sending)}
           style={styles.done}
         />
       </View>
@@ -46,13 +46,17 @@ export function PendingSkipsStrip({
           <Text style={styles.text} numberOfLines={1}>
             {skip.item.subject}
           </Text>
-          <Pressable
-            onPress={() => onCancel(skip.item.transactionId)}
-            accessibilityRole="button"
-            accessibilityLabel={`${t('undo')} ${skip.item.subject}`}
-            hitSlop={6}>
-            <Text style={styles.undo}>{t('undo')}</Text>
-          </Pressable>
+          {skip.sending ? (
+            <Text style={styles.sending}>{t('strip.sending')}</Text>
+          ) : (
+            <Pressable
+              onPress={() => onCancel(skip.item.transactionId)}
+              accessibilityRole="button"
+              accessibilityLabel={`${t('undo')} ${skip.item.subject}`}
+              hitSlop={6}>
+              <Text style={styles.undo}>{t('undo')}</Text>
+            </Pressable>
+          )}
         </View>
       ))}
     </View>
@@ -77,5 +81,6 @@ const styles = StyleSheet.create({
   // Undo sits beside the text it belongs to, not at the far edge of a wide strip.
   line: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   text: { color: colors.text, fontSize: 13, flexShrink: 1 },
+  sending: { color: colors.muted, fontSize: 13, fontStyle: 'italic' },
   undo: { color: colors.indigo3, fontSize: 13, fontWeight: '700' },
 });

@@ -37,8 +37,10 @@ import {
   initialAcceptState,
   skippedLabel,
   pendingSkips,
+  sendingCount,
   topEntry,
   withoutPendingSkips,
+  type SkipEntry,
   type AcceptAction,
   type AcceptState,
   type FiledItem,
@@ -47,7 +49,15 @@ import { leaveStore } from './leave.store';
 import { useUnloadGuard } from './useUnloadGuard';
 import type { ShownBundle } from './queue.logic';
 import { t } from './i18n';
-import { bundleChangedMessage, bundleToastLabel, isBundleChanged, rowSubject, type PickedCategory } from './page.logic';
+import {
+  bundleChangedMessage,
+  bundleToastLabel,
+  isBundleChanged,
+  rowsGoneFromQueue,
+  rowSubject,
+  skipFailureKind,
+  type PickedCategory,
+} from './page.logic';
 import { undoInChunks, undoOutcome } from './undo.logic';
 
 /** How long the message toast stays; a skip in the strip does not depend on it. */
@@ -71,6 +81,8 @@ export interface CategorizeAccept {
   cancelSkip: (transactionId: string) => boolean;
   /** Done: send every row in the strip, permanently, for the whole budget. */
   sendSkips: () => Promise<void>;
+  /** Send these rows (the leave prompt's "Send and leave"), with the same locking and re-checks. */
+  sendRows: (rows: readonly SkipEntry[]) => Promise<{ sent: string[]; failed: number }>;
   acceptBundle: (bundle: ShownBundle, knownRows: readonly CategorizeQueueRow[]) => Promise<boolean>;
   acceptAll: (bundles: readonly ShownBundle[]) => Promise<boolean>;
   /** Undo the most recent action; resolves to the transactions that came back to the queue. */
@@ -84,6 +96,7 @@ export function useCategorizeAccept({
   queueRefetch,
   queueUpdatedAt,
   queueRowIds,
+  queueSize,
 }: {
   budgetId: string | null;
   formatMoney: (cents: number) => string;
@@ -92,6 +105,8 @@ export function useCategorizeAccept({
   queueUpdatedAt: number;
   /** The rows the queue read lists now: hidden ids outside it are forgotten. */
   queueRowIds: readonly string[];
+  /** Rows the whole queue holds (the loaded page may be shorter). */
+  queueSize: number;
 }): CategorizeAccept {
   const [accept] = useAcceptCategorizeMutation();
   const [undo] = useUndoCategorizeMutation();
@@ -126,15 +141,20 @@ export function useCategorizeAccept({
 
   const rowIdsRef = useRef(queueRowIds);
   rowIdsRef.current = queueRowIds;
+  const queueSizeRef = useRef(queueSize);
+  queueSizeRef.current = queueSize;
   useEffect(() => {
     setGoneBundleKeys(new Set());
     // A pending skip whose row has left the queue (categorized elsewhere, taken
     // by a bulk accept) is dropped, never sent: there is nothing left to skip.
-    const present = new Set(rowIdsRef.current);
-    for (const entry of pendingSkips(stateRef.current)) {
-      if (present.has(entry.item.transactionId)) continue;
-      send({ type: 'skipDropped', transactionId: entry.item.transactionId });
-    }
+    const strip = pendingSkips(stateRef.current).filter((entry) => !entry.sending);
+    const gone = rowsGoneFromQueue(
+      strip.map((entry) => entry.item.transactionId),
+      new Set(rowIdsRef.current),
+      queueSizeRef.current,
+      rowIdsRef.current.length,
+    );
+    for (const id of gone) send({ type: 'skipDropped', transactionId: id });
     send({ type: 'prune', presentIds: rowIdsRef.current });
   }, [queueUpdatedAt]);
 
@@ -264,24 +284,46 @@ export function useCategorizeAccept({
     );
   };
 
-  /** Done: every row in the strip is sent now, one request each, and leaves the stack as it goes. */
+  /**
+   * Send these strip rows, one request each. They are LOCKED first (no Undo, Z
+   * passes over them), and each is re-checked right before its request: a row
+   * that has since left the strip is never sent. A row refused because it no
+   * longer needs a category leaves the strip with a note; any other failure keeps
+   * it in the strip for another try. Resolves to the ids that were sent.
+   */
+  const sendRows = async (rows: readonly SkipEntry[]): Promise<{ sent: string[]; failed: number }> => {
+    if (!budgetId) return { sent: [], failed: 0 };
+    send({ type: 'skipsLocked', seqs: rows.map((entry) => entry.seq) });
+    const sent: string[] = [];
+    let failed = 0;
+    for (const row of rows) {
+      const entry = stateRef.current.stack.find((e) => e.seq === row.seq);
+      if (!entry || entry.kind !== 'skip') continue;
+      const { item } = entry;
+      send({ type: 'skipSending', seq: entry.seq });
+      try {
+        await skip({ budgetId, transactionId: item.transactionId }).unwrap();
+        send({ type: 'skipDone', requestId: item.transactionId });
+        sent.push(item.transactionId);
+      } catch (err) {
+        failed += 1;
+        if (skipFailureKind(err) === 'refused') {
+          send({ type: 'skipFailed', requestId: item.transactionId, error: t('error.skipRefused', { subject: item.subject }) });
+        } else {
+          send({ type: 'skipRetained', entry, error: apiErrorMessage(err, t('error.skip')) });
+        }
+      }
+    }
+    if (failed > 0) refetch();
+    return { sent, failed };
+  };
+
+  /** Done: every row in the strip is sent now. */
   const sendSkips = async (): Promise<void> => {
     if (!budgetId || sendingSkips.current) return;
     sendingSkips.current = true;
     try {
-      let failed = false;
-      for (const entry of pendingSkips(stateRef.current)) {
-        const { item } = entry;
-        send({ type: 'skipSending', seq: entry.seq });
-        try {
-          await skip({ budgetId, transactionId: item.transactionId }).unwrap();
-          send({ type: 'skipDone', requestId: item.transactionId });
-        } catch (err) {
-          failed = true;
-          send({ type: 'skipFailed', requestId: item.transactionId, error: apiErrorMessage(err, t('error.skip')) });
-        }
-      }
-      if (failed) refetch();
+      await sendRows(pendingSkips(stateRef.current).filter((entry) => !entry.sending));
     } finally {
       sendingSkips.current = false;
     }
@@ -302,7 +344,7 @@ export function useCategorizeAccept({
 
   const cancelSkip = (transactionId: string): boolean => {
     const entry = stateRef.current.stack.find((e) => e.kind === 'skip' && e.item.transactionId === transactionId);
-    if (!entry) return false;
+    if (!entry || (entry.kind === 'skip' && entry.sending)) return false;
     send({ type: 'skipCancelled', transactionId });
     return true;
   };
@@ -473,7 +515,11 @@ export function useCategorizeAccept({
     // Claim the top entry NOW, in press order: a press made while this waits
     // takes the next one down, never the one the person saw undone.
     const entry = topEntry(stateRef.current);
-    if (!entry) return [];
+    if (!entry) {
+      // Only rows on their way to the server are left: say so instead of doing nothing.
+      if (sendingCount(stateRef.current) > 0) send({ type: 'notice', label: t('toast.sending') });
+      return [];
+    }
 
     if (entry.kind === 'skip') {
       return cancelSkip(entry.item.transactionId) ? [entry.item.transactionId] : [];
@@ -511,6 +557,7 @@ export function useCategorizeAccept({
     skipRow,
     cancelSkip,
     sendSkips,
+    sendRows,
     acceptBundle,
     acceptAll,
     undoLast,

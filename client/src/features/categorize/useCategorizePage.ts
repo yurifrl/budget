@@ -65,6 +65,7 @@ export function useCategorizePage(rootRef: { current: unknown }) {
     queueRefetch: () => void queue.refetch(),
     queueUpdatedAt: queue.fulfilledTimeStamp ?? 0,
     queueRowIds,
+    queueSize: queue.data?.counts.left_to_categorize ?? 0,
   });
 
   const active = status.data?.active;

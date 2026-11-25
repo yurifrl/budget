@@ -10,6 +10,7 @@ import {
   insertBySeq,
   initialAcceptState,
   pendingSkips,
+  sendingCount,
   skippedLabel,
   toastActionable,
   topEntry,
@@ -351,5 +352,50 @@ describe('an accept with no rows', () => {
     expect(state.stack.map((e) => e.seq)).toEqual([1]);
     expect(acceptIdle(state)).toBe(true);
     expect(state.toast).toEqual({ label: 'S1', seq: 1 });
+  });
+});
+
+describe('Done locks the rows it will send', () => {
+  const locked = () => run([start(1, 'a'), ok(1, 'a'), skipStart(2, 's1'), skipStart(3, 's2'), { type: 'skipsLocked', seqs: [2, 3] }]);
+
+  test('a locked row cannot be undone from the strip', () => {
+    const state = acceptReducer(locked(), { type: 'skipCancelled', transactionId: 's1' });
+    expect(pendingSkips(state).length).toBe(2);
+    expect(state.hiddenIds).toContain('s1');
+  });
+
+  test('Z goes to the action below the locked rows', () => {
+    const state = locked();
+    expect(topEntry(state)?.seq).toBe(1);
+    expect(sendingCount(state)).toBe(2);
+    expect(toastActionable(state)).toBe(false);
+  });
+
+  test('with only locked rows there is nothing to undo, but Z can say it is sending', () => {
+    const state = run([skipStart(1, 's1'), { type: 'skipsLocked', seqs: [1] }]);
+    expect(topEntry(state)).toBeNull();
+    expect(canUndo(state)).toBe(true);
+  });
+
+  test('each row leaves the stack as its own request starts, and the busy count stays balanced', () => {
+    let state = locked();
+    state = run([{ type: 'skipSending', seq: 2 }], state);
+    expect(state.busy).toBe(1);
+    state = run([{ type: 'skipDone', requestId: 's1' }, { type: 'skipSending', seq: 3 }, { type: 'skipDone', requestId: 's2' }], state);
+    expect(state.busy).toBe(0);
+    expect(acceptIdle(state)).toBe(true);
+    expect(pendingSkips(state)).toEqual([]);
+  });
+
+  test('a send that may pass (network) puts the row back in the strip, unlocked, in its place, with the error', () => {
+    let state = locked();
+    const entry = state.stack.find((e) => e.seq === 2) as Extract<UndoEntry, { kind: 'skip' }>;
+    state = run([{ type: 'skipSending', seq: 2 }, { type: 'skipRetained', entry, error: 'Offline' }], state);
+    expect(state.busy).toBe(0);
+    expect(state.error).toBe('Offline');
+    expect(state.stack.map((e) => e.seq)).toEqual([1, 2, 3]);
+    const back = state.stack.find((e) => e.seq === 2) as Extract<UndoEntry, { kind: 'skip' }>;
+    expect(back.sending).toBeUndefined();
+    expect(state.hiddenIds).toContain('s1');
   });
 });

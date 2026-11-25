@@ -142,24 +142,26 @@ const m: Translation<typeof en> = {
   'one.confirm': 'Confirmar {category}',
   'one.filedTo': 'em {category}',
   'one.filedLeft': 'em “Saindo sem categoria”',
+  'strip.sending': 'enviando…',
   'strip.title': 'SAINDO SEM CATEGORIA',
   'strip.hint':
-    'Nada é enviado até você tocar em Concluir ou sair da página. Se fechar ou recarregar a aba, não são enviadas: voltam na próxima visita.',
+    'Nada é enviado até você tocar em Concluir. Se sair da página, você será perguntado antes. Se fechar ou recarregar a aba, não são enviadas: voltam na próxima visita.',
   'strip.done': {
     one: 'Concluir · tirar {count} da lista para todos do orçamento',
     other: 'Concluir · tirar {count} da lista para todos do orçamento',
   },
   'leave.title': 'Linhas em “Saindo sem categoria”',
   'leave.body': {
-    one: '{count} transação espera para sair da lista para todos do orçamento. Enviar agora?',
-    other: '{count} transações esperam para sair da lista para todos do orçamento. Enviar agora?',
+    one: '{count} transação de {budget} espera para sair da lista para todos naquele orçamento. Enviar agora?',
+    other: '{count} transações de {budget} esperam para sair da lista para todos naquele orçamento. Enviar agora?',
   },
+  'leave.sending': 'Enviando…',
   'leave.send': 'Enviar e sair',
   'leave.keep': 'Manter e sair',
   'leave.stay': 'Ficar',
   'leave.sendFailed': {
-    one: '{count} não pôde ser enviada. Tente de novo, ou mantenha e saia: volta na próxima visita.',
-    other: '{count} não puderam ser enviadas. Tente de novo, ou mantenha e saia: voltam na próxima visita.',
+    one: '{sent} enviadas, {count} não pôde ser enviada. Tente de novo, ou mantenha e saia: volta na próxima visita.',
+    other: '{sent} enviadas, {count} não puderam ser enviadas. Tente de novo, ou mantenha e saia: voltam na próxima visita.',
   },
   'one.skip': 'Deixar sem categoria',
   'one.skipHint': 'Tira da lista para todos do orçamento. Você ainda pode categorizar no registro.',
@@ -170,6 +172,8 @@ const m: Translation<typeof en> = {
 
   undo: 'Desfazer',
   'error.accept': 'Não foi possível categorizar estas transações.',
+  'error.skipRefused': '{subject} já foi categorizada em outro lugar, então saiu da lista sozinha.',
+  'toast.sending': 'Estas linhas estão sendo enviadas: não dá mais para desfazer.',
   'error.skip': 'Não foi possível pular esta transação.',
   'error.bundleChanged':
     'Esse pacote mudou de {expected} para {actual} transações. A lista foi atualizada: confira e aceite de novo.',
