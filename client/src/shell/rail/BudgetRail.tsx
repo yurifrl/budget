@@ -3,6 +3,7 @@ import { Link, usePathname } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useGetBudgetsQuery } from '@/budget/data/api';
+import { useCategorizeLeft } from '@/features/categorize';
 import { useMe } from '@/features/profile';
 import { displayName } from '@/profile/model';
 import { useAppSelector } from '@/state/hooks';
@@ -19,12 +20,13 @@ import { RailAccounts } from './RailAccounts';
 // eslint-disable-next-line budget-i18n/no-untranslated-string -- brand name, not translated
 const APP_TITLE = 'Budget';
 
-/** Built per render: the labels follow the active language. */
-const navLinks = () =>
+/** Built per render: the labels follow the active language and the badge its count. */
+const navLinks = (categorizeCount: number) =>
   [
     { route: '/plan', label: t('rail.plan'), icon: 'list.bullet' },
     { route: '/reflect', label: t('rail.reflect'), icon: 'chart.bar.fill' },
     { route: '/accounts', label: t('rail.allAccounts'), icon: 'building.columns.fill' },
+    { route: '/categorize', label: t('rail.categorize'), icon: 'tag.fill', badge: categorizeCount },
   ] as const;
 
 /**
@@ -61,6 +63,7 @@ export function BudgetRail({
   const pathname = usePathname();
   const budgetId = useAppSelector((s) => selectActiveBudgetId(s));
   const budgetName = useGetBudgetsQuery().data?.find((b) => b.id === budgetId)?.name;
+  const categorizeLeft = useCategorizeLeft();
   const isCollapsed = collapsed === true;
 
   return (
@@ -85,8 +88,9 @@ export function BudgetRail({
         ) : null}
       </View>
       <View style={styles.nav}>
-        {navLinks().map((l) => {
+        {navLinks(categorizeLeft ?? 0).map((l) => {
           const active = pathname.startsWith(l.route);
+          const badge = 'badge' in l ? l.badge : 0;
           return (
             <Link key={l.route} href={l.route} onPress={() => onNavigate()} accessibilityLabel={l.label} asChild>
               <Pressable
@@ -96,6 +100,11 @@ export function BudgetRail({
                 {isCollapsed ? null : (
                   <Text style={[styles.navLinkText, active && { color: colors.text }]} numberOfLines={1}>
                     {l.label}
+                  </Text>
+                )}
+                {isCollapsed || badge <= 0 ? null : (
+                  <Text style={styles.navBadge} numberOfLines={1}>
+                    {badge}
                   </Text>
                 )}
               </Pressable>
@@ -172,6 +181,17 @@ const styles = StyleSheet.create({
   navLinkIcon: { justifyContent: 'center', paddingHorizontal: 0 },
   navLinkActive: { backgroundColor: colors.indigoSoft },
   navLinkText: { color: colors.muted, fontSize: 14, fontWeight: '600', flexShrink: 1 },
+  navBadge: {
+    marginLeft: 'auto',
+    backgroundColor: colors.indigoSoft,
+    color: colors.indigo3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    fontSize: 11,
+    fontWeight: '700',
+    overflow: 'hidden',
+  },
   foot: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 },
   trigger: {
     flexDirection: 'row',
