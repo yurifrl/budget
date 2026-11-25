@@ -94,6 +94,7 @@ const m: Translation<typeof en> = {
   transaction_already_repeating: 'Esta transação já se repete.',
   bank_account_already_linked: 'Essa conta bancária já está vinculada a outra conta do seu orçamento.',
   account_must_be_closed_first: 'Encerre esta conta antes de excluí-la.',
+  account_name_exists: 'Já existe uma conta aberta chamada "{name}". Escolha outro nome.',
   member_not_in_budget: 'Essa pessoa não é membro deste orçamento.',
   payee_name_reserved: 'O nome "{name}" é reservado para um favorecido de transferência. Escolha outro nome.',
   transfer_payee_protected: '"{name}" é o favorecido de transferência de uma conta. Ele acompanha o nome da conta e não pode ser renomeado, mesclado, ocultado nem excluído.',

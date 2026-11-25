@@ -2251,6 +2251,21 @@ resolution), `edited-payee.ts` (the payee of an edit), `transfer-payee-repair.ts
   ordinary row (no mirror). A non-transfer row whose stored payee is a legacy
   "Transfer : X" cannot be turned into a transfer by re-picking that same text.
 
+## Two open accounts never share a name (2026-11-25)
+
+Creating or renaming an account to the name of another OPEN account of the
+budget (case-, edge- and space-run-insensitive) is `409 account_name_exists`
+(`params.name` = the holder's name); reopening a closed account into such a
+name is refused the same way. Closed and deleted accounts do not block. Existing
+duplicates are grandfathered: editing their other fields, re-sending the same
+name, closing them, restore and fresh start (raw SQL copies) all keep working;
+the transfer-payee repair script reports them. No unique index (the database is
+shared with another app): the check runs in the write's transaction after a
+`FOR NO KEY UPDATE` row lock on the budget, which serializes account-name writes
+of one budget and does not block the FK checks of other inserts. Bank linking
+(`PATCH /accounts/:id` with `link`) never creates or renames an account.
+||||||| 5e847a6
+
 ## Transfer integrity on the server (budget-nq2f, transfers T3)
 
 Plan: `.agents/plans/2026-11-24_transfers-refactor.md` (T3). Model: a transaction
