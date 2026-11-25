@@ -90,6 +90,21 @@ describe('acceptReducer', () => {
     expect(canUndo(failed)).toBe(true);
   });
 
+  test('the last accept stays undoable after its toast times out, until the next accept or an undo', () => {
+    let state = acceptReducer(initialAcceptState, { type: 'succeeded', transactionIds: ['t1'], requestIds: [], label: 'a' });
+    state = acceptReducer(state, { type: 'dismissToast' });
+    expect(state.toast).toBeNull();
+    expect(canUndo(state)).toBe(true);
+    state = acceptReducer(state, { type: 'skipSucceeded', requestId: 'x', label: 'skipped' });
+    expect(canUndo(state)).toBe(true);
+    const started = acceptReducer(state, { type: 'start', items: [filed('t2')] });
+    expect(started.undoable?.transactionIds).toEqual(['t1']);
+    const replaced = acceptReducer(started, { type: 'succeeded', transactionIds: ['t2'], requestIds: ['t2'], label: 'b' });
+    expect(replaced.undoable?.transactionIds).toEqual(['t2']);
+    const undone = acceptReducer(replaced, { type: 'undoSucceeded', transactionIds: ['t2'], restored: 1, skipped: 0 });
+    expect(canUndo(undone)).toBe(false);
+  });
+
   test('dismissing the toast leaves the accepted rows hidden', () => {
     const accepted = acceptReducer(initialAcceptState, {
       type: 'succeeded',
@@ -147,14 +162,15 @@ describe('overlapping single-row filings (keyboard flow)', () => {
 });
 
 describe('skip', () => {
-  test('hides the row, keeps the current undo toast and has nothing to undo afterwards', () => {
+  test('hides the row, keeps the current undo toast, and the toast it leaves has no Undo', () => {
     const accepted = acceptReducer(initialAcceptState, { type: 'succeeded', transactionIds: ['t1'], requestIds: [], label: 'a' });
     const skipping = acceptReducer(accepted, { type: 'skipStarted', item: filed('t2') });
     expect(skipping.hiddenIds).toEqual(['t1', 't2']);
     expect(skipping.toast?.transactionIds).toEqual(['t1']);
     const done = acceptReducer(skipping, { type: 'skipSucceeded', requestId: 't2', label: 'Skipped Uber' });
     expect(done.toast).toEqual({ label: 'Skipped Uber', transactionIds: [] });
-    expect(canUndo(done)).toBe(false);
+    // The earlier accept is still what Z reverses; a skip has nothing to undo.
+    expect(done.undoable?.transactionIds).toEqual(['t1']);
     expect(acceptIdle(done)).toBe(true);
   });
 

@@ -10,6 +10,7 @@ import type { TextInputInstance } from 'react-native';
 
 import type { CategorizeCounts, CategorizeQueueRow } from '@/budget/data/api';
 
+import { canUndo as canUndoState } from './accept.logic';
 import type { CategorizeAccept } from './useCategorizeAccept';
 import type { CategorizeKeyAction } from './keys.logic';
 import { orderQueue, progressView, remainingCount, resolveFocus, type ProgressView } from './oneByOne.logic';
@@ -91,7 +92,7 @@ export function useOneByOne({
     });
   };
 
-  const canUndo = accept.state.busy === 0 && (accept.state.toast?.transactionIds.length ?? 0) > 0;
+  const canUndo = canUndoState(accept.state);
 
   const onKey = (action: CategorizeKeyAction) => {
     switch (action.kind) {

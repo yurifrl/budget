@@ -277,7 +277,7 @@ export function useCategorizeAccept({
   };
 
   const undoLast = async (): Promise<string[]> => {
-    const transactionIds = state.toast?.transactionIds ?? [];
+    const transactionIds = state.undoable?.transactionIds ?? [];
     if (!budgetId || inFlight.current || transactionIds.length === 0) return [];
     inFlight.current = true;
     reduce({ type: 'undoStarted' });

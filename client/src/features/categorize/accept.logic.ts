@@ -31,7 +31,14 @@ export interface AcceptState {
   pending: FiledItem[];
   /** Requests in flight: accepts and undos. Idle at 0. */
   busy: number;
+  /** The message toast on screen; it times out. */
   toast: UndoToast | null;
+  /**
+   * The last confirmed accept, kept after its toast timed out: "Undo last" and
+   * the Z key still reverse it (the server has no undo time limit) until the
+   * next accept replaces it or an undo consumes it.
+   */
+  undoable: UndoToast | null;
   /** A sentence for the failed accept/undo; cleared when the next action starts. */
   error: string | null;
   /** What the last undo reversed, for the toast/summary line. */
@@ -43,6 +50,7 @@ export const initialAcceptState: AcceptState = {
   pending: [],
   busy: 0,
   toast: null,
+  undoable: null,
   error: null,
   lastUndo: null,
 };
@@ -103,6 +111,7 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
         pending: settle(state.pending, action.requestIds),
         busy: less(state.busy),
         toast: { label: action.label, transactionIds: action.transactionIds },
+        undoable: action.transactionIds.length > 0 ? { label: action.label, transactionIds: action.transactionIds } : state.undoable,
         error: null,
       };
     case 'skipStarted':
@@ -129,6 +138,7 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
         hiddenIds: without(state.hiddenIds, action.transactionIds),
         busy: less(state.busy),
         toast: null,
+        undoable: null,
         error: null,
         lastUndo: { restored: action.restored, skipped: action.skipped },
       };
@@ -167,9 +177,9 @@ export function acceptIdle(state: Pick<AcceptState, 'busy'>): boolean {
   return state.busy === 0;
 }
 
-/** The undo toast is actionable while no request is in flight and something is undoable. */
-export function canUndo(state: Pick<AcceptState, 'busy' | 'toast'>): boolean {
-  return state.busy === 0 && state.toast !== null && state.toast.transactionIds.length > 0;
+/** Undo is available while no request is in flight and an accept is undoable. */
+export function canUndo(state: Pick<AcceptState, 'busy' | 'undoable'>): boolean {
+  return state.busy === 0 && state.undoable !== null && state.undoable.transactionIds.length > 0;
 }
 
 /** "Uber · –R$ 18,90 → Transport" for a single filed row. */

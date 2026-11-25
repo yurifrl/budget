@@ -143,10 +143,19 @@ export function CategoryPicker({
 }
 
 /** A keyboard key drawn as a small cap: "1", "Enter", "S". */
-export function KeyCap({ label, style }: { label: string; style?: StyleProp<ViewStyle> }) {
+export function KeyCap({
+  label,
+  style,
+  onPrimary,
+}: {
+  label: string;
+  style?: StyleProp<ViewStyle>;
+  /** Drawn on an indigo button: lighter cap, white text. */
+  onPrimary?: boolean;
+}) {
   return (
-    <View style={[styles.keyCap, style]} accessible={false}>
-      <Text style={styles.keyCapText}>{label}</Text>
+    <View style={[styles.keyCap, onPrimary && styles.keyCapOnPrimary, style]} accessible={false}>
+      <Text style={[styles.keyCapText, onPrimary && styles.keyCapTextOnPrimary]}>{label}</Text>
     </View>
   );
 }
@@ -176,7 +185,7 @@ export function KeyButton({
       <Text style={[styles.keyButtonText, primary && styles.keyButtonTextPrimary]} numberOfLines={1}>
         {label}
       </Text>
-      {keyLabel ? <KeyCap label={keyLabel} style={primary ? styles.keyCapOnPrimary : undefined} /> : null}
+      {keyLabel ? <KeyCap label={keyLabel} onPrimary={primary} /> : null}
     </Pressable>
   );
 }
@@ -206,6 +215,8 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   keyCapText: { color: colors.muted, fontSize: 11, fontWeight: '700' },
+  keyCapOnPrimary: { backgroundColor: colors.indigo2, borderColor: colors.indigo3 },
+  keyCapTextOnPrimary: { color: colors.white },
   keyButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -222,7 +233,6 @@ const styles = StyleSheet.create({
   keyButtonOff: { opacity: 0.45 },
   keyButtonText: { color: colors.text, fontSize: 13.5, fontWeight: '700', flexShrink: 1 },
   keyButtonTextPrimary: { color: colors.white },
-  keyCapOnPrimary: { backgroundColor: colors.indigo2, borderColor: colors.indigo3 },
   chip: { fontSize: 12, fontWeight: '700', paddingVertical: 4, paddingHorizontal: 10 },
   dot: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   dotLetter: { fontWeight: '800' },
