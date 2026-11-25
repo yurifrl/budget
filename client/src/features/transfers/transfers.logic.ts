@@ -1,44 +1,51 @@
 /**
  * View rules for transfers between own accounts (budget-mit6): register chips
  * and their counts, the suggestion behind a register row, the popover's two
- * sides and "why" line, the transfer rules list. Pure (wire types allowed);
- * tested in transfers.logic.test.ts.
+ * sides and "why" line, the review list rows and the bulk bar totals, the
+ * transfer rules list. Pure (wire types allowed); tested in transfers.logic.test.ts.
  */
 import type { TransferLinkInput, TransferSuggestion } from '@/budget/data/api';
+import { milliToCents } from '@/budget/data/mapping';
 import type { PayeeAdminRow } from '@/budget/data/rows';
-import type { Account, Transaction } from '@/domain/types';
+import type { Account, Cents, Transaction } from '@/domain/types';
 import { t } from './i18n';
 
 export type RegisterChip = 'all' | 'needsCategory' | 'suggested' | 'transfers';
 export type TransferLeg = TransferSuggestion['leg'];
 export type CandidateLeg = TransferSuggestion['candidates'][number];
+export type MatchKind = 'sure' | 'confirm' | 'choose' | 'oneSide';
+export type TransferRule = NonNullable<CandidateLeg['rule']>;
 
 /** A linked transfer leg, or a rule row counted as a transfer (waiting / outside the budget). */
 export const isTransferRow = (tx: Pick<Transaction, 'transferAccountId' | 'transferPending'>): boolean =>
   !!tx.transferAccountId || tx.transferPending != null;
 
-/** Rows a register chip keeps; the chip counts are over the same rows. `suggested` keeps the rows that carry the ⇄ suggestion icon. */
+/** Rows a register chip keeps. `suggested` shows the review list instead, so rows pass through. */
 export function filterByChip(rows: Transaction[], chip: RegisterChip, needsCategory: (tx: Transaction) => boolean): Transaction[] {
   if (chip === 'needsCategory') return rows.filter(needsCategory);
   if (chip === 'transfers') return rows.filter(isTransferRow);
-  if (chip === 'suggested') return rows.filter((tx) => !!tx.transferSuggestion);
   return rows;
 }
 
 export function chipCounts(
   rows: readonly Transaction[],
   needsCategory: (tx: Transaction) => boolean,
+  suggestions: readonly TransferSuggestion[],
 ): Record<Exclude<RegisterChip, 'all'>, number> {
   let needs = 0;
   let transfers = 0;
-  let suggested = 0;
   for (const tx of rows) {
     if (tx.upcoming || tx.installment) continue;
     if (needsCategory(tx)) needs += 1;
     if (isTransferRow(tx)) transfers += 1;
-    if (tx.transferSuggestion) suggested += 1;
   }
-  return { needsCategory: needs, suggested, transfers };
+  return { needsCategory: needs, suggested: suggestions.length, transfers };
+}
+
+/** Suggestions touching `accountId` (all of them in All Accounts). */
+export function scopeSuggestions(list: readonly TransferSuggestion[], accountId: string | null): TransferSuggestion[] {
+  if (!accountId) return [...list];
+  return list.filter((s) => s.leg.account_id === accountId || s.candidates.some((c) => c.account_id === accountId));
 }
 
 /** The suggestion a register row belongs to: as its subject first, else as a proposed other side. */
@@ -49,6 +56,10 @@ export function findSuggestion(list: readonly TransferSuggestion[], txnId: strin
     list.find((s) => s.candidates.some((c) => c.transaction_id === txnId))
   );
 }
+
+/** `confirm`: a lone pair the account rules refuse, so it is never "sure": the person decides. */
+export const matchKind = (s: Pick<TransferSuggestion, 'confidence' | 'basis'>): MatchKind =>
+  s.confidence === 'one_side' ? 'oneSide' : s.confidence === 'sure' && s.basis === 'refused' ? 'confirm' : s.confidence;
 
 /** What the popover shows for `txnId`: the row, the proposed other side (or choices), and the link to send. */
 export interface PopoverSides {
@@ -88,6 +99,21 @@ export function popoverSides(s: TransferSuggestion, txnId: string, pick?: string
 const daysBetween = (a: string, b: string): number =>
   Math.round(Math.abs(Date.parse(a.slice(0, 10)) - Date.parse(b.slice(0, 10))) / 86_400_000);
 
+const RULE_KEYS = {
+  card_outflow: 'why.refused.cardOutflow',
+  card_payment_other_bank: 'why.refused.cardOtherBank',
+  cash_same_bank: 'why.refused.cashSameBank',
+} as const satisfies Record<TransferRule, string>;
+
+/** One short line for the account rule a pairing breaks. */
+export const ruleReason = (rule: TransferRule): string => t(RULE_KEYS[rule]);
+
+/** Why a refused suggestion is only offered: the rule of the proposed side, else of its candidates. */
+function refusedReason(s: TransferSuggestion, other: PopoverSides['other']): string {
+  const rules = other && 'rule' in other && other.rule ? [other.rule] : [...new Set(s.candidates.flatMap((c) => (c.rule ? [c.rule] : [])))];
+  return rules.length > 0 ? rules.map(ruleReason).join(' / ') : t('why.refusedAny');
+}
+
 /** "Why: same amount, same day · Pluggy says "…" on both sides · only candidate". */
 export function whyLine(s: TransferSuggestion, sides: Pick<PopoverSides, 'row' | 'other'>): string {
   const parts: string[] = [];
@@ -107,9 +133,65 @@ export function whyLine(s: TransferSuggestion, sides: Pick<PopoverSides, 'row' |
   else if (s.basis === 'evidence') parts.push(t('why.evidence'));
   else if (s.basis === 'rule') parts.push(t('why.rule'));
   else if (s.basis === 'ambiguous') parts.push(t('why.ambiguous', { count: s.candidates.length }));
+  else if (s.basis === 'refused') parts.push(refusedReason(s, other));
   else parts.push(t('why.unmatched'));
+  if (s.basis !== 'refused' && other && 'rule' in other && other.rule) parts.push(ruleReason(other.rule));
   if (s.confidence === 'sure' && (!row.untouched || (other && !other.untouched))) parts.push(t('why.edited'));
   return `${t('why.label')} ${parts.join(' · ')}`;
+}
+
+/** One row of the "Looks like a transfer" review list. */
+export interface ReviewRow {
+  id: string;
+  date: string;
+  match: MatchKind;
+  from: TransferLeg | null;
+  to: TransferLeg | null;
+  /** Several possible other sides still to pick from. */
+  choices: CandidateLeg[];
+  /** Absolute amount, cents. */
+  amount: Cents;
+  link: TransferLinkInput | null;
+  /** Rows "Not transfers" marks: both legs of a sure pair, else the subject row. */
+  dismissIds: string[];
+  /** The subject row's payee (accessibility label). */
+  payee: string;
+  /** Refused suggestions only: the account rule the pairing breaks, one short line. */
+  reason: string | null;
+}
+
+export function reviewRow(s: TransferSuggestion, pick?: string | null): ReviewRow {
+  const sides = popoverSides(s, s.leg.transaction_id, pick);
+  return {
+    id: s.id,
+    date: s.leg.date,
+    match: matchKind(s),
+    from: sides.from,
+    to: sides.to,
+    choices: sides.other ? [] : sides.choices,
+    amount: Math.abs(milliToCents(s.leg.amount)),
+    link: sides.link,
+    dismissIds: s.confidence === 'sure' ? [s.leg.transaction_id, ...s.candidates.map((c) => c.transaction_id)] : [s.leg.transaction_id],
+    payee: s.leg.payee_name ?? '',
+    reason: s.basis === 'refused' ? refusedReason(s, sides.other) : null,
+  };
+}
+
+/** Bulk bar: how many are selected, money out / in (cents) and the links that can be sent now. */
+export function bulkSummary(rows: readonly ReviewRow[]): { count: number; out: Cents; in: Cents; links: TransferLinkInput[]; dismissIds: string[] } {
+  let out = 0;
+  let inn = 0;
+  for (const r of rows) {
+    if (r.from) out += r.amount;
+    if (r.to) inn += r.amount;
+  }
+  return {
+    count: rows.length,
+    out,
+    in: inn,
+    links: rows.flatMap((r) => (r.link ? [r.link] : [])),
+    dismissIds: [...new Set(rows.flatMap((r) => r.dismissIds))],
+  };
 }
 
 /** Toast after linking: "3 linked as transfers · 1 payee rule created". */

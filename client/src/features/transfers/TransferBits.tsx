@@ -1,12 +1,13 @@
 /**
  * Small transfer widgets shared by the register, the review list and the
  * payee screen: the ⇄ suggestion icon, the "auto · payee rule" label, the
- * match pill, a checkbox and the toast with Undo.
+ * match pill and the toast with Undo.
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius } from '@/ui/theme';
 import { t } from './i18n';
+import type { MatchKind } from './transfers.logic';
 import type { TransferToastState } from './useTransfers';
 
 /** ⇄ next to the category of a row that looks like a transfer; opens the popover at the press point. */
@@ -30,6 +31,13 @@ export function TransferAutoLabel() {
       {t('row.autoRule')}
     </Text>
   );
+}
+
+export function MatchPill({ kind }: { kind: MatchKind }) {
+  const style = kind === 'sure' ? styles.pillSure : kind === 'choose' || kind === 'confirm' ? styles.pillChoose : styles.pillOne;
+  const label =
+    kind === 'sure' ? t('match.sure') : kind === 'confirm' ? t('match.confirm') : kind === 'choose' ? t('match.choose') : t('match.oneSide');
+  return <Text style={[styles.pill, style]}>{label}</Text>;
 }
 
 /** Bottom toast; with `undo` it carries an Undo button. */
@@ -63,6 +71,10 @@ export const styles = StyleSheet.create({
   iconOn: { borderStyle: 'solid', borderColor: colors.blue },
   iconGlyph: { color: colors.blue, fontSize: 12, fontWeight: '800', lineHeight: 14 },
   auto: { color: colors.blue, fontSize: 10, flexShrink: 1 },
+  pill: { fontSize: 11, borderRadius: 6, paddingVertical: 2, paddingHorizontal: 8, overflow: 'hidden', alignSelf: 'flex-start' },
+  pillSure: { backgroundColor: colors.bluePillBg, color: colors.blue },
+  pillChoose: { backgroundColor: colors.yellowPillBg, color: colors.yellowPillFg },
+  pillOne: { backgroundColor: colors.grayPillBg, color: colors.grayPillFg },
   toast: {
     position: 'absolute',
     bottom: 18,

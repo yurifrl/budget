@@ -3,7 +3,7 @@
  * the chip count, the review list and the register popover), the popover
  * target, and the link / Undo / "not a transfer" actions with their toast.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   useGetTransferSuggestionsQuery,
@@ -15,7 +15,7 @@ import {
 } from '@/budget/data/api';
 import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { t } from './i18n';
-import { findSuggestion, linkedToast } from './transfers.logic';
+import { findSuggestion, linkedToast, scopeSuggestions } from './transfers.logic';
 
 const EMPTY: TransferSuggestion[] = [];
 
@@ -24,10 +24,11 @@ export interface TransferToastState {
   undo?: () => void;
 }
 
-export function useTransfers({ budgetId }: { budgetId: string | null | undefined }) {
+export function useTransfers({ budgetId, accountId }: { budgetId: string | null | undefined; accountId: string | null }) {
   const scope = { budgetId: budgetId ?? '' };
   const query = useGetTransferSuggestionsQuery(scope, { skip: !budgetId });
   const all = query.data ?? EMPTY;
+  const scoped = useMemo(() => scopeSuggestions(all, accountId), [all, accountId]);
   const [link] = useLinkTransfersMutation();
   const [unlink] = useUnlinkTransfersMutation();
   const [mark] = useMarkTransfersMutation();
@@ -86,6 +87,9 @@ export function useTransfers({ budgetId }: { budgetId: string | null | undefined
   };
 
   return {
+    all,
+    scoped,
+    loading: query.isLoading,
     popover,
     popoverItem,
     openPopover: (txnId: string, x: number, y: number) => setPopover({ txnId, x, y }),
