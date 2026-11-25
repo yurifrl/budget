@@ -13,12 +13,15 @@ export function SelectionCheckbox({
   onToggle,
   label,
   disabled,
+  marginRight = 4,
 }: {
   checked: boolean;
   onToggle: () => void;
   label: string;
   /** Reconciled rows are locked (syscd-app-lqu): renders but never toggles. */
   disabled?: boolean;
+  /** Space after the box; the register keeps 4, tables that start flush use 0. */
+  marginRight?: number;
 }) {
   return (
     <Pressable
@@ -28,7 +31,7 @@ export function SelectionCheckbox({
       accessibilityRole="checkbox"
       accessibilityState={{ checked, disabled }}
       accessibilityLabel={label}
-      style={styles.checkCell}>
+      style={[styles.checkCell, { marginRight }]}>
       <View style={[styles.checkbox, checked && styles.checkboxOn, disabled && styles.checkboxLocked]}>
         {checked ? <Ionicons name="checkmark" size={12} color={colors.white} /> : null}
       </View>
@@ -37,7 +40,7 @@ export function SelectionCheckbox({
 }
 
 const styles = StyleSheet.create({
-  checkCell: { width: 26, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 4 },
+  checkCell: { width: 26, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   checkbox: {
     width: 17,
     height: 17,

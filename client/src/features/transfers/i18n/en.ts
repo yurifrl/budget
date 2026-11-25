@@ -66,6 +66,7 @@ export default {
 
   'bulk.selected': { one: '{count} selected', other: '{count} selected' },
   'bulk.totals': '· {out} out · {in} in',
+  'bulk.includesRefused': { one: 'includes {count} pair the account rules do not link on their own', other: 'includes {count} pairs the account rules do not link on their own' },
   'bulk.dismiss': 'Not transfers',
   'bulk.link': { one: 'Link {count} as transfer', other: 'Link {count} as transfers' },
 

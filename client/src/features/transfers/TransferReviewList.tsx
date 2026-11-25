@@ -14,7 +14,7 @@ import { t } from './i18n';
 import { SelectionCheckbox } from '@/ui/SelectionCheckbox';
 import { tableStyles } from '@/ui/registerTable';
 import { MatchPill } from './TransferBits';
-import { bulkSummary, reviewRow, type ReviewRow, type TransferLeg } from './transfers.logic';
+import { allSelected, bulkSummary, reviewRow, selectAllRows, type ReviewRow, type TransferLeg } from './transfers.logic';
 import type { TransfersState } from './useTransfers';
 
 function Side({ leg }: { leg: TransferLeg }) {
@@ -76,7 +76,7 @@ export function TransferReviewList({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const chosen = rows.filter((r) => selected.has(r.id));
   const summary = bulkSummary(chosen);
-  const allOn = rows.length > 0 && chosen.length === rows.length;
+  const allOn = allSelected(rows, selected);
   const toggle = (id: string) => {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
@@ -95,6 +95,11 @@ export function TransferReviewList({
           <Text style={[styles.muted, { flexShrink: 1 }]} numberOfLines={1}>
             {t('bulk.totals', { out: `– ${formatMoney(summary.out)}`, in: `+ ${formatMoney(summary.in)}` })}
           </Text>
+          {summary.needConfirm > 0 ? (
+            <Text style={[styles.reason, { flexShrink: 1 }]} numberOfLines={2}>
+              {t('bulk.includesRefused', { count: summary.needConfirm })}
+            </Text>
+          ) : null}
           <View style={{ flex: 1 }} />
           <Pressable style={styles.btn} accessibilityRole="button" onPress={() => void actions.dismiss(summary.dismissIds).then(after)}>
             <Text style={styles.btnText}>{t('bulk.dismiss')}</Text>
@@ -110,7 +115,7 @@ export function TransferReviewList({
       ) : null}
       {!isPhone ? (
         <View style={[tableStyles.head, styles.head]}>
-          <SelectionCheckbox checked={allOn} onToggle={() => setSelected(allOn ? new Set() : new Set(rows.map((r) => r.id)))} label={t('review.selectAll')} />
+          <SelectionCheckbox marginRight={0} checked={allOn} onToggle={() => setSelected(allOn ? new Set() : selectAllRows(rows, selected))} label={t('review.selectAll')} />
           <Text style={[tableStyles.headText, { width: 70 }]}>{t('review.colDate')}</Text>
           <Text style={[tableStyles.headText, { flex: 1 }]}>{t('review.colFrom')}</Text>
           <Text style={[tableStyles.headText, { flex: 1.2 }]}>{t('review.colTo')}</Text>
@@ -124,7 +129,7 @@ export function TransferReviewList({
         ListEmptyComponent={<Text style={styles.empty}>{loading ? t('review.loading') : t('review.empty')}</Text>}
         renderItem={({ item: r }) => {
           const on = selected.has(r.id);
-          const check = <SelectionCheckbox checked={on} onToggle={() => toggle(r.id)} label={t('review.select', { payee: r.payee })} />;
+          const check = <SelectionCheckbox marginRight={0} checked={on} onToggle={() => toggle(r.id)} label={t('review.select', { payee: r.payee })} />;
           const amount = <Text style={styles.amount}>{formatMoney(r.amount)}</Text>;
           const pick = (x: number, y: number) => onOpenPopover(r.id, x, y);
           if (isPhone) {

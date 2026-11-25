@@ -85,6 +85,9 @@ export function TransferPopover({
   const [mode, setMode] = useState<'main' | 'other'>('main');
   const sides = popoverSides(item, txnId, pick);
   const payee = sides.row.payee_name;
+  // The bank rules still apply under a payee rule, so a refused pair cannot promise automatic links.
+  const canRemember = !!payee && item.basis !== 'refused';
+  const rememberOn = canRemember && remember;
 
   const done = (ok: boolean) => {
     if (ok) onClose();
@@ -121,9 +124,9 @@ export function TransferPopover({
                   </View>
                 ) : null}
                 <Text style={styles.why}>{whyLine(item, sides)}</Text>
-                {payee ? (
+                {canRemember ? (
                   <View style={styles.check}>
-                    <SelectionCheckbox checked={remember} onToggle={() => setRemember(!remember)} label={t('popover.remember', { payee })} />
+                    <SelectionCheckbox marginRight={0} checked={remember} onToggle={() => setRemember(!remember)} label={t('popover.remember', { payee })} />
                     <Pressable style={{ flex: 1 }} onPress={() => setRemember(!remember)}>
                       <Text style={styles.checkText}>{t('popover.remember', { payee })}</Text>
                       <Text style={styles.muted}>{t('popover.rememberSub')}</Text>
@@ -143,7 +146,7 @@ export function TransferPopover({
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !sides.link }}
                     disabled={!sides.link}
-                    onPress={() => sides.link && void actions.linkMany([sides.link], remember).then(done)}>
+                    onPress={() => sides.link && void actions.linkMany([sides.link], rememberOn).then(done)}>
                     <Text style={styles.primaryText}>{t('popover.link')}</Text>
                   </Pressable>
                 </View>
@@ -156,7 +159,7 @@ export function TransferPopover({
                     key={a.id}
                     style={styles.option}
                     accessibilityRole="button"
-                    onPress={() => void actions.linkMany([{ transaction_id: sides.row.transaction_id, account_id: a.id }], remember).then(done)}>
+                    onPress={() => void actions.linkMany([{ transaction_id: sides.row.transaction_id, account_id: a.id }], rememberOn).then(done)}>
                     <Text style={styles.checkText}>{a.name}</Text>
                   </Pressable>
                 ))}

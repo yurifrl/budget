@@ -69,6 +69,7 @@ const m: Translation<typeof en> = {
 
   'bulk.selected': { one: '{count} selecionada', other: '{count} selecionadas' },
   'bulk.totals': '· {out} saindo · {in} entrando',
+  'bulk.includesRefused': { one: 'inclui {count} par que as regras de conta não vinculam sozinhas', other: 'inclui {count} pares que as regras de conta não vinculam sozinhas' },
   'bulk.dismiss': 'Não são transferências',
   'bulk.link': { one: 'Vincular {count} como transferência', other: 'Vincular {count} como transferências' },
 
