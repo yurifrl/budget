@@ -715,11 +715,17 @@ describe.skipIf(!dbReady)('the recorded bank text is the text of the latest pull
     expect(txnOf(applied, 'n2').payee_id).toBe(c.idOf('Bakery'));
     await sync2(c, posted);
     expect(((await c.snapshot()) as Snap).transactions).toEqual(applied.transactions);
-    // Even if the recorded text were stale, the stored provider object (the bank's own words) wins.
+  });
+
+  test('even if the recorded text were stale, the stored provider object (the bank\'s own words) decides', async () => {
+    const c = await buildWith('n2raw', 'text');
+    upstream = pull({}, [{ id: 'n2', text: 'UBER TRIP', amount: -1300 }]);
+    await c.sync();
     await pool.query("UPDATE connection_transactions SET bank_text = 'SOMETHING OLD' WHERE external_transaction_id = 'n2' AND budget_id = $1", [c.B]);
-    const again = (await op('budget_payees_rename_rules_apply_preview', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { count: number; skipped: { edited: number } };
-    expect(again.count).toBe(0);
-    expect(await pool.query("SELECT 1 FROM transactions WHERE budget_id = $1 AND import_id = $2 AND payee_id = $3", [c.B, `${PROVIDER}:n2`, c.idOf('Bakery')])).toHaveProperty('rowCount', 1);
+    const rule = ((await op('budget_payees_rename_rules_add', { id: c.idOf('Bakery'), budget_id: c.B, match_type: 'is', condition: 'UBER TRIP' })).json as { id: string }).id;
+    const p = (await op('budget_payees_rename_rules_apply_preview', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { count: number; sample: { bank_text: string }[] };
+    expect(p.count).toBe(1);
+    expect(p.sample[0]!.bank_text).toBe('UBER TRIP');
   });
 });
 

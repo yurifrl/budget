@@ -2532,16 +2532,20 @@ row, not from a timestamp.
 - **Bank sync never re-resolves a row whose bank TEXT did not change.** For an untouched synced
   row (shadow not blocked, still equal to the shadow), "the bank changed the text" is decided
   by comparing the TEXT, never the provider object (which differs from pull to pull in balance,
-  status, updatedAt). The stored text is, in order: the text the last sync recorded
-  (`connection_transactions.bank_text`, 0122, written on insert and on every refresh), else the
-  text read out of the previous pull's stored object by `rawBankText` (`connections/bank-text.ts`:
-  `typeof raw.description === 'string'`, trimmed: the expression the adapter resolves
-  `description` with; a test proves they agree), else the row's `import_payee_name` when it
+  status, updatedAt). The stored text is, in order: the text read out of the previous pull's
+  stored object by `rawBankText` (`connections/bank-text.ts`: `typeof raw.description ===
+  'string'`, trimmed: the expression the adapter resolves `description` with; a test proves they
+  agree), else the text the sync recorded (`connection_transactions.bank_text`, 0122), else the
+  row's `import_payee_name` when it
   equals the bank text (every row stored since a rule assigns its payee). When none of these
   says (rows older than raw storage, rows of the earlier behaviour, whose import name is the
   REWRITTEN name, with a stored object that lacks the text) nothing is known about the past
   text and the text counts as UNCHANGED: the row is never re-resolved merely for that, and the
-  first pull records the text. Text unchanged and date and amount the same: duplicate (no
+  first pull records the text. `bank_text` is written on EVERY pull that sees the row (insert,
+  refresh and duplicate alike), in the same statement that stores that pull's provider object, so
+  it always equals the text of the latest pull: a text change that keeps the payee ("UBER *TRIP
+  PENDING" to "UBER *TRIP" under `contains UBER`) is recorded when it happens and a later rule
+  edit or add re-points nothing. Text unchanged and date and amount the same: duplicate (no
   peek, no payee, whatever the rules say now). Text unchanged, date or amount moved: the row
   follows the bank and keeps its payee, import name, hint and shadow payee, for rows of every
   form (also those of the earlier behaviour: a legacy row never re-points because the bank
@@ -2608,7 +2612,29 @@ row, not from a timestamp.
   payee and hint; a synced row's shadow unblocked and still saying that payee), still live in an
   open account, not reconciled, linked or a transfer; the payee put back must be a live ORDINARY
   payee and a hint a live open account other than the row's own. Everything else is left as it is
-  and reported (`changed_since`, `payee_gone`, `not_found`). A second revert restores nothing.
+  and reported (`changed_since`, `payee_gone`, `not_found`). Only the payee, the hint and the
+  shadow's payee are put back: a category, memo, approval or amount changed after the apply stays
+  as the person left it. An apply is reverted ONCE: `reverted_at` is set, and a second revert
+  restores nothing (`already_reverted`) even when a later apply touched the same rows (apply1,
+  revert1, apply2, revert1 again: nothing; revert2 restores).
+- **Locks.** An apply and a revert take the per-budget advisory lock `lockBudgetImportWrites`
+  (`pg_advisory_xact_lock` on a hash of the budget id) before they lock rows; the bank sync takes
+  the same lock for the budgets of the accounts it pulled, in id order, right after it locks its
+  connection row and before it writes any row. So a sync and an apply never hold row locks in
+  different orders (no deadlock; the second waits for the first to commit), and two syncs of
+  different connections never wait on each other in a cycle.
+- **Reads.** Apply and preview do not read or lock every imported row of the budget: the rule's
+  own match (is / contains / starts with / ends with, lower-cased) is made in SQL on the row's real
+  text as a prefilter, and `FOR UPDATE` locks exactly those rows (plus synced rows of unknown text,
+  which are counted). A pattern with a non-ASCII character is not prefiltered (SQL `lower()` is
+  locale dependent), so such a rule reads every imported row. `rename_rule_apply_rows` is indexed
+  by transaction id.
+- **Side effect, a fix over main: re-importing main's statement files into a fresh-start copy
+  imports nothing.** Fresh Start carries the history of linked accounts with the import ids
+  unchanged, so a carried row's key names the OLD budget's payee id. Main looked rows up under the
+  new budget's payee id, found none and imported every row again (the duplication review mkrt-5
+  recorded); `/bulk` now also recognises a stored row by amount, date and text under any key, so
+  the carried rows are duplicates (`connections/rename-rules-forward.test.ts`, "fresh-start copy").
 - **What does NOT change.** No rule change touches the stored rows' categories, balances,
   import ids, import names or hints. The rule operations' descriptions say so. Rows main
   stored, and the legacy-row recognition of the earlier task, are exactly as before.
