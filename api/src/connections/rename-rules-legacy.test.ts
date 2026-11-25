@@ -276,8 +276,8 @@ for (const migrate of [true, false]) {
       expect((await c.snapshot() as typeof before).payees).toEqual(after.payees);
     });
 
-    test('a row the bank changes, or a new bank row, takes the new behaviour; the rows next to it do not move', async () => {
-      const before = (await c.snapshot()) as { transactions: { id: string; account_id: string; import_id: string }[]; hints: { transaction_id: string; account_id: string }[]; balances: { id: string; c: string }[]; payees: { id: string; name: string }[]; shadows: { transaction_id: string; last_synced_payload: Record<string, unknown> }[] };
+    test('a row the bank moves (amount), or a new bank row: the moved row follows the bank and keeps its payee, the new rows take the new behaviour', async () => {
+      const before = (await c.snapshot()) as { transactions: { id: string; account_id: string; import_id: string; payee_id: string | null; import_payee_name: string }[]; hints: { transaction_id: string; account_id: string }[]; balances: { id: string; c: string }[]; payees: { id: string; name: string }[]; shadows: { transaction_id: string; last_synced_payload: Record<string, unknown> }[] };
       // c5 "PIX SAV 42" (a transfer payee's rule) and c9 "MERCADO LIVRE SP" (overlapping rules) change amount; two new texts arrive.
       upstream = mainUpstream().map((t) => (t.externalId === 'c5' ? { ...t, amount: -5500 } : t.externalId === 'c9' ? { ...t, amount: -9500 } : t));
       upstream.push(up('new1', 'UBER TRIP 999', -1500), up('new2', 'PIX SAV 7', -2500));
@@ -289,13 +289,14 @@ for (const migrate of [true, false]) {
       for (const t of before.transactions.filter((x) => x.account_id === c.accounts['Itau Conta'] && !['c5', 'c9'].some((e) => x.import_id === `${PROVIDER}:${e}`))) {
         expect(after.transactions.find((x) => x.id === t.id)).toEqual(t);
       }
+      // The bank only moved the amount of these (budget-ou8p, "Rules apply going forward"): they follow it and keep what they were
+      // stored with, however main's behaviour was rewritten since (payee, import name, shadow payee, hint).
       const c9 = ext(after, 'c9');
-      expect(c9).toMatchObject({ payee_id: c.idOf('Mercado Livre'), import_payee_name: 'MERCADO LIVRE SP', amount: '-9500' });
-      expect(after.shadows.find((s) => s.transaction_id === c9.id)!.last_synced_payload).toMatchObject({ payee: 'Mercado Livre', amount: -9500 });
+      expect(c9).toMatchObject({ payee_id: ext(before, 'c9').payee_id, import_payee_name: 'Mercadoado livre sp', amount: '-9500' });
+      expect(after.shadows.find((s) => s.transaction_id === c9.id)!.last_synced_payload).toMatchObject({ payee: 'Mercadoado livre sp', amount: -9500 });
       const c5 = ext(after, 'c5');
-      expect(c5.import_payee_name).toBe('PIX SAV 42');
-      expect(c5.payee_id).toBe(after.payees.find((p) => p.name === 'PIX SAV 42')?.id ?? 'missing');
-      expect(after.hints.find((h) => h.transaction_id === c5.id)?.account_id).toBe(c.accounts['Nubank Conta']);
+      expect(c5).toMatchObject({ payee_id: ext(before, 'c5').payee_id, import_payee_name: 'Transfer : Nubank Conta 42' });
+      expect(after.hints.find((h) => h.transaction_id === c5.id)).toBeUndefined();
       expect(ext(after, 'new1')).toMatchObject({ payee_id: c.idOf('Uber'), import_payee_name: 'UBER TRIP 999' });
       expect(after.payees.map((p) => p.name)).not.toContain('Uber 999');
       expect(after.hints.find((h) => h.transaction_id === ext(after, 'new2').id)?.account_id).toBe(c.accounts['Nubank Conta']);

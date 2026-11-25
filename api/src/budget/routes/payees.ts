@@ -27,6 +27,7 @@ import { assertNotTransferPayee, transferPayeeProtected } from '../domain/transf
 import * as transferStore from '../store/transfers';
 import { MIN_RULE_PATTERN_LENGTH } from '@shared/domain/payees';
 import { budgetRouter } from '../router';
+import type { IdentityUser } from '../../user';
 import { categoryInBudget } from '../store/categories';
 import * as payeesStore from '../store/payees';
 import * as rulesStore from '../store/rename-rules';
@@ -309,18 +310,19 @@ export const operations = [
     };
   }),
 
-  implement(payeesRenameRulesApply, async (_c, { id, budget_id, rule_id }) =>
+  implement(payeesRenameRulesApply, async (c, { id, budget_id, rule_id }) =>
     withTransaction(pool, async (client) => {
       await requirePayeeIn(client, budget_id, id);
       if (!(await rulesStore.getRule(client, budget_id, id, rule_id))) throw new HttpError(404, 'rule not found');
       const plan = await planRuleApply(client, budget_id, rule_id, true);
-      const rows = await writeRuleApply(client, budget_id, plan);
-      return { rule_id, changed: rows.length, rows, skipped: plan.skipped };
+      const user: IdentityUser | undefined = c.get('user');
+      const { applyId, rows } = await writeRuleApply(client, budget_id, plan, user?.id ?? null);
+      return { apply_id: applyId, rule_id, changed: rows.length, rows, skipped: plan.skipped };
     }),
   ),
 
-  implement(payeesRenameRulesRevert, async (_c, { budget_id, rows }) =>
-    withTransaction(pool, (client) => revertRuleApply(client, budget_id, rows)),
+  implement(payeesRenameRulesRevert, async (_c, { budget_id, apply_id }) =>
+    withTransaction(pool, (client) => revertRuleApply(client, budget_id, apply_id)),
   ),
 
   // "Treat as transfer" rule (budget-mit6).

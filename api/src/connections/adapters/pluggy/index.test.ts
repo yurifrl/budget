@@ -14,6 +14,7 @@ import {
 import { AggregatorError } from '../../errors';
 import { PluggyConfigError, PluggyError, configurePluggyEnv, retryAfterMsFrom, type FetchLike } from './client';
 import { Bill, type Transaction } from './types';
+import { rawBankText } from '../../bank-text';
 
 const cfg = {
   pluggyClientId: 'cid',
@@ -178,6 +179,18 @@ describe('adapter: transaction mapping', () => {
     expect(tx.url.searchParams.get('from')).toBeNull();
     expect(tx.url.searchParams.get('to')).toBeNull();
     expect(tx.url.searchParams.get('pageSize')).toBeNull();
+  });
+
+  it('the bank text read back from the stored provider object is the description the adapter resolved (one expression)', () => {
+    for (const description of ['Coffee Shop', '  Padded  ', 'UBER *TRIP 123', '']) {
+      const txn: Transaction = { id: 'tx', accountId: 'ac1', amount: 1, date: '2026-01-05', description };
+      const aggregated = toAggregatedTransaction(txn);
+      expect(rawBankText(aggregated.raw)).toBe(aggregated.description);
+    }
+    // No description at all: the adapter says blank, the stored object does not say (unknown, never read as a changed text).
+    const bare = toAggregatedTransaction({ id: 'tx', accountId: 'ac1', amount: 1, date: '2026-01-05', description: null });
+    expect(bare.description).toBe('');
+    expect(rawBankText(bare.raw)).toBeNull();
   });
 
   it('maps POSTED and BALANCED as cleared, everything else uncleared', () => {

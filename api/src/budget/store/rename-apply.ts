@@ -4,6 +4,7 @@
  * ../domain/rename-apply.ts.
  */
 import type { Queryable } from '../../core/db';
+import { rawBankText } from '../../connections';
 import { UNTOUCHED_LEDGER_SQL } from './transfers';
 
 /** A bank-imported row an apply may look at, with the facts "untouched", "transfer" and the matcher's bank rules need. */
@@ -15,8 +16,12 @@ export interface ApplyRow {
   amount: number;
   payee_id: string | null;
   payee_name: string | null;
-  /** The text the bank sent, as stored. */
-  bank_text: string;
+  /**
+   * The text the bank sent, or null when it is not known: a synced row's text comes from what the last sync recorded or the
+   * stored provider object (`rawBankText`), a statement row's from its import text. Never the import name of a synced row: rows
+   * stored before renaming rules assigned their payee hold the rewritten name there.
+   */
+  bank_text: string | null;
   /** The person picked the payee in an import screen (the stored import names differ). */
   chosen: boolean;
   category_id: string | null;
@@ -32,14 +37,21 @@ export interface ApplyRow {
   hint_account_id: string | null;
 }
 
+interface ApplyRowSql extends Omit<ApplyRow, 'bank_text'> {
+  statement_text: string;
+  bank_text_recorded: string | null;
+  raw_description: unknown;
+}
+
 /**
- * Every live bank-imported row of open accounts of the budget that has a stored bank text, newest first. `lock`: lock the
- * rows (an apply), so a concurrent sync or edit waits for it.
+ * Every live bank-imported row of open accounts of the budget with a stored import text, newest first. `lock`: lock the rows (an
+ * apply), so a concurrent sync or edit waits for it.
  */
 export async function listApplyRows(db: Queryable, budgetId: string, lock = false): Promise<ApplyRow[]> {
-  const res = await db.query<ApplyRow>(
+  const res = await db.query<ApplyRowSql>(
     `SELECT t.id, t.account_id, t.date::text AS date, t.amount, t.payee_id, p.name AS payee_name,
-            btrim(COALESCE(t.import_payee_name_original, t.import_payee_name)) AS bank_text,
+            btrim(COALESCE(t.import_payee_name_original, t.import_payee_name, '')) AS statement_text,
+            cs.bank_text AS bank_text_recorded, cs.raw_payload->'description' AS raw_description,
             (t.import_payee_name IS NOT NULL AND t.import_payee_name_original IS NOT NULL
               AND t.import_payee_name <> t.import_payee_name_original) AS chosen,
             t.category_id, t.memo, t.cleared,
@@ -54,12 +66,16 @@ export async function listApplyRows(db: Queryable, budgetId: string, lock = fals
        LEFT JOIN transfer_hints h ON h.transaction_id = t.id
       WHERE t.budget_id = $1 AND NOT t.deleted AND NOT t.upcoming AND NOT a.deleted AND NOT a.closed
         AND t.import_id IS NOT NULL
-        AND btrim(COALESCE(t.import_payee_name_original, t.import_payee_name, '')) <> ''
       ORDER BY t.date DESC, t.id
       ${lock ? 'FOR UPDATE OF t' : ''}`,
     [budgetId],
   );
-  return res.rows;
+  return res.rows.map(({ statement_text, bank_text_recorded, raw_description, ...row }) => ({
+    ...row,
+    // A synced row's text is the one the bank sent (recorded by the sync, else read from the stored provider object by the
+    // adapter's own expression); a statement row has only its import text. Unknown (null), never guessed.
+    bank_text: row.has_shadow ? (bank_text_recorded ?? rawBankText({ description: raw_description })) : statement_text === '' ? null : statement_text,
+  }));
 }
 
 /** The facts of an account the matcher's bank rules judge a pair by. */
@@ -110,41 +126,104 @@ export async function setRowPayees(db: Queryable, budgetId: string, pairs: reado
 /** A row as a revert finds it now. */
 export interface CurrentRow {
   id: string;
+  account_id: string;
   payee_id: string | null;
   hint_account_id: string | null;
   has_shadow: boolean;
   shadow_blocked: boolean | null;
   shadow_payee: string | null;
   payee_name: string | null;
+  /** Reconciled, linked or pointing at an account: a person or the matcher made it something an apply would never touch. */
+  frozen: boolean;
 }
 
-/** Live rows of the budget among `ids`, locked. */
+/** Live rows of the budget among `ids` in open accounts, locked. */
 export async function lockRows(db: Queryable, budgetId: string, ids: readonly string[]): Promise<CurrentRow[]> {
   if (ids.length === 0) return [];
   const res = await db.query<CurrentRow>(
-    `SELECT t.id, t.payee_id, h.account_id AS hint_account_id, (cs.transaction_id IS NOT NULL) AS has_shadow,
-            cs.blocked AS shadow_blocked, cs.last_synced_payload->>'payee' AS shadow_payee, p.name AS payee_name
+    `SELECT t.id, t.account_id, t.payee_id, h.account_id AS hint_account_id, (cs.transaction_id IS NOT NULL) AS has_shadow,
+            cs.blocked AS shadow_blocked, cs.last_synced_payload->>'payee' AS shadow_payee, p.name AS payee_name,
+            (t.cleared = 'reconciled' OR t.transfer_account_id IS NOT NULL OR t.transfer_transaction_id IS NOT NULL OR p.transfer_account_id IS NOT NULL) AS frozen
        FROM transactions t
+       JOIN accounts a ON a.id = t.account_id
        LEFT JOIN payees p ON p.id = t.payee_id
        LEFT JOIN connection_transactions cs ON cs.transaction_id = t.id
        LEFT JOIN transfer_hints h ON h.transaction_id = t.id
-      WHERE t.budget_id = $1 AND t.id = ANY($2) AND NOT t.deleted
+      WHERE t.budget_id = $1 AND t.id = ANY($2) AND NOT t.deleted AND NOT t.upcoming AND NOT a.deleted AND NOT a.closed
       FOR UPDATE OF t`,
     [budgetId, ids],
   );
   return res.rows;
 }
 
-/** Ids among `ids` that are live payees of the budget. */
+/** Ids among `ids` that are live ORDINARY payees of the budget (a transfer payee is never put back on a row). */
 export async function livePayeeIds(db: Queryable, budgetId: string, ids: readonly string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
-  const res = await db.query<{ id: string }>('SELECT id FROM payees WHERE budget_id = $1 AND id = ANY($2) AND deleted = false', [budgetId, ids]);
+  const res = await db.query<{ id: string }>(
+    'SELECT id FROM payees WHERE budget_id = $1 AND id = ANY($2) AND deleted = false AND transfer_account_id IS NULL',
+    [budgetId, ids],
+  );
   return new Set(res.rows.map((r) => r.id));
 }
 
-/** Ids among `ids` that are live accounts of the budget. */
+/** Ids among `ids` that are live, open accounts of the budget. */
 export async function liveAccountIds(db: Queryable, budgetId: string, ids: readonly string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
-  const res = await db.query<{ id: string }>('SELECT id FROM accounts WHERE budget_id = $1 AND id = ANY($2) AND NOT deleted', [budgetId, ids]);
+  const res = await db.query<{ id: string }>('SELECT id FROM accounts WHERE budget_id = $1 AND id = ANY($2) AND NOT deleted AND NOT closed', [budgetId, ids]);
   return new Set(res.rows.map((r) => r.id));
+}
+
+// ---- the record of an apply (rename_rule_applies / rename_rule_apply_rows, 0122) -------------------------------------------
+
+export interface AppliedRowRecord {
+  transaction_id: string;
+  previous_payee_id: string | null;
+  payee_id: string | null;
+  previous_hint_account_id: string | null;
+  hint_account_id: string | null;
+}
+
+export async function insertApply(db: Queryable, budgetId: string, ruleId: string, userId: string | null): Promise<string> {
+  const res = await db.query<{ id: string }>('INSERT INTO rename_rule_applies (budget_id, rule_id, user_id) VALUES ($1, $2, $3) RETURNING id', [budgetId, ruleId, userId]);
+  return res.rows[0]!.id;
+}
+
+export async function insertApplyRows(db: Queryable, budgetId: string, applyId: string, rows: readonly AppliedRowRecord[]): Promise<void> {
+  if (rows.length === 0) return;
+  await db.query(
+    `INSERT INTO rename_rule_apply_rows (apply_id, transaction_id, budget_id, previous_payee_id, payee_id, previous_hint_account_id, hint_account_id)
+     SELECT $1, v.transaction_id, $2, v.previous_payee_id, v.payee_id, v.previous_hint_account_id, v.hint_account_id
+       FROM unnest($3::uuid[], $4::uuid[], $5::uuid[], $6::uuid[], $7::uuid[]) AS v(transaction_id, previous_payee_id, payee_id, previous_hint_account_id, hint_account_id)`,
+    [
+      applyId,
+      budgetId,
+      rows.map((r) => r.transaction_id),
+      rows.map((r) => r.previous_payee_id),
+      rows.map((r) => r.payee_id),
+      rows.map((r) => r.previous_hint_account_id),
+      rows.map((r) => r.hint_account_id),
+    ],
+  );
+}
+
+/** An apply of the budget, locked, with when it was reverted; undefined for another budget's or an unknown id. */
+export async function lockApply(db: Queryable, budgetId: string, applyId: string): Promise<{ id: string; reverted: boolean } | undefined> {
+  const res = await db.query<{ id: string; reverted: boolean }>(
+    'SELECT id, reverted_at IS NOT NULL AS reverted FROM rename_rule_applies WHERE id = $1 AND budget_id = $2 FOR UPDATE',
+    [applyId, budgetId],
+  );
+  return res.rows[0];
+}
+
+export async function listApplyRecordRows(db: Queryable, budgetId: string, applyId: string): Promise<AppliedRowRecord[]> {
+  const res = await db.query<AppliedRowRecord>(
+    `SELECT transaction_id, previous_payee_id, payee_id, previous_hint_account_id, hint_account_id
+       FROM rename_rule_apply_rows WHERE apply_id = $1 AND budget_id = $2 ORDER BY transaction_id`,
+    [applyId, budgetId],
+  );
+  return res.rows;
+}
+
+export async function markApplyReverted(db: Queryable, budgetId: string, applyId: string): Promise<void> {
+  await db.query('UPDATE rename_rule_applies SET reverted_at = now() WHERE id = $1 AND budget_id = $2', [applyId, budgetId]);
 }

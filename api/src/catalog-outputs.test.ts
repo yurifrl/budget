@@ -234,7 +234,7 @@ seeded.rule = addedRule.id;
   seeded.importedTxn = importedRow.rows[0]!.id;
 // Apply a rule to past rows and take it back: the write outputs are validated by the handlers.
 const applied = await ok('budget_payees_rename_rules_apply', { id: seeded.payee, budget_id: B, rule_id: seeded.rule });
-if (applied.rows.length > 0) await ok('budget_payees_rename_rules_revert', { budget_id: B, rows: applied.rows });
+await ok('budget_payees_rename_rules_revert', { budget_id: B, apply_id: applied.apply_id });
 
   // Features: a value for everyone and one user override, so the admin list validates real rows.
   // The user's own value is ON: the connection above runs on the shared keys and must stay usable

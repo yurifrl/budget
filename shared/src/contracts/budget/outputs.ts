@@ -191,7 +191,7 @@ export const renameRuleApplyRowSchema = z.object({
   amount: milli.describe('Signed integer milliunits (negative = outflow).'),
   payee_id: id.nullable().describe('The payee the row has now (null: none).'),
   payee_name: nullableString,
-  /** The text the bank sent, as stored (the row\'s import name). */
+  /** The text the bank sent for the row (never the rewritten import name of a row stored before rules assigned their payee). */
   bank_text: z.string(),
 });
 
@@ -204,6 +204,8 @@ export const renameRuleApplySkippedSchema = z.object({
   reconciled: z.number().int(),
   /** A transfer rule whose hinted account the matcher\'s bank rules would never pair with this row. */
   bank_rules: z.number().int(),
+  /** Synced rows whose real bank text is not known (stored before it was recorded): the rule could not be checked against them. */
+  unknown_text: z.number().int(),
 });
 
 /** GET .../apply-preview: what applying one rule to past transactions would change. */
@@ -216,7 +218,7 @@ export const renameRuleApplyPreviewSchema = z.object({
   skipped: renameRuleApplySkippedSchema,
 });
 
-/** One row an apply changed, with what it needs to be put back (see `budget_payees_rename_rules_revert`). */
+/** One row an apply changed, with what it had before and what the apply gave it. */
 export const renameRuleAppliedRowSchema = z.object({
   transaction_id: id,
   /** The payee before (null: none). */
@@ -231,6 +233,8 @@ export const renameRuleAppliedRowSchema = z.object({
 
 /** POST .../apply: the rows it changed. */
 export const renameRuleApplyResultSchema = z.object({
+  /** The record of this apply on the server: the only thing `budget_payees_rename_rules_revert` takes. */
+  apply_id: id,
   rule_id: id,
   changed: z.number().int(),
   rows: z.array(renameRuleAppliedRowSchema),
@@ -240,7 +244,7 @@ export const renameRuleApplyResultSchema = z.object({
 /** POST .../revert: what was put back. */
 export const renameRuleRevertResultSchema = z.object({
   reverted: z.number().int(),
-  /** Rows left as they are: changed since the apply (`changed_since`), or their old payee is gone (`payee_gone`). */
+  /** Rows left as they are: changed since the apply (`changed_since`), their old payee is gone (`payee_gone`), or the row is gone. */
   skipped: z.array(z.object({ transaction_id: id, reason: z.enum(['changed_since', 'payee_gone', 'not_found']) })),
 });
 

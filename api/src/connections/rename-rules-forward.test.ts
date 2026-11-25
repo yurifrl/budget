@@ -81,6 +81,12 @@ const aggregator = {
   listTransactions: async () => ({ transactions: upstream.map((t) => ({ ...t })), hasMore: false }),
   fetchInstitution: async () => null,
 } as unknown as BankAggregator;
+/** What the provider object stored with the legacy rows says about the text: it carries it, lacks it, or there is no object at all (rows older than raw storage). */
+type StoredRaw = 'text' | 'none' | 'null';
+let storedRaw: StoredRaw = 'text';
+/** Every pull's provider object differs from the one before in fields that have nothing to do with the text (a real provider object carries balances, status, timestamps). */
+let pullNo = 0;
+const volatile = () => ({ balance: 1000 + pullNo * 7, updatedAt: `2026-11-25T10:00:${String(pullNo % 60).padStart(2, '0')}Z`, status: pullNo % 2 ? 'POSTED' : 'PENDING' });
 const up = (externalId: string, description: string, amount: number): AggregatedTransaction => ({
   externalId,
   externalAccountId: EXT_ITAU,
@@ -89,9 +95,12 @@ const up = (externalId: string, description: string, amount: number): Aggregated
   date,
   currencyCode: null,
   cleared: true,
-  raw: { id: externalId, description },
+  raw: { id: externalId, description, ...volatile() },
 });
-const mainUpstream = () => fx.texts.map(([text, amount], i) => up(`c${i}`, text, amount));
+const mainUpstream = () => {
+  pullNo += 1;
+  return fx.texts.map(([text, amount], i) => up(`c${i}`, text, amount));
+};
 const plainRows = (texts = fx.texts) => texts.map(([payee, amount]) => ({ date, payee, memo: '', outflow: -amount, inflow: 0, category_id: null }));
 const clientRows = (rows = fx.client) =>
   rows.map((r) => ({ date, payee: r.payee, memo: '', outflow: -r.amount, inflow: 0, category_id: null, import_payee_name: r.payee, import_payee_name_original: r.original }));
@@ -146,7 +155,7 @@ async function build(label: string, migrate: boolean): Promise<Ctx> {
     await pool.query(
       `INSERT INTO connection_transactions (transaction_id, budget_id, provider, external_transaction_id, last_synced_payload, blocked, raw_payload, raw_received_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,now())`,
-      [id, B, PROVIDER, r.external_id, JSON.stringify({ date, amount: r.amount, memo: '', payee: r.shadow_payee }), r.blocked, JSON.stringify({ id: r.external_id, description: fx.texts[Number(r.external_id.slice(1))]![0] })],
+      [id, B, PROVIDER, r.external_id, JSON.stringify({ date, amount: r.amount, memo: '', payee: r.shadow_payee }), r.blocked, storedRaw === 'null' ? null : JSON.stringify(storedRaw === 'none' ? { id: r.external_id } : { id: r.external_id, description: fx.texts[Number(r.external_id.slice(1))]![0] })],
     );
     if (r.hint_account) await pool.query('INSERT INTO transfer_hints (transaction_id, budget_id, account_id) VALUES ($1,$2,$3)', [id, B, accounts[r.hint_account]]);
   }
@@ -256,12 +265,15 @@ const CHANGES: { name: string; change: (c: Ctx) => Promise<void> }[] = [
   },
 ];
 
-for (const migrate of [true, false]) {
+const VARIANTS: [boolean, StoredRaw][] = [[true, 'text'], [false, 'text'], [true, 'none'], [true, 'null']];
+for (const [migrate, raw] of VARIANTS) {
   for (const { name, change } of CHANGES) {
-    describe.skipIf(!dbReady)(`${name}, rows main stored (${migrate ? 'rules copied by migration 0121' : 'rules read from the payee columns'})`, () => {
+    describe.skipIf(!dbReady)(`${name}, rows main stored (${migrate ? 'rules copied by migration 0121' : 'rules read from the payee columns'}; stored provider object: ${raw === 'text' ? 'carries the text' : raw === 'none' ? 'lacks the text' : 'none'}; the object changes on every pull)`, () => {
       let c: Ctx;
       beforeAll(async () => {
-        c = await build(`${migrate ? 'm' : 'c'}${CHANGES.findIndex((x) => x.name === name)}`, migrate);
+        storedRaw = raw;
+        c = await build(`${migrate ? 'm' : 'c'}${raw}${CHANGES.findIndex((x) => x.name === name)}`, migrate);
+        storedRaw = 'text';
         budgets.push(c.B);
         // The column-only budget needs the rules as rows to be edited through the API: the first rule write adopts them.
       });
@@ -273,7 +285,7 @@ for (const migrate of [true, false]) {
 
       test('rows inserted afterwards take the rules; a row whose bank text really changes takes them too; the rest stays', async () => {
         const before = (await c.snapshot()) as Snap;
-        upstream = mainUpstream().map((t) => (t.externalId === 'c7' ? { ...t, description: 'PADOCA 7', raw: { id: 'c7', description: 'PADOCA 7' } } : t));
+        upstream = mainUpstream().map((t) => (t.externalId === 'c7' ? { ...t, description: 'PADOCA 7', raw: { id: 'c7', description: 'PADOCA 7', ...volatile() } } : t));
         upstream.push(up('fwd1', 'Corner Shop', -1234), up('fwd2', 'PADARIA SANTA 3', -2345));
         const result = await c.sync();
         expect(result).toMatchObject({ added: 2, updated: 1, failed: 0 });
@@ -359,7 +371,7 @@ describe.skipIf(!dbReady)('applying one rule to past transactions', () => {
     expect(preview.sample[0]).toMatchObject({ bank_text: 'Corner Shop', payee_name: 'Corner Shop' });
     expect(await c.snapshot()).toEqual(before);
 
-    const result = (await op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: corner.id })).json as { changed: number; rows: { transaction_id: string; previous_payee_id: string | null; payee_id: string | null }[]; skipped: Record<string, number> };
+    const result = (await op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: corner.id })).json as { apply_id: string; changed: number; rows: { transaction_id: string; previous_payee_id: string | null; payee_id: string | null }[]; skipped: Record<string, number> };
     expect(result.changed).toBe(preview.count);
     expect(result.rows.map((r) => r.transaction_id).sort()).toEqual(expect.arrayContaining(preview.sample.map((s) => s.id)));
     expect(await revision(c)).toBe(rev0 + 1);
@@ -389,11 +401,11 @@ describe.skipIf(!dbReady)('applying one rule to past transactions', () => {
     expect(txnOf(after, 'c0').payee_id).toBe(txnOf(before, 'c0').payee_id);
 
     // Revert: the budget is as it was.
-    const revert = (await op('budget_payees_rename_rules_revert', { budget_id: c.B, rows: result.rows })).json as { reverted: number; skipped: unknown[] };
+    const revert = (await op('budget_payees_rename_rules_revert', { budget_id: c.B, apply_id: result.apply_id })).json as { reverted: number; skipped: unknown[] };
     expect(revert).toEqual({ reverted: result.rows.length, skipped: [] });
     expect(await c.snapshot()).toEqual(before);
     // Reverting twice changes nothing: the rows are no longer as the apply left them.
-    const twice = (await op('budget_payees_rename_rules_revert', { budget_id: c.B, rows: result.rows })).json as { reverted: number; skipped: { reason: string }[] };
+    const twice = (await op('budget_payees_rename_rules_revert', { budget_id: c.B, apply_id: result.apply_id })).json as { reverted: number; skipped: { reason: string }[] };
     expect(twice.reverted).toBe(0);
     expect(twice.skipped.every((s) => s.reason === 'changed_since')).toBe(true);
     void cafe;
@@ -453,7 +465,7 @@ describe.skipIf(!dbReady)('applying one rule to past transactions', () => {
     const preview = (await op('budget_payees_rename_rules_apply_preview', { id: c.idOf('Transfer : Third Conta'), budget_id: c.B, rule_id: added.id })).json as { count: number; skipped: { bank_rules: number } };
     expect(preview.count).toBe(2);
     expect(preview.skipped.bank_rules).toBe(1); // a card is never the outflow side of a transfer
-    const result = (await op('budget_payees_rename_rules_apply', { id: c.idOf('Transfer : Third Conta'), budget_id: c.B, rule_id: added.id })).json as { changed: number; rows: { transaction_id: string; hint_account_id: string | null; payee_id: string | null; previous_payee_id: string | null }[] };
+    const result = (await op('budget_payees_rename_rules_apply', { id: c.idOf('Transfer : Third Conta'), budget_id: c.B, rule_id: added.id })).json as { apply_id: string; changed: number; rows: { transaction_id: string; hint_account_id: string | null; payee_id: string | null; previous_payee_id: string | null }[] };
     expect(result.changed).toBe(2);
     const after = (await c.snapshot()) as Snap;
     expect(after.transactions).toHaveLength(txCount); // no mirror rows
@@ -470,7 +482,7 @@ describe.skipIf(!dbReady)('applying one rule to past transactions', () => {
     expect(await c.bulk('Savings Conta', [mk('TED ZEZE 1', 31_000), mk('TED ZEZE 2', 32_000)])).toEqual({ imported: 0, duplicates: 2 });
     expect(await c.bulk('Cartao Conta', [mk('TED ZEZE 3', 33_000)])).toEqual({ imported: 0, duplicates: 1 });
     // Revert drops the hints again.
-    expect(((await op('budget_payees_rename_rules_revert', { budget_id: c.B, rows: result.rows })).json as { reverted: number }).reverted).toBe(2);
+    expect(((await op('budget_payees_rename_rules_revert', { budget_id: c.B, apply_id: result.apply_id })).json as { reverted: number }).reverted).toBe(2);
     expect(await c.snapshot()).toEqual(before);
   });
 
@@ -482,5 +494,169 @@ describe.skipIf(!dbReady)('applying one rule to past transactions', () => {
     const [rule] = await rulesOf(other, 'Uber');
     expect((await op('budget_payees_rename_rules_apply', { id: c.idOf('Uber'), budget_id: c.B, rule_id: rule!.id })).status).toBe(404);
     expect((await op('budget_payees_rename_rules_apply_preview', { id: other.idOf('Uber'), budget_id: c.B, rule_id: rule!.id })).status).toBe(404);
+  });
+});
+
+async function buildWith(label: string, raw: StoredRaw): Promise<Ctx> {
+  storedRaw = raw;
+  try {
+    const c = await build(label, true);
+    budgets.push(c.B);
+    return c;
+  } finally {
+    storedRaw = 'text';
+  }
+}
+
+describe.skipIf(!dbReady)('rows stored before rules assigned their payee: the bank only moved the date or the amount (F1)', () => {
+  for (const raw of ['text', 'none', 'null'] as const) {
+    test(`the row follows the bank and keeps its payee, import name and shadow whatever the rules say now (stored provider object: ${raw})`, async () => {
+      const c = await buildWith(`f1${raw}`, raw);
+      // "MERCADO LIVRE SP" (c9) was stored by main as the spliced payee "Mercadoado livre sp"; take the rules that spliced it away.
+      for (const payee of ['Mercado', 'Mercado Livre']) {
+        for (const rule of await rulesOf(c, payee)) await op('budget_payees_rename_rules_remove', { id: c.idOf(payee), budget_id: c.B, rule_id: rule.id });
+      }
+      const before = (await c.snapshot()) as Snap;
+      upstream = mainUpstream().map((t) => (t.externalId === 'c9' ? { ...t, amount: -9700 } : t));
+      expect(await c.sync()).toMatchObject({ added: 0, updated: 1, failed: 0 });
+      const after = (await c.snapshot()) as Snap;
+      const was = txnOf(before, 'c9');
+      const now = txnOf(after, 'c9');
+      expect(now).toMatchObject({ payee_id: was.payee_id, import_payee_name: 'Mercadoado livre sp', amount: '-9700' });
+      expect(after.payees).toEqual(before.payees);
+      expect(after.shadows.find((s) => s.transaction_id === now.id)!.last_synced_payload).toMatchObject({ payee: 'Mercadoado livre sp', amount: -9700 });
+      upstream = mainUpstream().map((t) => (t.externalId === 'c9' ? { ...t, amount: -9700 } : t));
+      expect(await c.sync()).toMatchObject({ added: 0, updated: 0, failed: 0 });
+    });
+  }
+
+  test('a text the bank really changed takes the current rules, also for a row of the earlier form (the text is known from the stored provider object)', async () => {
+    const c = await buildWith('f1changed', 'text');
+    upstream = mainUpstream().map((t) => (t.externalId === 'c9' ? { ...t, description: 'MERCADO PAGO 1', raw: { id: 'c9', description: 'MERCADO PAGO 1', ...volatile() } } : t));
+    expect(await c.sync()).toMatchObject({ added: 0, updated: 1, failed: 0 });
+    const row = (await pool.query('SELECT p.name AS payee, t.import_payee_name FROM transactions t JOIN payees p ON p.id = t.payee_id WHERE t.budget_id = $1 AND t.import_id = $2', [c.B, `${PROVIDER}:c9`])).rows[0];
+    expect(row).toEqual({ payee: 'Mercado', import_payee_name: 'MERCADO PAGO 1' }); // rule "contains MERC" -> Mercado
+  });
+});
+
+describe.skipIf(!dbReady)('apply matches the REAL bank text (B2)', () => {
+  const apply = async (c: Ctx, payee: string, ruleId: string) => (await op('budget_payees_rename_rules_apply', { id: c.idOf(payee), budget_id: c.B, rule_id: ruleId })).json as { apply_id: string; changed: number; rows: { transaction_id: string }[]; skipped: Record<string, number> };
+  const preview = async (c: Ctx, payee: string, ruleId: string) => (await op('budget_payees_rename_rules_apply_preview', { id: c.idOf(payee), budget_id: c.B, rule_id: ruleId })).json as { count: number; sample: { bank_text: string; payee_name: string }[]; skipped: Record<string, number> };
+  const addRule = async (c: Ctx, payee: string, type: string, condition: string) => ((await op('budget_payees_rename_rules_add', { id: c.idOf(payee), budget_id: c.B, match_type: type, condition })).json as { id: string }).id;
+
+  test('a rule that matches only the rewritten import name of a legacy synced row does not match the row', async () => {
+    const c = await buildWith('b2name', 'text');
+    // The synced row "NETFLIX.COM" was stored by main as the payee and import name "Netflix"; the bank text is NETFLIX.COM.
+    const rule = await addRule(c, 'Bakery', 'is', 'Netflix');
+    const p = await preview(c, 'Bakery', rule);
+    expect(p.sample.find((x) => x.bank_text === 'Netflix' && x.payee_name === 'Netflix')).toBeUndefined();
+    const synced = (await pool.query("SELECT t.id FROM transactions t WHERE t.budget_id = $1 AND t.import_id LIKE $2 AND t.import_payee_name = 'Netflix'", [c.B, `${PROVIDER}:%`])).rows;
+    expect(synced.length).toBeGreaterThan(0);
+    const before = (await c.snapshot()) as Snap;
+    const result = await apply(c, 'Bakery', rule);
+    expect(result.rows.map((r) => r.transaction_id)).not.toEqual(expect.arrayContaining([synced[0].id]));
+    const after = (await c.snapshot()) as Snap;
+    for (const r of synced) expect(after.transactions.find((t) => t.id === r.id)!.payee_id).toBe(before.transactions.find((t) => t.id === r.id)!.payee_id);
+  });
+
+  for (const raw of ['text', 'none', 'null'] as const) {
+    test(`apply on legacy synced rows changes what it reports, shows the real text, and two syncs and two re-imports change nothing afterwards (stored provider object: ${raw})`, async () => {
+      const c = await buildWith(`b2${raw}`, raw);
+      // The rule of Netflix goes; another payee takes "is NETFLIX.COM" for the past too.
+      for (const rule of await rulesOf(c, 'Netflix')) await op('budget_payees_rename_rules_remove', { id: c.idOf('Netflix'), budget_id: c.B, rule_id: rule.id });
+      const rule = await addRule(c, 'Bakery', 'is', 'NETFLIX.COM');
+      const p = await preview(c, 'Bakery', rule);
+      for (const s of p.sample) expect(s.bank_text).toBe('NETFLIX.COM'); // the real text, never "Netflix"
+      if (raw === 'text') expect(p.sample.some((s) => s.payee_name === 'Netflix')).toBe(true);
+      else expect(p.skipped.unknown_text).toBeGreaterThan(0);
+      const before = (await c.snapshot()) as Snap;
+      const result = await apply(c, 'Bakery', rule);
+      expect(result.changed).toBe(p.count);
+      expect(result.skipped.unknown_text).toBe(p.skipped.unknown_text);
+      const after = (await c.snapshot()) as Snap;
+      const moved = new Set(result.rows.map((r) => r.transaction_id));
+      for (const t of before.transactions) if (!moved.has(t.id)) expect(after.transactions.find((x) => x.id === t.id)).toEqual(t);
+      // Quiet from now on, for synced rows (the provider object changes on every pull) and statement re-imports alike.
+      for (let pass = 0; pass < 2; pass++) {
+        upstream = mainUpstream();
+        expect(await c.sync(), `sync ${pass}`).toMatchObject({ added: 0, updated: 0, blocked: 1, failed: 0, duplicates: 23 });
+        expect(await c.bulk('Savings Conta', plainRows()), `bulk ${pass}`).toEqual({ imported: 0, duplicates: 24 });
+        expect(await c.bulk('Cartao Conta', clientRows()), `client ${pass}`).toEqual({ imported: 0, duplicates: 4 });
+      }
+      const quietAfter = (await c.snapshot()) as Snap;
+      expect(quietAfter.transactions).toEqual(after.transactions);
+      expect(quietAfter.payees).toEqual(after.payees);
+      expect(quietAfter.shadows.map((s) => s.last_synced_payload)).toEqual(after.shadows.map((s) => s.last_synced_payload));
+      if (raw !== 'text') {
+        // The sync recorded the text it saw: the rows that could not be checked before can be now.
+        const later = await preview(c, 'Bakery', rule);
+        expect(later.skipped.unknown_text).toBe(0);
+        expect(later.count).toBeGreaterThan(0);
+      }
+    });
+  }
+});
+
+describe.skipIf(!dbReady)('revert takes only the id of a recorded apply (B3)', () => {
+  const setup = async (label: string) => {
+    const c = await buildWith(label, 'text');
+    const rule = ((await op('budget_payees_rename_rules_add', { id: c.idOf('Bakery'), budget_id: c.B, match_type: 'is', condition: 'Corner Shop' })).json as { id: string }).id;
+    const result = (await op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { apply_id: string; rows: { transaction_id: string; payee_id: string | null; previous_payee_id: string | null }[] };
+    expect(result.rows.length).toBeGreaterThan(0);
+    return { c, rule, result };
+  };
+  const revert = (c: Ctx, body: Record<string, unknown>) => op('budget_payees_rename_rules_revert', { budget_id: c.B, ...body });
+
+  test('a body of rows (the old shape) names nothing: it is refused, and nothing moves', async () => {
+    const { c, result } = await setup('b3forge');
+    const before = await c.snapshot();
+    const forged = { rows: [{ transaction_id: result.rows[0]!.transaction_id, previous_payee_id: c.idOf('Transfer : Nubank Conta'), payee_id: result.rows[0]!.payee_id, previous_hint_account_id: null, hint_account_id: null }] };
+    expect((await revert(c, forged)).status).toBe(400);
+    expect(await c.snapshot()).toEqual(before);
+  });
+
+  test('the id of another budget\'s apply, or an unknown one, is a 404', async () => {
+    const a = await setup('b3a');
+    const b = await setup('b3b');
+    expect((await revert(a.c, { apply_id: b.result.apply_id })).status).toBe(404);
+    expect((await revert(a.c, { apply_id: crypto.randomUUID() })).status).toBe(404);
+  });
+
+  test('rows changed or frozen since the apply are left alone and reported; the rest is restored; a second revert restores nothing', async () => {
+    const { c, result } = await setup('b3since');
+    const ids = result.rows.map((r) => r.transaction_id);
+    expect(ids.length).toBeGreaterThanOrEqual(1);
+    // The person gives the first row another payee; the matcher/person reconcile another (when there is one).
+    await pool.query('UPDATE transactions SET payee_id = $2 WHERE id = $1', [ids[0], c.idOf('Cafe Central 1')]);
+    if (ids[1]) await pool.query("UPDATE transactions SET cleared = 'reconciled' WHERE id = $1", [ids[1]]);
+    const out = (await revert(c, { apply_id: result.apply_id })).json as { reverted: number; skipped: { transaction_id: string; reason: string }[] };
+    expect(out.skipped.map((x) => x.transaction_id)).toContain(ids[0]);
+    expect(out.skipped.find((x) => x.transaction_id === ids[0])!.reason).toBe('changed_since');
+    if (ids[1]) expect(out.skipped.find((x) => x.transaction_id === ids[1])!.reason).toBe('changed_since');
+    expect(out.reverted).toBe(ids.length - out.skipped.length);
+    const rows = (await pool.query<{ id: string; payee_id: string | null }>('SELECT id, payee_id FROM transactions WHERE id = ANY($1)', [ids])).rows;
+    expect(rows.find((r) => r.id === ids[0])!.payee_id).toBe(c.idOf('Cafe Central 1'));
+    const again = (await revert(c, { apply_id: result.apply_id })).json as { reverted: number };
+    expect(again.reverted).toBe(0);
+  });
+
+  test('a previous payee that is gone is not put back (and never a transfer payee)', async () => {
+    const { c, result } = await setup('b3gone');
+    const previous = [...new Set(result.rows.map((r) => r.previous_payee_id).filter((x): x is string => x !== null))];
+    await pool.query('UPDATE payees SET deleted = true WHERE id = ANY($1)', [previous]);
+    const out = (await revert(c, { apply_id: result.apply_id })).json as { reverted: number; skipped: { reason: string }[] };
+    expect(out.skipped.every((x) => x.reason === 'payee_gone')).toBe(true);
+    expect(out.reverted).toBe(result.rows.filter((r) => r.previous_payee_id === null).length);
+  });
+});
+
+describe.skipIf(!dbReady)('statement import with no rule change: another case is another text (B4)', () => {
+  test('"Coffee Shop" then "COFFEE SHOP" (same date and amount) imports both; the same text again imports none', async () => {
+    const c = await buildWith('b4', 'text');
+    const row = (payee: string) => ({ date, payee, memo: '', outflow: 4_500, inflow: 0, category_id: null });
+    expect(await c.bulk('Savings Conta', [row('Coffee Shop')])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Savings Conta', [row('COFFEE SHOP')])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Savings Conta', [row('COFFEE  SHOP')])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Savings Conta', [row('Coffee Shop'), row('COFFEE SHOP'), row(' Coffee Shop ')])).toEqual({ imported: 0, duplicates: 3 });
   });
 });

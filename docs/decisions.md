@@ -2529,70 +2529,92 @@ afterwards (bank sync, statement import, register, repeat rules) take the rule.
 No data is rewritten and there is no migration: "stored before the rule" is decided from the
 row, not from a timestamp.
 
-- **Bank sync never re-resolves a row the bank sent again with the same text.** For an
-  untouched synced row (shadow not blocked, still equal to the shadow), the text is the
-  same when the row's `import_payee_name` equals the bank's trimmed text (every row stored
-  since a rule assigns its payee: the import name IS the bank text), or, for rows of the
-  earlier behaviour whose import name is the REWRITTEN name, when the provider object stored
-  by the pull before (`connection_transactions.raw_payload`, read before this pull
-  overwrites it) is identical to this pull's AND carries the text (an object that does not
-  mention the text proves nothing about it). Same text and same date and amount: duplicate, whatever the
-  rules say now (no peek, no payee). Same text, date or amount moved: the row follows the bank
-  and keeps its payee, import name and hint (the shadow's payee too). A changed text, or a
-  legacy row with neither signal (import name rewritten, no raw stored yet: it gets its raw on
-  the first pull after this change), is resolved as before, so it takes the current rules.
-  The recognition of earlier-behaviour forms (`earlierNames`, `legacyName`) is unchanged.
+- **Bank sync never re-resolves a row whose bank TEXT did not change.** For an untouched synced
+  row (shadow not blocked, still equal to the shadow), "the bank changed the text" is decided
+  by comparing the TEXT, never the provider object (which differs from pull to pull in balance,
+  status, updatedAt). The stored text is, in order: the text the last sync recorded
+  (`connection_transactions.bank_text`, 0122, written on insert and on every refresh), else the
+  text read out of the previous pull's stored object by `rawBankText` (`connections/bank-text.ts`:
+  `typeof raw.description === 'string'`, trimmed: the expression the adapter resolves
+  `description` with; a test proves they agree), else the row's `import_payee_name` when it
+  equals the bank text (every row stored since a rule assigns its payee). When none of these
+  says (rows older than raw storage, rows of the earlier behaviour, whose import name is the
+  REWRITTEN name, with a stored object that lacks the text) nothing is known about the past
+  text and the text counts as UNCHANGED: the row is never re-resolved merely for that, and the
+  first pull records the text. Text unchanged and date and amount the same: duplicate (no
+  peek, no payee, whatever the rules say now). Text unchanged, date or amount moved: the row
+  follows the bank and keeps its payee, import name, hint and shadow payee, for rows of every
+  form (also those of the earlier behaviour: a legacy row never re-points because the bank
+  moved its amount). Only a row whose text demonstrably changed, and a new row, is resolved
+  with the current rules. The recognition of earlier-behaviour forms (`earlierNames`,
+  `legacyName`) is unchanged for those. Limitation: a text the bank changed BEFORE the first
+  pull that records it cannot be seen (nothing was stored to compare with).
 - **/bulk recognises a stored row by what it was imported as, under any key.** The key is
   `YNAB:<milli>:<date>:<payee id>:<occurrence>`; a rule changes the payee id a text resolves
   to. An id-less row is a re-import when a stored row of the account has the same signed
-  amount, the same date and the same statement text (case ignored, the payee field main keyed
-  on), whatever payee id its key names. The earlier per-key lookups (current key, earlier
-  keys, rows with no text on record) stay, and a new text still takes the next free
-  occurrence of ITS key. Side effect, an improvement over main: a stored row whose key payee
-  was merged or deleted since is still recognised. No payee is created for a duplicate.
-- **Apply to past transactions: three operations.** `budget_payees_rename_rules_apply_preview`
+  amount, the same date and the same statement text, under any key, whatever payee id its key
+  names. The text is compared TRIMMED AND EXACT here (another case or spacing is another text:
+  "Coffee Shop" then "COFFEE SHOP" on one day for one amount import both, as they did on main,
+  where they were two keys); within one key the earlier lower-cased comparison stays. The earlier
+  per-key lookups (current key, earlier keys, rows with no text on record) stay, and a new text
+  still takes the next free occurrence of ITS key. A second transaction with the same date,
+  amount and text arriving in a LATER file is still a re-import and is dropped, exactly as on
+  main (a stored row of that text makes every copy a duplicate; only copies inside one file
+  count). Side effect, an improvement over main: a stored row whose key payee was merged or
+  deleted since is still recognised. No payee is created for a duplicate.
+- **Apply to past transactions: three operations, none exposed to MCP** (API and CLI only, like
+  other bulk actions). `budget_payees_rename_rules_apply_preview`
   (GET /payees/:id/rename-rules/:rule_id/apply-preview, a read), `budget_payees_rename_rules_apply`
-  (POST .../apply) and `budget_payees_rename_rules_revert` (POST /payees/rename-rules-revert).
-  Preview and apply run the same selection (`domain/rename-apply.ts planRuleApply`); apply runs
-  it inside its database transaction with the candidate rows locked, so it changes exactly the
-  rows a preview taken at that moment counts. One budget revision bump (the existing deferred
-  trigger dedupes per transaction).
-- **Which rows.** Live, bank-imported (`import_id` set) rows of open accounts whose stored
-  bank text (`import_payee_name_original`, else `import_payee_name`) the rule WINS under the
-  normal matching order (most specific, longest, oldest; a rule of a dead transfer payee
-  never fires), minus: reconciled rows; transfers already (linked, pointing at an account, or
-  holding a transfer payee); rows the person edited. "Untouched" is the transfer matcher's
-  `untouched_ledger` (store/transfers.ts, `UNTOUCHED_LEDGER_SQL`, shared, not copied: payee
-  null, or equal to the import text, or to the sync shadow's payee, or, for a statement row,
-  the payee a rule assigns) PLUS, for a synced row, shadow not blocked and still equal to the
-  row (date, amount, memo, payee), PLUS: a payee chosen in an import screen (import names
-  differ) counts as edited. For a legacy synced row the stored text is the rewritten name
-  main stored; the rule is matched against that. Limitation: a statement row a rule of
-  type "contains" assigned looks edited to `untouched_ledger` (main's own test), so a later
-  apply of another rule skips it; a synced row follows its shadow and is applied again.
-  Categories are never written. Rows keep `import_id` and the import names.
+  (POST .../apply) and `budget_payees_rename_rules_revert` (POST /payees/rename-rules-revert, body
+  `{ budget_id, apply_id }`). Preview and apply run the same selection (`domain/rename-apply.ts
+  planRuleApply`); apply runs it inside its database transaction with the candidate rows locked,
+  so it changes exactly the rows a preview taken at that moment counts. One budget revision bump
+  (the existing deferred trigger dedupes per transaction). Apply does NOT run the transfer matcher:
+  the hints it writes are picked up at the next sync or transfer review.
+- **Which rows.** Live, bank-imported (`import_id` set) rows of open accounts whose REAL bank
+  text the rule WINS under the normal matching order (most specific, longest, oldest; a rule of
+  a dead transfer payee never fires). The real text of a synced row is the one the sync
+  recorded, else the stored provider object's (`rawBankText`); of a statement row, its import
+  text (`import_payee_name_original`, else `import_payee_name`). Never a synced row's import
+  name: rows of the earlier behaviour hold the rewritten name there, and matching it would change
+  rows the rule does not hold (the next sync would undo it). A synced row whose text is not known
+  is skipped and counted in `skipped.unknown_text` (the next sync records it, then it is
+  eligible). The preview sample shows this real text.
+- **Skip counts are one judgement.** A matching row is skipped, counted by the first reason of:
+  reconciled; transfer already (linked, pointing at an account, or holding a transfer payee);
+  edited; unknown_text; bank_rules. "Edited" means NOT PROVABLY AS IMPORTED, the same test for
+  every row: the transfer matcher's `untouched_ledger` (store/transfers.ts, `UNTOUCHED_LEDGER_SQL`,
+  shared, not copied: payee null, or equal to the import text, or to the sync shadow's payee, or,
+  for a statement row, the payee a rule of that payee assigns for the text), plus, for a synced
+  row, an unblocked shadow that still equals the row (date, amount, memo, payee), plus: a payee
+  chosen in an import screen is the person's. Conservative: a statement row whose assigning rule
+  was removed since no longer proves it and counts as edited (never the other way). Categories are
+  never written. Rows keep `import_id` and the import names.
 - **What it writes.** The payee (`transactions.payee_id`), the sync shadow's payee for a
   synced row (so the next sync sees an unedited row), and transfer hints. Ordinary payee
-  rule: the row gets the rule's payee and loses any transfer hint (as a sync refresh drops it
-  for text that is no longer transfer text). Rule on an account's transfer payee: as an import
-  does, the row keeps (or gets, created if missing) the ordinary payee of its text and a
-  `transfer_hints` row for that account (not for a categorized row or a row of that account
-  itself); never the transfer payee, never a mirror row, no `linkTransfers` run (the matcher
-  picks the hints up at its next run, sync or review). A row the matcher's bank rules would
-  never pair with the hinted account (`pairViolation`, the row's side by amount sign: card
-  outflow, cash to a card at another bank, checking to checking at one bank) is skipped
-  entirely and counted in `skipped.bank_rules`.
-- **Revert is stateless and cheap.** Apply returns every changed row with its previous and
-  new payee and hint; revert takes those rows back (max 20000), in one transaction, and puts the
-  previous payee, hint and shadow payee back only for a row that still has what the apply
-  gave it (synced rows: shadow not blocked and still saying that payee). A row changed since
-  is left alone and reported (`changed_since`, `payee_gone` when the previous payee was
-  deleted, `not_found`). All ids are scoped by budget in SQL. Nothing is stored server-side,
-  so the client must keep the apply result while the undo is on offer.
+  rule: the row gets the rule's payee and loses any transfer hint. Rule on an account's transfer
+  payee: as an import does, the row keeps (or gets, created if missing) the ordinary payee of its
+  text and a `transfer_hints` row for that account (not for a categorized row or a row of that
+  account itself); never the transfer payee, never a mirror row, no `linkTransfers` run. A row the
+  matcher's bank rules would never pair with the hinted account (`pairViolation`, the row's side
+  by amount sign: card outflow, cash to a card at another bank, checking to checking at one bank)
+  is skipped entirely and counted in `skipped.bank_rules`.
+- **Revert is recorded on the server and takes only an id.** Every apply writes a record
+  (`rename_rule_applies`: id, budget, rule, user, time, reverted_at; `rename_rule_apply_rows`: per
+  changed row the previous and the new payee and hint; migration 0122) and returns its
+  `apply_id`. Revert reads that record only: nothing the caller sends names a row, a payee or an
+  account (a body of rows is refused), the id is scoped by budget (another budget's id is a 404).
+  In one transaction it restores a row only while the row is exactly what the apply left (same
+  payee and hint; a synced row's shadow unblocked and still saying that payee), still live in an
+  open account, not reconciled, linked or a transfer; the payee put back must be a live ORDINARY
+  payee and a hint a live open account other than the row's own. Everything else is left as it is
+  and reported (`changed_since`, `payee_gone`, `not_found`). A second revert restores nothing.
 - **What does NOT change.** No rule change touches the stored rows' categories, balances,
   import ids, import names or hints. The rule operations' descriptions say so. Rows main
   stored, and the legacy-row recognition of the earlier task, are exactly as before.
   Proven by `connections/rename-rules-forward.test.ts` (the capture of main, rules added,
-  edited and removed through the API; sync twice and statement re-import twice: 0 updated,
-  0 imported, no payee created; new rows and a changed bank text take the rules; apply,
+  edited and removed through the API, with the stored provider object carrying the text, lacking
+  it, or absent, and an object that changes on every pull; sync twice and statement re-import twice:
+  0 updated, 0 imported, no payee created; new rows and a changed bank text take the rules; legacy
+  rows keep their payee when only the date or amount moves; apply on rows of the earlier form,
   revert, the skips, transfer hints).

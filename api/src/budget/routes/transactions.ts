@@ -297,7 +297,7 @@ export const operations = [
       const incomingText = (txn: (typeof txns)[number]) => textOf(txn.import_payee_name ?? txn.payee)!;
       const existingByPrefix = new Map<string, { occ: number; text: string | null }[]>();
       // Whatever the rules say NOW, a stored row is recognised by what it was imported as: the same (amount, date) and the same
-      // statement text, under ANY key. A renaming rule added, changed or removed since changes the payee a text resolves to, so
+      // statement text (trimmed, compared exactly: another case or spacing is another text, as it was another key on main), under ANY key. A renaming rule added, changed or removed since changes the payee a text resolves to, so
       // the key it would count under; the rows already stored must not come in again (docs/decisions.md, "Rules apply going
       // forward"). Keys are `YNAB:<milli>:<date>:<payee id>:<occurrence>` and neither milli nor date has a colon.
       const baseOf = (txn: (typeof txns)[number]) => `YNAB:${txn.inflow - txn.outflow}:${txn.date}`;
@@ -309,7 +309,7 @@ export const operations = [
           if (parts.length !== 5 || text == null) continue;
           const base = parts.slice(0, 3).join(':');
           const set = textsByBase.get(base) ?? new Set<string>();
-          set.add(text.trim().toLowerCase());
+          set.add(text.trim());
           textsByBase.set(base, set);
         }
       }
@@ -356,7 +356,7 @@ export const operations = [
           // numbered by their place among the rows of that text (a new text takes the next free number of the prefix, so its own
           // place is 1, as it was under its own key), and the first place is <= every occurrence. A stored row with no text on record
           // (very old) counts for any text, by its number, as before.
-          const reimport = (textsByBase.get(baseOf(txn))?.has(text) ?? false) || known.some((prefix) => {
+          const reimport = (textsByBase.get(baseOf(txn))?.has((txn.import_payee_name ?? txn.payee).trim()) ?? false) || known.some((prefix) => {
             const stored = existingByPrefix.get(prefix) ?? [];
             const n = counts.get(prefix) ?? Infinity;
             return stored.some((e) => e.text === text) || stored.some((e) => e.text === null && e.occ <= n);

@@ -31,6 +31,8 @@ export interface SkippedCounts {
   transfer: number;
   reconciled: number;
   bank_rules: number;
+  /** Synced rows whose real bank text is not known (stored before the text was recorded, and the stored provider object does not say). */
+  unknown_text: number;
 }
 
 export interface RuleApplyPlan {
@@ -57,28 +59,36 @@ export async function planRuleApply(db: Queryable, budgetId: string, ruleId: str
   const rule = rules.find((r) => r.id === ruleId);
   if (!rule) throw new HttpError(404, 'rule not found');
   const rows = await store.listApplyRows(db, budgetId, lock);
-  const skipped: SkippedCounts = { edited: 0, transfer: 0, reconciled: 0, bank_rules: 0 };
+  const skipped: SkippedCounts = { edited: 0, transfer: 0, reconciled: 0, bank_rules: 0, unknown_text: 0 };
   const changes: PlannedChange[] = [];
   // What the rule makes of one text (read only), once per text.
   const decisions = new Map<string, { name: string | null; existingId: string | null }>();
   let sides: Map<string, TransferSide> | null = null;
 
+  // Counting, in this order and only for rows the rule is the winner for (or, for unknown_text, could not be checked for):
+  // reconciled, then transfer, then edited, then unknown_text, then bank_rules. "Edited" is ONE judgement for every row: it is not
+  // provably as imported (the matcher's `untouched_ledger`: payee null, or the import text, or what the last sync wrote, or, for a
+  // statement row, a payee a rule of that payee assigns for the text; for a synced row also an unblocked shadow that still equals
+  // the row; a payee chosen in an import screen is the person's). A statement row whose rule has since been removed no longer
+  // proves it, so it counts here: conservative, never the other way.
   for (const row of rows) {
     const text = row.bank_text;
-    // The rule has to be the one that WINS for the text (a rule of a transfer payee whose account is gone never fires).
-    if (matchingRule(rules, text)?.id !== rule.id) continue;
-    if (row.cleared === 'reconciled') {
+    // The text this row's rule decision is made on is the REAL bank text, never the import name of a synced row.
+    if (text !== null && matchingRule(rules, text)?.id !== rule.id) continue;
+    if (text !== null && row.cleared === 'reconciled') {
       skipped.reconciled += 1;
       continue;
     }
-    if (row.transfer) {
+    if (text !== null && row.transfer) {
       skipped.transfer += 1;
       continue;
     }
-    // "Untouched" is the transfer matcher's: the payee is still as imported (`untouched_ledger`), and a synced row's shadow
-    // still agrees with the row. A payee the person chose in an import screen is theirs.
     if (row.chosen || !row.untouched_ledger || !shadowAgrees(row)) {
-      skipped.edited += 1;
+      if (text !== null) skipped.edited += 1;
+      continue;
+    }
+    if (text === null) {
+      if (row.cleared !== 'reconciled' && !row.transfer) skipped.unknown_text += 1;
       continue;
     }
 
@@ -138,8 +148,8 @@ export interface AppliedRow {
   hint_account_id: string | null;
 }
 
-/** Write a plan, in the caller's transaction. Returns what changed, with what each row had before. */
-export async function writeRuleApply(db: Queryable, budgetId: string, plan: RuleApplyPlan): Promise<AppliedRow[]> {
+/** Write a plan, in the caller's transaction, and record it (the record is what revert reads). */
+export async function writeRuleApply(db: Queryable, budgetId: string, plan: RuleApplyPlan, userId: string | null): Promise<{ applyId: string; rows: AppliedRow[] }> {
   const created = new Map<string, string | null>();
   const applied: AppliedRow[] = [];
   const payeeWrites: { id: string; payeeId: string | null }[] = [];
@@ -160,7 +170,9 @@ export async function writeRuleApply(db: Queryable, budgetId: string, plan: Rule
   }
   await store.setRowPayees(db, budgetId, payeeWrites);
   await writeHints(db, budgetId, applied.map((a) => ({ id: a.transaction_id, hint: a.hint_account_id, previous: a.previous_hint_account_id })));
-  return applied;
+  const applyId = await store.insertApply(db, budgetId, plan.rule.id, userId);
+  await store.insertApplyRows(db, budgetId, applyId, applied);
+  return { applyId, rows: applied };
 }
 
 async function writeHints(db: Queryable, budgetId: string, rows: { id: string; hint: string | null; previous: string | null }[]): Promise<void> {
@@ -175,22 +187,29 @@ export interface RevertResult {
 }
 
 /**
- * Put back what an apply changed. A row is restored only while it still has the payee and hint the apply gave it (and a synced
- * row is not blocked and still says that payee): anything the person did since wins.
+ * Put back what ONE recorded apply changed. Only the apply's own record is read (the client sends nothing but the id), and a row
+ * is restored only while it is still exactly what the apply left (same payee and hint, a synced row's shadow unblocked and still
+ * saying that payee), still live in an open account, not reconciled, linked or a transfer. The payee put back is an ordinary,
+ * live one, the hint a live open account: anything else is left alone and reported. A second revert restores nothing.
  */
-export async function revertRuleApply(db: Queryable, budgetId: string, rows: readonly AppliedRow[]): Promise<RevertResult> {
+export async function revertRuleApply(db: Queryable, budgetId: string, applyId: string): Promise<RevertResult> {
+  const apply = await store.lockApply(db, budgetId, applyId);
+  if (!apply) throw new HttpError(404, 'apply not found');
+  const rows = await store.listApplyRecordRows(db, budgetId, applyId);
   const current = new Map((await store.lockRows(db, budgetId, rows.map((r) => r.transaction_id))).map((r) => [r.id, r]));
   const payees = await store.livePayeeIds(db, budgetId, rows.map((r) => r.previous_payee_id).filter((x): x is string => x !== null));
   const accounts = await store.liveAccountIds(db, budgetId, rows.map((r) => r.previous_hint_account_id).filter((x): x is string => x !== null));
   const skipped: RevertResult['skipped'] = [];
-  const restore: AppliedRow[] = [];
-  const seen = new Set<string>();
+  const restore: store.AppliedRowRecord[] = [];
   for (const r of rows) {
-    if (seen.has(r.transaction_id)) continue;
-    seen.add(r.transaction_id);
     const now = current.get(r.transaction_id);
     if (!now) skipped.push({ transaction_id: r.transaction_id, reason: 'not_found' });
-    else if (now.payee_id !== r.payee_id || now.hint_account_id !== r.hint_account_id || (now.has_shadow && (now.shadow_blocked || (now.shadow_payee ?? '') !== (now.payee_name ?? '')))) {
+    else if (
+      now.frozen ||
+      now.payee_id !== r.payee_id ||
+      now.hint_account_id !== r.hint_account_id ||
+      (now.has_shadow && (now.shadow_blocked || (now.shadow_payee ?? '') !== (now.payee_name ?? '')))
+    ) {
       skipped.push({ transaction_id: r.transaction_id, reason: 'changed_since' });
     } else if (r.previous_payee_id !== null && !payees.has(r.previous_payee_id)) skipped.push({ transaction_id: r.transaction_id, reason: 'payee_gone' });
     else restore.push(r);
@@ -199,7 +218,12 @@ export async function revertRuleApply(db: Queryable, budgetId: string, rows: rea
   await writeHints(
     db,
     budgetId,
-    restore.map((r) => ({ id: r.transaction_id, hint: r.previous_hint_account_id !== null && accounts.has(r.previous_hint_account_id) ? r.previous_hint_account_id : null, previous: r.hint_account_id })),
+    restore.map((r) => {
+      const own = current.get(r.transaction_id)!.account_id;
+      const back = r.previous_hint_account_id !== null && r.previous_hint_account_id !== own && accounts.has(r.previous_hint_account_id) ? r.previous_hint_account_id : null;
+      return { id: r.transaction_id, hint: back, previous: r.hint_account_id };
+    }),
   );
+  await store.markApplyReverted(db, budgetId, applyId);
   return { reverted: restore.length, skipped };
 }

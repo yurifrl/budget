@@ -85,6 +85,8 @@ const V = {
   rule: crypto.randomUUID(),
   /** A renaming rule of the victim's payee. */
   renameRule: crypto.randomUUID(),
+  /** A recorded apply of the victim's rule. */
+  apply: crypto.randomUUID(),
   connection: crypto.randomUUID(),
 };
 // Attacker's own budget (budgetAccess lets them address it).
@@ -336,6 +338,7 @@ beforeAll(async () => {
   await pool.query(`INSERT INTO payee_renaming_rules (id, budget_id, payee_id, match_type, condition) VALUES ($1, $2, $3, 'is', 'victim rule')`, [
     V.renameRule, V.budget, V.payee,
   ]);
+  await pool.query(`INSERT INTO rename_rule_applies (id, budget_id, rule_id) VALUES ($1, $2, $3)`, [V.apply, V.budget, V.renameRule]);
   await pool.query(
     `INSERT INTO transactions (id, budget_id, account_id, date, amount, payee_id, category_id, memo, cleared, approved, repeat, deleted)
      VALUES ($1, $2, $3, '2026-01-05', -1000, $4, $5, 'victim memo', 'uncleared', true, 'never', false),
@@ -524,13 +527,9 @@ const bodyCases: BodyCase[] = [
     input: { id: A.payee, budget_id: A.budget, categorization_mode: 'fixed', default_category_id: V.category } },
   { op: 'budget_payees_merge', fields: ['target_id'], outcome: 'reject', status: 404,
     input: { id: A.payee, budget_id: A.budget, target_id: V.payee } },
-  // Undoing an apply: every id of the request is re-scoped by budget in SQL; a foreign row, payee or account changes nothing.
-  { op: 'budget_payees_rename_rules_revert', fields: ['rows[].transaction_id'], outcome: 'ignored',
-    input: { budget_id: A.budget, rows: [{ transaction_id: V.txn, previous_payee_id: null, payee_id: V.payee, previous_hint_account_id: null, hint_account_id: null }] } },
-  { op: 'budget_payees_rename_rules_revert', fields: ['rows[].previous_payee_id', 'rows[].payee_id'], outcome: 'ignored',
-    input: { budget_id: A.budget, rows: [{ transaction_id: A.txn, previous_payee_id: V.payee, payee_id: A.payee, previous_hint_account_id: null, hint_account_id: null }] } },
-  { op: 'budget_payees_rename_rules_revert', fields: ['rows[].previous_hint_account_id', 'rows[].hint_account_id'], outcome: 'ignored',
-    input: { budget_id: A.budget, rows: [{ transaction_id: A.txn, previous_payee_id: null, payee_id: A.payee, previous_hint_account_id: V.account, hint_account_id: V.account }] } },
+  // Undoing an apply: the apply record is re-scoped by budget in SQL; another budget's apply id is a 404 and changes nothing.
+  { op: 'budget_payees_rename_rules_revert', fields: ['apply_id'], outcome: 'reject', status: 404,
+    input: { budget_id: A.budget, apply_id: V.apply } },
   // repeat rules
   { op: 'budget_repeat_rules_create', fields: ['account_id'], outcome: 'reject', status: 400,
     input: ruleBase({ account_id: V.account }) },
@@ -782,7 +781,7 @@ const onVictimBudget: Record<string, Record<string, unknown>> = {
   budget_payees_merge: { id: V.payee, target_id: V.payee },
   budget_payees_rename_rules_apply: { id: V.payee, rule_id: V.renameRule },
   budget_payees_rename_rules_apply_preview: { id: V.payee, rule_id: V.renameRule },
-  budget_payees_rename_rules_revert: { rows: [{ transaction_id: V.txn, previous_payee_id: null, payee_id: V.payee, previous_hint_account_id: null, hint_account_id: null }] },
+  budget_payees_rename_rules_revert: { apply_id: V.apply },
   budget_plan_auto_assign: { month: MONTH, rows: [{ category_id: V.category, assigned: 1000 }] },
   budget_repeat_rules_create: ruleBase({ account_id: V.account }),
   budget_repeat_rules_generate: {},
