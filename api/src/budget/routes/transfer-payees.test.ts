@@ -1142,3 +1142,105 @@ describe.skipIf(!dbReady)('payee_id on create: validation', () => {
     expect((await pool!.query('SELECT count(*)::int AS n FROM transactions WHERE account_id = $1 AND deleted = false', [src])).rows[0].n).toBe(0);
   });
 });
+
+describe.skipIf(!dbReady)('carry-overs of the payee lifecycle review (budget-nq2f)', () => {
+  const former = async (payeeId: string) =>
+    (await pool!.query<{ name: string }>('SELECT name FROM transfer_payee_former_names WHERE payee_id = $1 ORDER BY name', [payeeId])).rows.map((r) => r.name);
+
+  test('the repair records the folded payee\'s name and former names on the kept payee, so a stale edit text cannot move a mirror', async () => {
+    const b = await newBudget();
+    const peer = await createAccount(b, 'Rec Peer');
+    const a = await legacyAccount(b, 'Rec Acct');
+    const keep = await rawPayee(b, 'Transfer : Rec Acct', a);
+    const extra = await rawPayee(b, 'Transfer : Rec Acct Old', a);
+    await pool!.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [keep, a]);
+    await pool!.query('INSERT INTO transfer_payee_former_names (payee_id, budget_id, name) VALUES ($1, $2, $3)', [extra, b, 'Transfer : Rec Older']);
+
+    await repair(b, true);
+    expect(await former(keep)).toEqual(['Transfer : Rec Acct Old', 'Transfer : Rec Older']);
+
+    // A transfer row of the kept payee; then an account takes the folded name. The released
+    // client still sends the old text on an edit: it must not move the mirror to the new account.
+    const t = await createTransfer(b, peer, 'Transfer : Rec Acct');
+    expect(t.res.status, t.text).toBe(201);
+    const newcomer = await createAccount(b, 'Rec Acct Old');
+    const legBefore = await txnRow(t.body!.id);
+    const res = await send('PATCH', `/transactions/${t.body!.id}`, { budget_id: b, patch: { payee: 'Transfer : Rec Acct Old' } });
+    expect(res.status, await res.clone().text()).toBe(204);
+    const legAfter = await txnRow(t.body!.id);
+    expect(legAfter).toEqual(legBefore);
+    expect(legAfter.transfer_account_id).toBe(a);
+    expect((await pool!.query('SELECT 1 FROM transactions WHERE account_id = $1 AND NOT deleted', [newcomer])).rowCount).toBe(0);
+  });
+
+  test('a transfer row edited to rule text that yields an ORDINARY "Transfer : X" payee stops being a transfer', async () => {
+    const b = await newBudget();
+    const src = await createAccount(b, 'Rule Src');
+    await createAccount(b, 'Rule Dst');
+    const plain = await rawPayee(b, 'Transfer : Rule Plain', null, { rule: ['is', 'ZED PIX'] });
+    const t = await createTransfer(b, src, 'Transfer : Rule Dst');
+    const mirrorId = (await txnRow(t.body!.id)).transfer_transaction_id!;
+    const res = await send('PATCH', `/transactions/${t.body!.id}`, { budget_id: b, patch: { payee: 'ZED PIX' } });
+    expect(res.status, await res.clone().text()).toBe(204);
+    const row = await txnRow(t.body!.id);
+    expect(row.payee_id).toBe(plain);
+    expect([row.transfer_account_id, row.transfer_transaction_id]).toEqual([null, null]);
+    expect((await pool!.query('SELECT deleted FROM transactions WHERE id = $1', [mirrorId])).rows[0].deleted).toBe(true);
+  });
+
+  test('a duplicate kept unlinked for another budget does not keep its "treat as transfer" rule: moved when the kept payee has none, else reported', async () => {
+    for (const keptHasRule of [false, true]) {
+      const b = await newBudget();
+      const other = await newBudget();
+      const peer = await createAccount(b, 'Rule Keep Peer');
+      const otherAccount = await createAccount(other, 'Rule Keep Other');
+      const a = await legacyAccount(b, 'Rule Keep Acct');
+      const keep = await rawPayee(b, 'Transfer : Rule Keep Acct', a);
+      const extra = await rawPayee(b, 'Transfer : Rule Keep Acct Old', a);
+      await pool!.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [keep, a]);
+      await rawTxn(b, peer, extra);
+      await rawTxn(other, otherAccount, extra);
+      await pool!.query("UPDATE payees SET transfer_rule = 'auto' WHERE id = $1", [extra]);
+      if (keptHasRule) await pool!.query("UPDATE payees SET transfer_rule = 'never' WHERE id = $1", [keep]);
+
+      const applied = await repair(b, true);
+      expect(applied.kept_payees).toHaveLength(1);
+      const rule = async (id: string) => (await pool!.query('SELECT transfer_rule FROM payees WHERE id = $1', [id])).rows[0].transfer_rule;
+      expect(await rule(extra)).toBeNull(); // the unlinked leftover no longer treats anything as a transfer
+      expect(await rule(keep)).toBe(keptHasRule ? 'never' : 'auto');
+      expect(applied.dropped_rules.filter((d) => d.kind === 'transfer_rule').map((d) => d.payee_id)).toEqual(keptHasRule ? [extra] : []);
+    }
+  });
+
+  test('an account whose pointer names another account\'s payee never hands it to a mirror', async () => {
+    const b = await newBudget();
+    const dst = await createAccount(b, 'Ptr Dst');
+    const src = await legacyAccount(b, 'Ptr Src');
+    const other = await legacyAccount(b, 'Ptr Other');
+    const otherPayee = await rawPayee(b, 'Transfer : Ptr Other', other);
+    await pool!.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [otherPayee, src]);
+    const t = await createTransfer(b, src, 'Transfer : Ptr Dst');
+    expect(t.res.status, t.text).toBe(201);
+    const mirror = (await pool!.query('SELECT payee_id FROM transactions WHERE account_id = $1', [dst])).rows[0];
+    expect(mirror.payee_id).not.toBe(otherPayee);
+    expect((await pool!.query('SELECT transfer_account_id FROM payees WHERE id = $1', [mirror.payee_id])).rows[0].transfer_account_id).toBe(src);
+    expect((await pool!.query('SELECT transfer_account_id FROM payees WHERE id = $1', [otherPayee])).rows[0].transfer_account_id).toBe(other);
+  });
+
+  test('deleting the older of two same-named accounts retires its own payee and leaves the newer one\'s alone, even with a wrong pointer', async () => {
+    const b = await newBudget();
+    const older = await createAccount(b, 'Del Twin');
+    const newer = await createAccount(b, 'Del Twin');
+    const olderPayee = await expectOneTransferPayee(older, 'Transfer : Del Twin');
+    const newerPayee = await expectOneTransferPayee(newer, 'Transfer : Del Twin (2)');
+    // Bad data: the older account's pointer names the newer account's payee.
+    await pool!.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [newerPayee, older]);
+    expect((await send('PATCH', `/accounts/${older}`, { budget_id: b, closed: true })).status).toBe(200);
+    const del = await send('DELETE', `/accounts/${older}?budget_id=${b}`);
+    expect(del.status, await del.clone().text()).toBe(204);
+    const state = async (id: string) => (await pool!.query('SELECT deleted, transfer_account_id FROM payees WHERE id = $1', [id])).rows[0];
+    expect(await state(newerPayee)).toEqual({ deleted: false, transfer_account_id: newer });
+    expect((await state(olderPayee)).deleted).toBe(true);
+    await expectOneTransferPayee(newer, 'Transfer : Del Twin (2)');
+  });
+});

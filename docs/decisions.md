@@ -2250,3 +2250,97 @@ resolution), `edited-payee.ts` (the payee of an edit), `transfer-payee-repair.ts
   create the same text means the account that holds the name now. A duplicate or make-repeat sent with a stale text creates an
   ordinary row (no mirror). A non-transfer row whose stored payee is a legacy
   "Transfer : X" cannot be turned into a transfer by re-picking that same text.
+
+## Transfer integrity on the server (budget-nq2f, transfers T3)
+
+Plan: `.agents/plans/2026-11-24_transfers-refactor.md` (T3). Model: a transaction
+is a transfer when its payee is an account's system transfer payee; between two
+on-budget accounts it is ONE linked pair (both `transfer_account_id` and
+`transfer_transaction_id` on both legs, each leg's payee the peer account's
+transfer payee) with no category. Schema: migration 0119 adds the table
+`transfer_hints` only (additive; the other app never reads it).
+
+- **A leg leaving a pair never deletes a bank row (R1).** Editing the payee of one
+  leg to an ordinary payee, moving it to another peer, or deleting it takes the
+  other leg out of the pair through `removeMirror` (domain/transfers.ts):
+  a mirror the matcher or a person linked from a bank row (a `transfer_links`
+  record with `created_mirror = false`) is RESTORED exactly as
+  `POST /transfers/unlink` does (previous payee and category, the sync shadow
+  unblocked when it was not blocked before, mark `manual` so it is suggested and
+  never re-linked on its own); an imported row without a usable record gets the
+  ordinary payee its import name stands for; only a hand-made mirror (no import
+  id, or `created_mirror = true`) is soft-deleted, balance reversed, as before.
+  The bank id stays live, so later syncs neither skip nor duplicate it. The link
+  records of both legs are dropped.
+- **A bank row replaces the hand-made mirror it duplicates (R2).** At the start
+  of `linkTransfers` (every sync, statement import and rule save) a hand-made
+  leg (no import id, no sync shadow, not reconciled, in a mutual pair of two
+  on-budget accounts) is matched with an imported row of the SAME account, the
+  SAME signed amount, at most 3 days apart (uncategorized, unsplit, unlinked, not
+  "dismissed", not hinted at another account). Closest date first, each row used
+  once, repeated until nothing more joins (a pair of two hand-made rows can be
+  replaced by both bank sides in turn). The hand-made row is soft-deleted with its
+  balance reversed (the account ends where it would be had only the bank row
+  existed), the imported row takes its place in the pair (pointers, peer
+  transfer payee, no category, shadow frozen) and gets a link record (`auto`,
+  previous payee/category/blocked), so unlinking or editing the other leg
+  restores it. A leg's own link record is kept and pointed at the new row.
+  Nothing is created, only what already pairs is joined; idempotent.
+- **Imports never store a transfer payee without the transfer (item 6).** A
+  statement-import row or a bank-sync row whose payee text (after the renaming
+  rules) means "Transfer : <account>" (the text itself, or a renaming rule on
+  that account's transfer payee) is NOT given that payee: it was a payee-only
+  half transfer, and creating a mirror from an import would duplicate the money
+  when the other side arrives from the other bank. The row stays an ordinary
+  uncategorized row with the ordinary payee of its raw text (none when the raw
+  text is itself a transfer payee's name; the text stays in the import name),
+  and the account is stored in `transfer_hints`. The matcher treats a hinted row
+  as STRONG evidence for THAT account: it only pairs with a row of it (the bank
+  rules still apply and still refuse the same pairs), alone it is a one-side
+  suggestion, and when the other side arrives the usual rules link them (unique
+  pair, both untouched = auto-link). The hint is dropped when the row is linked.
+  Statement-import ids keep counting under the account's transfer payee, so
+  re-importing a file stays idempotent. The register still creates the mirror
+  (a person picked the transfer). `GET /payees` and the contracts are unchanged.
+- **Complete transfers from every writer (R4/R5).** Repeat-rule generation writes
+  the occurrence and its mirror (both upcoming, balance withheld from both, no
+  category between on-budget accounts, the off-budget leg keeps the rule's
+  category); a transfer payee whose account cannot receive it (own, closed,
+  deleted) writes nothing. Editing either half of a pending occurrence detaches
+  the pair; deleting the rule removes the pending mirrors; Make Repeating on a
+  future-dated transfer anchor makes its mirror pending too. A restore writes
+  both pointers and no category on legs. A budget copy writes complete pairs: the
+  other leg of a copied transfer is copied too when its account is not a carried
+  (linked) one, and that account's balance is the sum of what it received (an
+  unlinked account used to start at zero with nothing); legs known only by their
+  transaction pointer get the account pointer from the peer; pending
+  occurrences travel with their mirrors.
+- **Rows already half-linked are reported, never rewritten on read.** The transfer
+  payee repair (`scripts/repair-transfer-payees.ts`, report first, `--apply`,
+  idempotent, one budget) now also lists and repairs them
+  (`half_linked` in its report; domain/transfer-link-repair.ts): a mutual pair
+  missing the account pointer, a payee-less leg or a category on an on-budget
+  pair is completed; a leg known only by its account pointer or only by its
+  transfer payee is paired with the one row that is its other side (copy: same
+  day; payee-only: within 3 days, unlinked, uncategorized), no balance moves, a
+  changed bank row keeps what it was in `transfer_links`; a leg with no other
+  side anywhere (`needs_mirror`) or with several equally close ones (`ambiguous`)
+  is only reported. `--apply --create-mirrors` also creates the missing mirrors
+  (it moves the peer account's balance: only after reading the report).
+- **No category on a leg of an on-budget pair, on every write path.** Create and
+  edit (also through Categorize accept: `clearCategoryOfOnBudgetTransfers`
+  after every update, for rows whose pointer OR payee names an on-budget peer),
+  link, restore, repeat generation, budget copy, repair. A leg to an off-budget
+  account keeps its category.
+- **Carry-overs of the payee lifecycle reviews.** The repair's absorb records the
+  folded payee's name and its former names on the kept payee (a stale edit text
+  after the repair cannot move a mirror), and clears the folded payee's "treat as
+  transfer" rule after moving it (or listing it in `dropped_rules`), so a payee
+  kept unlinked for another budget no longer treats rows as transfers. A transfer
+  row edited to text a renaming rule turns into an ORDINARY payee's name
+  ("Transfer : X" held by a payee nobody links) becomes that ordinary payee and
+  stops being a transfer. `ensureTransferPayee` uses the account's pointer only
+  when that payee points back at the account (else the payee linked to it, else
+  it creates one), so a mirror or a link never takes another account's payee.
+  Deleting an account retires the payees that point at IT (plus its own pointer
+  when that payee points at no other account), never another account's payee.
