@@ -182,6 +182,72 @@ export const renameRuleSchema = z.object({
   created_at: timestamp,
 });
 
+/** One past transaction a renaming rule would change (preview) or changed (apply). */
+export const renameRuleApplyRowSchema = z.object({
+  id,
+  account_id: id,
+  date: z.string(),
+  /** Signed integer milliunits (negative = outflow). */
+  amount: milli.describe('Signed integer milliunits (negative = outflow).'),
+  payee_id: id.nullable().describe('The payee the row has now (null: none).'),
+  payee_name: nullableString,
+  /** The text the bank sent for the row (never the rewritten import name of a row stored before rules assigned their payee). */
+  bank_text: z.string(),
+});
+
+/** Rows a rule matches but apply leaves alone, by reason. */
+export const renameRuleApplySkippedSchema = z.object({
+  /** The person changed the payee, memo, date or amount, or chose the payee in an import screen. */
+  edited: z.number().int(),
+  /** Already a transfer (linked, or a transfer payee). */
+  transfer: z.number().int(),
+  reconciled: z.number().int(),
+  /** A transfer rule whose hinted account the matcher\'s bank rules would never pair with this row. */
+  bank_rules: z.number().int(),
+  /** Synced rows whose real bank text is not known (stored before it was recorded): the rule could not be checked against them. */
+  unknown_text: z.number().int(),
+});
+
+/** GET .../apply-preview: what applying one rule to past transactions would change. */
+export const renameRuleApplyPreviewSchema = z.object({
+  rule_id: id,
+  /** Rows the apply would change (exactly the ones it changes if nothing moves in between). */
+  count: z.number().int(),
+  /** The newest few of them. */
+  sample: z.array(renameRuleApplyRowSchema),
+  skipped: renameRuleApplySkippedSchema,
+});
+
+/** One row an apply changed, with what it had before and what the apply gave it. */
+export const renameRuleAppliedRowSchema = z.object({
+  transaction_id: id,
+  /** The payee before (null: none). */
+  previous_payee_id: id.nullable(),
+  /** The payee now. */
+  payee_id: id.nullable(),
+  /** The transfer hint (an account id) the row had before, or null. */
+  previous_hint_account_id: id.nullable(),
+  /** The transfer hint the row has now, or null. */
+  hint_account_id: id.nullable(),
+});
+
+/** POST .../apply: the rows it changed. */
+export const renameRuleApplyResultSchema = z.object({
+  /** The record of this apply on the server: the only thing `budget_payees_rename_rules_revert` takes. */
+  apply_id: id,
+  rule_id: id,
+  changed: z.number().int(),
+  rows: z.array(renameRuleAppliedRowSchema),
+  skipped: renameRuleApplySkippedSchema,
+});
+
+/** POST .../revert: what was put back. */
+export const renameRuleRevertResultSchema = z.object({
+  reverted: z.number().int(),
+  /** Rows left as they are: changed since the apply (`changed_since`), their old payee is gone (`payee_gone`), the row is gone (`not_found`), or the whole apply was reverted before (`already_reverted`). */
+  skipped: z.array(z.object({ transaction_id: id, reason: z.enum(['changed_since', 'payee_gone', 'not_found', 'already_reverted']) })),
+});
+
 /** GET /payees: the base payee plus visibility, categorization and usage stats. */
 export const payeeAdminRowSchema = payeeRowSchema.extend({
   hidden: z.boolean(),

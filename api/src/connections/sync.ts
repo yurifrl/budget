@@ -33,6 +33,7 @@ import { HttpError } from '../core/validate';
 import { getConnectionByUser, setConnectionInstitution, withLinkedBy, type ConnectionRow, type ConnectionWithLinker } from './store';
 import { ALL_HISTORY_DAYS, effectiveSyncWindowDays, getSyncWindowDays } from './settings';
 import type { AggregatedTransaction, BankAggregator, TransactionPull } from './types';
+import { rawBankText } from './bank-text';
 import { isPaidInstallmentCopy, PAID_INSTALLMENT_REASON } from './installments';
 
 /** Counts reported to the caller. */
@@ -206,6 +207,12 @@ interface ExistingTxnRow {
   payee_id: string | null;
   shadow_blocked: boolean | null;
   shadow_payload: OwnedPayload | null;
+  /** The provider's object as the PREVIOUS pull stored it (read before this pull overwrites it). */
+  shadow_raw: unknown;
+  /** The bank text the last sync recorded for the row (null: rows stored before it was recorded). */
+  shadow_bank_text: string | null;
+  /** The name the row was imported under (the bank's text; rows of the earlier behaviour hold the rewritten name). */
+  import_payee_name: string | null;
 }
 
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -561,6 +568,14 @@ async function syncOnce(
 
     // Only accounts we actually pulled (links may have changed meanwhile).
     const stillLinked = (await pg.query<LinkedAccountRow>(linkedSql, [row.id])).rows;
+    // Applying a renaming rule to past rows (and taking it back) writes the same rows: it takes this per-budget lock EXCLUSIVELY and syncs take
+    // it SHARED (syncs of one budget stay parallel; an apply waits for them and they for it), so the two never lock rows in
+    // different orders. Budgets are locked in id order.
+    await ledger.lockBudgetImportWrites(
+      pg,
+      [...new Set(stillLinked.filter((a) => fetched.has(a.id)).map((a) => fetched.get(a.id)!.acc.budget_id))],
+      'shared',
+    );
     rowsStart = Date.now();
 
     for (const { id } of stillLinked) {
@@ -597,7 +612,8 @@ async function syncOnce(
             await pg.query<ExistingTxnRow>(
               `SELECT t.id, t.date::text AS date, t.amount, t.memo, t.cleared,
                       p.name AS payee_name, t.payee_id,
-                      s.blocked AS shadow_blocked, s.last_synced_payload AS shadow_payload
+                      s.blocked AS shadow_blocked, s.last_synced_payload AS shadow_payload,
+                      s.raw_payload AS shadow_raw, s.bank_text AS shadow_bank_text, t.import_payee_name
                FROM public.transactions t
                LEFT JOIN public.connection_transactions s ON s.transaction_id = t.id
                LEFT JOIN public.payees p ON p.id = t.payee_id
@@ -647,8 +663,8 @@ async function syncOnce(
             await pg.query(
               `INSERT INTO connection_transactions
                  (transaction_id, budget_id, provider, external_transaction_id, last_synced_payload, blocked,
-                  raw_payload, raw_received_at)
-               VALUES ($1, $2, $3, $4, $5, false, $6, now())`,
+                  raw_payload, raw_received_at, bank_text)
+               VALUES ($1, $2, $3, $4, $5, false, $6, now(), $7)`,
               [
                 insertedId,
                 acc.budget_id,
@@ -656,6 +672,7 @@ async function syncOnce(
                 txn.externalId,
                 JSON.stringify({ date: txn.date.slice(0, 10), amount: milli, memo: '', payee: payee.name }),
                 JSON.stringify(txn.raw),
+                txn.description.trim() || null,
               ],
             );
             result.added += 1;
@@ -669,9 +686,12 @@ async function syncOnce(
           // too. Never touches user-visible fields or updated_at. Skipped bank
           // ids (deleted, or imported into another account) get no raw write.
           if (existing.shadow_payload != null) {
+            // The bank text of the latest pull is recorded in the same statement as the object it came from, on every path
+            // that sees the row (the refresh and duplicate paths below only READ the previous values, selected above), so
+            // `bank_text` always equals the text of the last pull and a text change that keeps the payee is not forgotten.
             await pg.query(
-              'UPDATE connection_transactions SET raw_payload = $2, raw_received_at = now() WHERE transaction_id = $1',
-              [existing.id, JSON.stringify(txn.raw)],
+              'UPDATE connection_transactions SET raw_payload = $2, raw_received_at = now(), bank_text = $3 WHERE transaction_id = $1',
+              [existing.id, JSON.stringify(txn.raw), txn.description.trim() || null],
             );
           }
 
@@ -690,6 +710,24 @@ async function syncOnce(
               [existing.id],
             );
             result.blocked += 1;
+            continue;
+          }
+
+          // A renaming rule added, changed or removed later never moves a stored row by itself (docs/decisions.md, "Rules
+          // apply going forward"): a row whose bank TEXT is the one it was stored under stays as it is, whatever the rules say
+          // now, and a row whose text the bank really changed takes the current rules. What the stored text was comes from
+          // (1) the text the last sync recorded, (2) the provider object the pull before stored (`rawBankText`, the adapter's
+          // own expression; the whole object is NOT compared: it changes in balance, status, updatedAt on most pulls), or (3)
+          // the import name, when it is the bank text (every row stored since a rule assigns its payee). Rows of the earlier
+          // behaviour hold the rewritten name as import name, and rows older than raw storage have no stored text at all:
+          // nothing is known about their past text, so the text counts as UNCHANGED (never re-resolved merely for that).
+          const bankText = txn.description.trim();
+          // The stored object's text wins over the recorded one when both exist (the object is the bank's own words).
+          const storedText = rawBankText(existing.shadow_raw) ?? existing.shadow_bank_text;
+          const textKept = bankText !== '' && (existing.import_payee_name === bankText || storedText === null || storedText === bankText);
+          const sameDateAndAmount = current.date === txn.date.slice(0, 10) && current.amount === milli;
+          if (textKept && sameDateAndAmount) {
+            result.duplicates += 1;
             continue;
           }
 
@@ -722,18 +760,21 @@ async function syncOnce(
           // with the transfer payee keeps it (the engine never rewrites a payee only
           // because transfer text is resolved differently now).
           const keep = legacyForm;
+          // The bank moved the date or amount of a row whose text it did not change (the stored import name is the text):
+          // the row follows the bank, its payee, import name and hint stay as they were stored.
+          const keepStored = !keep && textKept;
           // The row is being changed: ONE resolve() decides payee, shadow name, import name
           // and hint, so the row and its shadow always agree (a peek made before the
           // resolve could adopt a name-only payee would disagree with the stored row,
           // and the next sync would freeze it).
-          const resolved = keep ? null : await resolver.resolve(txn.description);
+          const resolved = keep || keepStored ? null : await resolver.resolve(txn.description);
           const payeeId = resolved ? resolved.id : existing.payee_id;
           const storedName = resolved ? resolved.name : current.payee;
           await ledger.refreshImportedTransaction(pg, existing.id, {
             date: txn.date.slice(0, 10),
             amount: milli,
             payeeId,
-            importPayeeName: (resolved ? resolved.importName : current.payee) || null,
+            importPayeeName: (resolved ? resolved.importName : keepStored ? existing.import_payee_name : current.payee) || null,
           });
           // The hint follows the row: a refreshed row of transfer text keeps or gets it, any other text drops it.
           if (resolved) {

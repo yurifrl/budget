@@ -10,6 +10,7 @@ export { default as webhook } from './webhook';
 export { configurePluggyEnv } from './adapters/pluggy/client';
 // Importing the barrel registers the `connections_sync` job type (API + worker).
 export { enqueueConnectionSync } from './job';
+export { rawBankText } from './bank-text';
 export {
   CONNECTIONS_SWEEP_CRON,
   CONNECTIONS_SWEEP_SCHEDULE_ID,
