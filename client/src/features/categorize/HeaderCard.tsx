@@ -41,7 +41,7 @@ export function HeaderCard({
   const running = run?.kind === 'active';
   const disabled = thresholdDisabled || !aiAvailable || runStarting || running;
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, run?.kind === 'unavailable' && styles.cardOff]}>
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>{t('header.threshold')}</Text>
         <View style={styles.thresholdRow}>
@@ -131,6 +131,8 @@ function ThresholdSlider({
 }
 
 const styles = StyleSheet.create({
+  /** No AI available: the card is dimmed like the mock; the threshold still works. */
+  cardOff: { opacity: 0.7 },
   card: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -138,7 +138,7 @@ function ViewSegments({ view, onChange }: { view: CategorizeViewMode; onChange: 
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 22, gap: 14, width: '100%', maxWidth: 1400, alignSelf: 'center' },
+  content: { padding: 22, paddingBottom: 88, gap: 14, width: '100%', maxWidth: 1400, alignSelf: 'center' },
   head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' },
   headText: { gap: 3 },
   title: { color: colors.text, fontSize: 24, fontWeight: '700', letterSpacing: -0.5 },
