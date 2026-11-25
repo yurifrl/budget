@@ -288,21 +288,27 @@ export const operations = [
       for (const t of txns) {
         if (!t.import_id) for (const key of await lookupKeysOf(t)) if (!prefixes.includes(prefixOf(t, key))) prefixes.push(prefixOf(t, key));
       }
-      const existingOccs = new Map<string, number[]>();
+      // The stored rows of each prefix: their occurrence number and the statement text they came from. An incoming row is a
+      // re-import of a stored one only when the text is the same (case ignored, as the splice that used to make the key lower-cased
+      // it); a text the prefix has not seen is a NEW row and takes the next free occurrence number (two rides, two coffees; the
+      // second ride arriving in a later, overlapping file). Inside one (prefix, text) the rule is main's: `existing <= occurrence`.
+      const textOf = (t: string | null | undefined) => (t == null ? null : t.trim().toLowerCase());
+      const incomingText = (txn: (typeof txns)[number]) => textOf(txn.import_payee_name_original ?? txn.payee)!;
+      const existingByPrefix = new Map<string, { occ: number; text: string | null }[]>();
       if (prefixes.length > 0) {
-        const found = await txnStore.findImportIdsLike(
+        const found = await txnStore.findImportRowsLike(
           client,
           account_id,
           prefixes.map((prefix) => `${prefix}:%`),
         );
-        for (const import_id of found) {
+        for (const { import_id, text } of found) {
           const cut = import_id.lastIndexOf(':');
           const occ = Number(import_id.slice(cut + 1));
           const prefix = import_id.slice(0, cut);
           if (prefixes.includes(prefix) && Number.isInteger(occ)) {
-            const occs = existingOccs.get(prefix) ?? [];
-            occs.push(occ);
-            existingOccs.set(prefix, occs);
+            const rows = existingByPrefix.get(prefix) ?? [];
+            rows.push({ occ, text: textOf(text) });
+            existingByPrefix.set(prefix, rows);
           }
         }
       }
@@ -310,28 +316,42 @@ export const operations = [
       let imported = 0;
       let duplicates = 0;
       let unclearedDelta = 0; // milliunits, summed across inserted rows
-      const batchOcc = new Map<string, number>();
+      const batchOcc = new Map<string, number>(); // `${prefix}\0${text}` -> rows of this file so far (skipped ones too, as main counted)
+      const lastOcc = new Map<string, number>(); // prefix -> highest occurrence number in use (stored and given in this file)
       for (const txn of txns) {
         const milliunits = txn.inflow - txn.outflow;
         let importId = txn.import_id ?? null;
         if (!importId) {
-          // Occurrences count per key prefix, exactly as main did: whatever text a rule sent to one payee, on one day
-          // for one amount, is the 1st, 2nd, ... such row (two rides, two coffees are two rows).
+          const text = incomingText(txn);
           const k = await keysOf(txn);
           const own = prefixOf(txn, k.countKey);
-          const occs = new Map<string, number>();
-          for (const prefix of new Set([own, ...k.earlier.map((e) => prefixOf(txn, e))])) {
-            const n = (batchOcc.get(prefix) ?? 0) + 1;
-            batchOcc.set(prefix, n);
-            occs.set(prefix, n);
+          const prefixesOfRow = new Set([own, ...k.earlier.map((e) => prefixOf(txn, e))]);
+          const counts = new Map<string, number>();
+          for (const prefix of prefixesOfRow) {
+            const bucket = `${prefix}\0${text}`;
+            const n = (batchOcc.get(bucket) ?? 0) + 1;
+            batchOcc.set(bucket, n);
+            counts.set(prefix, n);
           }
           const known = (await lookupKeysOf(txn)).map((key) => prefixOf(txn, key));
-          if (known.some((prefix) => (existingOccs.get(prefix) ?? []).some((existing) => existing <= (occs.get(prefix) ?? Infinity)))) {
+          // Inside a (prefix, text) main's `existing <= occurrence` is true as soon as the text has a stored row: the stored rows are
+          // numbered by their place among the rows of that text (a new text takes the next free number of the prefix, so its own
+          // place is 1, as it was under its own key), and the first place is <= every occurrence. A stored row with no text on record
+          // (very old) counts for any text, by its number, as before.
+          const reimport = known.some((prefix) => {
+            const stored = existingByPrefix.get(prefix) ?? [];
+            const n = counts.get(prefix) ?? Infinity;
+            return stored.some((e) => e.text === text) || stored.some((e) => e.text === null && e.occ <= n);
+          });
+          if (reimport) {
             duplicates += 1;
             continue;
           }
-          // A new row: its payee (and so its key) is created now when it does not exist.
-          importId = `${prefixOf(txn, (await payeeByName.get(payeeKeyOfText(txn))?.key()) ?? '-')}:${occs.get(own)}`;
+          // A new row: its payee (and so its key) is created now when it does not exist. Its occurrence is the next free one of the prefix.
+          const stored = existingByPrefix.get(own) ?? [];
+          const occ = Math.max(lastOcc.get(own) ?? 0, ...stored.map((e) => e.occ)) + 1;
+          lastOcc.set(own, occ);
+          importId = `${prefixOf(txn, (await payeeByName.get(payeeKeyOfText(txn))?.key()) ?? '-')}:${occ}`;
         }
         const statementPayee = payeeByName.get(payeeKeyOfText(txn));
         // A payee that does not exist yet is created after the row is in: a duplicate row

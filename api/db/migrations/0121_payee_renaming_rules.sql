@@ -32,6 +32,13 @@ create table if not exists public.payee_renaming_rules (
   seq         bigint generated always as identity
 );
 
+-- A development database that ran an EARLIER draft of this file (before `seq` existed, with a normalised index) keeps its table;
+-- the next two statements bring it to this shape. Production never ran any draft: 0121 is unreleased and this app has not shipped
+-- it, so there the table is created above in its final form.
+alter table public.payee_renaming_rules
+  add column if not exists seq bigint generated always as identity;
+drop index if exists public.payee_renaming_rules_pattern_key;
+
 create unique index if not exists payee_renaming_rules_exact_key
   on public.payee_renaming_rules (budget_id, match_type, condition);
 create index if not exists payee_renaming_rules_payee_idx

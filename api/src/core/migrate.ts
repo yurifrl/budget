@@ -80,7 +80,8 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0118_transfer_payee_former_names.sql': 'table:public.transfer_payee_former_names',
   '0119_transfer_hints.sql': 'table:public.transfer_hints',
   '0120_transfer_mark_release.sql': 'column:public.transfer_marks.released',
-  '0121_payee_renaming_rules.sql': 'table:public.payee_renaming_rules',
+  // Both probes: a development database that ran an earlier draft (no `seq`) is unmarked and the file re-runs, which heals it.
+  '0121_payee_renaming_rules.sql': ['table:public.payee_renaming_rules', 'column:public.payee_renaming_rules.seq'],
 };
 
 /**
