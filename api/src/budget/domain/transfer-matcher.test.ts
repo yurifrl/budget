@@ -72,14 +72,13 @@ describe('planTransfers: account kinds', () => {
       { id: a.id, confidence: 'sure', basis: 'refused', candidateIds: [b.id], violations: { [b.id]: 'card_outflow' } },
     ]);
   });
-  test('card outflow into a cash account is never linked (refund / cash advance), only offered', () => {
-    const a = row({ accountId: 'card1', accountKind: 'card' });
-    const b = inn();
+  test('card outflow against a cash inflow is no pair at all, as before (refund / cash advance): no link, no suggestion', () => {
+    const a = row({ accountId: 'card1', accountKind: 'card', date: '2026-11-03' });
+    const b = inn({ date: '2026-11-06' });
     const p = plan([a, b]);
     expect(p.links).toEqual([]);
-    expect(p.suggestions).toEqual([
-      { id: a.id, confidence: 'sure', basis: 'refused', candidateIds: [b.id], violations: { [b.id]: 'card_outflow' } },
-    ]);
+    expect(p.suggestions).toEqual([]);
+    expect(p.rows.size).toBe(0);
   });
   test('other account kinds, off-budget accounts and other budgets never pair', () => {
     expect(plan([out({ accountKind: 'other' }), inn()]).links).toEqual([]);
@@ -330,18 +329,29 @@ describe('planTransfers: account rules (budget-zkts)', () => {
     expect(sameBank({ bank: 'itau', connectionId: 'c1' }, { bank: null, connectionId: 'c2' })).toBeNull();
   });
 
-  test('rule 1: a card outflow is never linked, whatever the evidence or the other account; it is a refused suggestion', () => {
-    for (const other of [itauConta, nuConta, nuCard]) {
-      const a = o(itauCard, { hint: SAME_PERSON });
-      const b = i(other, { hint: SAME_PERSON });
-      const p = plan([a, b]);
-      expect(p.links).toEqual([]);
-      expect(p.suggestions).toEqual([
-        { id: a.id, confidence: 'sure', basis: 'refused', candidateIds: [b.id], violations: { [b.id]: 'card_outflow' } },
-      ]);
-      // Both rows count as suspected transfers in the register summaries.
-      expect(p.rows.get(a.id)).toEqual({ confidence: 'sure', candidateCount: 1, counterpartId: b.id });
-      expect(p.rows.get(b.id)).toEqual({ confidence: 'sure', candidateCount: 1, counterpartId: a.id });
+  test('rule 1: a card outflow is never linked, whatever the evidence; against a card inflow it is a refused suggestion', () => {
+    const a = o(itauCard, { hint: SAME_PERSON });
+    const b = i(nuCard, { hint: SAME_PERSON });
+    const p = plan([a, b]);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions).toEqual([
+      { id: a.id, confidence: 'sure', basis: 'refused', candidateIds: [b.id], violations: { [b.id]: 'card_outflow' } },
+    ]);
+    // Both rows count as suspected transfers in the register summaries.
+    expect(p.rows.get(a.id)).toEqual({ confidence: 'sure', candidateCount: 1, counterpartId: b.id });
+    expect(p.rows.get(b.id)).toEqual({ confidence: 'sure', candidateCount: 1, counterpartId: a.id });
+  });
+
+  test('a card purchase with a same-amount opposite row in a checking account within 3 days: no suggestion, as on main', () => {
+    for (const other of [itauConta, nuConta]) {
+      for (const gap of [0, 3]) {
+        const purchase = o(itauCard, { date: '2026-11-03', hint: SAME_PERSON });
+        const deposit = i(other, { date: `2026-11-0${3 + gap}`, hint: SAME_PERSON });
+        const p = plan([purchase, deposit]);
+        expect(p.links).toEqual([]);
+        expect(p.suggestions.filter((s) => s.id === purchase.id || s.candidateIds.includes(purchase.id))).toEqual([]);
+        expect(p.suggestions.some((s) => s.basis === 'refused')).toBe(false);
+      }
     }
   });
 
@@ -525,7 +535,7 @@ describe('planTransfers: account rules (budget-zkts)', () => {
   test('a card outflow with a payee rule is offered its refused counterpart, not waiting or one-side', () => {
     const rules = new Map<string, TransferRule>([['p', { mode: 'auto', accountId: null, noMatch: 'outside', waitDays: 2, since: null }]]);
     const a = o(nuCard, { payeeId: 'p', date: '2026-11-03' });
-    const b = i(nuConta, { date: '2026-11-03' });
+    const b = i(itauCard, { date: '2026-11-03' });
     const p = plan([a, b], rules);
     expect(p.suggestions.map((s) => [s.id, s.basis, s.candidateIds])).toEqual([[a.id, 'refused', [b.id]]]);
     expect(p.pending.size).toBe(0);

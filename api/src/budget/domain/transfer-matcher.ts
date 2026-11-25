@@ -235,7 +235,10 @@ function structurallyFits(o: Node, i: Node): boolean {
   if (o.row.budgetId !== i.row.budgetId || o.row.accountId === i.row.accountId) return false;
   if (-o.row.amount !== i.row.amount) return false;
   if (daysApart(o.row.date, i.row.date) > MAX_TRANSFER_DAYS_APART) return false;
-  if (o.row.accountKind === 'other' || i.row.accountKind === 'other') return false;
+  // The pairs main matched: cash > cash, cash > card, card > card. A card outflow against a cash
+  // inflow (refund, cash advance) was never a transfer candidate and stays none, refused or not.
+  const kinds = `${o.row.accountKind}>${i.row.accountKind}`;
+  if (kinds !== 'cash>cash' && kinds !== 'cash>card' && kinds !== 'card>card') return false;
   if (o.rule?.mode === 'account' && o.rule.accountId !== i.row.accountId) return false;
   if (i.rule?.mode === 'account' && i.rule.accountId !== o.row.accountId) return false;
   return true;
@@ -266,7 +269,8 @@ interface BucketResult {
  * Pairs the account rules refuse (budget-zkts) are never linked, whatever the
  * evidence or the payee rule, but they are still offered: among the rows of one
  * amount bucket that found no allowed partner, an outflow and an inflow that
- * fit but for a rule become a suggestion naming the rule each candidate
+ * main would have paired (card > card, cash > card at another bank, checking >
+ * checking at one bank) but a rule refuses become a suggestion naming the rule each candidate
  * breaks (`basis: 'refused'`). One mutual candidate on both sides is `sure`,
  * anything else `choose`. Rows with such a suggestion are not also one-side or
  * waiting rule rows.

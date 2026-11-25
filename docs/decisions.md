@@ -1915,7 +1915,11 @@ app. The two now ship independently.
   `card_outflow` | `card_payment_other_bank` | `cash_same_bank`). It counts
   as a suspected transfer in the register chip and the suggestions list, and
   the row is then not also a one-side or waiting/outside rule row. Refused
-  candidates are not offered to a row that has an allowed partner. Confirming
+  candidates are not offered to a row that has an allowed partner. Only pairs
+  main would have matched are ever refused candidates (card→card, cash→card
+  at another bank, checking→checking at one bank); a card outflow against a
+  cash inflow (refund, cash advance) was never a transfer candidate and is
+  none now. Confirming
   goes through `POST /transfers/link` with `counterpart_id` and returns the
   existing warning. Contract change is additive (new basis value, optional
   `candidates[].rule`). A released client has no text for `refused`: its
