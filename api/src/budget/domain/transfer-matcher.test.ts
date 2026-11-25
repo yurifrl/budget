@@ -657,4 +657,16 @@ describe('import hints (budget-nq2f)', () => {
     expect(p.links).toEqual([]);
     expect(p.suggestions.map((sug) => [sug.id, sug.basis])).toEqual([[a.id, 'refused']]);
   });
+
+  test('a hint never overrides the bank\'s contradicting category: no auto-link, no one-side suggestion', () => {
+    const a = out({ hintAccountId: 'nubank', hint: SHOP });
+    const b = inn();
+    const p = plan([a, b], noRules);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions.map((sug) => [sug.id, sug.confidence])).toEqual([[a.id, 'sure']]);
+    const lone = out({ hintAccountId: 'nubank', hint: SHOP });
+    expect(plan([lone], noRules).suggestions).toEqual([]);
+    // Without the contradicting category the same pair links, as before.
+    expect(plan([out({ hintAccountId: 'nubank' }), inn()], noRules).links).toHaveLength(1);
+  });
 });

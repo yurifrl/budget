@@ -19,8 +19,6 @@ import * as store from '../store/transfers';
 import { deriveDeltas, upsertPayee, type BalanceDelta } from './transactions';
 import { ensureTransferPayee } from './transfer-payees';
 
-/** How far from the leg's date a released bank row still counts as its other side. */
-const MAX_RELINK_DAYS = 3;
 
 /** The row facts a mirror is derived from (amount in milliunits). */
 export interface TransferLeg {
@@ -215,16 +213,22 @@ export async function removeMirror(client: Queryable, budgetId: string, legId: s
       categoryId: own.prev_category_id,
     });
     if (own.prev_blocked === false) await setImportShadowsBlocked(client, [mirrorId], false);
-    await store.setTransferMarks(client, budgetId, [mirrorId], 'manual');
+    await markReleasedRow(client, budgetId, mirrorId, legId);
   } else if (!own && mirror.import_id !== null) {
     await store.restoreUnlinkedLeg(client, mirrorId, { payeeId: await ordinaryPayeeOfImport(client, budgetId, mirror.import_payee_name), categoryId: null });
-    await store.setTransferMarks(client, budgetId, [mirrorId], 'manual');
+    await markReleasedRow(client, budgetId, mirrorId, legId);
   } else {
     deltas = await deleteMirror(client, budgetId, mirrorId);
   }
   await store.deleteTransferLinks(client, budgetId, [legId, mirrorId]);
   await store.clearTransferHints(client, budgetId, [mirrorId]);
   return deltas;
+}
+
+/** Mark a restored bank row 'manual' and remember that THIS leg released it (see `store.markReleased`). */
+async function markReleasedRow(client: Queryable, budgetId: string, rowId: string, legId: string): Promise<void> {
+  const row = await store.getRowFields(client, budgetId, rowId);
+  if (row) await store.markReleased(client, budgetId, row, legId);
 }
 
 /** A recorded previous payee, when it still exists as an ordinary live payee of the budget. */
@@ -244,13 +248,14 @@ async function ordinaryPayeeOfImport(client: Queryable, budgetId: string, import
 }
 
 /**
- * Link a leg that becomes a transfer to the bank row it was released from, when
- * that row is again its exact counterpart (see `store.findReleasedBankRow`).
+ * Link a leg that becomes a transfer to the bank row IT released earlier, when
+ * that row is still exactly as the release left it (see `store.findReleasedBankRow`).
+ * Any other row is none of its business: a mirror is created as on main.
  * No row is created and no balance moves. Both legs get a link record, so
  * POST /transfers/unlink works on the pair.
  */
 async function relinkReleasedBankRow(client: Queryable, budgetId: string, row: TransferLeg, peerAccountId: string): Promise<boolean> {
-  const foundId = await store.findReleasedBankRow(client, budgetId, peerAccountId, -Number(row.amount), row.date, MAX_RELINK_DAYS);
+  const foundId = await store.findReleasedBankRow(client, budgetId, row.id, peerAccountId, -Number(row.amount));
   if (!foundId) return false;
   const found = await store.getRowFields(client, budgetId, foundId);
   if (!found) return false;
@@ -345,9 +350,8 @@ export async function syncMirror(
   const deltas: BalanceDelta[] = [];
   if (mirror) deltas.push(...(await removeMirror(client, budgetId, row.id, mirror.id)));
   if (peerAccountId) {
-    // A bank row this leg was released from earlier (it keeps the "manual" mark
-    // of the release) is the other side again: link it instead of adding a mirror
-    // next to it (that counted the money twice until the next sync).
+    // The bank row this very leg released is the other side again: link it instead
+    // of adding a mirror next to it (that counted the money twice until the next sync).
     const released = await relinkReleasedBankRow(client, budgetId, row, peerAccountId);
     if (!released) deltas.push(...(await insertMirror(client, budgetId, row, peerAccountId)).deltas);
   } else {

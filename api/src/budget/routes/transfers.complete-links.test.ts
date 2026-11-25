@@ -390,24 +390,4 @@ describe.skipIf(!dbReady)('repair of half-linked transfer rows: report first, --
     // The leg is back to what the repair found: the transfer payee, no pointers (listed again by the report).
     expect(await get(leg)).toMatchObject({ payee_id: legPayee, transfer_account_id: null, transfer_transaction_id: null });
   });
-
-  test('a hand-made mirror and bank rows the adoption gates refused are listed (kind unadopted, with the reason), never touched', async () => {
-    const { id: b } = await newBudget('nq2f-fix-unadopted');
-    const a = await account(b, 'Ua A');
-    const c = await account(b, 'Ua B');
-    const x1 = await rawTxn(b, a, { amount: -80_000, payee_id: await payeeOf(c), transfer_account_id: c, date: iso(-3) });
-    const x2 = await rawTxn(b, c, { amount: 80_000, payee_id: await payeeOf(a), transfer_account_id: a, transfer_transaction_id: x1, date: iso(-3) });
-    await pool.query('UPDATE transactions SET transfer_transaction_id = $2 WHERE id = $1', [x1, x2]);
-    const n1 = await rawTxn(b, c, { amount: 80_000, import_id: 'bank:ua1', date: iso(-3) });
-    const n2 = await rawTxn(b, c, { amount: 80_000, import_id: 'bank:ua2', date: iso(-2) });
-    const before = await txns(b);
-    const report = await repair(b, false);
-    const unadopted = report.half_linked.items.filter((i) => i.kind === 'unadopted');
-    expect(unadopted.map((i) => [i.transaction_id, i.peer_id, i.detail]).sort()).toEqual(
-      [[n1, x2, 'ambiguous'], [n2, x2, 'ambiguous']].sort(),
-    );
-    expect(report.half_linked.unadopted).toBe(2);
-    await repair(b, true);
-    expect(await txns(b)).toEqual(before); // nothing is merged or deleted for the person
-  });
 });

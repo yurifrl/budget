@@ -89,39 +89,65 @@ export async function upsertPayeeResolvingTransfers(
   return transferPayee ?? upsertPayee(client, budgetId, effectiveName, { verbatim: opts.verbatim });
 }
 
-/** The payee of an imported row (bank sync, statement import). */
-export interface ImportedPayee {
-  /** The payee a NEW row is stored with: ordinary or null, NEVER an account's transfer payee. */
-  id: string | null;
+/** What an imported row's payee text means; computed with reads only (see `planImportedPayee`). */
+export interface ImportedPayeePlan {
+  /** The ordinary payee name a NEW row is stored with (not yet created), or null when it gets no payee. */
+  ordinaryName: string | null;
   /** The stored payee's name ('' when none): what the sync shadow says. */
   name: string;
   /** The name the row's `import_payee_name` keeps: the bank's text, also when the stored payee is none. */
   importName: string;
   /** The account the payee text pointed at ("Transfer : <account>", as text or through a renaming rule), if any. */
   transferAccountId: string | null;
-  /** The id the row counts under when the text names an account: that account's transfer payee (statement-import idempotency keys). */
-  transferPayeeId: string | null;
   /**
    * What the bank sync stored before imports stopped storing transfer payees: the
    * account's transfer payee under the rule-rewritten text. A row stored that way
    * (payee-only, from an earlier sync) is NOT changed by a later sync: its payee is
-   * compared and kept against this, never against `id`/`name`. Null when the text
+   * compared and kept against this name, never against `name`. Null when the text
    * names no account.
    */
-  legacy: { id: string; name: string } | null;
+  legacyName: string | null;
 }
 
 /**
- * Resolve the payee of an IMPORTED row. Unlike the register, an import never
+ * Decide what an imported row's payee text means, WITHOUT writing anything (a
+ * re-sync of rows that do not change must not create payees). An import never
  * stores an account's transfer payee without the transfer behind it (a
- * payee-only half transfer, and the other side may arrive from the other bank):
- * when the text (after the renaming rules) means "Transfer : <account>", a NEW row
- * keeps the ordinary payee of the RAW text and the account is returned for the
- * caller to record as a transfer hint, so the matcher offers the row as a strong
- * suggestion for that account. A raw text that is itself the name of a transfer
- * payee leaves the row without a payee (its text stays in `importName`).
- * Any other text is an ordinary payee, as before.
+ * payee-only half transfer; the other side may arrive from the other bank): when
+ * the text (after the renaming rules) means "Transfer : <account>", a NEW row
+ * keeps the ordinary payee of the RAW text and the account is returned for a
+ * transfer hint. A raw text that is itself the name of a transfer payee leaves the
+ * row without a payee (its text stays in `importName`). Other text is an ordinary
+ * payee, as before.
  */
+export async function planImportedPayee(
+  client: Queryable,
+  budgetId: string,
+  rawText: string,
+  effective: string,
+  opts: { verbatim?: boolean } = {},
+): Promise<ImportedPayeePlan> {
+  const trimmed = effective.trim();
+  if (!trimmed) return { ordinaryName: null, name: '', importName: '', transferAccountId: null, legacyName: null };
+  const raw = rawText.trim();
+  const accountId = await resolveTransferAccountFromText(client, budgetId, trimmed, { fromRule: trimmed !== raw });
+  if (!accountId) return { ordinaryName: effective, name: effective, importName: effective, transferAccountId: null, legacyName: null };
+  const holder = raw ? await findPayeeRowByName(client, budgetId, raw) : undefined;
+  if (!raw || (holder && (holder.transfer_account_id !== null || holder.deleted))) {
+    return { ordinaryName: null, name: '', importName: effective, transferAccountId: accountId, legacyName: effective };
+  }
+  const name = opts.verbatim ? rawText : raw;
+  return { ordinaryName: name, name, importName: name, transferAccountId: accountId, legacyName: effective };
+}
+
+/** The payee of a NEW imported row (bank sync, statement import): the plan, written. */
+export interface ImportedPayee extends ImportedPayeePlan {
+  /** The payee the row is stored with: ordinary or null, NEVER an account's transfer payee. */
+  id: string | null;
+  /** The id the row counts under when the text names an account: that account's transfer payee (statement-import idempotency keys). */
+  transferPayeeId: string | null;
+}
+
 export async function resolveImportedPayee(
   client: PoolClient,
   budgetId: string,
@@ -129,22 +155,17 @@ export async function resolveImportedPayee(
   effective: string,
   opts: { verbatim?: boolean } = {},
 ): Promise<ImportedPayee> {
-  const trimmed = effective.trim();
-  if (!trimmed) return { id: null, name: '', importName: '', transferAccountId: null, transferPayeeId: null, legacy: null };
-  const raw = rawText.trim();
-  const accountId = await resolveTransferAccountFromText(client, budgetId, trimmed, { fromRule: trimmed !== raw });
-  if (!accountId) {
-    const id = await upsertPayee(client, budgetId, effective, opts);
-    return { id, name: effective, importName: effective, transferAccountId: null, transferPayeeId: null, legacy: null };
+  let plan = await planImportedPayee(client, budgetId, rawText, effective, opts);
+  let transferPayeeId: string | null = null;
+  if (plan.transferAccountId) {
+    // The account's payee exists (or is created) BEFORE the raw text is judged: a legacy
+    // account's name-only "Transfer : X" payee becomes its transfer payee here, so the raw
+    // text of the same name is recognised as that payee and never stored as an ordinary one.
+    transferPayeeId = await ensureTransferPayee(client, budgetId, plan.transferAccountId);
+    plan = await planImportedPayee(client, budgetId, rawText, effective, opts);
   }
-  const transferPayeeId = await ensureTransferPayee(client, budgetId, accountId);
-  const legacy = { id: transferPayeeId, name: effective };
-  const holder = raw ? await findPayeeRowByName(client, budgetId, raw) : undefined;
-  if (!raw || (holder && (holder.transfer_account_id !== null || holder.deleted))) {
-    return { id: null, name: '', importName: effective, transferAccountId: accountId, transferPayeeId, legacy };
-  }
-  const name = opts.verbatim ? rawText : raw;
-  return { id: await upsertPayee(client, budgetId, name), name, importName: name, transferAccountId: accountId, transferPayeeId, legacy };
+  const id = plan.ordinaryName === null ? null : await upsertPayee(client, budgetId, plan.ordinaryName, { verbatim: opts.verbatim });
+  return { ...plan, id, transferPayeeId };
 }
 
 export async function resolvePayeeId(

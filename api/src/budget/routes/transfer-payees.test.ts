@@ -853,7 +853,7 @@ describe.skipIf(!dbReady)('the same text resolution on import, bank sync and rep
       // The text names the account (the same account as in the register), but the stored payee is never its transfer payee.
       const toDst = await resolver.resolve('Transfer : Sync Dst');
       expect(toDst).toMatchObject({ id: null, name: '', importName: 'Transfer : Sync Dst', transferAccountId: dst });
-      expect(toDst.legacy?.name).toBe('Transfer : Sync Dst');
+      expect(toDst.legacyName).toBe('Transfer : Sync Dst');
       const toLegacy = await resolver.resolve('Transfer : Sync Legacy');
       expect(toLegacy.transferAccountId).toBe(legacy);
       expect(toLegacy.id).toBeNull();

@@ -42,9 +42,8 @@ import { MAX_TRANSFER_DAYS_APART } from './transfer-matcher';
 import { applyBalanceDeltas } from './transactions';
 import { ensureTransferPayee } from './transfer-payees';
 import { insertMirror } from './transfers';
-import { planAdoptions } from './transfer-links';
 
-export type HalfLinkedKind = 'complete_pointers' | 'set_payee' | 'clear_category' | 'pair' | 'needs_mirror' | 'ambiguous' | 'unadopted';
+export type HalfLinkedKind = 'complete_pointers' | 'set_payee' | 'clear_category' | 'pair' | 'needs_mirror' | 'ambiguous';
 
 export interface HalfLinkedItem {
   kind: HalfLinkedKind;
@@ -64,8 +63,6 @@ export interface HalfLinkedReport {
   paired: number;
   needs_mirror: number;
   ambiguous: number;
-  /** Hand-made mirrors and bank rows that look like one movement but the matcher's gates refused to merge (see `planAdoptions`). */
-  unadopted: number;
   /** Mirrors created by `apply` with `createMirrors`. */
   mirrors_created: number;
 }
@@ -211,9 +208,6 @@ export async function planHalfLinkedTransfers(db: Queryable, budgetId: string): 
       pairs.push({ leg, other: best });
     }
   }
-  for (const refusal of (await planAdoptions(db, budgetId)).refused) {
-    items.push({ kind: 'unadopted', transaction_id: refusal.bank_id, peer_id: refusal.hand_id, peer_account_id: null, detail: refusal.reason });
-  }
   const count = (kind: HalfLinkedKind) => items.filter((i) => i.kind === kind).length;
   return {
     report: {
@@ -224,7 +218,6 @@ export async function planHalfLinkedTransfers(db: Queryable, budgetId: string): 
       paired: count('pair'),
       needs_mirror: count('needs_mirror'),
       ambiguous: count('ambiguous'),
-      unadopted: count('unadopted'),
       mirrors_created: 0,
     },
     pairs,

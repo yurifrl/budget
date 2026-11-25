@@ -164,7 +164,7 @@ export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepair
     dropped_rules: [],
     kept_payees: [],
     actions: [],
-    half_linked: { items: [], complete_pointers: 0, set_payee: 0, clear_category: 0, paired: 0, needs_mirror: 0, ambiguous: 0, unadopted: 0, mirrors_created: 0 },
+    half_linked: { items: [], complete_pointers: 0, set_payee: 0, clear_category: 0, paired: 0, needs_mirror: 0, ambiguous: 0, mirrors_created: 0 },
   };
 
   for (const account of accounts) {

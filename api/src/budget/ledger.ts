@@ -24,7 +24,7 @@
 import type { PoolClient } from 'pg';
 
 import { applyRules, type RenameRule } from '@shared/domain/payees';
-import { loadRenameRules, resolveImportedPayee } from './domain/transactions';
+import { loadRenameRules, planImportedPayee, resolveImportedPayee } from './domain/transactions';
 
 export { applyBalanceDeltas, type BalanceDelta } from './domain/transactions';
 export { linkTransfers, linkTransfers as linkCardPayments } from './domain/transfer-links';
@@ -49,12 +49,18 @@ export interface ResolvedPayee {
   /** The text `import_payee_name` keeps (the bank's text, also when no payee is stored). */
   importName: string;
   transferAccountId: string | null;
-  /** What an earlier sync stored for the same text (the transfer payee); see `ImportedPayee.legacy`. */
-  legacy: { id: string; name: string } | null;
+  /** The name an earlier sync stored for the same text (the transfer payee); see `ImportedPayeePlan.legacyName`. */
+  legacyName: string | null;
 }
 
+/** What a text means, without any write (no payee is created): for rows that already exist. */
+export type PeekedPayee = Omit<ResolvedPayee, 'id'>;
+
 export interface ImportPayeeResolver {
+  /** Create-or-find the payee of a row being inserted or changed. */
   resolve(rawName: string): Promise<ResolvedPayee>;
+  /** What the text means, with no write: for an existing row that may stay as it is. */
+  peek(rawName: string): Promise<PeekedPayee>;
 }
 
 /**
@@ -67,15 +73,23 @@ export interface ImportPayeeResolver {
 export function createImportPayeeResolver(client: PoolClient, budgetId: string): ImportPayeeResolver {
   const cache = new Map<string, ResolvedPayee>();
   let rules: RenameRule[] | null = null;
+  const blank: ResolvedPayee = { id: null, name: '', importName: '', transferAccountId: null, legacyName: null };
   return {
+    async peek(rawName: string): Promise<PeekedPayee> {
+      const name = rawName.trim();
+      if (!name) return blank;
+      if (!rules) rules = (await loadRenameRules(client, budgetId)).rows;
+      const plan = await planImportedPayee(client, budgetId, name, applyRules(rules, name), { verbatim: true });
+      return { name: plan.name, importName: plan.importName, transferAccountId: plan.transferAccountId, legacyName: plan.legacyName };
+    },
     async resolve(rawName: string): Promise<ResolvedPayee> {
       const name = rawName.trim();
-      if (!name) return { id: null, name: '', importName: '', transferAccountId: null, legacy: null };
+      if (!name) return blank;
       if (!cache.has(name)) {
         if (!rules) rules = (await loadRenameRules(client, budgetId)).rows;
         const effective = applyRules(rules, name);
         const payee = await resolveImportedPayee(client, budgetId, name, effective, { verbatim: true });
-        cache.set(name, { id: payee.id, name: payee.name, importName: payee.importName, transferAccountId: payee.transferAccountId, legacy: payee.legacy });
+        cache.set(name, { id: payee.id, name: payee.name, importName: payee.importName, transferAccountId: payee.transferAccountId, legacyName: payee.legacyName });
       }
       return cache.get(name)!;
     },

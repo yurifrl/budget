@@ -43,7 +43,7 @@
  * Bank hints come from the provider's raw transaction (Pluggy `category` and
  * `operationType`); payee text is never read. The one exception is a stored
  * `hintAccountId` (an import whose payee text was resolved to an account's
- * transfer payee at import time, see `MatchRow`): strong evidence for that account.
+ * transfer payee at import time, see `MatchRow`): strong evidence for that account unless the bank's own category contradicts a transfer.
  */
 
 export const MAX_TRANSFER_DAYS_APART = 3;
@@ -218,6 +218,17 @@ interface Node {
   row: MatchRow;
   evidence: Evidence;
   rule: TransferRule | null;
+}
+
+/**
+ * The row's evidence. An import hint (the payee text named an account) counts as
+ * strong evidence, but never overrides the bank's own contradicting category
+ * ('against' stays a veto) and never touches the account or bank rules: it only
+ * narrows the candidates to the hinted account (`structurallyFits`).
+ */
+function evidenceWithHint(row: MatchRow): Evidence {
+  const own = evidenceOf(row.hint);
+  return row.hintAccountId && own !== 'against' ? 'strong' : own;
 }
 
 /** The rule covering a row (an active 'auto'/'account' rule set before the row was created). */
@@ -496,7 +507,7 @@ export function planTransfers(
   }
   const nodes: Node[] = rows
     .filter((r) => considered(r, rules))
-    .map((row) => ({ row, evidence: row.hintAccountId ? ('strong' as const) : evidenceOf(row.hint), rule: coveringRule(row, rules) }));
+    .map((row) => ({ row, evidence: evidenceWithHint(row), rule: coveringRule(row, rules) }));
   const buckets = new Map<number, Node[]>();
   for (const n of nodes) {
     const k = Math.abs(n.row.amount);

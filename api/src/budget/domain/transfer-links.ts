@@ -22,13 +22,11 @@ import { HttpError } from '../../core/validate';
 import { blockImportShadows, listImportHints, setImportShadowsBlocked, type ImportHint } from '../../connections';
 import * as store from '../store/transfers';
 import { bankKey } from './bank-key';
-import { applyBalanceDeltas, deriveDeltas, type BalanceDelta } from './transactions';
+import { applyBalanceDeltas, type BalanceDelta } from './transactions';
 import { deleteMirror, ensureTransferPayee, insertMirror } from './transfers';
 import {
-  MAX_TRANSFER_DAYS_APART,
   daysApart,
   evidenceLabel,
-  evidenceOf,
   pairViolation,
   planTransfers,
   readView,
@@ -142,179 +140,16 @@ async function linkLegs(
   await store.clearTransferHints(client, budgetId, [out.id, inn.id]);
 }
 
-export interface AdoptionRefusal {
-  hand_id: string;
-  bank_id: string;
-  reason: 'ambiguous' | 'touched' | 'against_evidence' | PairViolation;
-}
-
-interface AdoptionCandidate {
-  hand_id: string;
-  bank_id: string;
-  peer_id: string;
-  peer_account_id: string;
-}
-
-/**
- * Which hand-made mirrors a bank row may replace, with the same gates as the
- * matcher's auto-link: both sides on budget, no mark and no "never" payee on any
- * row (SQL), the bank row untouched (still the bank's text, shadow not blocked),
- * a bank category that contradicts a transfer vetoes it (except cash to card),
- * the account and bank rules (`pairViolation`) hold, and the match is
- * UNAMBIGUOUS: exactly one hand-made row for the bank row and exactly one bank
- * row for the hand-made row (same account, amount, 3 days). Everything else is
- * returned as a refusal (both rows stay; the repair report lists them).
- */
-export async function planAdoptions(db: Queryable, budgetId: string): Promise<{ adopt: AdoptionCandidate[]; refused: AdoptionRefusal[] }> {
-  const pairs = await store.listAdoptablePairs(db, budgetId, MAX_TRANSFER_DAYS_APART);
-  const byBank = new Map<string, number>();
-  const byHand = new Map<string, number>();
-  for (const p of pairs) {
-    byBank.set(p.bank_id, (byBank.get(p.bank_id) ?? 0) + 1);
-    byHand.set(p.hand_id, (byHand.get(p.hand_id) ?? 0) + 1);
-  }
-  const adopt: AdoptionCandidate[] = [];
-  const refused: AdoptionRefusal[] = [];
-  if (pairs.length === 0) return { adopt, refused };
-  const rows = new Map(
-    (await store.getTransferRows(db, budgetId, [...new Set(pairs.flatMap((p) => [p.bank_id, p.peer_id]))])).map((r) => [r.id, r]),
-  );
-  const hints = await listImportHints(db, [...new Set(pairs.map((p) => p.bank_id))]);
-  for (const p of pairs) {
-    const base = { hand_id: p.hand_id, bank_id: p.bank_id };
-    const bank = rows.get(p.bank_id);
-    const peer = rows.get(p.peer_id);
-    if (!bank || !peer) continue;
-    if ((byBank.get(p.bank_id) ?? 0) > 1 || (byHand.get(p.hand_id) ?? 0) > 1) {
-      refused.push({ ...base, reason: 'ambiguous' });
-      continue;
-    }
-    const hint = hints.get(p.bank_id);
-    if (!bank.untouched_ledger || hint?.blocked) {
-      refused.push({ ...base, reason: 'touched' });
-      continue;
-    }
-    const [out, inn] = Number(bank.amount) < 0 ? [bank, peer] : [peer, bank];
-    const cashToCard = out.kind === 'cash' && inn.kind === 'card';
-    if (!cashToCard && evidenceOf(hint ? { category: hint.category, operationType: hint.operationType } : null) === 'against') {
-      refused.push({ ...base, reason: 'against_evidence' });
-      continue;
-    }
-    const violation = pairViolation(sideOf(out), sideOf(inn));
-    if (violation) {
-      refused.push({ ...base, reason: violation });
-      continue;
-    }
-    adopt.push({ ...base, peer_id: p.peer_id, peer_account_id: p.peer_account_id });
-  }
-  return { adopt, refused };
-}
-
-/**
- * A transfer entered by hand has a hand-made mirror in the other account (no
- * import id, no bank shadow). When the bank later imports the REAL other side
- * (`planAdoptions` decides which), keeping both would count the money twice: the
- * bank row takes the hand-made row's place in the pair. MERGE, not delete:
- *  - the bank row keeps its import identity, amount and payload; it takes the
- *    user's side of the transfer: date (the pair's dates stay equal), memo, flag
- *    and approval where the user set one (else the bank row's own stay), and
- *    "cleared" when the user had cleared it and the bank row is not yet;
- *  - the hand-made row is soft-deleted and its balance reversed (a reconciled
- *    one is never replaced), the account ends where it would be had only the bank
- *    row existed (plus the cleared change);
- *  - both pointers and the peer's transfer payee are written on both legs, no
- *    category; the shadow is frozen;
- *  - a `transfer_links` record on BOTH legs (method auto), the bank row's one
- *    carrying what it replaced (`adopted`), so POST /transfers/unlink restores
- *    the hand-made pair and the bank row's own fields.
- * Closest date first, each row once, repeated until nothing more adopts (a pair
- * of two hand-made rows is replaced by both bank sides in turn). Idempotent.
- */
-async function adoptHandMadeMirrors(client: PoolClient, budgetId: string): Promise<number> {
-  let adopted = 0;
-  for (let pass = 0; pass < 10; pass++) {
-    const used = new Set<string>();
-    const deltas: BalanceDelta[] = [];
-    let applied = 0;
-    for (const pair of (await planAdoptions(client, budgetId)).adopt) {
-      if (used.has(pair.hand_id) || used.has(pair.bank_id) || used.has(pair.peer_id)) continue;
-      used.add(pair.hand_id).add(pair.bank_id).add(pair.peer_id);
-      const hand = await store.getRowFields(client, budgetId, pair.hand_id);
-      const bank = await store.getRowFields(client, budgetId, pair.bank_id);
-      const peer = await store.getRowFields(client, budgetId, pair.peer_id);
-      if (!hand || !bank || !peer) continue;
-      const hints = await listImportHints(client, [bank.id]);
-      const merged = {
-        memo: hand.memo?.trim() ? hand.memo : bank.memo,
-        flag_color: hand.flag_color ?? bank.flag_color,
-        flag_name: hand.flag_name ?? bank.flag_name,
-        approved: hand.approved || bank.approved,
-        cleared: bank.cleared === 'uncleared' && hand.cleared === 'cleared' ? ('cleared' as const) : bank.cleared,
-        date: hand.date,
-      };
-      const peerPayee = await ensureTransferPayee(client, budgetId, pair.peer_account_id);
-      await store.setRowFields(client, budgetId, bank.id, merged);
-      await store.writeTransferLeg(client, bank.id, pair.peer_account_id, peer.id, peerPayee);
-      await store.repointPeerLeg(client, budgetId, peer.id, bank.account_id, bank.id);
-      await store.insertTransferLink(client, budgetId, {
-        transaction_id: bank.id,
-        peer_transaction_id: peer.id,
-        method: 'auto',
-        prev_payee_id: bank.payee_id,
-        prev_category_id: bank.category_id,
-        prev_blocked: hints.get(bank.id)?.blocked ?? null,
-        created_mirror: false,
-        adopted: {
-          replaced_id: hand.id,
-          prev: { memo: bank.memo, flag_color: bank.flag_color, flag_name: bank.flag_name, approved: bank.approved, cleared: bank.cleared, date: bank.date },
-        },
-      });
-      // The peer's record: its own pre-adoption state (an earlier adoption's record keeps what it replaced).
-      const peerRecord = await store.getTransferLink(client, budgetId, peer.id);
-      await store.insertTransferLink(client, budgetId, {
-        transaction_id: peer.id,
-        peer_transaction_id: bank.id,
-        method: 'auto',
-        prev_payee_id: peerRecord ? peerRecord.prev_payee_id : peer.payee_id,
-        prev_category_id: peerRecord ? peerRecord.prev_category_id : peer.category_id,
-        prev_blocked: peerRecord ? peerRecord.prev_blocked : null,
-        created_mirror: false,
-        adopted: peerRecord?.adopted ?? null,
-      });
-      await store.deleteTransferLinks(client, budgetId, [hand.id]);
-      deltas.push(...(await deleteMirror(client, budgetId, hand.id)));
-      deltas.push(...deriveDeltas(ledgerOf(bank), ledgerOf({ ...bank, cleared: merged.cleared })));
-      await blockImportShadows(client, [bank.id]);
-      await store.setTransferMarks(client, budgetId, [bank.id], null);
-      await store.clearTransferHints(client, budgetId, [bank.id]);
-      applied += 1;
-    }
-    if (deltas.length > 0) await applyBalanceDeltas(client, budgetId, deltas);
-    adopted += applied;
-    if (applied === 0) break;
-  }
-  return adopted;
-}
-
-const ledgerOf = (r: { account_id: string; amount: string; cleared: 'cleared' | 'uncleared' | 'reconciled' }) => ({
-  account_id: r.account_id,
-  amount: r.amount,
-  cleared: r.cleared,
-});
-
 /**
  * Link every pair the matcher is sure of (auto-link rules and payee rules) and
  * return how many pairs were linked. Call inside the caller's transaction.
  */
 export async function linkTransfers(client: PoolClient, budgetId: string, today: string = todayIso()): Promise<number> {
-  // Hand-made mirrors first: a bank row that is the real other side of one joins
-  // that pair, so it is not left for the matcher to pair with something else.
-  const adopted = await adoptHandMadeMirrors(client, budgetId);
   const { byId, hints, plan } = await loadContext(client, budgetId, today);
   for (const link of plan.links) {
     await linkLegs(client, budgetId, byId.get(link.outflowId)!, byId.get(link.inflowId)!, link.method, (id) => hints.get(id)?.blocked ?? null);
   }
-  return plan.links.length + adopted;
+  return plan.links.length;
 }
 
 /** What the register list needs per row: suggestion summary, pending state, who linked it. */
@@ -529,10 +364,7 @@ export async function unlinkTransfers(client: PoolClient, budgetId: string, ids:
     const pb = pointers.get(b);
     const stillLinked =
       ra && rb && pa && pb && !pa.deleted && !pb.deleted && pa.transfer_transaction_id === b && pb.transfer_transaction_id === a;
-    if (stillLinked && (ra.adopted || rb.adopted)) {
-      deltas.push(...(await undoAdoption(client, budgetId, ra, rb)));
-      count += 1;
-    } else if (stillLinked) {
+    if (stillLinked) {
       const kept: string[] = [];
       const unblock: string[] = [];
       for (const r of [ra, rb]) {
@@ -552,44 +384,6 @@ export async function unlinkTransfers(client: PoolClient, budgetId: string, ids:
   }
   if (deltas.length > 0) await applyBalanceDeltas(client, budgetId, deltas);
   return count;
-}
-
-/**
- * Undo of an adopted pair: each bank leg that replaced a hand-made row gets its
- * own payee, category and fields back and is marked "manual"; the replaced
- * hand-made row comes back as one leg of the user's transfer (its balance
- * re-applied) and the other leg points at it again. A leg that was never
- * replaced (the user's own row) stays as it is.
- */
-async function undoAdoption(client: PoolClient, budgetId: string, ra: store.TransferLinkSql, rb: store.TransferLinkSql): Promise<BalanceDelta[]> {
-  const deltas: BalanceDelta[] = [];
-  const legs = [ra, rb];
-  const revived = new Map<string, string>(); // bank leg id -> revived hand-made row id
-  for (const rec of legs) {
-    if (!rec.adopted) continue;
-    const bank = await store.getRowFields(client, budgetId, rec.transaction_id);
-    if (!bank) continue;
-    await store.restoreUnlinkedLeg(client, rec.transaction_id, { payeeId: rec.prev_payee_id, categoryId: rec.prev_category_id });
-    await store.setRowFields(client, budgetId, bank.id, rec.adopted.prev);
-    deltas.push(...deriveDeltas(ledgerOf(bank), ledgerOf({ ...bank, cleared: rec.adopted.prev.cleared })));
-    if (rec.prev_blocked === false) await setImportShadowsBlocked(client, [bank.id], false);
-    await store.setTransferMarks(client, budgetId, [bank.id], 'manual');
-    revived.set(bank.id, rec.adopted.replaced_id);
-  }
-  // Re-pair: a revived row takes the place of its bank leg in the pair.
-  const [a, b] = [ra.transaction_id, rb.transaction_id];
-  const accountOf = async (id: string) => (await store.getRowFields(client, budgetId, id))!.account_id;
-  const targetOf = (id: string) => revived.get(id) ?? id;
-  for (const [bankId, handId] of revived) {
-    const other = bankId === a ? b : a;
-    const otherTarget = targetOf(other);
-    if (!(await store.reviveLeg(client, budgetId, handId, await accountOf(other), otherTarget))) continue;
-    const hand = (await store.getRowFields(client, budgetId, handId))!;
-    deltas.push(...deriveDeltas(null, ledgerOf(hand)));
-    if (!revived.has(other)) await store.repointPeerLeg(client, budgetId, other, hand.account_id, handId);
-  }
-  await store.deleteTransferLinks(client, budgetId, [a, b]);
-  return deltas;
 }
 
 /** PUT /transfers/marks: 404 unless every id is a live row of the budget. */

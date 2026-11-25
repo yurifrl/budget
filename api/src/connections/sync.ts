@@ -203,6 +203,7 @@ interface ExistingTxnRow {
   memo: string | null;
   cleared: 'cleared' | 'uncleared' | 'reconciled';
   payee_name: string | null;
+  payee_id: string | null;
   shadow_blocked: boolean | null;
   shadow_payload: OwnedPayload | null;
 }
@@ -595,7 +596,7 @@ async function syncOnce(
           const existing = (
             await pg.query<ExistingTxnRow>(
               `SELECT t.id, t.date::text AS date, t.amount, t.memo, t.cleared,
-                      p.name AS payee_name,
+                      p.name AS payee_name, t.payee_id,
                       s.blocked AS shadow_blocked, s.last_synced_payload AS shadow_payload
                FROM public.transactions t
                LEFT JOIN public.connection_transactions s ON s.transaction_id = t.id
@@ -692,7 +693,8 @@ async function syncOnce(
             continue;
           }
 
-          const upstreamPayee = await resolver.resolve(txn.description);
+          // What the text means, read only: a row that stays as it is must not create payees.
+          const upstreamPayee = await resolver.peek(txn.description);
           // The ledger's read-back form is date-only (`t.date::text`); compare
           // like with like so unchanged upstream rows stay duplicates. The payee is
           // compared in BOTH forms the same bank text has been stored in: what a new
@@ -704,7 +706,7 @@ async function syncOnce(
             memo: '',
             payee,
           });
-          const legacyForm = upstreamPayee.legacy !== null && current.payee === upstreamPayee.legacy.name;
+          const legacyForm = upstreamPayee.legacyName !== null && current.payee === upstreamPayee.legacyName;
           if (samePayload(current, upstreamPayload(upstreamPayee.name)) || (legacyForm && samePayload(current, upstreamPayload(current.payee)))) {
             result.duplicates += 1;
             continue;
@@ -714,14 +716,14 @@ async function syncOnce(
           // fields; cleared/approved state is preserved. A row an earlier sync stored
           // with the transfer payee keeps it (the engine never rewrites a payee only
           // because transfer text is resolved differently now).
-          const keep = legacyForm ? upstreamPayee.legacy! : null;
-          const payeeId = keep ? keep.id : upstreamPayee.id;
-          const storedName = keep ? keep.name : upstreamPayee.name;
+          const keep = legacyForm;
+          const payeeId = keep ? existing.payee_id : (await resolver.resolve(txn.description)).id;
+          const storedName = keep ? current.payee : upstreamPayee.name;
           await ledger.refreshImportedTransaction(pg, existing.id, {
             date: txn.date.slice(0, 10),
             amount: milli,
             payeeId,
-            importPayeeName: (keep ? keep.name : upstreamPayee.importName) || null,
+            importPayeeName: (keep ? current.payee : upstreamPayee.importName) || null,
           });
           // The hint follows the row: a refreshed row of transfer text keeps or gets it, any other text drops it.
           if (!keep) {
