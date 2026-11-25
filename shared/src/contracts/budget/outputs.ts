@@ -11,7 +11,7 @@
  */
 import { z } from '../../zod';
 
-import { categorizationModes, matchTypes } from '../../domain/payees';
+import { categorizationModes, matchTypes, ruleMatchTypes } from '../../domain/payees';
 import { ACCOUNT_TYPES } from './schemas';
 import { FREQUENCIES } from './frequencies';
 
@@ -173,6 +173,15 @@ export const payeeRowSchema = z.object({
   deleted: z.boolean(),
 });
 
+/** One renaming rule of a payee: imported text matching it is assigned to that payee. */
+export const renameRuleSchema = z.object({
+  id,
+  payee_id: id,
+  match_type: z.enum(ruleMatchTypes),
+  condition: z.string().describe('Text the rule matches (case-insensitive, surrounding and repeated spaces ignored).'),
+  created_at: timestamp,
+});
+
 /** GET /payees: the base payee plus visibility, categorization and usage stats. */
 export const payeeAdminRowSchema = payeeRowSchema.extend({
   hidden: z.boolean(),
@@ -181,6 +190,8 @@ export const payeeAdminRowSchema = payeeRowSchema.extend({
   /** The payee's own renaming rule: statement text matching this resolves to the payee. */
   rename_match_type: z.enum(matchTypes).nullable(),
   rename_condition: nullableString,
+  /** Every renaming rule of the payee, oldest first. The two fields above show its first "is" / "contains" rule. */
+  rename_rules: z.array(renameRuleSchema).optional(),
   transaction_count: z.number(),
   last_used_date: nullableString,
   /** Majority category of the payee's last 3 categorized transactions; null when none. */

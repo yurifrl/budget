@@ -2,12 +2,12 @@
  * Characterisation tests for the sync engine's payee write path (written
  * before sync's private PayeeResolver was replaced by budget's ledger API).
  * They pin what sync did:
- * - rename rules apply to the upstream description (a `contains` rule
- *   splices its replacement into the lowercased text); the payee row, the
- *   transaction's import_payee_name(_original) and the shadow payload carry
- *   the rule-rewritten name;
- * - an `is` rule's replacement is used verbatim (NOT trimmed), unlike
- *   budget's own upsertPayee, which trims;
+ * - a renaming rule that matches the upstream description ASSIGNS its payee
+ *   (budget-mkrt: it used to splice the payee's name into the matching part of
+ *   the text); the transaction keeps the bank's text in import_payee_name(_original)
+ *   and the shadow payload carries the payee's name;
+ * - the assigned payee is used as it is (a name with surrounding spaces is NOT
+ *   trimmed), unlike budget's own upsertPayee, which trims;
  * - a blank description stores no payee and NULL import names;
  * - an upstream description change refreshes payee_id and the import names
  *   through the same rules, keeping cleared/approved.
@@ -109,10 +109,12 @@ beforeAll(async () => {
     EXTERNAL_ACCOUNT,
     accountId,
   ]);
-  // Rules: "contains UBER" -> splice "Uber"; "is PADDED RAW" -> payee " Padded " (surrounding spaces kept).
+  // Rules: "contains UBER" -> payee "Uber"; "is PADDED RAW" -> payee " Padded " (surrounding spaces kept).
+  await pool.query(`INSERT INTO payees (budget_id, name) VALUES ($1, 'Uber'), ($1, ' Padded ')`, [budgetId]);
   await pool.query(
-    `INSERT INTO payees (budget_id, name, rename_match_type, rename_condition) VALUES
-       ($1, 'Uber', 'contains', 'UBER'), ($1, ' Padded ', 'is', 'PADDED RAW')`,
+    `INSERT INTO payee_renaming_rules (budget_id, payee_id, match_type, condition)
+     SELECT $1, id, CASE name WHEN 'Uber' THEN 'contains' ELSE 'is' END, CASE name WHEN 'Uber' THEN 'UBER' ELSE 'PADDED RAW' END
+       FROM payees WHERE budget_id = $1`,
     [budgetId],
   );
 });
@@ -122,21 +124,21 @@ afterAll(async () => {
 });
 
 describe.skipIf(!dbReady)('sync payee write path (characterisation)', () => {
-  test('rename rules rewrite the payee; is-rule replacement kept verbatim; blank stays null', async () => {
+  test('a matching rule assigns its payee (name kept verbatim) and the bank text stays the import name; blank stays null', async () => {
     upstream = [up('p1', 'UBER *TRIP 123'), up('p2', 'PADDED RAW'), up('p3', '   '), up('p4', '  Bakery  ')];
     const result = await sync();
     expect(result.added).toBe(4);
 
-    // A contains-rule splices the replacement into the lowercased name.
+    // A contains-rule assigns its payee itself: the rest of the text is not kept in the name.
     const p1 = await row('p1');
-    expect(p1.payee_name).toBe('Uber *trip 123');
-    expect(p1.import_payee_name).toBe('Uber *trip 123');
-    expect(p1.import_payee_name_original).toBe('Uber *trip 123');
-    expect(p1.payload.payee).toBe('Uber *trip 123');
+    expect(p1.payee_name).toBe('Uber');
+    expect(p1.import_payee_name).toBe('UBER *TRIP 123');
+    expect(p1.import_payee_name_original).toBe('UBER *TRIP 123');
+    expect(p1.payload.payee).toBe('Uber');
 
     const p2 = await row('p2');
     expect(p2.payee_name).toBe(' Padded ');
-    expect(p2.import_payee_name).toBe(' Padded ');
+    expect(p2.import_payee_name).toBe('PADDED RAW');
     expect(p2.payload.payee).toBe(' Padded ');
     const trimmed = await pool.query("SELECT 1 FROM payees WHERE budget_id = $1 AND name = 'Padded'", [budgetId]);
     expect(trimmed.rowCount).toBe(0);
@@ -160,10 +162,10 @@ describe.skipIf(!dbReady)('sync payee write path (characterisation)', () => {
     expect(result.updated).toBe(1);
     expect(result.duplicates).toBe(3);
     const p4 = await row('p4');
-    expect(p4.payee_name).toBe('Uber eats');
-    expect(p4.import_payee_name).toBe('Uber eats');
-    expect(p4.import_payee_name_original).toBe('Uber eats');
-    expect(p4.payload.payee).toBe('Uber eats');
+    expect(p4.payee_name).toBe('Uber');
+    expect(p4.import_payee_name).toBe('UBER EATS');
+    expect(p4.import_payee_name_original).toBe('UBER EATS');
+    expect(p4.payload.payee).toBe('Uber');
     expect(p4).toMatchObject({ cleared: 'uncleared', approved: true });
   });
 });

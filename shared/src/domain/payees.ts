@@ -4,50 +4,113 @@
  * supply data and persist results.
  */
 
+/**
+ * The match types the released clients know (the single-rule endpoint and the
+ * `rename_match_type` field of a payee row only ever carry these two).
+ */
 export type MatchType = 'is' | 'contains';
 export type CategorizationMode = 'auto' | 'fixed' | 'never';
 
+/** Every match type a renaming rule can have: the released two plus "starts with" and "ends with". */
+export type RuleMatchType = MatchType | 'starts_with' | 'ends_with';
+
 /** Runtime value lists shared by zod validation and client pickers. */
 export const matchTypes: readonly MatchType[] = ['contains', 'is'];
+export const ruleMatchTypes: readonly RuleMatchType[] = ['is', 'starts_with', 'ends_with', 'contains'];
 export const categorizationModes: readonly CategorizationMode[] = ['auto', 'fixed', 'never'];
 
 /** Dropdown labels for matchTypes (Manage Payees renaming section). */
 export const matchTypeLabels: Record<MatchType, string> = { contains: 'Contains', is: 'Is' };
+export const ruleMatchTypeLabels: Record<RuleMatchType, string> = {
+  is: 'Is',
+  starts_with: 'Starts with',
+  ends_with: 'Ends with',
+  contains: 'Contains',
+};
 
 /**
- * One renaming rule, owned by the payee whose name is the target: imported
- * statement text matching the condition resolves to (or replaces into) that
- * payee. One rule per payee, stored on the payees row.
+ * One renaming rule, owned by the payee whose name is the target: "imported
+ * text that <is | contains | starts with | ends with> X is renamed to this
+ * payee". A matching rule ASSIGNS the transaction to that payee; the imported
+ * text is kept as the row's import name, never spliced into the payee name.
+ * A payee holds any number of rules.
  */
 export interface RenameRule {
   /** Statement text the rule matches. */
   condition: string;
-  match_type: MatchType;
+  match_type: RuleMatchType;
   /** The owning payee's name (rename target). */
   replacement: string;
 }
 
-/** Does one rule fire for this raw payee name? */
-export function matchRule(rule: RenameRule, name: string): boolean {
-  const needle = rule.condition.toLowerCase();
+/**
+ * The ONE comparison form of a rule's pattern and of a text, shared by the matcher
+ * and by the frozen earlier matcher (api `domain/legacy-rename.ts`): exactly what
+ * main did, `String.prototype.toLowerCase()` and nothing else. No trimming, no
+ * collapsing of repeated spaces, no accent folding ("pão" and "pao" differ, "Ç" and
+ * "ç" do not). The callers trim the TEXT they hand in (bank sync and statement
+ * import trim the bank text; the contract trims a pattern when it is written), as
+ * they always did; a pattern or a text holding two spaces matches only the same two
+ * spaces.
+ */
+export function normalizeRuleText(text: string): string {
+  return text.toLowerCase();
+}
+
+/** Shortest pattern a NEW "contains", "starts with" or "ends with" rule may have (shorter ones swallow nearly every text); stored shorter ones keep working. */
+export const MIN_RULE_PATTERN_LENGTH = 2;
+
+/** How specific a rule is: lower first. `is` < `starts with` = `ends with` < `contains`. */
+function specificity(type: RuleMatchType): number {
+  return type === 'is' ? 0 : type === 'contains' ? 2 : 1;
+}
+
+function fires(type: RuleMatchType, needle: string, hay: string): boolean {
   if (needle === '') return false;
-  const hay = name.toLowerCase();
-  return rule.match_type === 'is' ? hay === needle : hay.includes(needle);
+  switch (type) {
+    case 'is':
+      return hay === needle;
+    case 'starts_with':
+      return hay.startsWith(needle);
+    case 'ends_with':
+      return hay.endsWith(needle);
+    case 'contains':
+      return hay.includes(needle);
+  }
+}
+
+/** Does one rule fire for this raw payee name? Case-insensitive, whitespace-insensitive. */
+export function matchRule(rule: RenameRule, name: string): boolean {
+  return fires(rule.match_type, normalizeRuleText(rule.condition), normalizeRuleText(name));
 }
 
 /**
- * Apply the first matching rule (rules are ordered by caller); otherwise the
- * name unchanged. `contains` rewrites every occurrence of the condition;
- * `is` swaps the whole name.
+ * The rule that decides a text, or null. When several rules match (of one payee
+ * or of several), the most specific wins: `is`, then `starts with` / `ends
+ * with`, then `contains`; then the longest pattern; then the earliest in
+ * `rules`, so callers list the oldest rule first. Deterministic whatever the
+ * rules' number.
  */
-export function applyRules(rules: RenameRule[], name: string): string {
+export function findRenameRule<R extends RenameRule>(rules: readonly R[], name: string): R | null {
+  const hay = normalizeRuleText(name);
+  let best: { rule: R; rank: number; length: number } | null = null;
   for (const rule of rules) {
-    if (!matchRule(rule, name)) continue;
-    if (rule.match_type === 'is') return rule.replacement;
-    const replaced = name.toLowerCase().split(rule.condition.toLowerCase()).join(rule.replacement);
-    if (replaced.trim()) return replaced.trim();
+    const needle = normalizeRuleText(rule.condition);
+    if (!fires(rule.match_type, needle, hay)) continue;
+    const rank = specificity(rule.match_type);
+    if (best === null || rank < best.rank || (rank === best.rank && needle.length > best.length)) {
+      best = { rule, rank, length: needle.length };
+    }
   }
-  return name;
+  return best?.rule ?? null;
+}
+
+/**
+ * The payee name a text resolves to: the winning rule's payee (see
+ * `findRenameRule`), whole; the name unchanged when no rule matches.
+ */
+export function applyRules(rules: readonly RenameRule[], name: string): string {
+  return findRenameRule(rules, name)?.replacement ?? name;
 }
 
 export interface PayeeCategorization {

@@ -2,6 +2,7 @@
  * Budget store: payees. SQL only; every function takes a Queryable.
  */
 import type { Queryable } from '../../core/db';
+import { RULE_CREATED_AT, allRulesSql } from './rename-rules';
 
 /**
  * Find-or-create a payee by exact name (no trimming, no rename rules): the
@@ -36,6 +37,22 @@ export async function retireTransferPayee(db: Queryable, payeeId: string | null)
     [payeeId],
   );
 }
+
+// The payee's renaming rules (0121): every rule for `rename_rules`, and its first
+// "is" / "contains" rule for the two single-rule fields the released clients read.
+const ruleStats = `
+  left join lateral (
+    select r.match_type, r.condition from ${allRulesSql('p.budget_id', 'p.id')} r
+    where r.match_type in ('is', 'contains')
+    order by r.created_at, r.seq nulls last, r.id limit 1
+  ) first_rule on true
+  left join lateral (
+    select json_agg(json_build_object('id', r.id, 'payee_id', r.payee_id, 'match_type', r.match_type,
+                                      'condition', r.condition, 'created_at', ${RULE_CREATED_AT})
+                    order by r.created_at, r.seq nulls last, r.id) as rules
+    from ${allRulesSql('p.budget_id', 'p.id')} r
+  ) all_rules on true
+`;
 
 // Transaction counts + last-used date per payee, one scan over live txns.
 const listStats = `
@@ -85,7 +102,8 @@ export async function listPayees(db: Queryable, budgetId: string, hidden: string
   const result = await db.query(
     `SELECT p.id, p.name, p.transfer_account_id, p.deleted, p.hidden,
               p.categorization_mode, p.default_category_id,
-              p.rename_match_type, p.rename_condition,
+              first_rule.match_type AS rename_match_type, first_rule.condition AS rename_condition,
+              coalesce(all_rules.rules, '[]'::json) AS rename_rules,
               CASE WHEN p.transfer_rule IN ('auto','account','never') THEN p.transfer_rule END AS transfer_rule,
               p.transfer_rule_account_id,
               ta.name AS transfer_account_name,
@@ -93,7 +111,7 @@ export async function listPayees(db: Queryable, budgetId: string, hidden: string
               inf.inferred_category_id, ic.name as inferred_category_name
        FROM payees p
        LEFT JOIN accounts ta ON ta.id = p.transfer_account_id AND ta.budget_id = p.budget_id AND ta.deleted = false
-       ${listStats} ${inferredStats}
+       ${ruleStats} ${listStats} ${inferredStats}
        WHERE p.budget_id = $1 AND p.deleted = false ${transferClause} ${hiddenClause}
        ORDER BY p.name`,
     [budgetId],
@@ -243,21 +261,6 @@ export async function movePayeeTransactions(db: Queryable, fromId: string, toId:
 
 export async function markPayeeDeleted(db: Queryable, id: string): Promise<void> {
   await db.query('UPDATE payees SET deleted = true WHERE id = $1', [id]);
-}
-
-/** Set (or with nulls, clear) the payee's rename rule; false when no live payee matched. */
-export async function setPayeeRenameRule(
-  db: Queryable,
-  id: string,
-  budgetId: string,
-  matchType: string | null,
-  condition: string | null,
-): Promise<boolean> {
-  const result = await db.query(
-    'UPDATE payees SET rename_match_type = $3, rename_condition = $4 WHERE id = $1 AND budget_id = $2 AND deleted = false',
-    [id, budgetId, matchType, condition],
-  );
-  return result.rowCount !== 0;
 }
 
 /** categorization_mode of a live payee of the budget; undefined when there is none. */

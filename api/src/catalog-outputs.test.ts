@@ -195,6 +195,9 @@ beforeAll(async () => {
   await ok('budget_transactions_create', { budget_id: B, txn: txn({ account_id: card.id, payee: 'Pagamento recebido', inflow: 77_000 }) });
   seeded.payee = rent.payee_id;
   await ok('budget_payees_set_rename_rule', { id: rent.payee_id, budget_id: B, match_type: 'contains', condition: 'landlord co' });
+// Several rules per payee: a second one of another type, validated by the list read and the add/update outputs.
+const addedRule = await ok('budget_payees_rename_rules_add', { id: rent.payee_id, budget_id: B, match_type: 'starts_with', condition: 'landlord' });
+await ok('budget_payees_rename_rules_update', { id: rent.payee_id, budget_id: B, rule_id: addedRule.id, match_type: 'ends_with', condition: 'landlord' });
   await ok('budget_assignments_set', { budget_id: B, month: `${today.slice(0, 7)}-01`, category_id: c1.id, budgeted: 1_500_000 });
   await ok('budget_month_notes_set', { budget_id: B, month: `${today.slice(0, 7)}-01`, note: 'month' });
   await ok('budget_category_notes_set', { categoryId: c1.id, budget_id: B, month: `${today.slice(0, 7)}-01`, note: 'cat' });
@@ -272,6 +275,7 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     budget_assignments_list: { budget_id: B },
     budget_month_notes_list: { budget_id: B },
     budget_payees_list: { budget_id: B },
+    budget_payees_rename_rules_list: { id: seeded.payee, budget_id: B },
     budget_payees_transactions: { id: seeded.payee, budget_id: B },
     budget_payee_suggestions_get: { id: seeded.payee, budget_id: B },
     budget_payees_transfer_rule_get: { id: seeded.payee, budget_id: B },

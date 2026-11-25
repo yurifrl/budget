@@ -25,13 +25,13 @@ export interface PayeeFullRow {
   hidden: boolean;
   transfer_account_id: string | null;
   created_at: string;
-  rename_match_type: string | null;
-  rename_condition: string | null;
+  /** How many renaming rules the payee holds (`payee_renaming_rules`). */
+  rename_rule_count: number;
   transfer_rule: string | null;
 }
 
 const PAYEE_COLUMNS = `id, budget_id, name, deleted, hidden, transfer_account_id, created_at::text AS created_at,
-  rename_match_type, rename_condition, transfer_rule`;
+  (SELECT count(*)::int FROM payee_renaming_rules r WHERE r.payee_id = payees.id) AS rename_rule_count, transfer_rule`;
 
 /** The account (any state) with its transfer payee pointer; undefined when it does not exist. */
 export async function getAccountRow(db: Queryable, accountId: string): Promise<AccountPayeeRow | undefined> {
@@ -180,15 +180,6 @@ export async function countTransactionsByPayee(db: Queryable, payeeIds: readonly
     [payeeIds],
   );
   return new Map(res.rows.map((r) => [r.payee_id, r.n]));
-}
-
-/** Drop the payee's renaming rule (the unique index is per budget and condition). */
-export async function clearRenameRule(db: Queryable, payeeId: string): Promise<void> {
-  await db.query('UPDATE payees SET rename_match_type = NULL, rename_condition = NULL WHERE id = $1', [payeeId]);
-}
-
-export async function setRenameRule(db: Queryable, payeeId: string, matchType: string, condition: string): Promise<void> {
-  await db.query('UPDATE payees SET rename_match_type = $2, rename_condition = $3 WHERE id = $1', [payeeId, matchType, condition]);
 }
 
 /** Copy the "treat as transfer" rule columns from one payee to another. */

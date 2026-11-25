@@ -105,6 +105,8 @@ export default {
   payee_not_in_budget: 'That payee is not in this budget.',
   payee_name_deleted_exists: 'A deleted payee is already named "{name}". Choose a different name.',
   payee_name_exists: 'A payee named "{name}" already exists. Choose a different name, or use Merge to combine them.',
+  rename_rule_too_short: 'A "contains", "starts with" or "ends with" rule needs at least {min} characters.',
+  rename_rule_exists: 'The payee "{name}" already has that renaming rule. A rule belongs to one payee.',
   cannot_merge_into_itself: 'A payee cannot be merged into itself. Choose another payee.',
   bundle_needs_two_categories: 'A bundle needs at least two different categories.',
   member_name_required: 'Enter a name, or an e-mail address, for the new person.',
