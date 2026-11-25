@@ -2617,12 +2617,19 @@ row, not from a timestamp.
   as the person left it. An apply is reverted ONCE: `reverted_at` is set, and a second revert
   restores nothing (`already_reverted`) even when a later apply touched the same rows (apply1,
   revert1, apply2, revert1 again: nothing; revert2 restores).
-- **Locks.** An apply and a revert take the per-budget advisory lock `lockBudgetImportWrites`
-  (`pg_advisory_xact_lock` on a hash of the budget id) before they lock rows; the bank sync takes
-  the same lock for the budgets of the accounts it pulled, in id order, right after it locks its
-  connection row and before it writes any row. So a sync and an apply never hold row locks in
-  different orders (no deadlock; the second waits for the first to commit), and two syncs of
-  different connections never wait on each other in a cycle.
+- **Locks.** One per-budget advisory lock (`lockBudgetImportWrites`, `pg_advisory_xact_lock` on a
+  hash of the budget id) orders the bank sync against an apply or a revert. The sync takes it
+  SHARED (`pg_advisory_xact_lock_shared`) for the budgets of the accounts it pulled, in id order,
+  right after it locks its connection row and before it writes any row: syncs of several
+  connections of one budget hold it together and stay parallel, as before. An apply and a revert
+  take it EXCLUSIVELY before they lock rows: they wait for every running sync of the budget (and
+  a sync that starts meanwhile waits for them), so the two never hold row locks in different
+  orders (no deadlock). Apply and revert set `lock_timeout = 5s` for their transaction: when the
+  lock or a row is not free in time they answer 409 `bank_sync_running` ("a bank sync is
+  running, try again in a moment", en and pt-BR) and write nothing, rather than a request that
+  outlives a proxy timeout and still commits. A SQL prefilter trims the text exactly as
+  JavaScript's `trim()` does (tab, newline, no-break and other Unicode spaces, BOM), so a raw text
+  with those at an end is still found.
 - **Reads.** Apply and preview do not read or lock every imported row of the budget: the rule's
   own match (is / contains / starts with / ends with, lower-cased) is made in SQL on the row's real
   text as a prefilter, and `FOR UPDATE` locks exactly those rows (plus synced rows of unknown text,
