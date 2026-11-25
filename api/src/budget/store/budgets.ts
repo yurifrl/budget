@@ -183,8 +183,8 @@ export async function copyBudgetForFreshStart(client: Queryable, oldId: string, 
       AND acc.old = a_old.id AND a_old.transfer_payee_id = pay.old`,
     [newId],
   );
-  // Accounts left without a transfer payee (and duplicates) are repaired by the
-  // caller once the copy is done (domain/transfer-payee-repair.ts).
+  // Accounts left without a transfer payee get one from the caller once the
+  // copy is done; duplicates are copied as they are (domain/transfer-payee-repair.ts).
 
   // ---- plan structure maps (YNAB: groups + categories carry; assignments
   // reset — the plan starts empty). Built before the transaction copy:

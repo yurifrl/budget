@@ -21,7 +21,9 @@ would be removed, how many transactions would be re-pointed, how many renaming
 rules would move and which would be dropped: `dropped_rules` lists each one (payee,
 rule, and the payee that keeps its own different rule; a payee holds one renaming
 rule and one "treat as transfer" rule), plus `actions` with the account and payee
-ids. Read `dropped_rules` before `--apply`. `ambiguous_name_only_payees` (two accounts share the
+ids. Read `dropped_rules` before `--apply`. `kept_payees` lists duplicates that rows
+of another budget still reference: they are NOT deleted, only unlinked (see
+`transfer-payee-cross-budget.md`). `ambiguous_name_only_payees` (two accounts share the
 name) and `orphan_transfer_payees` are listed and never touched.
 
 ## 2. Apply

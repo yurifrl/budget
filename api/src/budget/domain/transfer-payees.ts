@@ -149,6 +149,8 @@ export async function ensureTransferPayee(
 export interface AbsorbResult {
   transactions: number;
   ruleMoved: boolean;
+  /** The payee was NOT deleted because rows of another budget still reference it; it is unlinked instead. */
+  keptReferencedFromOtherBudget: boolean;
   /** What was lost: the source's renaming rule or "treat as transfer" rule the kept payee could not take. */
   dropped: { kind: 'rename_rule' | 'transfer_rule'; payee_id: string; payee_name: string; detail: string }[];
 }
@@ -158,13 +160,13 @@ export interface AbsorbResult {
  * (transactions, splits, scheduled rows, repeat rules, link records, account
  * pointers; each scoped to the budget) moves, the renaming rule and the "treat
  * as transfer" rule move when the canonical payee has none, then the duplicate
- * row is deleted. What cannot move (a payee holds one rule) is returned so the
+ * row is deleted (or, when another budget references it, unlinked and kept). What cannot move (a payee holds one rule) is returned so the
  * report can name it.
  */
 export async function absorbPayee(db: Queryable, budgetId: string, fromId: string, intoId: string): Promise<AbsorbResult> {
   const from = await store.getPayeeRow(db, budgetId, fromId);
   const into = await store.getPayeeRow(db, budgetId, intoId);
-  const result: AbsorbResult = { transactions: 0, ruleMoved: false, dropped: [] };
+  const result: AbsorbResult = { transactions: 0, ruleMoved: false, keptReferencedFromOtherBudget: false, dropped: [] };
   if (!from || !into || from.id === into.id) return result;
   result.transactions = await store.repointPayeeReferences(db, budgetId, from.id, into.id);
   if (from.rename_condition !== null && from.rename_match_type !== null) {
@@ -187,7 +189,14 @@ export async function absorbPayee(db: Queryable, budgetId: string, fromId: strin
       result.dropped.push({ kind: 'transfer_rule', payee_id: from.id, payee_name: from.name, detail: from.transfer_rule });
     }
   }
-  await store.deletePayeeRow(db, budgetId, from.id);
+  // A payee another budget still references is never deleted (the foreign keys
+  // would null those rows); it stays, unlinked, and the report lists it.
+  if ((await store.payeesReferencedFromOtherBudgets(db, budgetId, [from.id])).size > 0) {
+    await store.unlinkPayee(db, budgetId, from.id);
+    result.keptReferencedFromOtherBudget = true;
+  } else {
+    await store.deletePayeeRow(db, budgetId, from.id);
+  }
   return result;
 }
 
@@ -220,6 +229,7 @@ export async function renameTransferPayee(db: Queryable, budgetId: string, accou
     if (!canonical) return { payee_id: payeeId, name: own?.name ?? '', collision: null, inconsistent: true };
     payeeId = canonical.id;
   }
+  const previousName = (await store.getPayeeRow(db, budgetId, payeeId))?.name;
   let collision: TransferPayeeRename['collision'] = null;
   for (let n = 1; n <= MAX_NAME_ATTEMPTS; n++) {
     const name = transferPayeeCandidate(account.name, n);
@@ -229,47 +239,48 @@ export async function renameTransferPayee(db: Queryable, budgetId: string, accou
       if (n === 1) collision = { wanted: name, holder_payee_id: holder.id, holder_account_id: holder.transfer_account_id };
       continue;
     }
-    if (await store.trySetPayeeName(db, payeeId, name)) return { payee_id: payeeId, name, collision };
+    if (await store.trySetPayeeName(db, payeeId, name)) {
+      // The released client may still send the old text on edits: remember it.
+      if (previousName && previousName !== name) await store.recordFormerName(db, budgetId, payeeId, previousName);
+      return { payee_id: payeeId, name, collision };
+    }
   }
   throw new HttpError(409, 'no free transfer payee name for this account', 'conflict');
 }
 
 /**
- * Which account a payee TEXT means, read-only: null when it means none.
- *  - A "Transfer : <name>" text means the live account called <name>; when
- *    several share the name, the NEWEST (what the released client got before
- *    transfer payees were per account: the last account created took the one
- *    shared "Transfer : <name>" payee). The others are reached by payee id.
- *  - A text that is exactly the name of an account's payee (numbered names
- *    included, or a renaming rule's target) means that payee's account.
- * `exactFirst` (the text came out of a renaming rule, so it IS a payee's name)
- * tries the exact payee name before the account name.
+ * Which account a payee TEXT means, read-only: null when it means none. The
+ * same order for create, edit, import and sync:
+ *  1. the exact name of a LINKED transfer payee (numbered names included): that
+ *     payee's account;
+ *  2. `fromRule` (the text came out of a renaming rule, so it IS a payee's
+ *     name) and a live payee that nobody links holds exactly this name: none, it
+ *     is an ordinary payee and the rule keeps producing it;
+ *  3. the live account called <name> in "Transfer : <name>"; with several of
+ *     that name, the NEWEST (a text that is no payee's name: nothing better to
+ *     go by). The accounts of one name are reached by their own payee name
+ *     ("Transfer : X", "Transfer : X (2)") or by payee id.
  * Only texts that read "Transfer : ..." can mean an account.
  */
 export async function resolveTransferAccountFromText(
   db: Queryable,
   budgetId: string,
   text: string,
-  opts: { exactFirst?: boolean } = {},
+  opts: { fromRule?: boolean } = {},
 ): Promise<string | null> {
   const peerName = TRANSFER_PAYEE_RE.exec(text)?.[1]?.trim();
   if (!peerName) return null;
-  const byExactPayee = async () => {
-    const exact = await store.findPayeeRowByName(db, budgetId, text);
-    if (!exact?.transfer_account_id || exact.deleted) return null;
-    const account = await store.getAccountRow(db, exact.transfer_account_id);
-    return account && account.budget_id === budgetId && !account.deleted ? account.id : null;
-  };
-  const byAccountName = async () => {
-    const ids = await store.liveAccountIdsByName(db, budgetId, peerName);
-    return ids.length > 0 ? ids[ids.length - 1]! : null;
-  };
-  const order = opts.exactFirst ? [byExactPayee, byAccountName] : [byAccountName, byExactPayee];
-  for (const attempt of order) {
-    const accountId = await attempt();
-    if (accountId) return accountId;
+  const exact = await store.findPayeeRowByName(db, budgetId, text);
+  if (exact && !exact.deleted) {
+    if (exact.transfer_account_id) {
+      const account = await store.getAccountRow(db, exact.transfer_account_id);
+      if (account && account.budget_id === budgetId && !account.deleted) return account.id;
+    } else if (opts.fromRule) {
+      return null;
+    }
   }
-  return null;
+  const ids = await store.liveAccountIdsByName(db, budgetId, peerName);
+  return ids.length > 0 ? ids[ids.length - 1]! : null;
 }
 
 /**
@@ -282,7 +293,7 @@ export async function resolveTransferPayeeText(
   db: Queryable,
   budgetId: string,
   text: string,
-  opts: { exactFirst?: boolean } = {},
+  opts: { fromRule?: boolean } = {},
 ): Promise<string | null> {
   const accountId = await resolveTransferAccountFromText(db, budgetId, text, opts);
   return accountId ? ensureTransferPayee(db, budgetId, accountId) : null;

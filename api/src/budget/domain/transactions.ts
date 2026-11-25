@@ -84,7 +84,7 @@ export async function upsertPayeeResolvingTransfers(
 ): Promise<string | null> {
   const trimmed = effectiveName.trim();
   if (!trimmed) return null;
-  const transferPayee = await resolveTransferPayeeText(client, budgetId, trimmed, { exactFirst: opts.fromRule });
+  const transferPayee = await resolveTransferPayeeText(client, budgetId, trimmed, { fromRule: opts.fromRule });
   return transferPayee ?? upsertPayee(client, budgetId, effectiveName, { verbatim: opts.verbatim });
 }
 

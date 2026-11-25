@@ -565,7 +565,7 @@ describe.skipIf(!dbReady)('listing: GET /payees names the account of a transfer 
 });
 
 describe.skipIf(!dbReady)('resolution by id: payee text reaches the canonical payee or is refused', () => {
-  test('with two accounts of one name the released client text goes to the newest, as it did before; the older is reached by payee_id', async () => {
+  test('with two accounts of one name the plain text goes to the account that holds the plain payee name, "(2)" to the second; payee_id reaches either', async () => {
     const b = await newBudget();
     const from = await legacyAccount(b, 'Amb From');
     const older = await createAccount(b, 'Amb Twin');
@@ -574,8 +574,11 @@ describe.skipIf(!dbReady)('resolution by id: payee text reaches the canonical pa
     const newerPayee = await expectOneTransferPayee(newer, 'Transfer : Amb Twin (2)');
 
     const byText = await createTransfer(b, from, 'Transfer : Amb Twin');
-    expect(byText.body!.transfer_account_id).toBe(newer);
-    expect(byText.body!.payee_id).toBe(newerPayee);
+    expect(byText.body!.transfer_account_id).toBe(older);
+    expect(byText.body!.payee_id).toBe(olderPayee);
+    const bySecond = await createTransfer(b, from, 'Transfer : Amb Twin (2)');
+    expect(bySecond.body!.transfer_account_id).toBe(newer);
+    expect(bySecond.body!.payee_id).toBe(newerPayee);
 
     const byId = await send('POST', '/transactions', { budget_id: b, txn: { ...txnBody(from, 'ignored text'), payee_id: olderPayee } });
     expect(byId.status, await byId.clone().text()).toBe(201);
@@ -786,7 +789,7 @@ describe.skipIf(!dbReady)('ordinary requests never repair: they use bad data as 
 });
 
 describe.skipIf(!dbReady)('the same text resolution on import, bank sync and repeat rules', () => {
-  test('two accounts of one name: statement text goes to the newest, a renaming rule to the payee it belongs to', async () => {
+  test('two accounts of one name: statement text goes by the exact payee name, a renaming rule to the payee it belongs to', async () => {
     const b = await newBudget();
     const target = await createAccount(b, 'Imp Target');
     const older = await createAccount(b, 'Imp Twin');
@@ -810,7 +813,7 @@ describe.skipIf(!dbReady)('the same text resolution on import, bank sync and rep
       'SELECT amount::int AS amount, payee_id FROM transactions WHERE account_id = $1 ORDER BY date',
       [target],
     )).rows.map((r) => r.payee_id);
-    expect(payees).toEqual([newerPayee, olderPayee, newerPayee]);
+    expect(payees).toEqual([olderPayee, olderPayee, newerPayee]);
     // No ordinary payee called "Transfer : Imp Twin" was created next to the system ones.
     expect((await pool!.query("SELECT count(*)::int AS n FROM payees WHERE budget_id = $1 AND name LIKE 'Transfer : Imp Twin%'", [b])).rows[0].n).toBe(2);
   });
@@ -893,7 +896,7 @@ describe.skipIf(!dbReady)('repair: every reference moves, only within its own bu
     expect(await ref('SELECT prev_payee_id AS p FROM transfer_links WHERE transaction_id = $1', txn)).toBe(keep);
   });
 
-  test('a row of ANOTHER budget that carries the duplicate payee id is not touched', async () => {
+  test('a duplicate that rows of ANOTHER budget reference is not deleted: it stays unlinked, nothing in the other budget changes, the report lists it', async () => {
     const b = await newBudget();
     const other = await newBudget();
     const peer = await createAccount(b, 'Iso Peer');
@@ -909,13 +912,33 @@ describe.skipIf(!dbReady)('repair: every reference moves, only within its own bu
        VALUES ($1, $2, $3, -5, 'monthly', '2030-01-01') RETURNING id`,
       [other, otherAccount, extra],
     )).rows[0]!.id;
+    await pool!.query(`INSERT INTO transfer_links (transaction_id, budget_id, peer_transaction_id, method, prev_payee_id) VALUES ($1, $2, $1, 'auto', $3)`, [foreign, other, extra]);
+    const otherBefore = {
+      txn: await txnRow(foreign),
+      rule: (await pool!.query('SELECT payee_id FROM txn_repeat_rules WHERE id = $1', [foreignRule])).rows[0].payee_id,
+      link: (await pool!.query('SELECT prev_payee_id FROM transfer_links WHERE transaction_id = $1', [foreign])).rows[0].prev_payee_id,
+    };
 
-    await repair(b, true);
+    const planned = await repair(b, false);
+    expect(planned.kept_payees).toEqual([
+      { payee_id: extra, payee_name: 'Transfer : Iso Acct Old', account_id: a, state: 'will_unlink', reason: 'referenced from another budget' },
+    ]);
+    expect(planned.payees_removed).toBe(0);
+    const applied = await repair(b, true);
+    expect(applied.kept_payees).toEqual(planned.kept_payees);
 
+    // This budget: the row moved, the account has one linked payee, the duplicate is kept but unlinked.
     expect(await payeeIdOf(mine)).toBe(keep);
-    expect(await payeeIdOf(foreign)).toBeNull(); // the payee row is gone: FK set null, never re-pointed across budgets
-    expect((await pool!.query('SELECT payee_id FROM txn_repeat_rules WHERE id = $1', [foreignRule])).rows[0].payee_id).toBeNull();
-    expect((await pool!.query('SELECT 1 FROM payees WHERE id = $1', [keep])).rowCount).toBe(1);
+    await expectOneTransferPayee(a, 'Transfer : Iso Acct');
+    const keptRow = (await pool!.query('SELECT deleted, hidden, transfer_account_id FROM payees WHERE id = $1', [extra])).rows[0];
+    expect(keptRow).toEqual({ deleted: false, hidden: false, transfer_account_id: null });
+    // The other budget: nothing changed, nothing dangling.
+    expect(await txnRow(foreign)).toEqual(otherBefore.txn);
+    expect((await pool!.query('SELECT payee_id FROM txn_repeat_rules WHERE id = $1', [foreignRule])).rows[0].payee_id).toBe(otherBefore.rule);
+    expect((await pool!.query('SELECT prev_payee_id FROM transfer_links WHERE transaction_id = $1', [foreign])).rows[0].prev_payee_id).toBe(otherBefore.link);
+    expect(await payeeExists(extra)).toBe(true);
+    // Idempotent: nothing left to do (the kept payee stays listed for the owner).
+    expect((await repair(b, true)).actions).toEqual([]);
   });
 
   test('the report names every rule it drops, renaming and "treat as transfer"', async () => {
@@ -960,5 +983,132 @@ describe.skipIf(!dbReady)('repair: every reference moves, only within its own bu
     expect(result.payee_id).toBe(payee!);
     expect(result.name).toBe('Transfer : Race New (2)');
     await expectOneTransferPayee(a, 'Transfer : Race New (2)');
+  });
+});
+
+describe.skipIf(!dbReady)('former names: a stale text on an edit of a transfer never moves it, even when a new account holds the old name', () => {
+  test('S2: peer renamed on another device, a NEW account takes the old name, the stale memo edit keeps the mirror where it was', async () => {
+    const b = await newBudget();
+    const src = await createAccount(b, 'S2 Src');
+    const dst = await createAccount(b, 'S2 Old');
+    const made = await createTransfer(b, src, 'Transfer : S2 Old');
+    await send('PATCH', `/accounts/${dst}`, { budget_id: b, name: 'S2 New' });
+    const newcomer = await createAccount(b, 'S2 Old');
+    const before = { src: await balanceOf(src), dst: await balanceOf(dst), newcomer: await balanceOf(newcomer) };
+
+    const res = await send('PATCH', `/transactions/${made.body!.id}`, { budget_id: b, patch: { payee: 'Transfer : S2 Old', memo: 'edited' } });
+    expect(res.status, await res.clone().text()).toBe(204);
+
+    const after = await txnRow(made.body!.id);
+    expect(after.memo).toBe('edited');
+    expect(after.transfer_account_id).toBe(dst);
+    expect(after.payee_id).toBe(made.body!.payee_id);
+    expect(await liveRowsIn(newcomer)).toBe(0);
+    expect(await balanceOf(src)).toEqual(before.src);
+    expect(await balanceOf(dst)).toEqual(before.dst);
+    expect(await balanceOf(newcomer)).toEqual(before.newcomer);
+  });
+
+  test('on CREATE the same text still means the account that holds the name now', async () => {
+    const b = await newBudget();
+    const src = await createAccount(b, 'S2c Src');
+    const dst = await createAccount(b, 'S2c Old');
+    await send('PATCH', `/accounts/${dst}`, { budget_id: b, name: 'S2c New' });
+    const newcomer = await createAccount(b, 'S2c Old');
+    const t = await createTransfer(b, src, 'Transfer : S2c Old');
+    expect(t.body!.transfer_account_id).toBe(newcomer);
+  });
+
+  test('every former name is remembered, and recording is written by the rename in the same transaction', async () => {
+    const b = await newBudget();
+    const a = await createAccount(b, 'FN One');
+    const payee = (await accountPointer(a))!;
+    await send('PATCH', `/accounts/${a}`, { budget_id: b, name: 'FN Two' });
+    await send('PATCH', `/accounts/${a}`, { budget_id: b, name: 'FN Three' });
+    const names = (await pool!.query<{ name: string }>('SELECT name FROM transfer_payee_former_names WHERE payee_id = $1 ORDER BY name', [payee])).rows.map((r) => r.name);
+    expect(names).toEqual(['Transfer : FN One', 'Transfer : FN Two']);
+  });
+});
+
+describe.skipIf(!dbReady)('one resolution order on create and edit: exact linked payee name first, then the account name', () => {
+  test('D1: duplicating a transfer to the OLDER of two same-named accounts lands on the older one', async () => {
+    const b = await newBudget();
+    const src = await createAccount(b, 'D1 Src');
+    const older = await createAccount(b, 'D1 X');
+    const newer = await createAccount(b, 'D1 X');
+    void newer;
+    const olderPayee = (await accountPointer(older))!;
+    const original = await send('POST', '/transactions', { budget_id: b, txn: { ...txnBody(src, ''), payee_id: olderPayee } });
+    const orig = (await original.json()) as { id: string };
+    const storedName = (await pool!.query('SELECT p.name FROM transactions t JOIN payees p ON p.id = t.payee_id WHERE t.id = $1', [orig.id])).rows[0].name;
+    // Duplicate / Make Repeat re-send the stored payee text as a new row.
+    const dup = await createTransfer(b, src, storedName);
+    expect(dup.body!.transfer_account_id).toBe(older);
+    expect(dup.body!.payee_id).toBe(olderPayee);
+  });
+
+  test('D2: "Transfer : A (2)" is the second account named A, not a literal account called "A (2)"', async () => {
+    const b = await newBudget();
+    const src = await createAccount(b, 'D2 Src');
+    await createAccount(b, 'D2 A');
+    const second = await createAccount(b, 'D2 A');
+    await createAccount(b, 'D2 A (2)');
+    const t = await createTransfer(b, src, 'Transfer : D2 A (2)');
+    expect(t.body!.transfer_account_id).toBe(second);
+  });
+
+  test('R1: a renaming rule whose target is an ORDINARY payee named "Transfer : X" keeps producing it, even after an account is renamed into that name', async () => {
+    const b = await newBudget();
+    const src = await createAccount(b, 'R1 Src');
+    const x = await createAccount(b, 'R1 Old');
+    const ordinary = await rawPayee(b, 'Transfer : R1 X', null, { rule: ['is', 'PIXR1'] });
+    await send('PATCH', `/accounts/${x}`, { budget_id: b, name: 'R1 X' });
+    const before = await balanceOf(x);
+
+    const t = await createTransfer(b, src, 'PIXR1');
+    expect(t.res.status, t.text).toBe(201);
+    expect(t.body!.payee_id).toBe(ordinary);
+    expect(t.body!.transfer_account_id ?? null).toBeNull();
+    expect(await liveRowsIn(x)).toBe(0);
+    expect(await balanceOf(x)).toEqual(before);
+
+    // Import and the sync resolver agree.
+    const bulk = await send('POST', '/transactions/bulk', {
+      budget_id: b,
+      account_id: src,
+      txns: [{ date: '2026-03-01', payee: 'PIXR1', category_id: null, memo: null, outflow: 500, inflow: 0 }],
+    });
+    expect(bulk.status).toBe(201);
+    const { createImportPayeeResolver } = await import('../ledger');
+    const { withTransaction } = await import('../../core/db');
+    await withTransaction(pool!, async (client) => {
+      expect((await createImportPayeeResolver(client, b).resolve('PIXR1')).id).toBe(ordinary);
+    });
+    expect(await liveRowsIn(x)).toBe(0);
+  });
+});
+
+describe.skipIf(!dbReady)('payee_id on create: validation', () => {
+  test('the account\'s own payee is 400, a closed account\'s payee is 409, a retired payee is 400', async () => {
+    const b = await newBudget();
+    const src = await createAccount(b, 'Val Src');
+    const closed = await createAccount(b, 'Val Closed');
+    const own = (await accountPointer(src))!;
+    const closedPayee = (await accountPointer(closed))!;
+    expect((await send('PATCH', `/accounts/${closed}`, { budget_id: b, closed: true })).status).toBe(200);
+    const retired = await rawPayee(b, 'Retired Shop');
+    await pool!.query('UPDATE payees SET deleted = true WHERE id = $1', [retired]);
+
+    const make = (payee_id: string) => send('POST', '/transactions', { budget_id: b, txn: { ...txnBody(src, ''), payee_id } });
+    const toSelf = await make(own);
+    expect(toSelf.status).toBe(400);
+    expect(((await toSelf.json()) as { code: string }).code).toBe('cannot_transfer_to_same_account');
+    const toClosed = await make(closedPayee);
+    expect(toClosed.status).toBe(409);
+    expect(((await toClosed.json()) as { code: string }).code).toBe('account_closed');
+    const toRetired = await make(retired);
+    expect(toRetired.status).toBe(400);
+    expect(((await toRetired.json()) as { code: string }).code).toBe('payee_not_in_budget');
+    expect((await pool!.query('SELECT count(*)::int AS n FROM transactions WHERE account_id = $1 AND deleted = false', [src])).rows[0].n).toBe(0);
   });
 });

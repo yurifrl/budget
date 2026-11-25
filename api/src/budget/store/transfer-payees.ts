@@ -154,6 +154,7 @@ const PAYEE_REFERENCES = [
   ['scheduled_subtransactions', 'payee_id'],
   ['txn_repeat_rules', 'payee_id'],
   ['transfer_links', 'prev_payee_id'],
+  ['payee_locations', 'payee_id'],
 ] as const;
 
 /**
@@ -204,4 +205,44 @@ export async function copyTransferRule(db: Queryable, fromId: string, toId: stri
 /** Repair only: hard-delete a payee nothing references any more (its name becomes free). */
 export async function deletePayeeRow(db: Queryable, budgetId: string, payeeId: string): Promise<void> {
   await db.query('DELETE FROM payees WHERE id = $1 AND budget_id = $2', [payeeId, budgetId]);
+}
+
+/** Remember a name the payee had before a rename (idempotent). */
+export async function recordFormerName(db: Queryable, budgetId: string, payeeId: string, name: string): Promise<void> {
+  await db.query(
+    'INSERT INTO transfer_payee_former_names (payee_id, budget_id, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+    [payeeId, budgetId, name],
+  );
+}
+
+/** True when `name` is a former name of the payee. */
+export async function isFormerName(db: Queryable, budgetId: string, payeeId: string, name: string): Promise<boolean> {
+  const res = await db.query(
+    'SELECT 1 FROM transfer_payee_former_names WHERE payee_id = $1 AND budget_id = $2 AND name = $3',
+    [payeeId, budgetId, name],
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
+/** Make the payee an ordinary one again (repair only: it is kept because another budget still points at it). */
+export async function unlinkPayee(db: Queryable, budgetId: string, payeeId: string): Promise<void> {
+  await db.query('UPDATE payees SET transfer_account_id = NULL WHERE id = $1 AND budget_id = $2', [payeeId, budgetId]);
+}
+
+/**
+ * Of `payeeIds`, those that rows of ANOTHER budget still reference (a hard
+ * delete would null their foreign keys; see docs/runbooks/transfer-payee-cross-budget.md).
+ */
+export async function payeesReferencedFromOtherBudgets(
+  db: Queryable,
+  budgetId: string,
+  payeeIds: readonly string[],
+): Promise<Set<string>> {
+  const found = new Set<string>();
+  if (payeeIds.length === 0) return found;
+  const sources = [...PAYEE_REFERENCES.map(([t, c]) => `SELECT ${c} AS payee_id FROM ${t} WHERE budget_id <> $2 AND ${c} = ANY($1::uuid[])`),
+    'SELECT transfer_payee_id AS payee_id FROM accounts WHERE budget_id <> $2 AND transfer_payee_id = ANY($1::uuid[])'];
+  const res = await db.query<{ payee_id: string }>(sources.join(' UNION '), [payeeIds, budgetId]);
+  for (const r of res.rows) found.add(r.payee_id);
+  return found;
 }

@@ -9,10 +9,13 @@
  *  2. The text equals the name of the row's current "Transfer : ..." payee:
  *     unchanged, whatever resolution would say now (a legacy name-only payee,
  *     the payee of a renamed account, a numbered name).
- *  3. The row is already a transfer and the text reads "Transfer : ..." but names
+ *  3. The row is already a transfer and the text equals a FORMER name of its
+ *     current transfer payee (the account was renamed on another device; a new
+ *     account may even hold that name now): unchanged.
+ *  4. The row is already a transfer and the text reads "Transfer : ..." but names
  *     no account, or names the row's current peer: unchanged. Only a text that
  *     names a DIFFERENT live account (or an ordinary payee) changes it.
- *  4. Anything else resolves as on create (`resolvePayeeId`).
+ *  5. Anything else resolves as on create (`resolvePayeeId`).
  * Unchanged means the row keeps its payee id and its mirror is neither created,
  * moved nor deleted.
  */
@@ -53,11 +56,12 @@ export async function resolveEditedPayee(
   if (current && TRANSFER_PAYEE_RE.test(current.name) && text.trim() === current.name.trim()) return { unchanged: true };
 
   const isTransferRow = row.transfer_transaction_id !== null || row.transfer_account_id !== null;
+  if (isTransferRow && row.payee_id && (await store.isFormerName(client, budgetId, row.payee_id, text.trim()))) return { unchanged: true };
   if (isTransferRow) {
     const rules = await loadRenameRules(client, budgetId);
     const effective = applyRules(rules.rows, text).trim();
     if (TRANSFER_PAYEE_RE.test(effective)) {
-      const accountId = await resolveTransferAccountFromText(client, budgetId, effective, { exactFirst: effective !== text.trim() });
+      const accountId = await resolveTransferAccountFromText(client, budgetId, effective, { fromRule: effective !== text.trim() });
       const peer = row.transfer_account_id ?? current?.transfer_account_id ?? null;
       if (accountId === null || accountId === peer) return { unchanged: true };
       return { unchanged: false, payeeId: await ensureTransferPayee(client, budgetId, accountId) };

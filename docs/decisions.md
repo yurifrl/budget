@@ -2142,12 +2142,15 @@ resolution), `edited-payee.ts` (the payee of an edit), `transfer-payee-repair.ts
   (`[transfer-payee] fresh start ...`); it deletes and merges nothing.
 - **Only the repair merges and deletes.** `repairTransferPayees` and
   `scripts/repair-transfer-payees.ts` (report first, `--apply` in one
-  transaction, idempotent, every statement scoped by budget_id). Folding a
-  duplicate moves its transactions, splits, scheduled rows, repeat rules and
-  `transfer_links.prev_payee_id`; its renaming and "treat as transfer" rules move
-  when the kept payee has none, otherwise they are lost and the report lists
-  each one (`dropped_rules`: payee, rule, kept payee). A numbered name is
-  normalised to the plain one once nothing else holds it.
+  transaction, idempotent). Folding a duplicate moves its transactions, splits,
+  scheduled rows, repeat rules, locations and `transfer_links.prev_payee_id`
+  within the budget; its renaming and "treat as transfer" rules move when the
+  kept payee has none, otherwise they are lost and the report lists each one
+  (`dropped_rules`). A duplicate that rows of ANOTHER budget reference is not
+  deleted (the foreign keys would null those rows): it is unlinked and kept, and
+  the report lists it in `kept_payees` ("referenced from another budget", see
+  `docs/runbooks/transfer-payee-cross-budget.md`). A numbered name is normalised
+  to the plain one once nothing else holds it.
 - Uniqueness is kept by code, not by an index: the shared database's other app
   also writes `payees`. Migration 0117 only adds a plain partial index on
   `payees(transfer_account_id)`. It is not built CONCURRENTLY: the migration
@@ -2161,13 +2164,15 @@ resolution), `edited-payee.ts` (the payee of an edit), `transfer-payee-repair.ts
   with `transfer_account_id` and the additive `transfer_account_name`. Default
   off because every current client caller would show them as ordinary payees.
 - **Payee text is still accepted, and one resolver reads it everywhere** (register
-  create/edit, repeat rules, statement import, bank sync):
-  a "Transfer : <name>" text means the live account called <name>; with several
-  of that name, the NEWEST (what the released client got on main, where the last
-  account created took the one shared payee); a text that is exactly an account
-  payee's name (numbered names, a renaming rule's target) means that payee's
-  account; no match is an ordinary payee. Rule-produced text tries the exact
-  payee first. The older of two same-named accounts is reached by `payee_id`.
+  create/edit, repeat rules, statement import, bank sync), in this order:
+  (1) the exact name of a LINKED transfer payee ("Transfer : X", "Transfer : X
+  (2)") means that payee's account; (2) text produced by a renaming rule whose
+  target is a live payee nobody links stays that ordinary payee (no transfer);
+  (3) "Transfer : <name>" means the live account called <name>, the newest when
+  several share it (a text that is no payee's name); (4) no match is an ordinary
+  payee. So with two accounts named X, "Transfer : X" is the one holding that
+  payee name (the older), "Transfer : X (2)" the second; payee_id reaches either.
+  Duplicate and make-repeat, which re-send the stored name, keep the peer.
 - **`payee_id` (additive, optional) on transaction create and update** wins over
   the text (null = no payee); a payee outside the budget is 400
   `payee_not_in_budget`. New clients send it.
@@ -2176,9 +2181,11 @@ resolution), `edited-payee.ts` (the payee of an edit), `transfer-payee-repair.ts
   the row's current "Transfer : ..." payee is unchanged; on a row that is
   already a transfer, a "Transfer : ..." text naming no account, or the row's
   current peer, is unchanged; only text naming a different live account, or an
-  ordinary payee, changes it. Previous account names are not recorded: the row's
-  own pointers decide. Known limit: if a new account takes the old name of the
-  peer, the old text names that new account and moves the transfer; `payee_id`
-  avoids it. A duplicate or make-repeat sent with a stale text creates an
+  ordinary payee, changes it. Text equal to a FORMER name of the row's current
+  transfer payee is unchanged too, even when a new account holds that name now:
+  `renameTransferPayee` records the old name in `transfer_payee_former_names`
+  (migration 0118, same transaction), because the released client re-sends the
+  cached text and the server cannot tell it from a deliberate pick otherwise. On
+  create the same text means the account that holds the name now. A duplicate or make-repeat sent with a stale text creates an
   ordinary row (no mirror). A non-transfer row whose stored payee is a legacy
   "Transfer : X" cannot be turned into a transfer by re-picking that same text.

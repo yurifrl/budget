@@ -45,6 +45,15 @@ export interface DroppedRule {
   kept_payee_id: string;
 }
 
+export interface KeptPayee {
+  payee_id: string;
+  payee_name: string;
+  account_id: string;
+  /** `will_unlink`: folded into the account's payee but not deleted; `unlinked`: already unlinked by an earlier run. */
+  state: 'will_unlink' | 'unlinked';
+  reason: 'referenced from another budget';
+}
+
 export interface AccountRepairAction {
   account_id: string;
   account_name: string;
@@ -52,7 +61,7 @@ export interface AccountRepairAction {
   canonical_payee_id: string | null;
   /** The kept payee is a name-only payee that gets linked to the account. */
   adopt: boolean;
-  /** Payees folded into the kept one and deleted. */
+  /** Payees folded into the kept one and deleted (or unlinked and kept, see `kept_payees`). */
   extra_payee_ids: string[];
   rename: boolean;
   fix_pointer: boolean;
@@ -82,6 +91,12 @@ export interface TransferPayeeRepairReport {
   rename_rules_dropped: number;
   /** Every rule that cannot move to the kept payee and is lost (a payee holds one of each). */
   dropped_rules: DroppedRule[];
+  /**
+   * Payees the repair does not delete because rows of ANOTHER budget reference
+   * them (a delete would null those rows' payee): kept unlinked. See
+   * docs/runbooks/transfer-payee-cross-budget.md.
+   */
+  kept_payees: KeptPayee[];
   actions: AccountRepairAction[];
 }
 
@@ -91,6 +106,8 @@ export interface RepairInput {
   payees: readonly PayeeFullRow[];
   /** Transactions per payee id. */
   transactionCounts: ReadonlyMap<string, number>;
+  /** Payee ids that rows of another budget reference. */
+  foreignReferenced?: ReadonlySet<string>;
 }
 
 const peerNameOf = (name: string): string | undefined => TRANSFER_PAYEE_RE.exec(name)?.[1]?.trim();
@@ -138,6 +155,7 @@ export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepair
     rename_rules_moved: 0,
     rename_rules_dropped: 0,
     dropped_rules: [],
+    kept_payees: [],
     actions: [],
   };
 
@@ -150,7 +168,14 @@ export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepair
       canonical = nameOnly[0];
       adopt = true;
     }
-    const extras = [...linked, ...nameOnly].filter((p) => p.id !== canonical?.id);
+    const foreign = input.foreignReferenced ?? new Set<string>();
+    // An unlinked payee another budget references is never folded or deleted: it only stays listed.
+    for (const p of nameOnly) {
+      if (p.id !== canonical?.id && foreign.has(p.id)) {
+        report.kept_payees.push({ payee_id: p.id, payee_name: p.name, account_id: account.id, state: 'unlinked', reason: 'referenced from another budget' });
+      }
+    }
+    const extras = [...linked, ...nameOnly].filter((p) => p.id !== canonical?.id && !(foreign.has(p.id) && p.transfer_account_id === null));
     const create = canonical === undefined;
     const extraIds = new Set(extras.map((e) => e.id));
     // A numbered name ("Transfer : X (2)") is right while another payee that stays holds "Transfer : X".
@@ -169,7 +194,12 @@ export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepair
     report.name_only_payees += nameOnly.length;
     if (rename) report.payees_renamed++;
     if (fixPointer) report.pointers_fixed++;
-    report.payees_removed += extras.length;
+    for (const e of extras) {
+      if (foreign.has(e.id)) {
+        report.kept_payees.push({ payee_id: e.id, payee_name: e.name, account_id: account.id, state: 'will_unlink', reason: 'referenced from another budget' });
+      }
+    }
+    report.payees_removed += extras.filter((e) => !foreign.has(e.id)).length;
     let heldRule = canonical ? { type: canonical.rename_match_type, condition: canonical.rename_condition } : null;
     let heldTransferRule = canonical?.transfer_rule ?? null;
     const keptId = canonical?.id ?? '';
@@ -222,7 +252,13 @@ export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepair
 async function loadInput(db: Queryable, budgetId: string): Promise<RepairInput> {
   const [accounts, payees] = await Promise.all([store.listLiveAccounts(db, budgetId), store.listBudgetPayees(db, budgetId)]);
   const candidates = payees.filter((p) => p.transfer_account_id !== null || TRANSFER_PAYEE_RE.test(p.name)).map((p) => p.id);
-  return { budgetId, accounts, payees, transactionCounts: await store.countTransactionsByPayee(db, candidates) };
+  return {
+    budgetId,
+    accounts,
+    payees,
+    transactionCounts: await store.countTransactionsByPayee(db, candidates),
+    foreignReferenced: await store.payeesReferencedFromOtherBudgets(db, budgetId, candidates),
+  };
 }
 
 /**
