@@ -16,6 +16,7 @@ import {
   payeesTransferRuleGet,
 } from '@shared/contracts/budget';
 import { linkTransfers } from '../domain/transfer-links';
+import { assertNotTransferPayee, transferPayeeProtected } from '../domain/transfer-payees';
 import * as transferStore from '../store/transfers';
 import { loadRenameRules } from '../domain/transactions';
 import { budgetRouter } from '../router';
@@ -65,7 +66,11 @@ async function requirePayee(budgetId: string, id: string): Promise<void> {
 }
 
 export const operations = [
-  implement(payeesList, async (_c, { budget_id, hidden }) => payeesStore.listPayees(pool, budget_id, hidden)),
+  // Transfer payees (one per account) are listed only on request: the pickers
+  // and Manage Payees show them through the accounts, not as ordinary payees.
+  implement(payeesList, async (_c, { budget_id, hidden, include_transfers }) =>
+    payeesStore.listPayees(pool, budget_id, hidden, include_transfers === 'true'),
+  ),
 
   implement(payeesCreate, async (_c, { budget_id, name, default_category_id, hidden, categorization_mode }) => {
     if (default_category_id) {
@@ -92,6 +97,7 @@ export const operations = [
 
   implement(payeesRename, async (_c, { id, budget_id, name }) => {
     await requirePayee(budget_id, id);
+    await assertNotTransferPayee(pool, budget_id, id);
     // Case-insensitive pre-check for a friendly message (the DB constraint is
     // case-sensitive, so it can't catch "ifood" vs "iFood"). The payee itself is
     // excluded so a case-only rename of the same payee ("ifood" -> "iFood") works.
@@ -116,6 +122,7 @@ export const operations = [
   }),
 
   implement(payeesSetHidden, async (_c, { id, budget_id, hidden }) => {
+    if (hidden) await assertNotTransferPayee(pool, budget_id, id);
     if (!(await payeesStore.setPayeeHidden(pool, id, budget_id, hidden))) throw new HttpError(404, 'payee not found');
   }),
 
@@ -133,6 +140,7 @@ export const operations = [
   // Soft-delete only: transactions keep their payee_id, so a hard delete would
   // orphan them — the UI offers merge instead.
   implement(payeesDelete, async (_c, { id, budget_id }) => {
+    await assertNotTransferPayee(pool, budget_id, id);
     if (!(await payeesStore.softDeletePayee(pool, id, budget_id))) throw new HttpError(404, 'payee not found');
   }),
 
@@ -148,6 +156,11 @@ export const operations = [
       const rows = await payeesStore.lockLivePayees(client, [id, target_id], budget_id);
       if (!rows.some((r) => r.id === id)) throw new HttpError(404, 'payee not found');
       if (!rows.some((r) => r.id === target_id)) throw new HttpError(404, 'target payee not found');
+      // A transfer payee belongs to its account: neither the source nor the target of a merge.
+      for (const merging of [id, target_id]) {
+        const row = rows.find((r) => r.id === merging);
+        if (row?.transfer_account_id) throw transferPayeeProtected(row.name);
+      }
 
       const merged = await payeesStore.movePayeeTransactions(client, id, target_id);
       await payeesStore.markPayeeDeleted(client, id);

@@ -24,9 +24,17 @@ export async function repointLiveTransactionsPayee(db: Queryable, fromPayeeId: s
   await db.query('UPDATE transactions SET payee_id = $2 WHERE payee_id = $1 AND deleted = false', [fromPayeeId, toPayeeId]);
 }
 
-/** Retire a transfer payee (drop its account link, soft-delete). */
+/**
+ * Retire a transfer payee (drop its account link, soft-delete). Its name gets
+ * a "(deleted <id>)" tail so a new account with the same name can have its own
+ * "Transfer : <name>" payee (names are unique per budget, deleted rows included).
+ */
 export async function retireTransferPayee(db: Queryable, payeeId: string | null): Promise<void> {
-  await db.query('UPDATE payees SET transfer_account_id = NULL, deleted = true WHERE id = $1 AND deleted = false', [payeeId]);
+  await db.query(
+    `UPDATE payees SET transfer_account_id = NULL, deleted = true, name = name || ' (deleted ' || left(id::text, 8) || ')'
+      WHERE id = $1 AND deleted = false`,
+    [payeeId],
+  );
 }
 
 // Transaction counts + last-used date per payee, one scan over live txns.
@@ -64,21 +72,29 @@ const inferredStats = `
   left join categories ic on ic.id = inf.inferred_category_id
 `;
 
-/** Live, non-transfer payees with usage stats and the inferred category; `hidden` filters. */
-export async function listPayees(db: Queryable, budgetId: string, hidden: string | undefined) {
+/**
+ * Live payees with usage stats and the inferred category; `hidden` filters.
+ * Account transfer payees ("Transfer : <account>") are listed only when
+ * `includeTransfers` is set, each carrying its account's current name.
+ */
+export async function listPayees(db: Queryable, budgetId: string, hidden: string | undefined, includeTransfers = false) {
   // `hidden` filter: absent = all live payees (with flag), 'false' = pickers
-  // (visible only), 'true' = hidden only. Transfer payees never list.
+  // (visible only), 'true' = hidden only.
   const hiddenClause = hidden === 'true' ? 'AND p.hidden = true' : hidden === 'false' ? 'AND p.hidden = false' : '';
+  const transferClause = includeTransfers ? '' : 'AND p.transfer_account_id IS NULL';
   const result = await db.query(
     `SELECT p.id, p.name, p.transfer_account_id, p.deleted, p.hidden,
               p.categorization_mode, p.default_category_id,
               p.rename_match_type, p.rename_condition,
               CASE WHEN p.transfer_rule IN ('auto','account','never') THEN p.transfer_rule END AS transfer_rule,
               p.transfer_rule_account_id,
+              ta.name AS transfer_account_name,
               coalesce(s.txn_count, 0) as transaction_count, s.last_used_date,
               inf.inferred_category_id, ic.name as inferred_category_name
-       FROM payees p ${listStats} ${inferredStats}
-       WHERE p.budget_id = $1 AND p.deleted = false AND p.transfer_account_id IS NULL ${hiddenClause}
+       FROM payees p
+       LEFT JOIN accounts ta ON ta.id = p.transfer_account_id AND ta.budget_id = p.budget_id AND ta.deleted = false
+       ${listStats} ${inferredStats}
+       WHERE p.budget_id = $1 AND p.deleted = false ${transferClause} ${hiddenClause}
        ORDER BY p.name`,
     [budgetId],
   );
@@ -210,8 +226,8 @@ export async function softDeletePayee(db: Queryable, id: string, budgetId: strin
 
 /** Lock the live payees among `ids` in the budget (merge). */
 export async function lockLivePayees(db: Queryable, ids: string[], budgetId: string) {
-  const rows = await db.query<{ id: string; name: string }>(
-    `SELECT id, name FROM payees
+  const rows = await db.query<{ id: string; name: string; transfer_account_id: string | null }>(
+    `SELECT id, name, transfer_account_id FROM payees
          WHERE id = ANY($1::uuid[]) AND budget_id = $2 AND deleted = false
          FOR UPDATE`,
     [ids, budgetId],

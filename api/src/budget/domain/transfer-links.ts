@@ -21,14 +21,17 @@ import type { Queryable } from '../../core/db';
 import { HttpError } from '../../core/validate';
 import { blockImportShadows, listImportHints, setImportShadowsBlocked, type ImportHint } from '../../connections';
 import * as store from '../store/transfers';
+import { bankKey } from './bank-key';
 import { applyBalanceDeltas, type BalanceDelta } from './transactions';
 import { deleteMirror, ensureTransferPayee, insertMirror } from './transfers';
 import {
   daysApart,
   evidenceLabel,
+  pairViolation,
   planTransfers,
   readView,
   type MatchRow,
+  type PairViolation,
   type PendingTransfer,
   type RowSuggestion,
   type Suggestion,
@@ -53,6 +56,7 @@ function toMatchRow(r: store.TransferCandidateSql, hint: ImportHint | undefined)
     budgetId: r.budget_id,
     accountId: r.account_id,
     accountKind: r.kind,
+    checking: r.checking,
     onBudget: r.on_budget,
     amount: Number(r.amount),
     date: r.date,
@@ -66,8 +70,12 @@ function toMatchRow(r: store.TransferCandidateSql, hint: ImportHint | undefined)
     payeeId: r.payee_id,
     hint: hint ? { category: hint.category, operationType: hint.operationType } : null,
     mark: r.mark,
+    bank: bankKey(r.institution),
+    connectionId: r.connection_id,
   };
 }
+
+const sideOf = (r: store.TransferCandidateSql) => ({ accountKind: r.kind, checking: r.checking, bank: bankKey(r.institution), connectionId: r.connection_id });
 
 async function loadRules(db: Queryable, budgetId: string): Promise<Map<string, TransferRule>> {
   const rules = await store.listTransferRules(db, budgetId);
@@ -181,20 +189,34 @@ export async function listTransferSuggestions(db: Queryable, budgetId: string, a
       confidence: s.confidence,
       basis: s.basis,
       leg: leg(s.id),
-      candidates: s.candidateIds.map((c) => ({ ...leg(c), days_apart: daysApart(byId.get(c)!.date, byId.get(s.id)!.date) })),
+      candidates: s.candidateIds.map((c) => ({
+        ...leg(c),
+        days_apart: daysApart(byId.get(c)!.date, byId.get(s.id)!.date),
+        ...(s.violations?.[c] ? { rule: s.violations[c] } : {}),
+      })),
     }))
     .sort((a, b) => b.leg.date.localeCompare(a.leg.date) || a.id.localeCompare(b.id));
 }
 
 const isLinked = (r: store.TransferCandidateSql) => r.transfer_account_id != null || r.transfer_transaction_id != null;
 
-/** Person-made links (POST /transfers/link). Validates every link before writing (404 / 400 / 409). */
+export interface TransferLinkWarning {
+  transaction_id: string;
+  counterpart_id: string;
+  rule: PairViolation;
+}
+
+/**
+ * Person-made links (POST /transfers/link). Validates every link before
+ * writing (404 / 400 / 409). A counterpart pair that breaks the account rules
+ * (transfer-matcher `pairViolation`) is still linked, with a warning.
+ */
 export async function linkByUser(
   client: PoolClient,
   budgetId: string,
   links: readonly { transaction_id: string; counterpart_id?: string; account_id?: string }[],
   rememberPayee: boolean,
-): Promise<{ linked: string[]; rules_created: number }> {
+): Promise<{ linked: string[]; rules_created: number; warnings: TransferLinkWarning[] }> {
   for (const l of links) {
     if (Boolean(l.counterpart_id) === Boolean(l.account_id)) {
       throw new HttpError(400, 'give exactly one of counterpart_id or account_id', 'transfer_link_target');
@@ -208,6 +230,7 @@ export async function linkByUser(
   const linked: string[] = [];
   const deltas: BalanceDelta[] = [];
   const rulePayees = new Set<string>();
+  const warnings: TransferLinkWarning[] = [];
 
   const claim = (r: store.TransferCandidateSql) => {
     if (isLinked(r) || used.has(r.id)) throw new HttpError(409, 'transaction is already a transfer', 'transfer_already_linked');
@@ -274,6 +297,8 @@ export async function linkByUser(
       throw new HttpError(400, 'the two rows must have equal and opposite amounts', 'transfer_amount_mismatch');
     }
     const [out, inn] = Number(row.amount) < 0 ? [row, other] : [other, row];
+    const violation = pairViolation(sideOf(out), sideOf(inn));
+    if (violation) warnings.push({ transaction_id: row.id, counterpart_id: other.id, rule: violation });
     const extraHints = await listImportHints(client, [other.id]);
     await linkLegs(client, budgetId, out, inn, 'user', (id) => (hints.get(id) ?? extraHints.get(id))?.blocked ?? null);
     linked.push(row.id, other.id);
@@ -295,7 +320,7 @@ export async function linkByUser(
       rulesCreated += 1;
     }
   }
-  return { linked, rules_created: rulesCreated };
+  return { linked, rules_created: rulesCreated, warnings };
 }
 
 async function legForMirror(client: PoolClient, id: string) {

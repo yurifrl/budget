@@ -3,7 +3,7 @@ import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { accountsCreate, accountsDelete, accountsList, accountsReconcile, accountsUpdate } from '@shared/contracts/budget';
 import type { AccountType } from '@shared/contracts/budget/schemas';
-import { ensureTransferPayee } from '../domain/transfers';
+import { ensureTransferPayee, renameTransferPayee } from '../domain/transfer-payees';
 import { toPersonRef } from '../../user';
 import { findUserConnection } from '../../connections';
 import { isBudgetMember } from '../ownership';
@@ -145,6 +145,14 @@ const updateAccount = implement(
 
       if (name !== undefined || note !== undefined) {
         await accountsStore.setAccountNameNote(client, accountId, name ?? null, note ?? null);
+        // The account's transfer payee follows its name, in this transaction.
+        if (name !== undefined && name !== acc.name) {
+          const renamed = await renameTransferPayee(client, budget_id, accountId);
+          // Nothing else was touched; the repair script folds the colliding payee later.
+          if (renamed.collision || renamed.inconsistent) {
+            console.warn(`[transfer-payee] account ${accountId} of budget ${budget_id}: ${JSON.stringify(renamed)}`);
+          }
+        }
       }
 
       if (user_id !== undefined) {

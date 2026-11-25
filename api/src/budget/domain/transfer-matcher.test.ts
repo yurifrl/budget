@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { evidenceOf, planTransfers, readView, type MatchRow, type TransferRule } from './transfer-matcher';
+import { evidenceOf, pairViolation, planTransfers, readView, sameBank, type MatchRow, type TransferRule } from './transfer-matcher';
 
 let n = 0;
 const TODAY = '2026-11-23';
@@ -22,6 +22,9 @@ const row = (over: Partial<MatchRow>): MatchRow => ({
   payeeId: null,
   hint: null,
   mark: null,
+  bank: null,
+  connectionId: null,
+  checking: true,
   ...over,
 });
 const out = (over: Partial<MatchRow> = {}) => row(over);
@@ -60,15 +63,22 @@ describe('planTransfers: account kinds', () => {
     expect(pairsOf([a, b])).toEqual([[a.id, b.id]]);
     expect(pairsOf([out(), card({ date: '2026-11-07' })])).toEqual([]);
   });
-  test('card to card: auto-linked', () => {
-    const a = row({ accountId: 'card1', accountKind: 'card' });
-    const b = card();
-    expect(pairsOf([a, b])).toEqual([[a.id, b.id]]);
+  test('card to card is never linked: a card only receives; it is offered as a refused suggestion (budget-zkts)', () => {
+    const a = row({ accountId: 'card1', accountKind: 'card', hint: SAME_PERSON });
+    const b = card({ hint: SAME_PERSON });
+    const p = plan([a, b]);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions).toEqual([
+      { id: a.id, confidence: 'sure', basis: 'refused', candidateIds: [b.id], violations: { [b.id]: 'card_outflow' } },
+    ]);
   });
-  test('card outflow into a cash account is never paired (refund / cash advance)', () => {
-    const p = plan([row({ accountId: 'card1', accountKind: 'card' }), inn()]);
+  test('card outflow against a cash inflow is no pair at all, as before (refund / cash advance): no link, no suggestion', () => {
+    const a = row({ accountId: 'card1', accountKind: 'card', date: '2026-11-03' });
+    const b = inn({ date: '2026-11-06' });
+    const p = plan([a, b]);
     expect(p.links).toEqual([]);
     expect(p.suggestions).toEqual([]);
+    expect(p.rows.size).toBe(0);
   });
   test('other account kinds, off-budget accounts and other budgets never pair', () => {
     expect(plan([out({ accountKind: 'other' }), inn()]).links).toEqual([]);
@@ -277,5 +287,343 @@ describe('readView', () => {
     const p = plan(rows);
     expect(performance.now() - started).toBeLessThan(2000);
     expect(p.links.length).toBe(2000);
+  });
+});
+
+describe('planTransfers: account rules (budget-zkts)', () => {
+  // Accounts: Itaú conta / Itaú cartão / Nubank conta / Nubank cartão, banks known.
+  const itauConta = { accountId: 'itau', accountKind: 'cash' as const, bank: 'itau' };
+  const itauCard = { accountId: 'itaucard', accountKind: 'card' as const, bank: 'itau' };
+  const nuConta = { accountId: 'nubank', accountKind: 'cash' as const, bank: 'nubank' };
+  const nuCard = { accountId: 'nucard', accountKind: 'card' as const, bank: 'nubank' };
+  const o = (acc: Partial<MatchRow>, over: Partial<MatchRow> = {}) => row({ ...acc, amount: -100_000, ...over });
+  const i = (acc: Partial<MatchRow>, over: Partial<MatchRow> = {}) => row({ ...acc, amount: 100_000, ...over });
+
+  test('pairViolation / sameBank: each rule, unknown banks pass', () => {
+    const side = (accountKind: 'cash' | 'card', bank: string | null, connectionId: string | null = null, checking = accountKind === 'cash') => ({
+      accountKind,
+      bank,
+      connectionId,
+      checking,
+    });
+    expect(pairViolation(side('card', 'itau'), side('card', 'itau'))).toBe('card_outflow');
+    expect(pairViolation(side('card', null), side('cash', null))).toBe('card_outflow');
+    expect(pairViolation(side('cash', 'itau'), side('card', 'itau'))).toBeNull();
+    expect(pairViolation(side('cash', 'itau'), side('card', 'nubank'))).toBe('card_payment_other_bank');
+    expect(pairViolation(side('cash', 'itau'), side('cash', 'nubank'))).toBeNull();
+    expect(pairViolation(side('cash', 'nubank'), side('cash', 'nubank'))).toBe('cash_same_bank');
+    expect(pairViolation(side('cash', 'itau'), side('card', null))).toBeNull();
+    expect(pairViolation(side('cash', null), side('cash', null))).toBeNull();
+    // No institution label: the same connection means the same bank; different connections are unknown.
+    expect(sameBank({ bank: null, connectionId: 'c1' }, { bank: null, connectionId: 'c1' })).toBe(true);
+    expect(sameBank({ bank: null, connectionId: 'c1' }, { bank: null, connectionId: 'c2' })).toBeNull();
+    expect(sameBank({ bank: 'itau', connectionId: 'c1' }, { bank: 'nubank', connectionId: 'c1' })).toBe(false);
+    expect(pairViolation(side('cash', null, 'c1'), side('card', null, 'c1'))).toBeNull();
+    expect(pairViolation(side('cash', null, 'c1'), side('cash', null, 'c1'))).toBe('cash_same_bank');
+    // Rule 3 judges checking -> checking only: a savings (or cash-in-hand) account on either side passes.
+    expect(pairViolation(side('cash', 'itau', null, true), side('cash', 'itau', null, false))).toBeNull();
+    expect(pairViolation(side('cash', 'itau', null, false), side('cash', 'itau', null, true))).toBeNull();
+    expect(pairViolation(side('cash', 'itau', null, false), side('cash', 'itau', null, false))).toBeNull();
+    // One side labelled, the other not, on one connection: the same bank (documented in docs/decisions.md).
+    expect(sameBank({ bank: 'itau', connectionId: 'c1' }, { bank: null, connectionId: 'c1' })).toBe(true);
+    expect(sameBank({ bank: 'itau', connectionId: 'c1' }, { bank: null, connectionId: 'c2' })).toBeNull();
+  });
+
+  test('rule 1: a card outflow is never linked, whatever the evidence; against a card inflow it is a refused suggestion', () => {
+    const a = o(itauCard, { hint: SAME_PERSON });
+    const b = i(nuCard, { hint: SAME_PERSON });
+    const p = plan([a, b]);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions).toEqual([
+      { id: a.id, confidence: 'sure', basis: 'refused', candidateIds: [b.id], violations: { [b.id]: 'card_outflow' } },
+    ]);
+    // Both rows count as suspected transfers in the register summaries.
+    expect(p.rows.get(a.id)).toEqual({ confidence: 'sure', candidateCount: 1, counterpartId: b.id });
+    expect(p.rows.get(b.id)).toEqual({ confidence: 'sure', candidateCount: 1, counterpartId: a.id });
+  });
+
+  test('a card purchase with a same-amount opposite row in a checking account within 3 days: no suggestion, as on main', () => {
+    for (const other of [itauConta, nuConta]) {
+      for (const gap of [0, 3]) {
+        const purchase = o(itauCard, { date: '2026-11-03', hint: SAME_PERSON });
+        const deposit = i(other, { date: `2026-11-0${3 + gap}`, hint: SAME_PERSON });
+        const p = plan([purchase, deposit]);
+        expect(p.links).toEqual([]);
+        expect(p.suggestions.filter((s) => s.id === purchase.id || s.candidateIds.includes(purchase.id))).toEqual([]);
+        expect(p.suggestions.some((s) => s.basis === 'refused')).toBe(false);
+      }
+    }
+  });
+
+  test('card refund (card inflow from a merchant) is never linked to a card outflow, only offered', () => {
+    for (const [from, to] of [
+      [itauCard, nuCard],
+      [itauCard, { ...nuCard, bank: 'itau' }],
+      [{ accountId: 'card1', accountKind: 'card' as const }, { accountId: 'card2', accountKind: 'card' as const }],
+    ]) {
+      const purchase = o(from, { date: '2026-11-02', hint: SHOP });
+      const refund = i(to, { date: '2026-11-03', hint: SHOP });
+      const p = plan([purchase, refund]);
+      expect(p.links).toEqual([]);
+      expect(p.suggestions.map((s) => [s.id, s.basis, s.candidateIds])).toEqual([[purchase.id, 'refused', [refund.id]]]);
+    }
+  });
+
+  test('rule 2: checking pays a card only of the same bank (another bank is offered, never linked)', () => {
+    const a = o(itauConta);
+    const b = i(itauCard);
+    expect(pairsOf([a, b])).toEqual([[a.id, b.id]]);
+    const c = o(itauConta, { hint: { category: 'Credit card payment', operationType: 'PAGAMENTO_FATURA' } });
+    const d = i(nuCard, { hint: { category: 'Credit card payment', operationType: 'PAGAMENTO_FATURA' } });
+    const p = plan([c, d]);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions).toEqual([
+      { id: c.id, confidence: 'sure', basis: 'refused', candidateIds: [d.id], violations: { [d.id]: 'card_payment_other_bank' } },
+    ]);
+  });
+
+  test('rule 3: checking to checking only across banks (the same bank is offered, never linked)', () => {
+    const a = o(itauConta);
+    const b = i(nuConta);
+    expect(pairsOf([a, b])).toEqual([[a.id, b.id]]);
+    const c = o(nuConta);
+    const d = i({ accountId: 'nucheck2', accountKind: 'cash', bank: 'nubank' });
+    const p = plan([c, d]);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions).toEqual([
+      { id: c.id, confidence: 'sure', basis: 'refused', candidateIds: [d.id], violations: { [d.id]: 'cash_same_bank' } },
+    ]);
+  });
+
+  test('rule 3 does not apply to savings: same-bank checking <-> savings still links, either way', () => {
+    const nuSavings = { accountId: 'nusavings', accountKind: 'cash' as const, bank: 'nubank', checking: false };
+    const toSavings = [o(nuConta), i(nuSavings)];
+    expect(pairsOf(toSavings)).toEqual([[toSavings[0].id, toSavings[1].id]]);
+    const fromSavings = [o(nuSavings), i(nuConta)];
+    expect(pairsOf(fromSavings)).toEqual([[fromSavings[0].id, fromSavings[1].id]]);
+    // Same connection without labels: also still linked.
+    const conn = { connectionId: 'c1' };
+    const viaConn = [o({ accountId: 'x', accountKind: 'cash', ...conn }), i({ accountId: 'y', accountKind: 'cash', checking: false, ...conn })];
+    expect(pairsOf(viaConn)).toEqual([[viaConn[0].id, viaConn[1].id]]);
+    // Cross-bank is unchanged either way.
+    const cross = [o(itauConta), i(nuSavings)];
+    expect(pairsOf(cross)).toEqual([[cross[0].id, cross[1].id]]);
+  });
+
+  test('one side labelled and the other not, on one connection: treated as the same bank', () => {
+    const conn = { connectionId: 'c1' };
+    // checking -> checking: refused (same bank by connection).
+    expect(plan([o({ ...itauConta, ...conn }), i({ accountId: 'y', accountKind: 'cash', ...conn })]).links).toEqual([]);
+    // checking -> card: allowed (same bank).
+    const a = o({ ...itauConta, ...conn });
+    const b = i({ accountId: 'y', accountKind: 'card', ...conn });
+    expect(pairsOf([a, b])).toEqual([[a.id, b.id]]);
+    // Different connections with one label: unknown, so both rules pass.
+    const c = o({ ...itauConta, connectionId: 'c1' });
+    const d = i({ accountId: 'y', accountKind: 'cash', connectionId: 'c2' });
+    expect(pairsOf([c, d])).toEqual([[c.id, d.id]]);
+  });
+
+  test('the chain case: Itaú conta -> Nubank conta -> Nubank cartão, same day, same amount', () => {
+    const itauOut = o(itauConta, { hint: PIX });
+    const nuIn = i(nuConta, { hint: PIX });
+    const cardIn = i(nuCard, { hint: { category: 'Credit card payment', operationType: null } });
+    const nuOut = o(nuConta, { hint: { category: 'Credit card payment', operationType: 'PAGAMENTO_FATURA' } });
+    const p = plan([itauOut, nuIn, cardIn, nuOut]);
+    expect(p.links.map((l) => [l.outflowId, l.inflowId, l.basis]).sort()).toEqual(
+      [
+        [itauOut.id, nuIn.id, 'unique'],
+        [nuOut.id, cardIn.id, 'unique'],
+      ].sort(),
+    );
+    expect(p.suggestions).toEqual([]);
+  });
+
+  test('a row whose only candidates break the rules is offered, never linked; one-side only with strong evidence and a valid direction', () => {
+    // Itaú conta -> Nubank cartão breaks rule 2: no link, but offered as a pair (never a one-side row each).
+    const a = o(itauConta, { hint: SAME_PERSON });
+    const b = i(nuCard, { hint: SAME_PERSON });
+    const p = plan([a, b]);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions.map((s) => [s.id, s.confidence, s.basis, s.candidateIds])).toEqual([[a.id, 'sure', 'refused', [b.id]]]);
+    // A lone card outflow is never a one-side suggestion.
+    expect(plan([o(nuCard, { hint: SAME_PERSON })]).suggestions).toEqual([]);
+  });
+
+  test('the rules break ties: of two candidates only the one that fits remains', () => {
+    // Itaú conta -100 with Itaú cartão +100 and Nubank cartão +100: only Itaú's card fits.
+    const a = o(itauConta);
+    const b = i(itauCard);
+    const c = i(nuCard);
+    const p = plan([a, b, c]);
+    expect(p.links).toEqual([{ outflowId: a.id, inflowId: b.id, method: 'auto', basis: 'unique' }]);
+  });
+
+  test('accounts with an unknown bank keep the old behaviour (except card outflows)', () => {
+    const a = o({ accountId: 'itau', accountKind: 'cash' });
+    const b = i({ accountId: 'nubank', accountKind: 'cash' });
+    const c = i({ accountId: 'nucard', accountKind: 'card' });
+    const p = plan([a, b, c]);
+    expect(p.suggestions).toEqual([{ id: a.id, confidence: 'choose', basis: 'ambiguous', candidateIds: [b.id, c.id].sort() }]);
+    // One side known, the other unknown: still a candidate.
+    const d = o(itauConta);
+    const e = i({ accountId: 'nucard', accountKind: 'card' });
+    expect(pairsOf([d, e])).toEqual([[d.id, e.id]]);
+  });
+
+  test('the same connection without labels counts as the same bank', () => {
+    const conn = { connectionId: 'c1' };
+    expect(plan([o({ accountId: 'x', accountKind: 'cash', ...conn }), i({ accountId: 'y', accountKind: 'cash', ...conn })]).links).toEqual([]);
+    const a = o({ accountId: 'x', accountKind: 'cash', ...conn });
+    const b = i({ accountId: 'y', accountKind: 'card', ...conn });
+    expect(pairsOf([a, b])).toEqual([[a.id, b.id]]);
+  });
+
+  test('a card outflow with a payee rule is never a one-side suggestion either (it can never pair)', () => {
+    const rules = new Map<string, TransferRule>([['p', { mode: 'auto', accountId: null, noMatch: 'review', waitDays: 2, since: null }]]);
+    const purchase = o(nuCard, { payeeId: 'p', date: '2026-11-03' });
+    // Past waitDays and no pair possible: no suggestion (the guard for rule-less rows agrees).
+    expect(plan([purchase], rules).suggestions).toEqual([]);
+    // A card inflow (a payment received) and a cash row keep their one-side suggestion.
+    expect(plan([i(nuCard, { payeeId: 'p', date: '2026-11-03' })], rules).suggestions.map((s) => s.confidence)).toEqual(['one_side']);
+    expect(plan([o(nuConta, { payeeId: 'p', date: '2026-11-03' })], rules).suggestions.map((s) => s.confidence)).toEqual(['one_side']);
+    // Within waitDays it still waits (unchanged).
+    const waiting = o(nuCard, { payeeId: 'p', date: '2026-11-22' });
+    expect(plan([waiting], rules).pending.get(waiting.id)).toBe('waiting');
+  });
+
+  test('a refused pair is never auto-linked: not by evidence, not by an auto payee rule', () => {
+    const strong = { category: 'Credit card payment', operationType: 'PAGAMENTO_FATURA' };
+    const rules = new Map<string, TransferRule>([['p', { mode: 'auto', accountId: null, noMatch: 'review', waitDays: 5, since: null }]]);
+    const a = o(itauConta, { payeeId: 'p', hint: strong });
+    const b = i(nuCard, { hint: strong });
+    const p = plan([a, b], rules);
+    expect(p.links).toEqual([]);
+    expect(p.pending.size).toBe(0);
+    // The rule row is the suggestion, not also a one-side / waiting row.
+    expect(p.suggestions.map((s) => [s.id, s.basis, s.candidateIds])).toEqual([[a.id, 'refused', [b.id]]]);
+  });
+
+  test('refused candidates are only offered to rows without an allowed partner', () => {
+    // Itaú conta -100: Itaú cartão (allowed) and Nubank cartão (refused). Only the allowed pair shows.
+    const a = o(itauConta);
+    const b = i(itauCard);
+    const c = i(nuCard);
+    const p = plan([a, b, c]);
+    expect(p.links.map((l) => [l.outflowId, l.inflowId])).toEqual([[a.id, b.id]]);
+    expect(p.suggestions).toEqual([]);
+  });
+
+  test('several refused candidates are a choose suggestion, closest date first, each with its rule', () => {
+    const a = o(itauConta, { date: '2026-11-03' });
+    const near = i(nuCard, { date: '2026-11-04' });
+    const far = i({ accountId: 'itau2', accountKind: 'cash', bank: 'itau' }, { date: '2026-11-06' });
+    const p = plan([a, near, far]);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions).toEqual([
+      {
+        id: a.id,
+        confidence: 'choose',
+        basis: 'refused',
+        candidateIds: [near.id, far.id],
+        violations: { [near.id]: 'card_payment_other_bank', [far.id]: 'cash_same_bank' },
+      },
+    ]);
+    expect(p.rows.get(near.id)).toEqual({ confidence: 'choose', candidateCount: 1, counterpartId: a.id });
+  });
+
+  test('a card outflow with a payee rule is offered its refused counterpart, not waiting or one-side', () => {
+    const rules = new Map<string, TransferRule>([['p', { mode: 'auto', accountId: null, noMatch: 'outside', waitDays: 2, since: null }]]);
+    const a = o(nuCard, { payeeId: 'p', date: '2026-11-03' });
+    const b = i(itauCard, { date: '2026-11-03' });
+    const p = plan([a, b], rules);
+    expect(p.suggestions.map((s) => [s.id, s.basis, s.candidateIds])).toEqual([[a.id, 'refused', [b.id]]]);
+    expect(p.pending.size).toBe(0);
+  });
+
+  test('a row whose only partner is refused still gets a suggestion when that partner has allowed candidates of its own', () => {
+    // Itaú conta +100 is wanted by Nubank conta and BB conta (allowed) and by Itaú conta 2 (same bank: refused).
+    const nu = o(nuConta);
+    const bb = o({ accountId: 'bb', accountKind: 'cash', bank: 'bb' });
+    const itau2 = o({ accountId: 'itau2', accountKind: 'cash', bank: 'itau' });
+    const target = i(itauConta);
+    const p = plan([nu, bb, itau2, target]);
+    expect(p.links).toEqual([]);
+    const by = new Map(p.suggestions.map((sug) => [sug.id, sug]));
+    expect(by.get(nu.id)).toMatchObject({ confidence: 'choose', basis: 'ambiguous', candidateIds: [target.id] });
+    expect(by.get(bb.id)).toMatchObject({ confidence: 'choose', basis: 'ambiguous', candidateIds: [target.id] });
+    expect(by.get(itau2.id)).toEqual({
+      id: itau2.id,
+      confidence: 'choose',
+      basis: 'refused',
+      candidateIds: [target.id],
+      violations: { [target.id]: 'cash_same_bank' },
+    });
+    expect(p.suggestions).toHaveLength(3);
+    expect(p.rows.get(target.id)).toMatchObject({ candidateCount: 3, counterpartId: null });
+    // The refused row is not also a one-side row, even with strong evidence on both of its sides.
+    const strongItau2 = o({ accountId: 'itau2', accountKind: 'cash', bank: 'itau' }, { hint: SAME_PERSON });
+    const strong = plan([o(nuConta), o({ accountId: 'bb', accountKind: 'cash', bank: 'bb' }), strongItau2, i(itauConta, { hint: SAME_PERSON })]);
+    expect(strong.suggestions.some((sug) => sug.confidence === 'one_side')).toBe(false);
+    expect(strong.suggestions.find((sug) => sug.id === strongItau2.id)?.basis).toBe('refused');
+  });
+
+  test('refused candidates join a pair left for the person without changing it, and never join a linked pair', () => {
+    // Itaú conta -> Itaú cartão is an allowed pair but the outflow was edited: suggested, not linked.
+    const a = o(itauConta, { untouched: false });
+    const b = i(itauCard);
+    const refusedIn = i({ accountId: 'itau2', accountKind: 'cash', bank: 'itau' });
+    expect(pairsOf([a, b])).toEqual([]);
+    const p = plan([a, b, refusedIn]);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions.map((sug) => [sug.id, sug.confidence, sug.basis, sug.candidateIds])).toEqual([[a.id, 'choose', 'unique', [b.id, refusedIn.id].sort()]]);
+    expect(p.suggestions[0].violations).toEqual({ [refusedIn.id]: 'cash_same_bank' });
+    // The same rows with an untouched outflow: the allowed pair links, the refused row is not offered.
+    const c = o(itauConta);
+    const d = i(itauCard);
+    const e = i({ accountId: 'itau2', accountKind: 'cash', bank: 'itau' });
+    const q = plan([c, d, e]);
+    expect(q.links.map((l) => [l.outflowId, l.inflowId])).toEqual([[c.id, d.id]]);
+    expect(q.suggestions).toEqual([]);
+  });
+
+  test('rule 2 also judges a savings or cash-in-hand account paying a card at another bank', () => {
+    const side = (checking: boolean, bank: string) => ({ accountKind: 'cash' as const, checking, bank, connectionId: null });
+    const cardSide = (bank: string) => ({ accountKind: 'card' as const, checking: false, bank, connectionId: null });
+    expect(pairViolation(side(false, 'itau'), cardSide('nubank'))).toBe('card_payment_other_bank');
+    expect(pairViolation(side(false, 'itau'), cardSide('itau'))).toBeNull();
+    const itauSavings = { accountId: 'itausav', accountKind: 'cash' as const, bank: 'itau', checking: false };
+    const a = o(itauSavings);
+    const b = i(nuCard);
+    const p = plan([a, b]);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions).toEqual([
+      { id: a.id, confidence: 'sure', basis: 'refused', candidateIds: [b.id], violations: { [b.id]: 'card_payment_other_bank' } },
+    ]);
+    const c = o(itauSavings);
+    const d = i(itauCard);
+    expect(pairsOf([c, d])).toEqual([[c.id, d.id]]);
+  });
+
+  test('a payee-rule row whose only partner is refused stays a refused suggestion past waitDays, whatever the no-match policy', () => {
+    for (const noMatch of ['outside', 'review'] as const) {
+      const rules = new Map<string, TransferRule>([['p', { mode: 'auto', accountId: null, noMatch, waitDays: 2, since: null }]]);
+      const a = o(itauConta, { payeeId: 'p', date: '2026-11-03' }); // 20 days old at TODAY
+      const b = i(nuCard, { date: '2026-11-03' });
+      const p = plan([a, b], rules);
+      expect(p.links).toEqual([]);
+      expect(p.pending.size).toBe(0);
+      expect(p.suggestions.map((sug) => [sug.id, sug.confidence, sug.basis, sug.candidateIds])).toEqual([[a.id, 'sure', 'refused', [b.id]]]);
+    }
+  });
+
+  test('a fixed-account payee rule is the person\'s choice: the bank rules do not drop it', () => {
+    const rules = new Map<string, TransferRule>([['p', { mode: 'account', accountId: 'nucard', noMatch: 'review', waitDays: 5, since: null }]]);
+    const a = o(itauConta, { payeeId: 'p' });
+    const b = i(nuCard);
+    expect(plan([a, b], rules).links).toEqual([{ outflowId: a.id, inflowId: b.id, method: 'rule', basis: 'unique' }]);
+    // ...but a card is still never the outflow side.
+    const cardRules = new Map<string, TransferRule>([['p', { mode: 'account', accountId: 'nubank', noMatch: 'review', waitDays: 5, since: null }]]);
+    expect(plan([o(nuCard, { payeeId: 'p', date: '2026-11-20' }), i(nuConta, { date: '2026-11-20' })], cardRules).links).toEqual([]);
   });
 });

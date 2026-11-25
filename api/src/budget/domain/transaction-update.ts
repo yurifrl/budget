@@ -11,7 +11,8 @@ import type { z } from '@shared/zod';
 
 import { HttpError } from '../../core/validate';
 import { ONE_WAY_ERROR, bothPositive, patchTxnSchema, subTxnListSchema } from '@shared/contracts/budget/schemas';
-import { applyBalanceDeltas, deriveDeltas, insertSubTxns, resolvePayeeId } from './transactions';
+import { applyBalanceDeltas, deriveDeltas, insertSubTxns } from './transactions';
+import { resolveEditedPayee } from './edited-payee';
 import { resolveTransferPeer, syncMirror } from './transfers';
 import { advanceOccurrence } from './repeat-schedule';
 import { suggestedCategoryForPayee } from './categorization';
@@ -107,14 +108,17 @@ export async function updateTransactionInClient(
   // Set when the edit changes the payee: the transfer link must follow it.
   let payeeChanged = false;
   let transferPeer: Awaited<ReturnType<typeof resolveTransferPeer>> = null;
-  if (patch.payee !== undefined) {
-    const payeeId = await resolvePayeeId(client, budget_id, patch.payee);
-    if (payeeId !== existingPayeeId) {
-      payeeChanged = true;
-      transferPeer = await resolveTransferPeer(client, budget_id, payeeId, patch.account_id ?? existing.account_id);
-      if (transferPeer && (subtransactions?.length ?? 0) > 0) throw new HttpError(400, 'a transfer cannot be split', 'transfer_cannot_be_split');
+  if (patch.payee !== undefined || patch.payee_id !== undefined) {
+    const edited = await resolveEditedPayee(client, budget_id, existing, { payeeId: patch.payee_id, text: patch.payee });
+    if (!edited.unchanged) {
+      const payeeId = edited.payeeId;
+      if (payeeId !== existingPayeeId) {
+        payeeChanged = true;
+        transferPeer = await resolveTransferPeer(client, budget_id, payeeId, patch.account_id ?? existing.account_id);
+        if (transferPeer && (subtransactions?.length ?? 0) > 0) throw new HttpError(400, 'a transfer cannot be split', 'transfer_cannot_be_split');
+      }
+      set.push({ col: 'payee_id', value: payeeId });
     }
-    set.push({ col: 'payee_id', value: payeeId });
   }
 
   // Splits save full-leg lists (syscd-app-rlt): replace, don't diff. Split

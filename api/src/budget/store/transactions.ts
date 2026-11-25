@@ -129,6 +129,7 @@ export interface EditableTransaction {
   payee_id: string | null;
   category_id: string | null;
   transfer_transaction_id: string | null;
+  transfer_account_id: string | null;
 }
 
 export async function getLiveTransactionInBudget(
@@ -137,7 +138,7 @@ export async function getLiveTransactionInBudget(
   budgetId: string,
 ): Promise<EditableTransaction | undefined> {
   const owned = await db.query<EditableTransaction>(
-    'SELECT repeat_rule_id, occurrence_date, upcoming, account_id, amount, cleared, payee_id, category_id, transfer_transaction_id FROM transactions WHERE id = $1 AND budget_id = $2 AND deleted = false',
+    'SELECT repeat_rule_id, occurrence_date, upcoming, account_id, amount, cleared, payee_id, category_id, transfer_transaction_id, transfer_account_id FROM transactions WHERE id = $1 AND budget_id = $2 AND deleted = false',
     [id, budgetId],
   );
   return owned.rows[0];
