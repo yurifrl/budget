@@ -15,7 +15,8 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
 import { t } from './i18n';
 import { SelectionCheckbox } from '@/ui/SelectionCheckbox';
-import { popoverSides, transferTargets, whyLine, type TransferLeg } from './transfers.logic';
+import { transferTargets } from '@/domain/transfers';
+import { popoverSides, whyLine, type TransferLeg } from './transfers.logic';
 import type { TransfersState } from './useTransfers';
 
 const WIDTH = 392;
@@ -161,6 +162,7 @@ export function TransferPopover({
                     accessibilityRole="button"
                     onPress={() => void actions.linkMany([{ transaction_id: sides.row.transaction_id, account_id: a.id }], rememberOn).then(done)}>
                     <Text style={styles.checkText}>{a.name}</Text>
+                    {!a.onBudget ? <Text style={styles.muted}>{t('other.offBudget')}</Text> : null}
                   </Pressable>
                 ))}
                 <Pressable style={styles.option} accessibilityRole="button" onPress={() => void actions.keepOutside([sides.row.transaction_id]).then(done)}>

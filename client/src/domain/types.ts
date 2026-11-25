@@ -72,6 +72,8 @@ export interface Category {
   notes?: string;
   /** Hidden categories are withheld from the plan grid and listed under the Hidden Categories row. */
   hidden?: boolean;
+  /** The app's own category (never picked for a transaction). */
+  internal?: boolean;
   /** Budget member who owns this category; null/absent = Shared (the default). */
   userId?: string | null;
   /** Bundle this category belongs to (same group); absent = not bundled. */
@@ -93,6 +95,8 @@ export interface CategoryGroup {
    * credit account; AVAILABLE renders as PAYMENT. See PDD §3.5.
    */
   isCreditCardPayments?: boolean;
+  /** The app's own group (its categories are never picked for a transaction). */
+  internal?: boolean;
   categoryIds: string[];
 }
 
@@ -159,6 +163,8 @@ export interface Transaction {
   /** ISO date string (YYYY-MM-DD). */
   date: string;
   payee: string;
+  /** The payee's id (a transfer payee's too); null when the row has none. Writes send it when the payee is unchanged or picked. */
+  payeeId?: string | null;
   /** null => "this needs a category" (PDD §4.2). */
   categoryId: string | null;
   memo: string;
@@ -201,7 +207,9 @@ export interface Transaction {
    */
   matchedTransactionId?: string | null;
   /**
-   * Peer account of a transfer (docs/budget-engine-spec.md section 4). Set on
+   * Peer account of a transfer (docs/budget-engine-spec.md section 4): the
+   * server's transfer pointer, else the account of the row's transfer payee
+   * (never read from the payee text). Set on
    * BOTH mirrored legs of a transfer, each pointing at the other leg's account;
    * transfer legs carry no category unless one side is off-budget (T4).
    * null/absent = not a transfer.

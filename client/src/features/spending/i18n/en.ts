@@ -5,7 +5,6 @@ export default {
   'review.action': 'Review below',
   'empty.accounts': 'No transactions on {accounts}.',
   'empty.none': 'No transactions yet.',
-  'row.readyToAssign': '⚖ Ready to Assign',
   'row.unknown': '🙋 What is this?',
   'row.noPayee': '(no payee)',
   'row.approve': 'Approve',

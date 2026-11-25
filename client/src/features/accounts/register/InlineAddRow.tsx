@@ -10,10 +10,9 @@
 
 import { StyleSheet, Text, TextInput, View, Pressable } from 'react-native';
 
-import { transferPayeeName } from '@shared/domain/transfers';
 import { tCommon } from '@shared/i18n/common';
 
-import { useGetPayeesQuery } from '@/budget/data/api';
+import { useGetPayeesWithTransfersQuery } from '@/budget/data/api';
 import { todayIso } from '@/domain/format';
 import { draftMonthKey } from '@/domain/inlineAdd';
 import type { Budget, Transaction } from '@/domain/types';
@@ -49,9 +48,9 @@ export function InlineAddRow({
   transaction?: Transaction;
   onClose: () => void;
 }) {
-  const row = useInlineAdd({ budget, budgetId, defaultAccountId, transaction, onClose });
+  const payees = useGetPayeesWithTransfersQuery({ budgetId });
+  const row = useInlineAdd({ budget, budgetId, payees: payees.data ?? [], defaultAccountId, transaction, onClose });
   const { editing, account, dateText, dateIso, payee, categoryId, memo, outflow, inflow, error, repeatFreq, usd, save, createCategory } = row;
-  const payees = useGetPayeesQuery({ budgetId });
   // Menu amounts are month-scoped: AVAILABLE for the month the typed date
   // lands in (today when the date is blank), plus the live Ready-to-Assign.
   const bm = useBudgetMonth(budget, draftMonthKey(dateIso, todayIso()));
@@ -90,6 +89,8 @@ export function InlineAddRow({
         <PayeeDropdown
           value={payee}
           onChangeText={row.setPayee}
+          onPickPayee={row.pickPayee}
+          payeeId={row.payeeId}
           payees={payees.data ?? []}
           accounts={budget.accounts}
           currentAccountId={account?.id ?? null}
@@ -98,34 +99,35 @@ export function InlineAddRow({
           containerStyle={{ flex: 1.4 }}
           accessibilityLabel={t('field.payee')}
         />
-        <CategoryDropdown
-          categories={budget.categories}
-          groups={budget.groups}
-          bundles={budget.bundles}
-          currentCategoryId={categoryId}
-          bm={bm}
-          accounts={budget.accounts}
-          payeeValue={payee}
-          onPick={(picked) => {
-            row.setCategoryId(picked);
-            // Un-split gesture (syscd-app-rlt): choosing a single category
-            // while the split panel is open collapses the legs into one
-            // categorized row; the closed panel saves without splits.
-            row.setSplitsOpen(false);
-          }}
-          onCreate={(query) => void createCategory(query)}
-          onTransferPick={(pickedId) => {
-            const target = budget.accounts.find((a) => a.id === pickedId);
-            if (!target) return;
-            row.setPayee(transferPayeeName(target.name));
-            row.setCategoryId(null);
-          }}
-          onSplitPick={row.openSplitEditor}
-          placeholder={t('field.category')}
-          chevron
-          containerStyle={{ flex: 1.4 }}
-          accessibilityLabel={t('field.category')}
-        />
+        {row.categoryLocked ? (
+          // A transfer between on-budget accounts: no category, and none can be set here.
+          <View style={[styles.input, styles.lockedCell, { flex: 1.4 }]} accessibilityLabel={t('field.categoryNotNeeded')}>
+            <Text style={styles.lockedText} numberOfLines={1}>
+              {t('field.categoryNotNeeded')}
+            </Text>
+          </View>
+        ) : (
+          <CategoryDropdown
+            categories={budget.categories}
+            groups={budget.groups}
+            bundles={budget.bundles}
+            currentCategoryId={categoryId}
+            bm={bm}
+            onPick={(picked) => {
+              row.setCategoryId(picked);
+              // Un-split gesture (syscd-app-rlt): choosing a single category
+              // while the split panel is open collapses the legs into one
+              // categorized row; the closed panel saves without splits.
+              row.setSplitsOpen(false);
+            }}
+            onCreate={(query) => void createCategory(query)}
+            onSplitPick={row.openSplitEditor}
+            placeholder={t('field.category')}
+            chevron
+            containerStyle={{ flex: 1.4 }}
+            accessibilityLabel={t('field.category')}
+          />
+        )}
         <TextInput
           value={memo}
           onChangeText={row.setMemo}
@@ -223,6 +225,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   inputInvalid: { borderColor: colors.red },
+  lockedCell: { justifyContent: 'center', opacity: 0.8 },
+  lockedText: { color: colors.faint, fontSize: 13 },
   clearedCell: { width: 30 },
   actions: {
     flexDirection: 'row',

@@ -9,7 +9,6 @@
  */
 
 import { recomputeActivity } from '../domain/engine';
-import { transferPeerAccountId } from '@shared/domain/transfers';
 import type {
   Account,
   AccountType,
@@ -126,6 +125,7 @@ export interface BudgetSource {
 /** Assemble the engine `Budget` aggregate from one budget's rows. */
 export function assembleBudget(src: BudgetSource): Budget {
   const payeeName = new Map(src.payees.map((p) => [p.id, p.name]));
+  const payeeTransferAccount = new Map(src.payees.filter((p) => p.transfer_account_id).map((p) => [p.id, p.transfer_account_id as string]));
 
   const assignedByCat = new Map<string, Record<MonthKey, Cents>>();
   for (const a of src.assignments) {
@@ -143,6 +143,7 @@ export function assembleBudget(src: BudgetSource): Budget {
     target: mapCategoryTarget(c),
     notes: c.note ?? '',
     hidden: c.hidden || undefined,
+    internal: c.internal || undefined,
     userId: c.user_id ?? null,
     bundleId: c.bundle_id ?? undefined,
   }));
@@ -153,6 +154,7 @@ export function assembleBudget(src: BudgetSource): Budget {
     id: g.id,
     name: g.name,
     isCreditCardPayments: g.is_credit_card_payments || undefined,
+    internal: g.internal || undefined,
     categoryIds: src.categories.filter((c) => c.group_id === g.id).map((c) => c.id),
   }));
 
@@ -178,6 +180,7 @@ export function assembleBudget(src: BudgetSource): Budget {
       // the domain contract is YYYY-MM-DD (see Transaction.date in domain/types).
       date: t.date.slice(0, 10),
       payee,
+      payeeId: t.payee_id,
       categoryId: t.category_id,
       memo: t.memo ?? '',
       outflow: cents < 0 ? -cents : 0,
@@ -191,7 +194,8 @@ export function assembleBudget(src: BudgetSource): Budget {
       ...(t.installment ? { installment: t.installment } : {}),
       importId: t.import_id ?? null,
       matchedTransactionId: t.matched_transaction_id ?? null,
-      transferAccountId: t.transfer_account_id ?? transferPeerAccountId(payee, src.accounts, t.account_id) ?? null,
+      // The server's pointer, else the account of the row's transfer payee; never the payee text.
+      transferAccountId: t.transfer_account_id ?? (t.payee_id ? payeeTransferAccount.get(t.payee_id) : undefined) ?? null,
       ...(t.transfer_suggestion
         ? {
             transferSuggestion: {
@@ -259,8 +263,10 @@ export function assembleBudget(src: BudgetSource): Budget {
 export interface TransactionInput {
   accountId: string;
   date: string;
-  /** Payee name; upserted to a payee_id on save. Empty => no payee. */
+  /** Payee name; upserted to a payee_id on save. Empty => no payee. A picked payee goes by `payeeId` (it wins over the text). */
   payee: string;
+  /** An existing payee picked by the person (a transfer payee too). */
+  payeeId?: string | null;
   categoryId: string | null;
   memo: string;
   outflowCents: Cents;
@@ -297,6 +303,7 @@ export function snakeTxn(input: TransactionInput): Record<string, unknown> {
     account_id: input.accountId,
     date: input.date,
     payee: input.payee ?? '',
+    ...(input.payeeId ? { payee_id: input.payeeId } : {}),
     category_id: input.categoryId,
     memo: input.memo || null,
     outflow: centsToMilli(input.outflowCents ?? 0),
@@ -364,7 +371,9 @@ export function snakeTxnPatch(patch: Partial<TransactionInput>): Record<string, 
   const out: Record<string, unknown> = {};
   if (patch.accountId !== undefined) out.account_id = patch.accountId;
   if (patch.date !== undefined) out.date = patch.date;
-  if (patch.payee !== undefined) out.payee = patch.payee;
+  // A picked payee goes by id alone; typed text goes as text.
+  if (patch.payeeId) out.payee_id = patch.payeeId;
+  else if (patch.payee !== undefined) out.payee = patch.payee;
   if (patch.categoryId !== undefined) out.category_id = patch.categoryId;
   if (patch.memo !== undefined) out.memo = patch.memo;
   if (patch.outflowCents !== undefined) out.outflow = centsToMilli(patch.outflowCents);

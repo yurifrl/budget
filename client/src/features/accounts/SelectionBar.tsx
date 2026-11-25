@@ -9,7 +9,7 @@
  * parent's callbacks; the parent owns selection state and mutations.
  */
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   Modal,
@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { pickableCategories } from '@/domain/pickable';
 import type { Category, CategoryGroup, FlagColor } from '@/domain/types';
 import { displayFlagLabel } from '@/domain/flagLabels';
 import { FLAG_COLORS, colors } from '@/ui/theme';
@@ -99,6 +100,8 @@ export function SelectionBar({
   };
 
   const closeMenu = () => setMenu(null);
+  // Credit Card Payments and the app's internal categories are never offered.
+  const pickable = useMemo(() => pickableCategories(categories, groups), [categories, groups]);
 
   return (
     <View style={styles.wrap} pointerEvents="box-none">
@@ -126,7 +129,7 @@ export function SelectionBar({
                     <Text style={styles.menuItemText}>{t('selection.readyToAssign')}</Text>
                   </Pressable>
                   {groups.map((g) => {
-                    const groupCats = categories.filter((c) => c.groupId === g.id && !c.hidden);
+                    const groupCats = pickable.filter((c) => c.groupId === g.id && !c.hidden);
                     if (groupCats.length === 0) return null;
                     return (
                       <View key={g.id}>

@@ -16,11 +16,14 @@ import {
   useGetBundlesQuery,
   useGetCategoriesQuery,
   useGetGroupsQuery,
-  useGetPayeesQuery,
+  useGetPayeesWithTransfersQuery,
   useLazyGetPayeeSuggestionQuery,
   useUpdateTransactionMutation,
 } from '@/budget/data/api';
 import type { PayeeAdminRow } from '@/budget/data/rows';
+import { isTransferBetweenOnBudget } from '@shared/domain/transfers';
+import { isPickableCategory } from '@/domain/pickable';
+import { transferChoices } from '@/domain/transfers';
 import { categoryLabel } from '@/domain/bundles';
 import { addDaysToDate } from '@/domain/date';
 import { todayIso } from '@/domain/format';
@@ -60,7 +63,7 @@ export function useAddTransaction({
   const bundleRows = useGetBundlesQuery(scope, { skip: !budgetId });
   const accounts = useGetAccountsQuery(scope, { skip: !budgetId });
   const groups = useGetGroupsQuery(scope, { skip: !budgetId });
-  const payees = useGetPayeesQuery(scope, { skip: !budgetId });
+  const payees = useGetPayeesWithTransfersQuery(scope, { skip: !budgetId });
   const [addTransaction, addState] = useAddTransactionMutation();
   const [updateTransaction, updateState] = useUpdateTransactionMutation();
   const [addCategory] = useAddCategoryMutation();
@@ -70,6 +73,8 @@ export function useAddTransaction({
   const initialKind = initialSheetKind(editTxn, prefillCategoryId);
   const [isIncome, setIsIncome] = useState(initialKind.isIncome);
   const [payee, setPayee] = useState(editTxn?.payee ?? '');
+  // The picked payee's id (an existing payee, a transfer payee too); null for typed text.
+  const [payeeId, setPayeeId] = useState<string | null>(editTxn?.payeeId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initialKind.categoryId);
   const [accountId, setAccountId] = useState<string | null>(editTxn?.accountId ?? null);
   const [date, setDate] = useState(editTxn?.date ?? todayIso());
@@ -84,6 +89,7 @@ export function useAddTransaction({
     dispatchKeypad({ type: 'reset' });
     setIsIncome(false);
     setPayee('');
+    setPayeeId(null);
     setCategoryId(null);
     setPicker('none');
     setSearch('');
@@ -100,7 +106,14 @@ export function useAddTransaction({
   const settled = settledAmount(keypad);
 
   const account = sheetAccount(accounts.data, accountId);
-  const resolvedCategoryId = resolveSheetCategory({ isIncome, categoryId }, !!editTxn);
+  // A transfer payee between two on-budget accounts: no category, and none can be set.
+  const budgetAccounts = (accounts.data ?? []).map((a) => ({ id: a.id, onBudget: a.on_budget }));
+  const transferAccountId =
+    (payeeId && payeeId === (editTxn?.payeeId ?? null) ? editTxn?.transferAccountId : undefined) ??
+    (payeeId ? (payees.data ?? []).find((p) => p.id === payeeId)?.transfer_account_id : null) ??
+    null;
+  const categoryLocked = !!account && isTransferBetweenOnBudget(budgetAccounts, account.id, transferAccountId);
+  const resolvedCategoryId = categoryLocked ? null : resolveSheetCategory({ isIncome, categoryId }, !!editTxn);
   const category = categories.data?.find((c) => c.id === resolvedCategoryId) ?? null;
 
   const bundles = useMemo(
@@ -111,9 +124,18 @@ export function useAddTransaction({
     categoryLabel({ name: c.name, bundleId: c.bundle_id ?? undefined }, bundles);
 
   const query = search.trim();
-  const filteredPayees = (payees.data ?? []).filter((p) => !query || matchesSystemName(p.name, query.toLowerCase()));
+  // Ordinary payees; the accounts' transfer payees are the "Payments and Transfers" section.
+  const ordinaryPayees = (payees.data ?? []).filter((p) => p.transfer_account_id === null && !p.deleted);
+  const filteredPayees = ordinaryPayees.filter((p) => !query || matchesSystemName(p.name, query.toLowerCase()));
+  const filteredTransfers = transferChoices(
+    payees.data ?? [],
+    (accounts.data ?? []).map((a) => ({ id: a.id, name: a.name, group: a.account_group, onBudget: a.on_budget })),
+    account?.id ?? null,
+  ).filter(({ payee: p }) => !query || matchesSystemName(p.name, query.toLowerCase()));
   const canCreatePayee = canCreateNamed(payees.data ?? [], search);
-  const filteredCategories = searchByLabel(categories.data ?? [], search, labelOf);
+  const groupFlags = (groups.data ?? []).map((g) => ({ id: g.id, isCreditCardPayments: g.is_credit_card_payments, internal: g.internal }));
+  const pickableCategoryRows = (categories.data ?? []).filter((c) => isPickableCategory({ groupId: c.group_id, internal: c.internal }, groupFlags));
+  const filteredCategories = searchByLabel(pickableCategoryRows, search, labelOf);
   const canCreateCategory = canCreateNamed(categories.data ?? [], search);
   const accountChoices = pickableAccounts(accounts.data ?? [], accountId);
 
@@ -130,7 +152,13 @@ export function useAddTransaction({
 
   const pickPayee = (name: string, row?: PayeeAdminRow) => {
     setPayee(name);
+    setPayeeId(row?.id ?? null);
     closePicker();
+    // A transfer payee carries no category (and no payee-based suggestion).
+    if (row?.transfer_account_id) {
+      setCategoryId(null);
+      return;
+    }
     // Auto-select the category the server will infer for this payee on save
     // (categorization mode + history, syscd-app-7pa). Only rows from the
     // payee list carry an id; a hand-typed (created) payee has no history.
@@ -177,10 +205,10 @@ export function useAddTransaction({
   const save = async () => {
     if (!budgetId || !account || !canSaveAmount(settled) || addState.isLoading || updateState.isLoading) return;
     setSaveError(null);
-    const form = { accountId: account.id, date, payee, categoryId: category?.id ?? null, isIncome, amount: settled };
+    const form = { accountId: account.id, date, payee, payeeId, categoryId: category?.id ?? null, isIncome, amount: settled };
     try {
       if (editTxn) {
-        await updateTransaction({ budgetId, id: editTxn.id, patch: sheetEditPatch(form) }).unwrap();
+        await updateTransaction({ budgetId, id: editTxn.id, patch: sheetEditPatch(form, editTxn) }).unwrap();
         close();
         return;
       }
@@ -200,8 +228,10 @@ export function useAddTransaction({
     isIncome,
     toggleKind,
     payee,
+    payeeId,
     category,
     categoryId,
+    categoryLocked,
     labelOf,
     account,
     date,
@@ -213,6 +243,7 @@ export function useAddTransaction({
     setSearch,
     query,
     filteredPayees,
+    filteredTransfers,
     canCreatePayee,
     pickPayee,
     filteredCategories,

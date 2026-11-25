@@ -8,6 +8,7 @@ import {
   emptySplit,
   initialRepeatFreq,
   inlineRowDraft,
+  payeeWrite,
   planInlineSave,
   removeSplitLeg,
   repeatRuleFields,
@@ -126,7 +127,7 @@ describe('planInlineSave', () => {
   test('a plain row: trimmed payee/memo, one-way amounts, no legs', () => {
     expect(plan()).toEqual({
       ok: true,
-      fields: { accountId: 'a1', date: '2026-03-05', payee: 'Shop', categoryId: 'c1', memo: 'note', outflowCents: 1250, inflowCents: 0 },
+      fields: { accountId: 'a1', date: '2026-03-05', payee: 'Shop', payeeId: null, categoryId: 'c1', memo: 'note', outflowCents: 1250, inflowCents: 0 },
       subtransactions: [],
     });
   });
@@ -154,7 +155,7 @@ describe('planInlineSave', () => {
     });
     expect(res).toEqual({
       ok: true,
-      fields: { accountId: 'a1', date: '2026-03-05', payee: 'Shop', categoryId: null, memo: 'note', outflowCents: 200, inflowCents: 0 },
+      fields: { accountId: 'a1', date: '2026-03-05', payee: 'Shop', payeeId: null, categoryId: null, memo: 'note', outflowCents: 200, inflowCents: 0 },
       subtransactions: [
         { categoryId: 'c1', memo: 'x', outflowCents: 300, inflowCents: 0 },
         { categoryId: 'c2', memo: '', outflowCents: 0, inflowCents: 100 },
@@ -179,14 +180,37 @@ describe('planInlineSave', () => {
       expect(plan({ ...usd, splitsOpen: true, splits: [leg({ outflow: 700 })] })).toMatchObject({ fields: { outflowCents: 700 } });
     });
   });
+  test('a transfer between on-budget accounts saves no category and no legs, whatever the draft still holds', () => {
+    const res = plan({ payeeId: 'tp1', categoryLocked: true, categoryId: 'c1', splitsOpen: true, splits: [leg({ outflow: 300 })] });
+    expect(res).toMatchObject({ ok: true, fields: { payeeId: 'tp1', categoryId: null }, subtransactions: [] });
+  });
 });
 
 describe('repeatRuleFields', () => {
   test('the rule mirrors the saved row and attaches to it', () => {
-    const fields = { accountId: 'a1', date: '2026-03-05', payee: 'Shop', categoryId: 'c1', memo: 'n', outflowCents: 5, inflowCents: 0 };
+    const fields = { accountId: 'a1', date: '2026-03-05', payee: 'Shop', payeeId: null, categoryId: 'c1', memo: 'n', outflowCents: 5, inflowCents: 0 };
     expect(repeatRuleFields(fields, 'monthly', 't9')).toEqual({
       accountId: 'a1', payee: 'Shop', categoryId: 'c1', memo: 'n', outflowCents: 5, inflowCents: 0,
       frequency: 'monthly', monthLastDay: false, attachTransactionId: 't9',
     });
+  });
+});
+
+describe('payeeWrite', () => {
+  test('a new row: a picked payee goes by id (with its name), typed text as text only', () => {
+    expect(payeeWrite({ payee: ' Itau ', payeeId: 'p1' }, null)).toEqual({ payee: 'Itau', payeeId: 'p1' });
+    expect(payeeWrite({ payee: ' New shop ', payeeId: null }, null)).toEqual({ payee: 'New shop' });
+    expect(payeeWrite({ payee: '', payeeId: null }, null)).toEqual({ payee: '' });
+  });
+
+  test('an edit that leaves the payee alone sends none, whether it is a picked or a typed one', () => {
+    expect(payeeWrite({ payee: 'Transfer : Itau', payeeId: 'tp1' }, { payee: 'Transfer : Itau', payeeId: 'tp1' })).toEqual({});
+    expect(payeeWrite({ payee: 'Old shop ', payeeId: null }, { payee: 'Old shop', payeeId: null })).toEqual({});
+  });
+
+  test('an edit that changes it sends the id for a pick (no text) and the text for typing', () => {
+    expect(payeeWrite({ payee: 'Transfer : Nubank', payeeId: 'tp2' }, { payee: 'Padaria', payeeId: 'p1' })).toEqual({ payeeId: 'tp2' });
+    expect(payeeWrite({ payee: 'Brand new', payeeId: null }, { payee: 'Padaria', payeeId: 'p1' })).toEqual({ payee: 'Brand new' });
+    expect(payeeWrite({ payee: '', payeeId: null }, { payee: 'Padaria', payeeId: 'p1' })).toEqual({ payee: '' });
   });
 });

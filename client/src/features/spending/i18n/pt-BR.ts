@@ -8,7 +8,6 @@ const m: Translation<typeof en> = {
   'review.action': 'Revise abaixo',
   'empty.accounts': 'Nenhuma transação em {accounts}.',
   'empty.none': 'Nenhuma transação ainda.',
-  'row.readyToAssign': '⚖ Pronto para atribuir',
   'row.unknown': '🙋 O que é isto?',
   'row.noPayee': '(sem favorecido)',
   'row.approve': 'Aprovar',

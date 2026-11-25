@@ -43,6 +43,7 @@ export default {
   'other.title': 'Link to which account?',
   'other.outside': 'An account outside this budget',
   'other.outsideSub': 'Keep it as a transfer, no category',
+  'other.offBudget': 'Off budget',
   'other.back': 'Back',
 
   'review.colDate': 'DATE',

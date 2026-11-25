@@ -271,13 +271,21 @@ describe('transfer links (spec T1)', () => {
     expect(u.transferSuggestion).toBeUndefined();
   });
 
-  test('legacy "Transfer : <account name>" payee resolves to the account id when the column is null', () => {
+  test('a row whose payee is an account\'s transfer payee is a transfer to that account, even with no pointer on the row', () => {
     const [t] = map([transferTxn({ id: 'x2', payee_id: 'p-tr', transfer_account_id: null })], [
-      { id: 'p-tr', name: 'Transfer : Nubank', transfer_account_id: null, deleted: false },
+      { id: 'p-tr', name: 'Transfer : Nubank', transfer_account_id: 'a-nubank', deleted: false },
     ]);
     expect(t.transferAccountId).toBe('a-nubank');
-    const [byName] = map([transferTxn({ id: 'x3', account_id: 'a-nubank', payee_id: null, payee_name: 'Transfer :   itau', transfer_account_id: null })]);
-    expect(byName.transferAccountId).toBe('a-itau'); // case-insensitive, whitespace-tolerant
+    expect(t.payeeId).toBe('p-tr');
+  });
+
+  test('the payee text never makes a transfer: a "Transfer : <account>" text without a pointer or a transfer payee is an ordinary row', () => {
+    const [byText] = map([transferTxn({ id: 'x3', account_id: 'a-nubank', payee_id: null, payee_name: 'Transfer : Itau', transfer_account_id: null })]);
+    expect(byText.transferAccountId).toBeNull();
+    const [ordinaryPayee] = map([transferTxn({ id: 'x3b', payee_id: 'p-tr', transfer_account_id: null })], [
+      { id: 'p-tr', name: 'Transfer : Nubank', transfer_account_id: null, deleted: false },
+    ]);
+    expect(ordinaryPayee.transferAccountId).toBeNull();
   });
 
   test('the wire column wins over the payee convention', () => {
@@ -285,25 +293,33 @@ describe('transfer links (spec T1)', () => {
     expect(t.transferAccountId).toBe('a-nubank');
   });
 
-  test('ordinary payees, unknown names and the own account are not transfers (null)', () => {
+  test('ordinary payees are not transfers (null)', () => {
     const rows = map([
       transferTxn({ id: 'y1', payee_id: 'p-smartfit', transfer_account_id: null }),
       transferTxn({ id: 'y2', payee_id: null, payee_name: 'Transfer : Nowhere', transfer_account_id: null }),
-      transferTxn({ id: 'y3', payee_id: null, payee_name: 'Transfer : Itau', account_id: 'a-itau', transfer_account_id: null }),
     ]);
-    expect(rows.map((t) => t.transferAccountId)).toEqual([null, null, null]);
+    expect(rows.map((t) => t.transferAccountId)).toEqual([null, null]);
   });
 
-  test('a pair of legacy "Transfer : ..." rows is a card payment for the engine', () => {
+  test('a card payment made with the transfer payees is the same for the engine as with pointers (T3, P2)', () => {
     const src = casaSource();
-    src.transactions = [
-      transferTxn({ id: 'p1', account_id: 'a-itau', amount: -50000, payee_name: 'Transfer : Nubank', date: '2026-06-10' }),
-      transferTxn({ id: 'p2', account_id: 'a-nubank', amount: 50000, payee_name: 'Transfer : Itau', date: '2026-06-10' }),
-    ] as unknown as BudgetSource['transactions'];
-    const bm = computeBudgetMonth(assembleBudget(src), 202606);
-    // Paid 5000 to the card; no budget effect on Ready to Assign (T3), payment Available -5000 (P2).
-    expect(bm.payments['c-nubank']).toMatchObject({ payments: 5000, available: -5000, debt: 0 });
-    expect(bm.readyToAssign).toBe(-17000);
+    src.payees = [
+      ...src.payees,
+      { id: 'tp-nubank', name: 'Transfer : Nubank', transfer_account_id: 'a-nubank', deleted: false },
+      { id: 'tp-itau', name: 'Transfer : Itau', transfer_account_id: 'a-itau', deleted: false },
+    ] as BudgetSource['payees'];
+    const legs = (pointers: boolean) =>
+      [
+        transferTxn({ id: 'p1', account_id: 'a-itau', amount: -50000, payee_id: 'tp-nubank', transfer_account_id: pointers ? 'a-nubank' : null, date: '2026-06-10' }),
+        transferTxn({ id: 'p2', account_id: 'a-nubank', amount: 50000, payee_id: 'tp-itau', transfer_account_id: pointers ? 'a-itau' : null, date: '2026-06-10' }),
+      ] as unknown as BudgetSource['transactions'];
+    for (const pointers of [true, false]) {
+      src.transactions = legs(pointers);
+      const bm = computeBudgetMonth(assembleBudget(src), 202606);
+      // Paid 5000 to the card; no budget effect on Ready to Assign (T3), payment Available -5000 (P2).
+      expect(bm.payments['c-nubank']).toMatchObject({ payments: 5000, available: -5000, debt: 0 });
+      expect(bm.readyToAssign).toBe(-17000);
+    }
   });
 });
 
@@ -321,6 +337,14 @@ describe('snakeTxn / snakeTxnPatch (POST/PATCH wire mapping)', () => {
     flag: null,
     repeat: 'never',
   };
+
+  test('a picked payee goes by id (POST carries the name too, PATCH the id alone); typed text goes as text', () => {
+    expect(snakeTxn({ ...fullInput, payee: 'Transfer : Nubank', payeeId: 'tp1' })).toMatchObject({ payee: 'Transfer : Nubank', payee_id: 'tp1' });
+    expect('payee_id' in snakeTxn(fullInput)).toBe(false);
+    expect(snakeTxnPatch({ payeeId: 'tp1' })).toEqual({ payee_id: 'tp1' });
+    expect(snakeTxnPatch({ payee: 'New shop' })).toEqual({ payee: 'New shop' });
+    expect(snakeTxnPatch({ memo: 'only a memo' })).toEqual({ memo: 'only a memo' });
+  });
 
   test('snakeTxn maps the full POST body with server-side defaults', () => {
     expect(snakeTxn(fullInput)).toEqual({

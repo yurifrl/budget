@@ -6,24 +6,23 @@
  * with its AVAILABLE amount, an "Inflow / Ready to Assign" row that commits
  * the uncategorized state (checkmark + pin when nothing is selected) with
  * the live Ready-to-Assign amount, then one section per category group with
- * each category's AVAILABLE amount right-aligned. The "Payment/Transfer"
- * footer switches the same menu into transfer mode — one row per budget
- * account; picking one commits the exact "Transfer : <name>" payee string
- * PayeeDropdown uses and clears the category. "Split" needs register split
- * support and is a documented prerequisite (see tk syscd-app-zcm).
+ * each category's AVAILABLE amount right-aligned. Credit Card Payments and
+ * the app's internal categories are not listed (domain/pickable). A transfer
+ * is made with the payee picker, never from here. "Split" needs register
+ * split support and is a documented prerequisite (see tk syscd-app-zcm).
  * Filter-as-you-type narrows group rows. Built on the shared DropdownShell
  * portal (syscd-app-9q7) so the menu paints above sibling register rows.
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { t } from '../text/i18n';
 import { amountStyle, DropdownShell, dropdownStyles, pressNoBlur, useDropdownPortal, type DropdownKeyEvent } from './dropdown';
-import { transferPayeeName } from '@shared/domain/transfers';
 
 import { categoryLabel } from '@/domain/bundles';
 import { useMoneyFormat } from '../moneyFormat';
-import type { Account, Bundle, Category, CategoryGroup } from '@/domain/types';
+import { pickableCategories } from '@/domain/pickable';
+import type { Bundle, Category, CategoryGroup } from '@/domain/types';
 import { categoryFigures, type BudgetMonth } from '@/domain/zeroSum';
 import { matchesCategoryQuery } from '../categoryPick';
 import { colors } from '@/ui/theme';
@@ -31,8 +30,8 @@ import { displaySystemName } from '@/domain/systemNames';
 
 interface Item {
   key: string;
-  kind: 'create' | 'selected' | 'rta' | 'category' | 'transfer';
-  /** Category id to commit (null = uncategorized/RTA); account id in transfer mode. */
+  kind: 'create' | 'selected' | 'rta' | 'category';
+  /** Category id to commit (null = uncategorized/RTA). */
   targetId: string | null;
   label: string;
   /** Owning group title — drives category section headers. */
@@ -47,11 +46,8 @@ export function CategoryDropdown({
   bundles = [],
   currentCategoryId,
   bm,
-  accounts,
-  payeeValue,
   onPick,
   onCreate,
-  onTransferPick,
   onSplitPick,
   placeholder,
   chevron,
@@ -68,15 +64,9 @@ export function CategoryDropdown({
   /** Month whose category AVAILABLE amounts are shown. */
   /** The engine's figures for the month the menu amounts are scoped to (Available per row, Ready to Assign). */
   bm: BudgetMonth;
-  /** Budget accounts for transfer mode (Payment/Transfer footer). */
-  accounts: Account[];
-  /** Current payee text — marks which transfer row is already committed. */
-  payeeValue?: string;
   onPick: (categoryId: string | null) => void;
   /** Creates a category from the current filter text and assigns it. */
   onCreate: (query: string) => void;
-  /** Commits the picked account as the transaction's transfer payee. */
-  onTransferPick: (accountId: string) => void;
   /** Opens the row's split editor (syscd-app-rlt). Omitted hides the Split footer button. */
   onSplitPick?: () => void;
   placeholder?: string;
@@ -87,7 +77,6 @@ export function CategoryDropdown({
 }) {
   const { formatMoney } = useMoneyFormat();
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<'category' | 'transfer'>('category');
   const [draft, setDraft] = useState('');
   const [highlight, setHighlight] = useState(0);
   const close = useCallback(() => setOpen(false), []);
@@ -95,53 +84,39 @@ export function CategoryDropdown({
 
   const current = categories.find((c) => c.id === currentCategoryId) ?? null;
   const currentGroup = current ? groups.find((g) => g.id === current.groupId) ?? null : null;
-  const currentTransfer = payeeValue ? accounts.find((a) => transferPayeeName(a.name) === payeeValue) ?? null : null;
-  const transfer = mode === 'transfer';
+  const pickable = useMemo(() => pickableCategories(categories, groups), [categories, groups]);
   const query = draft.trim().toLowerCase();
   // Spec: the "New Category" action is pinned at the top of category mode. It
   // only hides when the typed name already exists (nothing left to create);
   // with an empty draft it stays visible but the commit is a no-op.
-  const creatable = !transfer && !categories.some((c) => c.name.toLowerCase() === query);
+  const creatable = !categories.some((c) => c.name.toLowerCase() === query);
   // While open, the input holds the filter text; the committed name shows as
   // soon as the filter is empty or the menu is closed.
-  const inputValue = open && draft !== '' ? draft : transfer ? currentTransfer?.name ?? '' : current ? categoryLabel(current, bundles) : '';
-
-  // The transfer mode is a transient view of this menu: closing it (blur,
-  // Esc, or a pick) returns the cell to the category list.
-  useEffect(() => {
-    if (!open && mode === 'transfer') setMode('category');
-  }, [open, mode]);
+  const inputValue = open && draft !== '' ? draft : current ? categoryLabel(current, bundles) : '';
 
   const items = useMemo<Item[]>(() => {
     const rows: Item[] = [];
-    if (transfer) {
-      for (const a of accounts) {
-        if (query && !a.name.toLowerCase().includes(query)) continue;
-        rows.push({ key: a.id, kind: 'transfer', targetId: a.id, label: a.name, checked: a.id === currentTransfer?.id });
-      }
-    } else {
-      if (creatable) {
-        rows.push({ key: '__create__', kind: 'create', targetId: null, label: t('category.new'), checked: false });
-      }
-      if (current) {
-        const groupName = groups.find((g) => g.id === current.groupId)?.name;
-        rows.push({
-          key: '__selected__',
-          kind: 'selected',
-          targetId: current.id,
-          label: groupName ? `${categoryLabel(current, bundles)} (${displaySystemName(groupName)})` : categoryLabel(current, bundles),
-          checked: true,
-        });
-      }
-      rows.push({ key: '__rta__', kind: 'rta', targetId: null, label: t('category.inflowReadyToAssign'), checked: currentCategoryId === null });
-      for (const g of groups) {
-        for (const cat of categories.filter((c) => c.groupId === g.id && matchesCategoryQuery(c, bundles, query))) {
-          rows.push({ key: cat.id, kind: 'category', targetId: cat.id, label: categoryLabel(cat, bundles), groupTitle: g.name, checked: cat.id === currentCategoryId });
-        }
+    if (creatable) {
+      rows.push({ key: '__create__', kind: 'create', targetId: null, label: t('category.new'), checked: false });
+    }
+    if (current) {
+      const groupName = groups.find((g) => g.id === current.groupId)?.name;
+      rows.push({
+        key: '__selected__',
+        kind: 'selected',
+        targetId: current.id,
+        label: groupName ? `${categoryLabel(current, bundles)} (${displaySystemName(groupName)})` : categoryLabel(current, bundles),
+        checked: true,
+      });
+    }
+    rows.push({ key: '__rta__', kind: 'rta', targetId: null, label: t('category.inflowReadyToAssign'), checked: currentCategoryId === null });
+    for (const g of groups) {
+      for (const cat of pickable.filter((c) => c.groupId === g.id && matchesCategoryQuery(c, bundles, query))) {
+        rows.push({ key: cat.id, kind: 'category', targetId: cat.id, label: categoryLabel(cat, bundles), groupTitle: g.name, checked: cat.id === currentCategoryId });
       }
     }
     return rows;
-  }, [transfer, accounts, query, creatable, current, groups, categories, bundles, currentTransfer, currentCategoryId]);
+  }, [query, creatable, current, groups, pickable, bundles, currentCategoryId]);
 
   const commit = useCallback(
     (item: Item | undefined) => {
@@ -150,11 +125,10 @@ export function CategoryDropdown({
         const name = draft.trim();
         if (!name) return;
         onCreate(name);
-      } else if (item.kind === 'transfer' && item.targetId) onTransferPick(item.targetId);
-      else onPick(item.targetId);
+      } else onPick(item.targetId);
       close();
     },
-    [onCreate, onPick, onTransferPick, close, draft],
+    [onCreate, onPick, close, draft],
   );
 
   const onKeyPress = useCallback(
@@ -190,7 +164,7 @@ export function CategoryDropdown({
         </Text>,
       );
     }
-    const itemTitle = transfer ? t('category.paymentsAndTransfers') : item.groupTitle;
+    const itemTitle = item.groupTitle;
     if (itemTitle && lastTitle !== itemTitle) {
       lastTitle = itemTitle;
       rows.push(
@@ -242,9 +216,7 @@ export function CategoryDropdown({
   if (query && items.length === 0) {
     rows.push(
       <Text key="empty" style={dropdownStyles.emptyRow}>
-        {transfer
-          ? t('dropdown.noAccountsMatch', { query: draft.trim() })
-          : t('category.noMatch', { query: draft.trim() })}
+        {t('category.noMatch', { query: draft.trim() })}
       </Text>,
     );
   }
@@ -273,20 +245,10 @@ export function CategoryDropdown({
         containerStyle={styles.cellInner}
         accessibilityLabel={accessibilityLabel}
         footer={
-          <View style={styles.footerRow}>
-            <Pressable
-              onPressIn={() => {
-                setMode('transfer');
-                setDraft('');
-                setHighlight(0);
-              }}
-              {...pressNoBlur}
-              style={[dropdownStyles.pinnedRow, dropdownStyles.row, styles.footerHalf]}>
-              <Text style={[dropdownStyles.rowLabel, dropdownStyles.pinnedLabel]}>{t('category.paymentTransfer')}</Text>
-            </Pressable>
-            {/* Split (syscd-app-rlt): opens the row's split editor. Only shown
-                through onSplitPick — register rows that can host it. */}
-            {onSplitPick ? (
+          // Split (syscd-app-rlt): opens the row's split editor. Only shown
+          // through onSplitPick — register rows that can host it.
+          onSplitPick ? (
+            <View style={styles.footerRow}>
               <Pressable
                 onPressIn={() => {
                   onSplitPick();
@@ -296,8 +258,8 @@ export function CategoryDropdown({
                 style={[dropdownStyles.pinnedRow, dropdownStyles.row, styles.footerHalf]}>
                 <Text style={[dropdownStyles.rowLabel, dropdownStyles.pinnedLabel]}>{t('category.split')}</Text>
               </Pressable>
-            ) : null}
-          </View>
+            </View>
+          ) : undefined
         }
         portalMinWidth={240}>
         {rows}

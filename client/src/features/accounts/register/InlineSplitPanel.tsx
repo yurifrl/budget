@@ -56,11 +56,9 @@ export function InlineSplitPanel({
               bundles={budget.bundles}
               currentCategoryId={leg.categoryId}
               bm={bm}
-              accounts={budget.accounts}
               onPick={(picked) =>
                 onChange((prev) => updateSplitLeg(prev, i, { categoryId: picked }))
               }
-              onTransferPick={() => undefined}
               onCreate={(query) =>
                 onCreateCategory(query, (id) =>
                   onChange((prev) => updateSplitLeg(prev, i, { categoryId: id })),

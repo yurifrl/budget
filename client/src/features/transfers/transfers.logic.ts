@@ -6,7 +6,7 @@
  */
 import type { TransferLinkInput, TransferSuggestion } from '@/budget/data/api';
 import { milliToCents } from '@/budget/data/mapping';
-import type { Account, Cents, Transaction } from '@/domain/types';
+import type { Cents, Transaction } from '@/domain/types';
 import { t } from './i18n';
 
 export type RegisterChip = 'all' | 'needsCategory' | 'suggested' | 'transfers';
@@ -231,9 +231,4 @@ export function linkedToast(result: { linked: string[]; rules_created: number })
   const pairs = Math.round(result.linked.length / 2);
   const linked = t('toast.linked', { count: pairs });
   return result.rules_created > 0 ? `${linked} · ${t('toast.rules', { count: result.rules_created })}` : linked;
-}
-
-/** On-budget open accounts a transfer may go to (rule targets, "Other account…"). */
-export function transferTargets(accounts: readonly Account[], exceptId?: string): Account[] {
-  return accounts.filter((a) => a.onBudget && a.group !== 'CLOSED' && a.id !== exceptId);
 }

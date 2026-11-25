@@ -26,7 +26,7 @@ import {
   useGetCategoryTargetsQuery,
   useGetGroupsQuery,
   useGetMonthNotesQuery,
-  useGetPayeesQuery,
+  useGetPayeesWithTransfersQuery,
   useGetTransactionsQuery,
 } from '@/budget/data/api';
 import { assembleBudget } from '@/budget/data/mapping';
@@ -54,7 +54,7 @@ export function useBudgetModel(): BudgetModel {
   const categories = useGetCategoriesQuery(scope);
   const bundles = useGetBundlesQuery(scope);
   const accounts = useGetAccountsQuery(scope);
-  const payees = useGetPayeesQuery(scope);
+  const payees = useGetPayeesWithTransfersQuery(scope);
   const transactions = useGetTransactionsQuery(scope);
   const assignments = useGetAssignmentsQuery(scope);
   const monthNotes = useGetMonthNotesQuery(scope);

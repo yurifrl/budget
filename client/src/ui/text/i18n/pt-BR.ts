@@ -27,8 +27,6 @@ const m: Translation<typeof en> = {
   'category.readyToAssign': 'Pronto para atribuir',
   'category.inflowReadyToAssign': 'Entrada / Pronto para atribuir',
   'category.new': 'Nova categoria',
-  'category.paymentsAndTransfers': 'Pagamentos e transferências',
-  'category.paymentTransfer': 'Pagamento/Transferência',
   'category.split': 'Divisão',
   'combobox.create': 'Criar “{query}”',
   'category.noMatch': 'Nenhuma categoria corresponde a “{query}”',

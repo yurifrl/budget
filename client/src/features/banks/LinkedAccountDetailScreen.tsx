@@ -198,7 +198,7 @@ export function LinkedAccountDetailScreen() {
           data={txns}
           keyExtractor={(txn) => txn.id}
           renderItem={({ item: txn }) => {
-            const cat = registerCategoryCell(budget, txn, { transfers: false });
+            const cat = registerCategoryCell(budget, txn);
             if (!showWide) {
               // Phone card — AccountsScreen's txnCard layout without the
               // Pressable/editor: payee + Repeat + amount + cleared mark,

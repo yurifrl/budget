@@ -6,6 +6,7 @@ const m: Translation<typeof en> = {
   'field.date': 'Data',
   'field.payee': 'Favorecido',
   'field.category': 'Categoria',
+  'field.categoryNotNeeded': 'Categoria não necessária',
   'field.memo': 'Observação',
 
   'row.cancelEditing': 'Cancelar edição da transação',
@@ -73,6 +74,7 @@ const m: Translation<typeof en> = {
   'payee.sub.cash': 'Conta em dinheiro',
   'payee.sub.credit': 'Conta de crédito',
   'payee.sub.account': 'Conta',
+  'payee.sub.offBudget': 'Fora do orçamento',
   'payee.create': 'Usar “{name}” como favorecido',
   'payee.manage': 'Gerenciar favorecidos…',
 };

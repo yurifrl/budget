@@ -23,8 +23,6 @@ export default {
   'category.readyToAssign': 'Ready to Assign',
   'category.inflowReadyToAssign': 'Inflow / Ready to Assign',
   'category.new': 'New Category',
-  'category.paymentsAndTransfers': 'Payments and Transfers',
-  'category.paymentTransfer': 'Payment/Transfer',
   'category.split': 'Split',
   'combobox.create': 'Create “{query}”',
   'category.noMatch': 'No categories match “{query}”',

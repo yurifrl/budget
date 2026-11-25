@@ -46,6 +46,7 @@ const m: Translation<typeof en> = {
   'other.title': 'Vincular a qual conta?',
   'other.outside': 'Uma conta fora deste orçamento',
   'other.outsideSub': 'Manter como transferência, sem categoria',
+  'other.offBudget': 'Fora do orçamento',
   'other.back': 'Voltar',
 
   'review.colDate': 'DATA',

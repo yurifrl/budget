@@ -12,63 +12,76 @@ import {
 } from './payeeDropdown.logic';
 
 const accounts = [
-  { id: 'a1', name: 'Checking', group: 'CASH' },
-  { id: 'a2', name: 'Card', group: 'CREDIT' },
-  { id: 'a3', name: 'Broker', group: 'TRACKING' },
+  { id: 'a1', name: 'Checking', group: 'CASH', onBudget: true },
+  { id: 'a2', name: 'Card', group: 'CREDIT', onBudget: true },
+  { id: 'a3', name: 'Broker', group: 'CASH', onBudget: false },
+  { id: 'a4', name: 'Old', group: 'CLOSED', onBudget: true },
 ] as unknown as Account[];
 const payees = [
-  { id: 'p1', name: 'Padaria', hidden: false },
-  { id: 'p2', name: 'Secret', hidden: true },
-  { id: 'p3', name: 'Pharmacy', hidden: false },
+  { id: 'tp1', name: 'Transfer : Checking', transfer_account_id: 'a1', hidden: false, deleted: false },
+  { id: 'tp2', name: 'Transfer : Card', transfer_account_id: 'a2', hidden: false, deleted: false },
+  { id: 'tp3', name: 'Transfer : Broker', transfer_account_id: 'a3', hidden: false, deleted: false },
+  { id: 'tp4', name: 'Transfer : Old', transfer_account_id: 'a4', hidden: false, deleted: false },
+  { id: 'p1', name: 'Padaria', transfer_account_id: null, hidden: false, deleted: false },
+  { id: 'p2', name: 'Secret', transfer_account_id: null, hidden: true, deleted: false },
+  { id: 'p3', name: 'Pharmacy', transfer_account_id: null, hidden: false, deleted: false },
 ] as unknown as PayeeAdminRow[];
-const sections = (value: string, currentAccountId: string | null = 'a1') => payeeSections({ accounts, currentAccountId, payees, value });
+const sections = (value: string, currentAccountId: string | null = 'a1', payeeId: string | null = null) =>
+  payeeSections({ accounts, currentAccountId, payees, value, payeeId });
 const titles = (value: string) => sections(value).map((s) => s.title);
 
 describe('payeeSections', () => {
-  test('empty field: transfers to every other account, then visible saved payees', () => {
+  test('empty field: the transfer payee of every other open account, then visible saved payees, each by id', () => {
     expect(sections('')).toEqual([
       {
         title: 'Payments and Transfers',
         items: [
-          { kind: 'transfer', key: 'transfer:a2', label: 'Transfer : Card', sub: 'Credit account', commit: 'Transfer : Card' },
-          { kind: 'transfer', key: 'transfer:a3', label: 'Transfer : Broker', sub: 'Account', commit: 'Transfer : Broker' },
+          { kind: 'transfer', key: 'transfer:a2', label: 'Transfer : Card', sub: 'Credit account', commit: 'Transfer : Card', payeeId: 'tp2' },
+          { kind: 'transfer', key: 'transfer:a3', label: 'Transfer : Broker', sub: 'Off budget', commit: 'Transfer : Broker', payeeId: 'tp3' },
         ],
       },
       {
         title: 'Saved Payees',
         items: [
-          { kind: 'payee', key: 'payee:p1', label: 'Padaria', commit: 'Padaria' },
-          { kind: 'payee', key: 'payee:p3', label: 'Pharmacy', commit: 'Pharmacy' },
+          { kind: 'payee', key: 'payee:p1', label: 'Padaria', commit: 'Padaria', payeeId: 'p1' },
+          { kind: 'payee', key: 'payee:p3', label: 'Pharmacy', commit: 'Pharmacy', payeeId: 'p3' },
         ],
       },
     ]);
   });
-  test('cash accounts are labelled; no current account lists them all', () => {
+  test('closed accounts are not offered; off-budget ones are labelled; no current account lists them all', () => {
     expect(sections('', null)[0].items.map((i) => [i.label, i.sub])).toEqual([
       ['Transfer : Checking', 'Cash account'],
       ['Transfer : Card', 'Credit account'],
-      ['Transfer : Broker', 'Account'],
+      ['Transfer : Broker', 'Off budget'],
     ]);
   });
+  test('transfer payees are not in Saved Payees', () => {
+    const saved = sections('').find((s) => s.title === 'Saved Payees')!;
+    expect(saved.items.map((i) => i.commit)).not.toContain('Transfer : Card');
+  });
   test('typing filters both lists by substring, case-insensitively; empty sections vanish', () => {
-    expect(sections(' pHa ')).toEqual([{ title: 'Saved Payees', items: [{ kind: 'payee', key: 'payee:p3', label: 'Pharmacy', commit: 'Pharmacy' }] }]);
+    expect(sections(' pHa ')).toEqual([{ title: 'Saved Payees', items: [{ kind: 'payee', key: 'payee:p3', label: 'Pharmacy', commit: 'Pharmacy', payeeId: 'p3' }] }]);
     expect(titles('card')).toEqual(['Payments and Transfers']);
     expect(sections('zzz')).toEqual([]);
   });
   test('an exact visible payee shows under Selected (checked) and stays in Saved Payees', () => {
     const s = sections('Padaria');
-    expect(s[0]).toEqual({ title: 'Selected', items: [{ kind: 'selected', key: 'selected', label: 'Padaria', commit: 'Padaria', checked: true }] });
+    expect(s[0]).toEqual({ title: 'Selected', items: [{ kind: 'selected', key: 'selected', label: 'Padaria', commit: 'Padaria', payeeId: 'p1', checked: true }] });
     expect(s.map((x) => x.title)).toEqual(['Selected', 'Saved Payees']);
   });
   test('Selected matches the trimmed value exactly (case-sensitive); hidden payees never show', () => {
     expect(titles('padaria')).toEqual(['Saved Payees']);
     expect(sections('Secret')).toEqual([]);
   });
-  test('a held transfer shows under Selected, even one to the current account', () => {
-    expect(sections('Transfer : Checking')).toEqual([
-      { title: 'Selected', items: [{ kind: 'selected', key: 'selected-transfer', label: 'Transfer : Checking', commit: 'Transfer : Checking', checked: true }] },
+  test('a held transfer payee (by id) shows under Selected, even the current account\'s own, which the list omits', () => {
+    expect(sections('Transfer : Checking', 'a1', 'tp1')).toEqual([
+      { title: 'Selected', items: [{ kind: 'selected', key: 'selected', label: 'Transfer : Checking', commit: 'Transfer : Checking', payeeId: 'tp1', checked: true }] },
     ]);
-    expect(titles('Transfer : Card')).toEqual(['Selected', 'Payments and Transfers']);
+    expect(sections('Transfer : Card', 'a1', 'tp2').map((x) => x.title)).toEqual(['Selected', 'Payments and Transfers']);
+  });
+  test('typed transfer text without a picked id is not Selected (the text is not what makes a transfer)', () => {
+    expect(titles('Transfer : Checking')).toEqual([]);
   });
 });
 

@@ -8,10 +8,11 @@ import { payeeMenu, payeeSections } from './payeeDropdown.logic';
 
 afterEach(() => setLocale('en'));
 
-const accounts = [{ id: 'a1', name: 'Nubank', group: 'CASH' }] as unknown as Account[];
+const accounts = [{ id: 'a1', name: 'Nubank', group: 'CASH', onBudget: true }] as unknown as Account[];
 const payees = [
-  { id: 'p1', name: 'Starting Balance', hidden: false },
-  { id: 'p2', name: 'Mercado', hidden: false },
+  { id: 'tp1', name: 'Transfer : Nubank', transfer_account_id: 'a1', hidden: false, deleted: false },
+  { id: 'p1', name: 'Starting Balance', transfer_account_id: null, hidden: false, deleted: false },
+  { id: 'p2', name: 'Mercado', transfer_account_id: null, hidden: false, deleted: false },
 ] as unknown as PayeeAdminRow[];
 const sections = (value: string) => payeeSections({ accounts, currentAccountId: null, payees, value });
 const items = (value: string) => sections(value).flatMap((s) => s.items);

@@ -19,6 +19,8 @@ export function SheetPicker({ sheet }: { sheet: AddTransaction }) {
     payee,
     canCreatePayee,
     filteredPayees,
+    filteredTransfers,
+    payeeId,
     pickPayee,
     categoryId,
     canCreateCategory,
@@ -60,10 +62,25 @@ export function SheetPicker({ sheet }: { sheet: AddTransaction }) {
               </Text>
             </Pressable>
           ) : null}
+          {filteredTransfers.length > 0 ? (
+            <>
+              <Text style={styles.sectionTitle}>{t('picker.sectionTransfers').toUpperCase()}</Text>
+              {filteredTransfers.map(({ payee: p, account: a }) => (
+                <Pressable key={p.id} style={styles.row} onPress={() => pickPayee(p.name, p)}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowV}>{displaySystemName(p.name)}</Text>
+                    {!a.onBudget ? <Text style={styles.rowSub}>{t('picker.offBudget')}</Text> : null}
+                  </View>
+                  {payeeId === p.id ? <Text style={{ color: colors.indigo2 }}>✓</Text> : null}
+                </Pressable>
+              ))}
+            </>
+          ) : null}
+          {filteredPayees.length > 0 ? <Text style={styles.sectionTitle}>{t('picker.sectionPayees').toUpperCase()}</Text> : null}
           {filteredPayees.map((p) => (
             <Pressable key={p.id} style={styles.row} onPress={() => pickPayee(p.name, p)}>
               <Text style={styles.rowV}>{displaySystemName(p.name)}</Text>
-              {payee === p.name ? <Text style={{ color: colors.indigo2 }}>✓</Text> : null}
+              {payeeId === p.id || (!payeeId && payee === p.name) ? <Text style={{ color: colors.indigo2 }}>✓</Text> : null}
             </Pressable>
           ))}
         </>

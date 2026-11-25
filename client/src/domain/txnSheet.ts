@@ -5,6 +5,7 @@
  * types. (Spending/Income and category resolution live in sheetKind.ts.)
  */
 
+import { payeeWrite } from './inlineAdd';
 import type { Cents, Transaction } from './types';
 
 /** An edit starts from the stored amount (whichever flow is set); a new entry from 0. */
@@ -52,6 +53,8 @@ export interface SheetForm {
   accountId: string;
   date: string;
   payee: string;
+  /** The picked payee's id (an existing payee, a transfer payee too); null for typed text. */
+  payeeId: string | null;
   /** The resolved category (null = Ready to Assign / uncategorized). */
   categoryId: string | null;
   isIncome: boolean;
@@ -59,12 +62,15 @@ export interface SheetForm {
   amount: Cents;
 }
 
-/** The fields an edit rewrites: income is an inflow, spending an outflow. */
-export function sheetEditPatch(form: SheetForm) {
+/**
+ * The fields an edit rewrites: income is an inflow, spending an outflow. The
+ * payee goes only when it changed (a picked one by id, typed text as text).
+ */
+export function sheetEditPatch(form: SheetForm, original: Pick<Transaction, 'payee' | 'payeeId'>) {
   return {
     accountId: form.accountId,
     date: form.date,
-    payee: form.payee.trim(),
+    ...payeeWrite({ payee: form.payee, payeeId: form.payeeId }, original),
     categoryId: form.categoryId,
     outflowCents: form.isIncome ? 0 : form.amount,
     inflowCents: form.isIncome ? form.amount : 0,
@@ -77,6 +83,7 @@ export function sheetNewTransaction(form: SheetForm) {
     accountId: form.accountId,
     date: form.date,
     payee: form.payee.trim(),
+    payeeId: form.payeeId,
     categoryId: form.categoryId,
     memo: '',
     outflowCents: form.isIncome ? 0 : form.amount,

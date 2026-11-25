@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { TransferSuggestion } from '@/budget/data/api';
-import type { Account, Transaction } from '@/domain/types';
+import type { Transaction } from '@/domain/types';
 import {
   allSelected,
   bulkSummary,
@@ -15,7 +15,6 @@ import {
   ruleReason,
   selectAllRows,
   scopeSuggestions,
-  transferTargets,
   whyLine,
 } from './transfers.logic';
 
@@ -215,18 +214,5 @@ describe('review list and bulk bar', () => {
   test('toast text', () => {
     expect(linkedToast({ linked: ['a', 'b', 'c', 'd', 'e', 'f'], rules_created: 1 })).toBe('3 linked as transfers · 1 payee rule created');
     expect(linkedToast({ linked: ['a', 'b'], rules_created: 0 })).toBe('1 linked as transfer');
-  });
-});
-
-describe('rules and targets', () => {
-  const accounts = [
-    { id: 'itau', name: 'Itau Conta', onBudget: true, group: 'CASH' },
-    { id: 'nu', name: 'Nubank Conta', onBudget: true, group: 'CASH' },
-    { id: 'card', name: 'Nubank Cartão', onBudget: true, group: 'CREDIT' },
-    { id: 'house', name: 'House', onBudget: false, group: 'TRACKING' },
-    { id: 'old', name: 'Old', onBudget: true, group: 'CLOSED' },
-  ] as unknown as Account[];
-  test('targets are open on-budget accounts other than the row\'s', () => {
-    expect(transferTargets(accounts, 'itau').map((a) => a.id)).toEqual(['nu', 'card']);
   });
 });

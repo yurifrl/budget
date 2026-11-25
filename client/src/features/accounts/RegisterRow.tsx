@@ -30,7 +30,7 @@ interface RowBaseProps {
   /** The row's account (undefined when the account is gone). */
   account: Account | undefined;
   /** Category cell from `registerCategoryCell`. */
-  category: { text: string; warn: boolean };
+  category: { text: string; warn: boolean; notNeeded?: boolean };
   density: RegisterDensity;
   /** Memo… from the native row menu: opens the edit sheet. */
   onEditMemo: () => void;
@@ -46,7 +46,7 @@ interface RowBaseProps {
 function CategoryCell({ txn, category, onOpenTransfer }: Pick<RowBaseProps, 'txn' | 'category' | 'onOpenTransfer'>) {
   return (
     <>
-      <Text style={[styles.tagPill, category.warn && styles.tagPillWarn, txn.transferAccountId && styles.tagPillTransfer]} numberOfLines={1}>
+      <Text style={[styles.tagPill, category.warn && styles.tagPillWarn, category.notNeeded && styles.tagPillNotNeeded]} numberOfLines={1}>
         {category.text}
       </Text>
       {txn.transferSuggestion && onOpenTransfer ? (
@@ -309,7 +309,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.yellowPillBg,
     color: colors.yellowPillFg,
   },
-  tagPillTransfer: { backgroundColor: colors.bluePillBg, color: colors.blue },
+  // "Category not needed": greyed, no pill fill.
+  tagPillNotNeeded: { backgroundColor: 'transparent', color: colors.faint, fontStyle: 'italic' },
   txnCard: {
     paddingHorizontal: 20,
     paddingVertical: 7,
