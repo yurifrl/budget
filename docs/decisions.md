@@ -1886,6 +1886,67 @@ app. The two now ship independently.
   "Apply to past rows" clears it. Undone links are marked `manual`: still
   suggested, never auto-linked again.
 
+## Transfer account rules by bank (budget-zkts)
+
+- The person's rules, enforced in the matcher's `fits` (`pairViolation`), so
+  breaking candidates are dropped before any tie-break: (1) a card only
+  receives (card→card is no longer paired; a lone card outflow is never a
+  one-side suggestion, also when its payee has a rule: such a row can never
+  pair); (2) cash→card only within one bank (any checking, savings or
+  cash-in-hand account paying a card); (3) checking→checking only
+  across banks. Rule 3 is judged on the account type, not the matcher's
+  `cash` kind: savings and cash-in-hand accounts are `cash` too, and a move
+  between a checking and a savings account of one bank (either way) is an
+  ordinary transfer that keeps linking and being suggested.
+- Bank of an account: `bankKey(accounts.institution ?? connections.institution)`
+  (`domain/bank-key.ts`: accents/punctuation/suffixes stripped, known brands
+  mapped, so "Itaú Unibanco PF" = "itau", "Nu Pagamentos S.A." = "Nubank").
+  With no label on either side, the same `connection_id` means the same bank.
+  Otherwise unknown: rules 2 and 3 do not apply (old behaviour).
+  One side labelled and the other not, on the same connection: the same bank
+  (the unlabelled account is taken to share the connection's bank); with
+  different connections it is unknown. Pinned in `transfer-matcher.test.ts`.
+  How "same bank" is decided (labels versus connection id) stays open until
+  production data and an owner decision.
+- Owner decision (refused pairs): a pair a rule refuses is never linked
+  automatically (not by evidence, not by an `auto` payee rule), but it is not
+  hidden: a row that stays unlinked carries every refused candidate it has.
+  A row without a suggestion gets a `refused` one (`basis: 'refused'`, `sure`
+  when the pair is mutual and neither row has another candidate, `choose`
+  otherwise); a row already in a choose group or in a pair left for the
+  person gets the refused candidates added and becomes `choose`; a row whose
+  only partner is refused is offered it even when that partner has allowed
+  candidates of its own. Each refused candidate carries the rule it breaks
+  (`rule`: `card_outflow` | `card_payment_other_bank` | `cash_same_bank`).
+  Refused candidates never change which allowed pair is linked, and a row that
+  is linked is never offered one. They count as suspected transfers in the
+  register chip and the suggestions list, and the row is then not also a
+  one-side or waiting/outside rule row. Only pairs main would have matched
+  are ever refused candidates (card→card, cash→card
+  at another bank, checking→checking at one bank); a card outflow against a
+  cash inflow (refund, cash advance) was never a transfer candidate and is
+  none now. Confirming
+  goes through `POST /transfers/link` with `counterpart_id` and returns the
+  existing warning. Contract change is additive (new basis value, optional
+  `candidates[].rule`). A released client has no text for `refused`: its
+  "Why:" line falls through to "no matching row in your accounts" (wrong but
+  harmless; the link action still works), so the client should add a reason
+  per `rule` (e.g. "different banks").
+- Known limit of "same bank" (follow-up, not fixed here): bank labels come
+  from the account's institution, else the connection's, and the same
+  connection counts as one bank when labels are missing. A connection that
+  holds several banks with unlabelled accounts would be treated as one bank.
+  Production data (read by the owner) has one bank per live connection and a
+  label on every linked account, so it does not occur today. A fix would
+  store the bank per account at link/sync time and treat the MeuPluggy
+  wrapper connection as unknown.
+- Re-running the matcher never touches a link that already exists, even one
+  that breaks these rules: only unlinked rows are candidates and nothing
+  unlinks (tested in `budget/routes/transfers.test.ts`).
+- A fixed-account payee rule is the person's choice and skips rules 2–3.
+  `POST /transfers/link` with a counterpart never blocks; a pair that breaks
+  a rule is linked and listed in `warnings`.
+
 ## Category suggestions engine (budget-fvtx)
 
 - `connection_transactions.raw_payload` (0105) is the provider transaction

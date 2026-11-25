@@ -289,7 +289,8 @@ export const subTransactionRowSchema = z.object({
 // ---- transfers between own accounts (budget-mit6) ------------------------------
 
 export const transferConfidences = ['sure', 'choose', 'one_side'] as const;
-export const transferBases = ['unique', 'ordinal', 'evidence', 'rule', 'ambiguous', 'unmatched'] as const;
+export const transferBases = ['unique', 'ordinal', 'evidence', 'rule', 'ambiguous', 'unmatched', 'refused'] as const;
+export const transferViolations = ['card_outflow', 'card_payment_other_bank', 'cash_same_bank'] as const;
 export const transferRuleModes = ['off', 'auto', 'account', 'never'] as const;
 export const transferNoMatchPolicies = ['outside', 'review'] as const;
 
@@ -324,16 +325,31 @@ export const transferSuggestionSchema = z.object({
   /** The row the suggestion is about (the outflow of a pair, or the lone row). */
   id,
   confidence: z.enum(transferConfidences),
-  /** Why: `unique` only candidate, `ordinal` paired in date order among repeats, `evidence` bank labels, `rule` payee rule, `ambiguous` several candidates, `unmatched` no candidate. */
+  /** Why: `unique` only candidate, `ordinal` paired in date order among repeats, `evidence` bank labels, `rule` payee rule, `ambiguous` several candidates, `unmatched` no candidate, `refused` the pair breaks an account rule (never linked on its own; each candidate's `rule` says which). */
   basis: z.enum(transferBases),
   leg: transferLegSchema,
-  candidates: z.array(transferLegSchema.extend({ days_apart: z.number().int() })),
+  candidates: z.array(
+    transferLegSchema.extend({
+      days_apart: z.number().int(),
+      /** Only on `refused` suggestions: the account rule this pairing breaks. `card_outflow`: a card is never the paying side; `card_payment_other_bank`: a checking, savings or cash account paying another bank's card; `cash_same_bank`: checking to checking within one bank. */
+      rule: z.enum(transferViolations).optional(),
+    }),
+  ),
 });
 
 export const transferLinkResultSchema = z.object({
   /** Every transaction id now linked (both legs of each pair); pass them to unlink to undo. */
   linked: z.array(id),
   rules_created: z.number().int(),
+  /**
+   * Counterpart links made although they break an account rule (they are still
+   * linked): `card_outflow` a card is never the paying side; `card_payment_other_bank`
+   * a checking, savings or cash account paid another bank's card; `cash_same_bank` checking to
+   * checking within one bank.
+   */
+  warnings: z.array(
+    z.object({ transaction_id: id, counterpart_id: id, rule: z.enum(transferViolations) }),
+  ),
 });
 
 export const payeeTransferRuleSchema = z.object({

@@ -33,10 +33,21 @@ describe('transfer contracts', () => {
     expect(transferSuggestionsList.input.safeParse({ budget_id: b }).success).toBe(true);
   });
 
+  test('a refused suggestion names the rule each candidate breaks; the field is optional elsewhere', () => {
+    const cand = { ...leg, transaction_id: t2, amount: 3_000_000, days_apart: 1 };
+    const row = { id: t1, confidence: 'sure', basis: 'refused', leg, candidates: [{ ...cand, rule: 'cash_same_bank' }] };
+    expect(transferSuggestionsList.output!.safeParse([row]).success).toBe(true);
+    expect(transferSuggestionsList.output!.safeParse([{ ...row, candidates: [{ ...cand, rule: 'nope' }] }]).success).toBe(false);
+    expect(transferSuggestionsList.output!.safeParse([{ ...row, basis: 'unique', candidates: [cand] }]).success).toBe(true);
+  });
+
   test('link takes pairs (or an account) and an optional remember flag; ids and modes are validated', () => {
     expect(transfersLink.input.safeParse({ budget_id: b, links: [{ transaction_id: t1, counterpart_id: t2 }], remember_payee: true }).success).toBe(true);
     expect(transfersLink.input.safeParse({ budget_id: b, links: [] }).success).toBe(false);
-    expect(transfersLink.output!.safeParse({ linked: [t1, t2], rules_created: 1 }).success).toBe(true);
+    expect(transfersLink.output!.safeParse({ linked: [t1, t2], rules_created: 1, warnings: [] }).success).toBe(true);
+    const warning = { transaction_id: t1, counterpart_id: t2, rule: 'card_payment_other_bank' };
+    expect(transfersLink.output!.safeParse({ linked: [t1, t2], rules_created: 0, warnings: [warning] }).success).toBe(true);
+    expect(transfersLink.output!.safeParse({ linked: [], rules_created: 0, warnings: [{ ...warning, rule: 'nope' }] }).success).toBe(false);
     expect(transfersUnlink.input.safeParse({ budget_id: b, transaction_ids: ['nope'] }).success).toBe(false);
     expect(transfersMark.input.safeParse({ budget_id: b, transaction_ids: [t1], state: null }).success).toBe(true);
     expect(transfersMark.input.safeParse({ budget_id: b, transaction_ids: [t1], state: 'manual' }).success).toBe(false);
