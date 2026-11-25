@@ -26,7 +26,9 @@ import { HttpError, errorResponse } from '../../core/validate';
 import type { IdentityUser } from '../../user';
 import { budgetRestore } from '@shared/contracts/budget';
 import { upgradeRestorePayload } from '@shared/contracts/budget/schemas';
+import { TRANSFER_PAYEE_RE } from '@shared/domain/transfers';
 import { matchCategoryIds, restoreScope } from '../domain/restore-scope';
+import { ensureTransferPayee } from '../domain/transfer-payees';
 import { recomputeAccountBalances } from '../domain/transactions';
 import { isBudgetMember, isBudgetOwner } from '../ownership';
 import { budgetRouter } from '../router';
@@ -38,7 +40,6 @@ import {
   insertRestoredCategory,
   insertRestoredGroup,
   insertRestoredTransaction,
-  linkRestoredTransferPayees,
   listCategoryKeys,
   linkRestoredTransferPeer,
   relinkCategoryLinks,
@@ -150,6 +151,9 @@ export const operations = [
           await personFor(payload.accounts[i].userId),
           payload.accounts[i].currency ?? null,
         );
+        // Every restored account gets its own transfer payee, by id: two
+        // accounts with the same name each keep theirs.
+        await ensureTransferPayee(client, budgetId, accountIds[i], payload.accounts[i].name);
       }
 
       // ---- payees ------------------------------------------------------------
@@ -185,12 +189,15 @@ export const operations = [
           throw new HttpError(400, `transaction ${i}: transferPeerIndex ${txn.transferPeerIndex} out of range`, 'invalid_backup');
         }
 
-        const peerAccountName =
-          txn.transferPeerIndex !== null
-            ? payload.accounts[payload.transactions[txn.transferPeerIndex].accountIndex].name
-            : null;
-        const payeeName = txn.payee === '' && peerAccountName ? `Transfer : ${peerAccountName}` : txn.payee;
-        const payeeId = await payeeFor(payeeName);
+        // A transfer leg whose payee is empty or reads "Transfer : <name>" takes
+        // the PEER account's transfer payee, by account (not by name: accounts
+        // may share a name).
+        const peerAccountIndex =
+          txn.transferPeerIndex !== null ? payload.transactions[txn.transferPeerIndex].accountIndex : null;
+        const payeeId =
+          peerAccountIndex !== null && (txn.payee === '' || TRANSFER_PAYEE_RE.test(txn.payee))
+            ? await ensureTransferPayee(client, budgetId, accountIds[peerAccountIndex])
+            : await payeeFor(txn.payee);
 
         const categoryId =
           txn.categoryIndex === null
@@ -223,10 +230,6 @@ export const operations = [
         }
         await linkRestoredTransferPeer(client, txnIds[i], txnIds[peer]);
       }
-
-      // "Transfer : <account>" payees keep their picker linkage to the account,
-      // mirroring the app's per-account transfer payee convention.
-      if (scope.register) await linkRestoredTransferPayees(client, budgetId);
 
       // ---- assignments -------------------------------------------------------
       const assignments = scope.plan ? payload.assignments : [];

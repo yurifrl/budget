@@ -21,9 +21,10 @@ import {
   insertSubTxns,
   loadRenameRules,
   resolvePayeeId,
-  upsertPayee,
+  upsertPayeeResolvingTransfers,
 } from '../domain/transactions';
 import { linkTransfers, transferOverview } from '../domain/transfer-links';
+import { payeeIdFromRequest } from '../domain/edited-payee';
 import { deleteMirror, insertMirror, resolveTransferPeer, syncMirror } from '../domain/transfers';
 import { advanceOccurrence } from '../domain/repeat-schedule';
 import { updateTransactionInClient } from '../domain/transaction-update';
@@ -57,7 +58,8 @@ async function createTransaction(
     if (txn.category_id) {
       if (!(await categoryInBudget(client, txn.category_id, budget_id))) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
     }
-    const payeeId = await resolvePayeeId(client, budget_id, txn.payee);
+    const payeeId =
+      txn.payee_id !== undefined ? await payeeIdFromRequest(client, budget_id, txn.payee_id) : await resolvePayeeId(client, budget_id, txn.payee);
     // A split overrides the single category: the parent carries NULL ("Split")
     // and each leg owns its own category (syscd-app-rlt).
     const isSplit = (subtransactions?.length ?? 0) > 0;
@@ -228,7 +230,8 @@ export const operations = [
       const rules = (await loadRenameRules(client, budget_id)).rows;
       const payeeIdByName = new Map<string, string | null>();
       for (const name of new Set(txns.map((t) => t.payee.trim()).filter(Boolean))) {
-        payeeIdByName.set(name, await upsertPayee(client, budget_id, applyRules(rules, name)));
+        const effective = applyRules(rules, name);
+        payeeIdByName.set(name, await upsertPayeeResolvingTransfers(client, budget_id, effective, { fromRule: effective !== name }));
       }
 
       // Existing occurrence numbers per `YNAB:<milliunits>:<date>:<payee>`

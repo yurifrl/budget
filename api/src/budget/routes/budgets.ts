@@ -12,6 +12,9 @@ import {
 } from '@shared/contracts/budget';
 import { claimUnownedBudgets } from '../ownership';
 import { budgetRouter } from '../router';
+import { repairTransferPayees } from '../domain/transfer-payee-repair';
+import { ensureTransferPayee } from '../domain/transfer-payees';
+import * as transferPayeesStore from '../store/transfer-payees';
 import * as budgetsStore from '../store/budgets';
 import { authDisabled, DEV_EMAIL, toPersonRef, type IdentityUser } from '../../user';
 
@@ -91,6 +94,17 @@ export const operations = [
       const newId = created.id;
 
       await budgetsStore.copyBudgetForFreshStart(client, oldId, newId);
+      // Every copied account has a transfer payee (created when the old budget
+      // had none). Duplicates and name-only payees are copied as they were: the
+      // fresh start deletes and merges nothing, it only reports them for the
+      // repair script.
+      for (const account of await transferPayeesStore.listLiveAccounts(client, newId)) {
+        await ensureTransferPayee(client, newId, account.id);
+      }
+      const report = await repairTransferPayees(client, newId, { apply: false });
+      if (report.actions.length > 0) {
+        console.warn(`[transfer-payee] fresh start ${oldId} -> ${newId}: repair needed: ${JSON.stringify(report)}`);
+      }
 
       return c.json({ archived, created });
     });

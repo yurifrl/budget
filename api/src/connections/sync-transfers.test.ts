@@ -89,8 +89,16 @@ suite('connections sync links transfers between own accounts', () => {
       environment: 'production',
     });
     connId = c.id;
-    await pool.query('UPDATE accounts SET connection_id = $1, external_account_id = $2 WHERE id = $3', [connId, EXT_ITAU, itau]);
-    await pool.query('UPDATE accounts SET connection_id = $1, external_account_id = $2 WHERE id = $3', [connId, EXT_NU, nubank]);
+    // One connection, two banks: the account labels tell them apart (budget-zkts:
+    // checking to checking pairs only across banks; the same connection
+    // without labels would count as one bank).
+    await pool.query('UPDATE accounts SET connection_id = $1, external_account_id = $2, institution = $4 WHERE id = $3', [connId, EXT_ITAU, itau, 'itau']);
+    await pool.query('UPDATE accounts SET connection_id = $1, external_account_id = $2, institution = $4 WHERE id = $3', [
+      connId,
+      EXT_NU,
+      nubank,
+      'Nu Pagamentos S.A.',
+    ]);
   });
   afterAll(async () => {
     await pool.query('DELETE FROM budgets WHERE id = $1', [budgetId]);
