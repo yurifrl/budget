@@ -2577,8 +2577,8 @@ row, not from a timestamp.
   the hints it writes are picked up at the next sync or transfer review.
 - **Which rows.** Live, bank-imported (`import_id` set) rows of open accounts whose REAL bank
   text the rule WINS under the normal matching order (most specific, longest, oldest; a rule of
-  a dead transfer payee never fires). The real text of a synced row is the one the sync
-  recorded, else the stored provider object's (`rawBankText`); of a statement row, its import
+  a dead transfer payee never fires). The real text of a synced row is the stored provider
+  object's (`rawBankText`), else the one the sync recorded; of a statement row, its import
   text (`import_payee_name_original`, else `import_payee_name`). Never a synced row's import
   name: rows of the earlier behaviour hold the rewritten name there, and matching it would change
   rows the rule does not hold (the next sync would undo it). A synced row whose text is not known
