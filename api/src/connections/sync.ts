@@ -206,7 +206,17 @@ interface ExistingTxnRow {
   payee_id: string | null;
   shadow_blocked: boolean | null;
   shadow_payload: OwnedPayload | null;
+  /** The provider's object as the PREVIOUS pull stored it (read before this pull overwrites it). */
+  shadow_raw: unknown;
+  /** The bank text the row was imported with (`import_payee_name`; rows of the earlier behaviour hold the rewritten name). */
+  import_payee_name: string | null;
 }
+
+/** JSON with sorted keys: two objects the bank sent equal compare equal whatever the order jsonb gave back. */
+const canonicalJson = (value: unknown): string =>
+  JSON.stringify(value, (_k, v) =>
+    v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : 1))) : v,
+  );
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -597,7 +607,8 @@ async function syncOnce(
             await pg.query<ExistingTxnRow>(
               `SELECT t.id, t.date::text AS date, t.amount, t.memo, t.cleared,
                       p.name AS payee_name, t.payee_id,
-                      s.blocked AS shadow_blocked, s.last_synced_payload AS shadow_payload
+                      s.blocked AS shadow_blocked, s.last_synced_payload AS shadow_payload,
+                      s.raw_payload AS shadow_raw, t.import_payee_name
                FROM public.transactions t
                LEFT JOIN public.connection_transactions s ON s.transaction_id = t.id
                LEFT JOIN public.payees p ON p.id = t.payee_id
@@ -693,6 +704,22 @@ async function syncOnce(
             continue;
           }
 
+          // A renaming rule added, changed or removed later never moves a stored row by itself (docs/decisions.md, "Rules
+          // apply going forward"): a row the bank sent again with the same text stays as it is, whatever the rules say now.
+          // The text is unchanged when the row still holds the bank's own text as its import name, or (rows of the earlier
+          // behaviour hold the rewritten name there) when the bank sent the same object as the pull before AND that object
+          // carries the text (a provider object that does not mention the text says nothing about it).
+          const bankText = txn.description.trim();
+          const textKept = existing.import_payee_name === bankText;
+          const rawJson = canonicalJson(txn.raw);
+          const sameBankObject =
+            existing.shadow_raw != null && canonicalJson(existing.shadow_raw) === rawJson && bankText !== '' && rawJson.includes(JSON.stringify(bankText).slice(1, -1));
+          const sameDateAndAmount = current.date === txn.date.slice(0, 10) && current.amount === milli;
+          if (sameDateAndAmount && bankText !== '' && (textKept || sameBankObject)) {
+            result.duplicates += 1;
+            continue;
+          }
+
           // What the text means, read only: a row that stays as it is must not create payees.
           const upstreamPayee = await resolver.peek(txn.description);
           // The ledger's read-back form is date-only (`t.date::text`); compare
@@ -722,18 +749,21 @@ async function syncOnce(
           // with the transfer payee keeps it (the engine never rewrites a payee only
           // because transfer text is resolved differently now).
           const keep = legacyForm;
+          // The bank moved the date or amount of a row whose text it did not change (the stored import name is the text):
+          // the row follows the bank, its payee, import name and hint stay as they were stored.
+          const keepStored = !keep && textKept && bankText !== '';
           // The row is being changed: ONE resolve() decides payee, shadow name, import name
           // and hint, so the row and its shadow always agree (a peek made before the
           // resolve could adopt a name-only payee would disagree with the stored row,
           // and the next sync would freeze it).
-          const resolved = keep ? null : await resolver.resolve(txn.description);
+          const resolved = keep || keepStored ? null : await resolver.resolve(txn.description);
           const payeeId = resolved ? resolved.id : existing.payee_id;
           const storedName = resolved ? resolved.name : current.payee;
           await ledger.refreshImportedTransaction(pg, existing.id, {
             date: txn.date.slice(0, 10),
             amount: milli,
             payeeId,
-            importPayeeName: (resolved ? resolved.importName : current.payee) || null,
+            importPayeeName: (resolved ? resolved.importName : keepStored ? existing.import_payee_name : current.payee) || null,
           });
           // The hint follows the row: a refreshed row of transfer text keeps or gets it, any other text drops it.
           if (resolved) {
