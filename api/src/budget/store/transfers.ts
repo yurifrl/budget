@@ -54,7 +54,7 @@ const CANDIDATE_SELECT = `
                -- equalled the imported text ('is': the payee's name; 'contains': the text with the pattern
                -- replaced by the payee's name); that is kept, rule by rule. 'starts with' / 'ends with' never
                -- existed on main: such a row is as imported.
-               OR EXISTS (
+               OR (cs.transaction_id IS NULL AND EXISTS (
                  SELECT 1 FROM payee_renaming_rules rr
                   WHERE rr.payee_id = t.payee_id
                     AND CASE rr.match_type
@@ -65,7 +65,7 @@ const CANDIDATE_SELECT = `
                           WHEN 'starts_with' THEN starts_with(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), lower(rr.condition))
                           WHEN 'ends_with' THEN right(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), length(rr.condition)) = lower(rr.condition)
                           ELSE false
-                        END)), false) AS untouched_ledger,
+                        END))), false) AS untouched_ledger,
          m.state AS mark,
          a.connection_id, COALESCE(NULLIF(btrim(a.institution), ''), c.institution) AS institution,
          CASE WHEN ha.id IS NOT NULL AND NOT ha.deleted THEN h.account_id END AS hint_account_id

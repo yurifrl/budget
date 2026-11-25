@@ -21,7 +21,6 @@ import {
 import { linkTransfers } from '../domain/transfer-links';
 import { assertNotTransferPayee, transferPayeeProtected } from '../domain/transfer-payees';
 import * as transferStore from '../store/transfers';
-import { loadRenameRules, matchingRule } from '../domain/transactions';
 import { MIN_RULE_PATTERN_LENGTH } from '@shared/domain/payees';
 import { budgetRouter } from '../router';
 import { categoryInBudget } from '../store/categories';
@@ -86,11 +85,13 @@ async function assertRuleAllowed(
   matchType: string,
   condition: string,
   existing: { id: string; match_type: string; condition: string } | null,
+  /** The 2-character minimum belongs to the new operations; the released client's single-rule call may still send 1 character. */
+  opts: { enforceMinLength: boolean } = { enforceMinLength: true },
 ): Promise<void> {
   const text = condition.trim();
   if (existing && existing.match_type === matchType && existing.condition.toLowerCase() === text.toLowerCase()) return;
-  if (matchType !== 'is' && text.length < MIN_RULE_PATTERN_LENGTH) {
-    throw new HttpError(400, `A "${matchType.replace('_', ' ')}" rule needs at least ${MIN_RULE_PATTERN_LENGTH} characters.`);
+  if (opts.enforceMinLength && matchType !== 'is' && text.length < MIN_RULE_PATTERN_LENGTH) {
+    throw new HttpError(400, `A "${matchType.replace('_', ' ')}" rule needs at least ${MIN_RULE_PATTERN_LENGTH} characters.`, 'rename_rule_too_short', { min: MIN_RULE_PATTERN_LENGTH });
   }
   const holder = await rulesStore.findRuleHolder(db, budgetId, matchType, text, existing?.id ?? null);
   if (!holder) return;
@@ -114,8 +115,7 @@ export const operations = [
   // Transfer payees (one per account) are listed only on request: the pickers
   // and Manage Payees show them through the accounts, not as ordinary payees.
   implement(payeesList, async (_c, { budget_id, hidden, include_transfers }) => {
-    // A rule only the old columns hold (written by the other app) becomes a row first, so the list shows what matching uses.
-    await rulesStore.adoptColumnRule(pool, budget_id);
+    // A rule only the old columns hold (written by the other app) is part of what the list returns, computed at read time.
     return payeesStore.listPayees(pool, budget_id, hidden, include_transfers === 'true');
   }),
 
@@ -123,14 +123,10 @@ export const operations = [
     if (default_category_id) {
       if (!(await categoryInBudget(pool, default_category_id, budget_id))) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
     }
-    // Rule-aware create: a name a renaming rule matches lands as that ORDINARY payee, mirroring what
-    // transaction creation does. A rule of a transfer payee never turns this into the transfer payee:
-    // the payee is created (or found) by the name given.
-    const hit = matchingRule(await loadRenameRules(pool, budget_id), name);
-    const effectiveName = hit && !hit.transfer_account_id ? hit.replacement : name;
+    // Creating a payee by name is not an import: no renaming rule applies, the payee is created (or found) by the name given.
     return payeesStore.insertPayee(pool, {
       budgetId: budget_id,
-      name: effectiveName,
+      name,
       defaultCategoryId: default_category_id ?? null,
       hidden: hidden ?? false,
       categorizationMode: categorization_mode ?? 'auto',
@@ -239,7 +235,7 @@ export const operations = [
       if (condition === '') {
         if (first) await rulesStore.deleteRule(client, budget_id, id, first.id);
       } else {
-        await assertRuleAllowed(client, budget_id, match_type, condition, first ?? null);
+        await assertRuleAllowed(client, budget_id, match_type, condition, first ?? null, { enforceMinLength: false });
         await ruleWrite(client, budget_id, match_type, condition, () =>
           first ? rulesStore.updateRule(client, budget_id, id, first.id, match_type, condition) : rulesStore.insertRule(client, budget_id, id, match_type, condition),
         );
@@ -252,7 +248,6 @@ export const operations = [
   // ends with> X is renamed to this payee".
   implement(payeesRenameRulesList, async (_c, { id, budget_id }) => {
     await requirePayee(budget_id, id);
-    await rulesStore.adoptColumnRule(pool, budget_id, id);
     return rulesStore.listPayeeRules(pool, budget_id, id);
   }),
 

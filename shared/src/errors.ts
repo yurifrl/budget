@@ -128,6 +128,7 @@ export const SPECIFIC_ERROR_CODES = [
   'payee_name_deleted_exists',
   'payee_name_exists',
   'rename_rule_exists',
+  'rename_rule_too_short',
   'cannot_merge_into_itself',
   'bundle_needs_two_categories',
   'member_name_required',

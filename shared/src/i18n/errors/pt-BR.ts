@@ -101,6 +101,7 @@ const m: Translation<typeof en> = {
   payee_not_in_budget: 'Esse favorecido não está neste orçamento.',
   payee_name_deleted_exists: 'Um favorecido excluído já se chama "{name}". Escolha outro nome.',
   payee_name_exists: 'Já existe um favorecido chamado "{name}". Escolha outro nome ou use Mesclar para combiná-los.',
+  rename_rule_too_short: 'Uma regra "contém", "começa com" ou "termina com" precisa de pelo menos {min} caracteres.',
   rename_rule_exists: 'O favorecido "{name}" já tem essa regra de renomeação. Uma regra pertence a um só favorecido.',
   cannot_merge_into_itself: 'Um favorecido não pode ser mesclado com ele mesmo. Escolha outro favorecido.',
   bundle_needs_two_categories: 'Um conjunto precisa de pelo menos duas categorias diferentes.',

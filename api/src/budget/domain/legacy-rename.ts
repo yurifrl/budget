@@ -24,13 +24,23 @@ function legacyMatches(rule: LoadedRenameRule, name: string): boolean {
   return (rule.match_type === 'is' || rule.match_type === 'contains') && matchRule(rule, name);
 }
 
-/** The text the earlier behaviour resolved `name` to: the first matching is/contains rule applied. */
-export function legacyEffectiveText(rules: readonly LoadedRenameRule[], name: string): string {
+/**
+ * Every text the earlier behaviour can have resolved `name` to: the splice of EACH matching is/contains rule, not just
+ * the first. Main took "the first rule" in the order Postgres returned the rows of equal `created_at` (a fresh-start copy
+ * gives every payee one), an order nothing here can rebuild; a stored row is recognised if it is any of them.
+ * Empty when no rule matches (the text itself is then the only form, which is not "earlier").
+ */
+export function legacyEffectiveTexts(rules: readonly LoadedRenameRule[], name: string): string[] {
+  const out = new Set<string>();
   for (const rule of rules) {
     if (!legacyMatches(rule, name)) continue;
-    if (rule.match_type === 'is') return rule.replacement;
+    if (rule.match_type === 'is') {
+      out.add(rule.replacement);
+      continue;
+    }
     const replaced = name.toLowerCase().split(rule.condition.toLowerCase()).join(rule.replacement);
-    if (replaced.trim()) return replaced.trim();
+    // A splice that comes out blank falls through to the next rule (and, with none left, to the text itself).
+    out.add(replaced.trim() ? replaced.trim() : name);
   }
-  return name;
+  return [...out];
 }

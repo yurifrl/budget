@@ -79,8 +79,8 @@ export function createImportPayeeResolver(client: PoolClient, budgetId: string):
   const cache = new Map<string, ResolvedPayee>();
   let rules: RenameRules | null = null;
   const blank: ResolvedPayee = { id: null, name: '', importName: '', transferAccountId: null, legacyName: null, earlierNames: [] };
-  const earlierNamesOf = (earlier: { name: string; legacyName: string | null } | null): string[] =>
-    earlier ? [earlier.name, ...(earlier.legacyName ? [earlier.legacyName] : [])] : [];
+  const earlierNamesOf = (earlier: { name: string; legacyName: string | null }[]): string[] =>
+    earlier.flatMap((e) => [e.name, ...(e.legacyName ? [e.legacyName] : [])]);
   return {
     async peek(rawName: string): Promise<PeekedPayee> {
       const name = rawName.trim();

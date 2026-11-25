@@ -20,7 +20,7 @@ export const payeesList = defineOperation({
 
 export const payeesCreate = defineOperation({
   name: 'budget_payees_create',
-  description: 'Create a payee (rename rules apply to the name; an existing name is returned as-is).',
+  description: 'Create a payee by the name given (no renaming rule applies: rules are for imported text); an existing name is returned as-is.',
   input: z.object({
     budget_id: budgetId,
     name: nameSchema,

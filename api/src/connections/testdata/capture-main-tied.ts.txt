@@ -1,0 +1,91 @@
+/** One-off: main's stored forms for overlapping rules whose payees all share one created_at. Not part of any branch. */
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { writeFileSync } from 'node:fs';
+import { Hono } from 'hono';
+
+import { contracts } from '../catalog';
+import { pool } from '../core/db';
+import { dbReady } from '../core/test-gate';
+import { makeOpCaller } from '../core/test-op';
+import { httpOnError } from '../core/validate';
+import type { IdentityUser } from '../user';
+import budget from '../budget';
+import * as store from './store';
+import { syncConnectionTransactions } from './sync';
+import type { AggregatedTransaction, BankAggregator } from './types';
+
+const PROVIDER = 'testprovider-tied';
+const user: IdentityUser = { id: crypto.randomUUID(), email: 'tied@syscd.local', googleSub: null, role: 'user', status: 'active' };
+const app = new Hono();
+app.onError(httpOnError);
+app.use('*', (c, next) => { c.set('user', user); return next(); });
+app.route('/', budget);
+const op = makeOpCaller(app, contracts);
+
+const date = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+const EXT = 'up-acc-tied';
+const TEXTS: [string, number][] = [
+  ['POSTO SHELL 3', -1000], ['POSTO 4', -1100], ['AMAZON PRIME BR', -1200], ['AMAZON X', -1300], ['IFOOD CLUB 1', -1400], ['IFOOD 2', -1500],
+  ['MERCADO LIVRE 1', -1600], ['MERC 2', -1700], ['LOJA X 1', -1800], ['loja y 2', -1900], ['POSTO SHELL IS', -2000],
+];
+// general first or specific first: the creation order of the payees (all with ONE created_at)
+const PAYEES = {
+  gen: [['Posto', 'contains', 'POSTO'], ['Shell', 'contains', 'POSTO SHELL'], ['Amazon', 'contains', 'AMAZON'], ['Prime', 'contains', 'AMAZON PRIME'], ['Ifood', 'contains', 'IFOOD'], ['Ifood Club', 'contains', 'IFOOD CLUB'], ['Mercado', 'contains', 'MERC'], ['Mercado Livre', 'contains', 'MERCADO LIVRE'], ['Loja', 'contains', 'Loja'], ['Loja Dead', 'contains', 'LOJA'], ['Shell Is', 'is', 'POSTO SHELL IS']],
+  spec: [['Shell', 'contains', 'POSTO SHELL'], ['Posto', 'contains', 'POSTO'], ['Prime', 'contains', 'AMAZON PRIME'], ['Amazon', 'contains', 'AMAZON'], ['Ifood Club', 'contains', 'IFOOD CLUB'], ['Ifood', 'contains', 'IFOOD'], ['Mercado Livre', 'contains', 'MERCADO LIVRE'], ['Mercado', 'contains', 'MERC'], ['Loja Dead', 'contains', 'LOJA'], ['Loja', 'contains', 'Loja'], ['Shell Is', 'is', 'POSTO SHELL IS']],
+} as Record<string, string[][]>;
+
+let upstream: AggregatedTransaction[] = [];
+const aggregator = {
+  environment: 'production',
+  listTransactions: async () => ({ transactions: upstream.map((t) => ({ ...t })), hasMore: false }),
+  fetchInstitution: async () => null,
+} as unknown as BankAggregator;
+
+describe.skipIf(!dbReady)('capture tied', () => {
+  beforeAll(async () => {
+    await pool.query(`INSERT INTO users (id, google_sub, email, role, status) VALUES ($1,$2,$3,'user','active')`, [user.id, user.id, user.email]);
+  });
+  afterAll(async () => {
+    await pool.query('DELETE FROM budgets WHERE owner_user_id = $1', [user.id]);
+    await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
+    await pool.query('DELETE FROM connections WHERE provider = $1', [PROVIDER]);
+  });
+
+  test('capture', async () => {
+    const out: Record<string, unknown> = { texts: TEXTS };
+    // gen, spec and shuffled creation orders (rows tie on created_at; which rule main took is Postgres's choice)
+    let seed = 7;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    for (let i = 0; i < 10; i++) PAYEES[`shuf${i}`] = [...PAYEES.gen!].map((v) => [rnd(), v] as const).sort((a, b) => a[0] - b[0]).map((x) => x[1]) as string[][];
+    for (const order of Object.keys(PAYEES)) {
+      const B = crypto.randomUUID();
+      const itau = crypto.randomUUID();
+      const savings = crypto.randomUUID();
+      await pool.query('INSERT INTO budgets (id, name, owner_user_id) VALUES ($1,$2,$3)', [B, `tied-${order}`, user.id]);
+      await pool.query('INSERT INTO budget_members (budget_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [B, user.id]);
+      await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$3,'Itau Conta','checking','CASH',true),($2,$3,'Savings Conta','checking','CASH',true)`, [itau, savings, B]);
+      const c = await store.upsertConnection({ userId: user.id, provider: PROVIDER, externalId: `up-item-tied-${order}-${user.id}`, clientUserId: `cu-${user.id}-${order}`, status: 'connected', environment: 'production' });
+      await pool.query('UPDATE accounts SET connection_id = $1, external_account_id = $2, institution = $4 WHERE id = $3', [c.id, EXT, itau, 'itau']);
+      for (const [name, type, cond] of PAYEES[order]!) {
+        await pool.query(`INSERT INTO payees (budget_id, name, rename_match_type, rename_condition, created_at) VALUES ($1,$2,$3,$4,'2026-01-01T00:00:00Z')`, [B, name, type, cond]);
+      }
+      upstream = TEXTS.map(([d, amount], i) => ({ externalId: `t${i}`, externalAccountId: EXT, description: d, amount, date, currencyCode: null, cleared: true, raw: { id: `t${i}` } }));
+      const sync = () => syncConnectionTransactions({ userId: user.id, connectionId: c.id, aggregator, ignoreWatermark: true });
+      const s1 = await sync();
+      const s2 = await sync();
+      const rows = TEXTS.map(([payee, amount]) => ({ date, payee, memo: '', outflow: -amount, inflow: 0, category_id: null }));
+      const b1 = (await op('budget_transactions_bulk_import', { budget_id: B, account_id: savings, txns: rows })).json;
+      const b2 = (await op('budget_transactions_bulk_import', { budget_id: B, account_id: savings, txns: rows })).json;
+      const names = new Map((await pool.query('SELECT id, name FROM payees WHERE budget_id = $1', [B])).rows.map((r) => [r.id, r.name]));
+      const sync_rows = (await pool.query(
+        `SELECT t.import_id, t.amount::int AS amount, p.name AS payee, t.import_payee_name, t.import_payee_name_original, s.last_synced_payload AS shadow FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id LEFT JOIN connection_transactions s ON s.transaction_id = t.id WHERE t.account_id = $1 ORDER BY t.import_id`, [itau])).rows
+        .map((r) => ({ external_id: r.import_id.split(':')[1], amount: r.amount, payee: r.payee, import_payee_name: r.import_payee_name, import_payee_name_original: r.import_payee_name_original, shadow_payee: r.shadow.payee }));
+      const bulk_rows = (await pool.query(
+        `SELECT t.import_id, t.amount::int AS amount, p.name AS payee, t.import_payee_name, t.import_payee_name_original FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id WHERE t.account_id = $1 ORDER BY t.import_id`, [savings])).rows
+        .map((r) => { const m = /^YNAB:(-?\d+):(\d{4}-\d{2}-\d{2}):(.*):(\d+)$/.exec(r.import_id)!; return { amount: r.amount, payee: r.payee, import_payee_name: r.import_payee_name, import_payee_name_original: r.import_payee_name_original, key_payee: names.get(m[3]!) ?? m[3], occ: Number(m[4]) }; });
+      out[order] = { payees: PAYEES[order], results: { s1: { added: s1.added, updated: s1.updated }, s2: { added: s2.added, updated: s2.updated, duplicates: s2.duplicates }, b1, b2 }, sync_rows, bulk_rows };
+    }
+    writeFileSync(process.env.CAPTURE_OUT!, JSON.stringify(out, null, 1));
+    expect(true).toBe(true);
+  });
+});

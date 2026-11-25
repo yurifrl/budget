@@ -260,18 +260,28 @@ export const operations = [
       // imported while a `contains` rule still spliced its payee into the text counted
       // under that spliced payee: its keys are looked up too (read only), so those rows
       // are still the same rows. Only the FIRST key is written for a new row.
-      // The ids the stored rows of a text count under (read only: no payee is created to look rows up).
-      const lookupKeysByName = new Map<string, string[]>();
-      const lookupKeysOf = async (txn: (typeof txns)[number]): Promise<string[]> => {
+      // The ids the stored rows of a text count under (read only: no payee is created to look rows up):
+      // the payee's own id when it exists, plus every id the text counted under before a matching rule assigned its payee.
+      const lookupKeysByName = new Map<string, { current: string | null; earlier: string[]; countKey: string }>();
+      const keysOf = async (txn: (typeof txns)[number]) => {
         const name = payeeKeyOfText(txn);
         let keys = lookupKeysByName.get(name);
         if (!keys) {
           const p = payeeByName.get(name);
           const current = p ? await p.existingKey() : null;
-          keys = [...new Set([...(current === undefined ? [] : [current ?? '-']), ...((await p?.earlierKeys()) ?? [])])];
+          keys = {
+            current: current === undefined ? null : (current ?? '-'),
+            earlier: [...new Set((await p?.earlierKeys()) ?? [])],
+            // What the row counts under in this batch: the id when the payee exists, else its name (the payee is created with its first row).
+            countKey: current === undefined ? `new:${p?.plan.ordinaryName ?? ''}` : (current ?? '-'),
+          };
           lookupKeysByName.set(name, keys);
         }
         return keys;
+      };
+      const lookupKeysOf = async (txn: (typeof txns)[number]) => {
+        const k = await keysOf(txn);
+        return [...(k.current === null ? [] : [k.current]), ...k.earlier];
       };
       const prefixOf = (txn: (typeof txns)[number], key: string) => `YNAB:${txn.inflow - txn.outflow}:${txn.date}:${key}`;
       const prefixes: string[] = [];
@@ -305,17 +315,23 @@ export const operations = [
         const milliunits = txn.inflow - txn.outflow;
         let importId = txn.import_id ?? null;
         if (!importId) {
-          // Occurrences count per (amount, date, text): what the id's payee part stands for.
-          const logical = `${milliunits}:${txn.date}:${payeeKeyOfText(txn)}`;
-          const occ = (batchOcc.get(logical) ?? 0) + 1;
-          batchOcc.set(logical, occ);
-          const known = (await lookupKeysOf(txn)).map((k) => prefixOf(txn, k));
-          if (known.some((prefix) => (existingOccs.get(prefix) ?? []).some((existing) => existing <= occ))) {
+          // Occurrences count per key prefix, exactly as main did: whatever text a rule sent to one payee, on one day
+          // for one amount, is the 1st, 2nd, ... such row (two rides, two coffees are two rows).
+          const k = await keysOf(txn);
+          const own = prefixOf(txn, k.countKey);
+          const occs = new Map<string, number>();
+          for (const prefix of new Set([own, ...k.earlier.map((e) => prefixOf(txn, e))])) {
+            const n = (batchOcc.get(prefix) ?? 0) + 1;
+            batchOcc.set(prefix, n);
+            occs.set(prefix, n);
+          }
+          const known = (await lookupKeysOf(txn)).map((key) => prefixOf(txn, key));
+          if (known.some((prefix) => (existingOccs.get(prefix) ?? []).some((existing) => existing <= (occs.get(prefix) ?? Infinity)))) {
             duplicates += 1;
             continue;
           }
           // A new row: its payee (and so its key) is created now when it does not exist.
-          importId = `${prefixOf(txn, (await payeeByName.get(payeeKeyOfText(txn))?.key()) ?? '-')}:${occ}`;
+          importId = `${prefixOf(txn, (await payeeByName.get(payeeKeyOfText(txn))?.key()) ?? '-')}:${occs.get(own)}`;
         }
         const statementPayee = payeeByName.get(payeeKeyOfText(txn));
         // A payee that does not exist yet is created after the row is in: a duplicate row

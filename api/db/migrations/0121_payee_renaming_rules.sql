@@ -26,7 +26,10 @@ create table if not exists public.payee_renaming_rules (
   payee_id    uuid not null references public.payees(id) on delete cascade,
   match_type  text not null check (match_type in ('is', 'contains', 'starts_with', 'ends_with')),
   condition   text not null check (condition <> ''),
-  created_at  timestamptz not null default now()
+  created_at  timestamptz not null default now(),
+  -- Stable creation order (ties on created_at are common: a fresh start gives every payee one): the last tie-break of the
+  -- matching order for NEW rows. The copy numbers the rules by payee age, then physical order (what main read in).
+  seq         bigint generated always as identity
 );
 
 create unique index if not exists payee_renaming_rules_exact_key
@@ -45,7 +48,7 @@ select p.budget_id, p.id, p.rename_match_type, p.rename_condition, p.created_at
    and p.rename_condition is not null
    and p.rename_condition <> ''
    and not exists (select 1 from public.payee_renaming_rules r where r.payee_id = p.id)
- order by p.created_at, p.id
+ order by p.created_at, p.ctid
 on conflict do nothing;
 
 -- Never silent: should a live payee's rule still not have a row of its own (it

@@ -2,7 +2,7 @@
  * Budget store: payees. SQL only; every function takes a Queryable.
  */
 import type { Queryable } from '../../core/db';
-import { RULE_CREATED_AT } from './rename-rules';
+import { RULE_CREATED_AT, allRulesSql } from './rename-rules';
 
 /**
  * Find-or-create a payee by exact name (no trimming, no rename rules): the
@@ -42,15 +42,15 @@ export async function retireTransferPayee(db: Queryable, payeeId: string | null)
 // "is" / "contains" rule for the two single-rule fields the released clients read.
 const ruleStats = `
   left join lateral (
-    select r.match_type, r.condition from payee_renaming_rules r
-    where r.payee_id = p.id and r.match_type in ('is', 'contains')
-    order by r.created_at, r.id limit 1
+    select r.match_type, r.condition from ${allRulesSql('p.budget_id', 'p.id')} r
+    where r.match_type in ('is', 'contains')
+    order by r.created_at, r.seq nulls last, r.id limit 1
   ) first_rule on true
   left join lateral (
     select json_agg(json_build_object('id', r.id, 'payee_id', r.payee_id, 'match_type', r.match_type,
                                       'condition', r.condition, 'created_at', ${RULE_CREATED_AT})
-                    order by r.created_at, r.id) as rules
-    from payee_renaming_rules r where r.payee_id = p.id
+                    order by r.created_at, r.seq nulls last, r.id) as rules
+    from ${allRulesSql('p.budget_id', 'p.id')} r
   ) all_rules on true
 `;
 

@@ -401,3 +401,60 @@ describe.skipIf(!dbReady)('the payee columns stay an input after the migration',
     expect((await pool.query('SELECT payee_id FROM transactions WHERE import_id = $1', [`${PROVIDER}:b3-two`])).rows[0].payee_id).toBe(shop);
   });
 });
+
+describe.skipIf(!dbReady)('review round 3: /bulk keeps every real row, and a user-edited synced row is never "untouched"', () => {
+  async function fresh(label: string) {
+    const c = await build(label, true);
+    budgets.push(c.B);
+    const id = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [id, c.B]);
+    c.accounts['Fresh Conta'] = id;
+    return { c, id };
+  }
+  const row = (payee: string, outflow: number, extra: Record<string, unknown> = {}) => ({ date, payee, memo: '', outflow, inflow: 0, category_id: null, ...extra });
+  const rowsOf = async (account: string) =>
+    (await pool.query<{ import_payee_name: string; payee: string | null; import_id: string }>('SELECT t.import_payee_name, p.name AS payee, t.import_id FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id WHERE t.account_id = $1 ORDER BY t.import_id', [account])).rows;
+
+  test('N2: two texts one rule sends to one payee, same day and amount, are both imported; the same text twice too; a re-import imports none', async () => {
+    const { c, id } = await fresh('n2');
+    const file = [
+      row('UBER TRIP 1001', 9_000), row('UBER TRIP 1002', 9_000), // contains rule -> Uber
+      row('NETFLIX.COM', 4_000), row('netflix.com', 4_000), // is rule -> Netflix
+      row('Padoca Dup', 5_000), row('Padoca Dup', 5_000), // the same new text twice
+      // a chosen "Netflix" (client-style: parsed text differs) plus a text row that the rule sends to Netflix
+      row('Netflix', 4_000, { import_payee_name: 'Netflix', import_payee_name_original: 'NFLX 99' }),
+      row('NETFLIX.COM', 4_000),
+    ];
+    expect(await c.bulk('Fresh Conta', file)).toEqual({ imported: 8, duplicates: 0 });
+    expect((await rowsOf(id)).filter((r) => r.payee === 'Uber')).toHaveLength(2);
+    expect((await rowsOf(id)).filter((r) => r.payee === 'Netflix')).toHaveLength(4);
+    const before = await c.snapshot();
+    expect(await c.bulk('Fresh Conta', file)).toEqual({ imported: 0, duplicates: 8 });
+    expect(await c.bulk('Fresh Conta', file)).toEqual({ imported: 0, duplicates: 8 });
+    expect(await c.snapshot()).toEqual(before);
+    // The key is (date, payee, amount) as ever: a later file whose rows land on a key that already holds rows is a re-import
+    // of them (the occurrence rule of main), while a row of a new key in the same file is new.
+    expect(await c.bulk('Fresh Conta', [row('UBER TRIP 1003', 9_000), ...file, row('Cafe Nova', 1_234)])).toEqual({ imported: 1, duplicates: 9 });
+  });
+
+  test('N2: texts a rule newly sends to a payee do not hide the rows main stored under the old keys', async () => {
+    // main's own rows (Padaria 42 ...) plus a new text of the same rule on the same day and amount: only the new one is imported
+    const { c } = await fresh('n2b');
+    expect(await c.bulk('Savings Conta', plainRows())).toEqual({ imported: 0, duplicates: 24 });
+    expect(await c.bulk('Savings Conta', [...plainRows([fx.texts[0]!]), row('PADOCA 43', -fx.texts[0]![1]), row('PADOCA 44', -fx.texts[0]![1])])).toEqual({ imported: 2, duplicates: 1 });
+  });
+
+  test('F-a: a synced row the person gave the rule\'s own payee is touched, whatever a rule says about its text', async () => {
+    const { c } = await fresh('fa');
+    const { listTransferCandidates } = await import('../budget/store/transfers');
+    // c23 is the synced "Cafe Central 1" row (payee "Cafe Central 1", the splice main stored); the person edits it onto the payee "Cafe Central",
+    // whose own rule "cafe central" matches the row's import text: it must NOT count as "as imported" for the matcher
+    upstream = mainUpstream();
+    await c.sync();
+    const cafe = (await pool.query<{ id: string }>('SELECT id FROM transactions WHERE import_id = $1 AND budget_id = $2', [`${PROVIDER}:c23`, c.B])).rows[0]!.id;
+    const edited = await op('budget_transactions_update', { id: cafe, budget_id: c.B, patch: { payee: 'Cafe Central' } });
+    expect(edited.status).toBe(204);
+    const verdict = async () => (await listTransferCandidates(pool, c.B)).find((x) => x.id === cafe)!.untouched_ledger;
+    expect(await verdict()).toBe(false);
+  });
+});

@@ -6,7 +6,7 @@ import { HttpError } from '../../core/validate';
 import { ensureTransferPayee, resolveTransferAccountFromText, resolveTransferPayeeText } from './transfer-payees';
 import { findPayeeRowByName, getAccountRow, getPayeeRow } from '../store/transfer-payees';
 import { loadBudgetRules, type LoadedRenameRule } from '../store/rename-rules';
-import { legacyEffectiveText } from './legacy-rename';
+import { legacyEffectiveTexts } from './legacy-rename';
 import { ONE_WAY_ERROR, bothPositive, type subTxnListSchema } from '@shared/contracts/budget/schemas';
 
 /**
@@ -123,9 +123,10 @@ export interface ImportedPayeePlan {
    * What the behaviour before "a rule assigns its payee" stored for the same text
    * (see legacy-rename.ts), when it differs from the text itself: a `contains` rule
    * used to splice its payee's name into the text ("Padaria 42", "Transfer : X 42").
-   * Rows stored that way are recognised, never rewritten; null when nothing differs.
+   * Rows stored that way are recognised, never rewritten. One entry per matching is/contains rule (not just the
+   * first: main's choice among rules of equal age cannot be rebuilt); empty when no rule matches.
    */
-  earlier: TextPlan | null;
+  earlier: TextPlan[];
 }
 
 type TextPlan = Omit<ImportedPayeePlan, 'assignedPayeeId' | 'earlier'>;
@@ -180,14 +181,14 @@ export async function planImportedPayee(
 ): Promise<ImportedPayeePlan> {
   const raw = rawText.trim();
   if (!raw) {
-    return { ordinaryName: null, assignedPayeeId: null, name: '', importName: '', transferAccountId: null, legacyName: null, earlier: null };
+    return { ordinaryName: null, assignedPayeeId: null, name: '', importName: '', transferAccountId: null, legacyName: null, earlier: [] };
   }
   const hit = opts.chosen ? null : matchingRule(rules, raw);
-  const earlierText = legacyEffectiveText(rules, raw);
-  // What the earlier behaviour stored for this text. When it stored the text itself (the pattern was already spelled as the
-  // payee's name: "Cafe Central 1" under a rule "cafe central" -> "Cafe Central"), that still is a form to recognise
-  // as soon as a rule now assigns another payee.
-  const earlier = earlierText !== raw || hit ? await planTextPayee(client, budgetId, raw, earlierText, opts) : null;
+  // What the earlier behaviour stored for this text, every form it can have taken (see `legacyEffectiveTexts`). It can be the
+  // text itself ("Cafe Central 1" under a rule "cafe central" -> "Cafe Central"): still a form to recognise once a rule
+  // assigns another payee.
+  const earlier: TextPlan[] = [];
+  for (const text of legacyEffectiveTexts(rules, raw)) earlier.push(await planTextPayee(client, budgetId, raw, text, opts));
   if (!hit) return { ...(await planTextPayee(client, budgetId, rawText, raw, opts)), assignedPayeeId: null, earlier };
   if (!hit.transfer_account_id) {
     return {
@@ -324,15 +325,17 @@ export async function resolveStatementPayee(
     return (await findPayeeRowByName(client, budgetId, plan.ordinaryName.trim()))?.id;
   };
   const earlierKeys = async (): Promise<string[]> => {
-    const earlier = plan.earlier;
-    if (!earlier) return [];
-    if (earlier.transferAccountId) {
-      const pointer = (await getAccountRow(client, earlier.transferAccountId))?.transfer_payee_id;
-      return pointer ? [pointer] : [];
+    const keys: string[] = [];
+    for (const earlier of plan.earlier) {
+      if (earlier.transferAccountId) {
+        const pointer = (await getAccountRow(client, earlier.transferAccountId))?.transfer_payee_id;
+        if (pointer) keys.push(pointer);
+      } else if (earlier.ordinaryName !== null) {
+        const holder = await findPayeeRowByName(client, budgetId, earlier.ordinaryName.trim());
+        if (holder) keys.push(holder.id);
+      }
     }
-    if (earlier.ordinaryName === null) return [];
-    const holder = await findPayeeRowByName(client, budgetId, earlier.ordinaryName.trim());
-    return holder ? [holder.id] : [];
+    return [...new Set(keys)];
   };
   return { plan, key, existingKey, earlierKeys, existingPayeeId, createPayee };
 }

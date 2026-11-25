@@ -48,6 +48,7 @@ const list = async (b: string, id: string) => {
   expect(res.status).toBe(200);
   return res.json as { id: string; payee_id: string; match_type: string; condition: string; created_at: string }[];
 };
+const asRowsOf = async (b: string, id: string) => (await list(b, id)).map((r) => [r.match_type, r.condition]);
 const columns = async (id: string) => (await pool.query('SELECT rename_match_type AS t, rename_condition AS c FROM payees WHERE id = $1', [id])).rows[0] as { t: string | null; c: string | null };
 const payeeRow = async (b: string, id: string) => {
   const res = await op('budget_payees_list', { budget_id: b, include_transfers: 'true' });
@@ -251,13 +252,16 @@ describe.skipIf(!dbReady)('renaming rules: payee delete, merge, create and budge
     expect((await pool.query('SELECT payee_id FROM transactions WHERE id = $1', [made.json.id])).rows[0].payee_id).toBe(to);
   });
 
-  test('creating a payee by a text a rule matches returns the rule\'s payee, whole', async () => {
+  test('F-b: creating a payee by name is not an import: no rule applies, the payee is created (or found) by the name given', async () => {
     const b = await newBudget();
     const p = await payee(b, 'Uber');
     await add(b, p, 'contains', 'UBER');
     const res = await op('budget_payees_create', { budget_id: b, name: 'UBER *TRIP 9' });
-    expect(res.json.id).toBe(p);
-    expect(res.json.name).toBe('Uber');
+    expect(res.status).toBe(201);
+    expect(res.json.id).not.toBe(p);
+    expect(res.json.name).toBe('UBER *TRIP 9');
+    // An existing name is returned as it is.
+    expect((await op('budget_payees_create', { budget_id: b, name: 'UBER *TRIP 9' })).json.id).toBe(res.json.id);
   });
 
   test('a fresh-start copy carries the rules with their payees', async () => {
@@ -390,7 +394,13 @@ describe.skipIf(!dbReady)('renaming rules: patterns, duplicates, accounts that a
     const made = await op('budget_transaction_add', { budget_id: b, account_id: acc.json.id, amount: -1000, payee: 'a quiet place' });
     expect((await pool.query('SELECT payee_id FROM transactions WHERE id = $1', [made.json.id])).rows[0].payee_id).toBe(old);
     expect((await op('budget_payees_set_rename_rule', { id: old, budget_id: b, match_type: 'contains', condition: 'q' })).status).toBe(204);
-    expect((await op('budget_payees_set_rename_rule', { id: old, budget_id: b, match_type: 'contains', condition: 'w' })).status).toBe(400);
+    // F-c: the released client's single-rule call keeps accepting a 1-character rule, as on main.
+    expect((await op('budget_payees_set_rename_rule', { id: old, budget_id: b, match_type: 'contains', condition: 'w' })).status).toBe(204);
+    expect(await asRowsOf(b, old)).toEqual([['contains', 'w']]);
+    // The new operations refuse it with a code.
+    const refused = await add(b, p, 'ends_with', 'z');
+    expect(refused.status).toBe(400);
+    expect(refused.json).toMatchObject({ code: 'rename_rule_too_short', params: { min: 2 } });
   });
 
   test('B2: patterns that collide only by case are both kept by the copy, but the API refuses to add or change into one; an exact duplicate is a 409 too', async () => {
@@ -423,20 +433,6 @@ describe.skipIf(!dbReady)('renaming rules: patterns, duplicates, accounts that a
     expect((await pool.query('SELECT p.name, t.transfer_account_id FROM transactions t JOIN payees p ON p.id = t.payee_id WHERE t.id = $1', [closed.json.id])).rows[0]).toEqual({ name: 'PIX DST 2', transfer_account_id: null });
   });
 
-  test('F6: POST /payees with a name a transfer payee\'s rule matches creates that ordinary payee; an ordinary payee\'s rule still lands on it', async () => {
-    const b = await newBudget();
-    await op('budget_accounts_create', { budget_id: b, name: 'Six Conta', type: 'checking', on_budget: true, balance: 0 });
-    const transfer = ((await op('budget_payees_list', { budget_id: b, include_transfers: 'true' })).json as { id: string; transfer_account_id: string | null }[]).find((x) => x.transfer_account_id)!;
-    await add(b, transfer.id, 'contains', 'PIX SIX');
-    const made = await op('budget_payees_create', { budget_id: b, name: 'PIX SIX 1' });
-    expect(made.status).toBe(201);
-    expect(made.json).toMatchObject({ name: 'PIX SIX 1', transfer_account_id: null });
-    expect(made.json.id).not.toBe(transfer.id);
-    const ordinary = await payee(b, 'Ordinary Six');
-    await add(b, ordinary, 'contains', 'ORD SIX');
-    expect((await op('budget_payees_create', { budget_id: b, name: 'ORD SIX 3' })).json.id).toBe(ordinary);
-  });
-
   test('F4: created_at has one format in the payee list and in every rule operation', async () => {
     const b = await newBudget();
     const p = await payee(b, 'Format');
@@ -447,5 +443,82 @@ describe.skipIf(!dbReady)('renaming rules: patterns, duplicates, accounts that a
     const iso = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/;
     for (const at of [added.json.created_at, listed.created_at, inPayeeList.created_at, updated.json.created_at]) expect(at).toMatch(iso);
     expect(inPayeeList.created_at).toBe(listed.created_at);
+  });
+});
+
+describe.skipIf(!dbReady)('review round 3: reads never write, a stable rule order, what the other app can change', () => {
+  const writeColumns = (id: string, type: string | null, cond: string | null) =>
+    pool.query('UPDATE payees SET rename_match_type = $2, rename_condition = $3 WHERE id = $1', [id, type, cond]);
+  const ruleCount = async (b: string) => (await pool.query('SELECT count(*)::int AS n FROM payee_renaming_rules WHERE budget_id = $1', [b])).rows[0].n as number;
+
+  test('F-e: the payee list and the rule list include a column-only rule but write nothing; its id works in a later write', async () => {
+    const b = await newBudget();
+    const p = await payee(b, 'Read Only');
+    await writeColumns(p, 'contains', 'READ ONLY SHOP');
+    const before = await ruleCount(b);
+    const listed = (await payeeRow(b, p)).rename_rules as { id: string; match_type: string; condition: string }[];
+    const rules = await list(b, p);
+    expect(listed.map((r) => [r.match_type, r.condition])).toEqual([['contains', 'READ ONLY SHOP']]);
+    expect(rules.map((r) => [r.match_type, r.condition])).toEqual([['contains', 'READ ONLY SHOP']]);
+    expect(await ruleCount(b)).toBe(before);
+    // A read-only transaction proves it: the same reads succeed where any write would fail.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN READ ONLY');
+      expect((await client.query('SELECT 1 FROM payees WHERE id = $1', [p])).rowCount).toBe(1);
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+    // The id the read gave is the id the row gets: it can be updated and removed.
+    expect(rules[0]!.id).toBe(listed[0]!.id);
+    const updated = await op('budget_payees_rename_rules_update', { id: p, budget_id: b, rule_id: rules[0]!.id, match_type: 'contains', condition: 'READ ONLY SHOP 2' });
+    expect(updated.status).toBe(200);
+    expect(updated.json.id).toBe(rules[0]!.id);
+    expect(await ruleCount(b)).toBe(before + 1);
+  });
+
+  test('F-f: rules tied on created_at keep their creation order (the sequence), not their ids', async () => {
+    const b = await newBudget();
+    const first = await payee(b, 'Tie First');
+    const second = await payee(b, 'Tie Second');
+    const acc = await op('budget_accounts_create', { budget_id: b, name: 'Tie Conta', type: 'checking', on_budget: true, balance: 0 });
+    // Same type, same length, same created_at: created second-payee-rule first? No: the FIRST inserted rule has the LARGER id.
+    const insert = (payeeId: string, id: string, cond: string) =>
+      pool.query(`INSERT INTO payee_renaming_rules (id, budget_id, payee_id, match_type, condition, created_at) VALUES ($1,$2,$3,'contains',$4,'2026-01-01T00:00:00Z')`, [id, b, payeeId, cond]);
+    await insert(first, 'ffffffff-0000-4000-8000-000000000001', 'abcd');
+    await insert(second, '00000000-0000-4000-8000-000000000002', 'bcde');
+    const made = await op('budget_transaction_add', { budget_id: b, account_id: acc.json.id, amount: -1000, payee: 'xabcdex' });
+    expect((await pool.query('SELECT payee_id FROM transactions WHERE id = $1', [made.json.id])).rows[0].payee_id).toBe(first);
+    expect((await list(b, first)).map((r) => r.condition)).toEqual(['abcd']);
+    // The migration numbers copied rules by payee age, then physical order; the list shows that order.
+    const both = await payee(b, 'Tie Both');
+    await add(b, both, 'contains', 'zzzz1');
+    await add(b, both, 'contains', 'zzzz2');
+    expect((await list(b, both)).map((r) => r.condition)).toEqual(['zzzz1', 'zzzz2']);
+  });
+
+  test('F-d: the columns are an input only while the payee has no is/contains rule in the table; after that the table is the truth and the columns follow it', async () => {
+    const b = await newBudget();
+    const p = await payee(b, 'Other App');
+    // A payee with no rule: the other app writes one, it applies.
+    await writeColumns(p, 'is', 'OTHER APP A');
+    expect((await list(b, p)).map((r) => r.condition)).toEqual(['OTHER APP A']);
+    // This app now holds a rule for the payee (write adopts it): the other app REPLACES the column, it does not take effect.
+    expect((await add(b, p, 'starts_with', 'OTHER')).status).toBe(201);
+    expect(await columns(p)).toEqual({ t: 'is', c: 'OTHER APP A' });
+    await writeColumns(p, 'is', 'OTHER APP B');
+    expect((await list(b, p)).map((r) => r.condition)).toEqual(['OTHER APP A', 'OTHER']);
+    // CLEARING the column does not remove the rule either; the next rule write restores the column.
+    await writeColumns(p, null, null);
+    expect((await list(b, p)).map((r) => r.condition)).toEqual(['OTHER APP A', 'OTHER']);
+    expect((await add(b, p, 'ends_with', 'APP')).status).toBe(201);
+    expect(await columns(p)).toEqual({ t: 'is', c: 'OTHER APP A' });
+    // Rules are edited here: removing the last is/contains rule frees the columns for the other app again.
+    const rule = (await list(b, p))[0]!;
+    expect((await op('budget_payees_rename_rules_remove', { id: p, budget_id: b, rule_id: rule.id })).status).toBe(204);
+    expect(await columns(p)).toEqual({ t: null, c: null });
+    await writeColumns(p, 'contains', 'OTHER APP C');
+    expect((await list(b, p)).map((r) => r.condition)).toContain('OTHER APP C');
   });
 });
