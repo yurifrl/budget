@@ -36,7 +36,9 @@ import {
   filedLabel,
   initialAcceptState,
   skippedLabel,
+  pendingSkips,
   topEntry,
+  withoutPendingSkips,
   type AcceptAction,
   type AcceptState,
   type FiledItem,
@@ -112,6 +114,16 @@ export function useCategorizeAccept({
   rowIdsRef.current = queueRowIds;
   useEffect(() => {
     setGoneBundleKeys(new Set());
+    // A pending skip whose row has left the queue (categorized elsewhere, taken
+    // by a bulk accept) is dropped, never sent: there is nothing left to skip.
+    const present = new Set(rowIdsRef.current);
+    for (const entry of pendingSkips(stateRef.current)) {
+      if (present.has(entry.item.transactionId)) continue;
+      const timer = timers.current.get(entry.seq);
+      if (timer) clearTimeout(timer);
+      timers.current.delete(entry.seq);
+      send({ type: 'skipDropped', transactionId: entry.item.transactionId });
+    }
     send({ type: 'prune', presentIds: rowIdsRef.current });
   }, [queueUpdatedAt]);
 
@@ -246,31 +258,58 @@ export function useCategorizeAccept({
     return true;
   };
 
+  /**
+   * Accept one bundle. The server resolves the rows from the bundle key and
+   * knows nothing of a skip that is still pending, so while any skip is pending
+   * the rows are fetched and sent explicitly, minus the rows being left out
+   * (the count check stands in for the server's `expected_count` guard).
+   */
+  const acceptBundleRows = async (bundle: CategorizeBundle): Promise<CategorizeDecisionItem[]> => {
+    if (!budgetId) return [];
+    if (pendingSkips(stateRef.current).length === 0) {
+      const result = await accept({ budgetId, bundleKey: bundle.bundle_key, expectedCount: bundle.count }).unwrap();
+      return result.items;
+    }
+    const rows = await bundleItems(bundle);
+    if (rows.length !== bundle.count) {
+      throw { status: 409, code: 'categorize_bundle_changed', params: { expected: bundle.count, actual: rows.length } };
+    }
+    const items = withoutPendingSkips(rows, stateRef.current);
+    const accepted: CategorizeDecisionItem[] = [];
+    for (let i = 0; i < items.length; i += ACCEPT_BATCH) {
+      const result = await accept({ budgetId, items: items.slice(i, i + ACCEPT_BATCH) }).unwrap();
+      accepted.push(...result.items);
+    }
+    return accepted;
+  };
+
   const acceptBundle = (bundle: CategorizeBundle, knownRows: readonly CategorizeQueueRow[]): Promise<boolean> => {
     if (!budgetId || inFlight.current) return Promise.resolve(false);
     inFlight.current = true;
     markGone(bundle.bundle_key, true);
-    const filed = knownRows.map((row) =>
-      filedItem(row, bundle.suggestion.category_id, bundle.suggestion.category_name),
-    );
+    const leaving = new Set(pendingSkips(stateRef.current).map((entry) => entry.item.transactionId));
+    const filed = knownRows
+      .filter((row) => !leaving.has(row.transaction_id))
+      .map((row) => filedItem(row, bundle.suggestion.category_id, bundle.suggestion.category_name));
     const requestIds = filed.map((item) => item.transactionId);
-    const label = bundleToastLabel(bundle);
     const seq = nextSeq();
     send({
       type: 'acceptStarted',
       items: filed,
-      entry: { seq, kind: 'accept', label, transactionIds: [], confirmed: false },
+      entry: { seq, kind: 'accept', label: bundleToastLabel(bundle), transactionIds: [], confirmed: false },
     });
     const request = (async () => {
       try {
-        const result = await accept({
-          budgetId,
-          bundleKey: bundle.bundle_key,
-          expectedCount: bundle.count,
-        }).unwrap();
-        const ids = result.items.map((item) => item.transaction_id);
+        const accepted = await acceptBundleRows(bundle);
+        const ids = accepted.map((item) => item.transaction_id);
         resultIds.current.set(seq, ids);
-        send({ type: 'acceptSucceeded', seq, transactionIds: ids, requestIds, label });
+        send({
+          type: 'acceptSucceeded',
+          seq,
+          transactionIds: ids,
+          requestIds,
+          label: bundleToastLabel({ ...bundle, count: ids.length }),
+        });
         return true;
       } catch (err) {
         const changed = isBundleChanged(err);
@@ -340,8 +379,10 @@ export function useCategorizeAccept({
     };
     const request = (async () => {
       try {
-        const items: CategorizeDecisionItem[] = [];
-        for (const bundle of bundles) items.push(...(await bundleItems(bundle)));
+        const all: CategorizeDecisionItem[] = [];
+        for (const bundle of bundles) all.push(...(await bundleItems(bundle)));
+        // Rows the person is leaving out (a skip pending) are not part of "accept all".
+        const items = withoutPendingSkips(all, stateRef.current);
         if (items.length === 0) {
           finish(t('error.accept'));
           setGoneBundleKeys(new Set());

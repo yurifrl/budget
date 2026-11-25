@@ -31,6 +31,7 @@ export function FocusPane({
   row,
   budgetId,
   canUndo,
+  searchReset,
   searchRef,
   onFile,
   onPick,
@@ -40,6 +41,7 @@ export function FocusPane({
   row: CategorizeQueueRow;
   budgetId: string | null;
   canUndo: boolean;
+  searchReset: number;
   searchRef: Ref<TextInputInstance>;
   onFile: (index: number) => void;
   onPick: (category: PickedCategory) => void;
@@ -132,7 +134,7 @@ export function FocusPane({
 
       <View style={styles.searchRow}>
         <CategoryPicker
-          key={row.transaction_id}
+          key={`${row.transaction_id}-${searchReset}`}
           budgetId={budgetId}
           label={t('row.chooseA11y', { payee })}
           onPick={onPick}

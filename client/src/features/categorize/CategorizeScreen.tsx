@@ -5,28 +5,44 @@
  */
 
 import { useRouter } from 'expo-router';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRef } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
 import { tCommon } from '@shared/i18n/common';
 
 import { useBudgetShell } from '@/shell/context';
+import { useAppSelector } from '@/state/hooks';
+import { selectActiveBudgetId } from '@/state/ui';
 import { ActionToast, SettingsCardFailed } from '@/ui/bits';
 import { colors, radius } from '@/ui/theme';
 
-import { toastActionable } from './accept.logic';
+import { pendingSkips, toastActionable } from './accept.logic';
 import { BundlesView } from './BundlesView';
 import { ErrorBanner } from './CategorizeBits';
 import { EmptyState, NoKeyBanner } from './EmptyState';
 import { HeaderCard } from './HeaderCard';
 import { t } from './i18n';
 import { OneByOneView } from './OneByOneView';
+import { PendingSkipsStrip } from './PendingSkipsStrip';
+import { pageKey } from './page.logic';
 import { useBlurAfterPointerPress, useFieldFocused } from './useCategorizeKeys';
 import { useCategorizePage, type CategorizeViewMode } from './useCategorizePage';
 
+/**
+ * Keyed by the active budget: switching budget in place (Settings, Open budget)
+ * remounts the page, so its queue focus, filed lines, undo stack, pending skips
+ * (cancelled, never sent, by the unmount) and toasts all belong to ONE budget.
+ */
 export function CategorizeScreen() {
+  const budgetId = useAppSelector(selectActiveBudgetId);
+  return <CategorizePage key={pageKey(budgetId)} />;
+}
+
+function CategorizePage() {
   const shell = useBudgetShell();
   const router = useRouter();
-  const page = useCategorizePage();
+  const rootRef = useRef<ViewInstance>(null);
+  const page = useCategorizePage(rootRef);
   useBlurAfterPointerPress();
   const fieldFocused = useFieldFocused();
   const counts = page.queue.counts;
@@ -37,7 +53,7 @@ export function CategorizeScreen() {
   const showNoKeyBanner = noKey && page.view === 'bundles' && hasBundles;
 
   return (
-    <View style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
+    <View ref={rootRef} style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.head}>
           <View style={styles.headText}>
@@ -83,6 +99,10 @@ export function CategorizeScreen() {
           <NoKeyBanner reason={page.aiReason} onAddKey={() => router.push('/ai-keys')} />
         ) : null}
 
+        {page.view === 'bundles' ? (
+          <PendingSkipsStrip skips={pendingSkips(page.accept.state)} onCancel={page.cancelSkip} />
+        ) : null}
+
         {page.reloading ? <Text style={styles.note}>{t('queue.updating')}</Text> : null}
         <View pointerEvents={page.reloading ? 'none' : 'auto'} style={page.reloading ? styles.reloading : undefined}>
 
@@ -122,6 +142,7 @@ export function CategorizeScreen() {
       {page.accept.state.toast ? (
         <ActionToast
           message={page.accept.state.toast.label}
+          leading={toastIsPendingSkip(page.accept.state) ? null : '✓'}
           actionLabel={toastActionable(page.accept.state) ? t('undo') : undefined}
           actionKey={page.view === 'one' && Platform.OS === 'web' && !fieldFocused ? 'Z' : undefined}
           onAction={page.undoLast}
@@ -129,6 +150,12 @@ export function CategorizeScreen() {
       ) : null}
     </View>
   );
+}
+
+/** A pending skip has not happened yet, so its toast carries no check mark. */
+function toastIsPendingSkip(state: Parameters<typeof toastActionable>[0]): boolean {
+  const seq = state.toast?.seq;
+  return state.stack.some((entry) => entry.kind === 'skip' && entry.seq === seq);
 }
 
 function ViewSegments({ view, onChange }: { view: CategorizeViewMode; onChange: (view: CategorizeViewMode) => void }) {

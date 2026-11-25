@@ -228,3 +228,13 @@ export function thresholdReloading({
   if (saving) return true;
   return stamp !== null && fulfilledAt <= stamp && !failed;
 }
+
+/**
+ * The identity of the Categorize page's state: one budget. The screen is keyed
+ * by it, so switching budget in place remounts the page (queue focus, filed
+ * lines, undo stack, pending skips and their timers, toasts all start fresh) and
+ * every request carries the budget its action was taken in.
+ */
+export function pageKey(budgetId: string | null): string {
+  return budgetId ?? 'no-budget';
+}

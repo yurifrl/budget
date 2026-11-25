@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { categorizeKeyAction, controlToBlur, hasModifier, isControlTarget, isTypingTarget } from './keys.logic';
+import { categorizeKeyAction, controlToBlur, hasModifier, isControlTarget, isTypingTarget, mayKeyAct } from './keys.logic';
 
 const base = { suggestions: 2, typing: false, undoAvailable: false };
 
@@ -94,5 +94,37 @@ describe('controlToBlur', () => {
     expect(controlToBlur({ closest: () => null }, 1)).toBeNull();
     expect(controlToBlur(null, 1)).toBeNull();
     expect(controlToBlur({}, 1)).toBeNull();
+  });
+});
+
+describe('mayKeyAct', () => {
+  const none = { onBody: false, inPage: false, overlayOpen: false };
+
+  test('acts on the bare document and inside the page', () => {
+    expect(mayKeyAct({ ...none, onBody: true })).toBe(true);
+    expect(mayKeyAct({ ...none, inPage: true })).toBe(true);
+  });
+
+  test('never acts while an overlay is open, wherever focus is', () => {
+    expect(mayKeyAct({ onBody: true, inPage: false, overlayOpen: true })).toBe(false);
+    expect(mayKeyAct({ onBody: false, inPage: true, overlayOpen: true })).toBe(false);
+  });
+
+  test('a key pressed in the shell (rail, menu panes) outside the page does not act', () => {
+    expect(mayKeyAct(none)).toBe(false);
+  });
+});
+
+describe('undo-only scope (Bundles view)', () => {
+  const ctx = { suggestions: 0, typing: false, undoAvailable: true, scope: 'undoOnly' as const };
+
+  test('Z undoes; the row shortcuts do nothing there', () => {
+    expect(categorizeKeyAction('z', ctx)).toEqual({ kind: 'undo' });
+    for (const key of ['s', 'S', '1', '2', '3', 'Enter', '/']) expect(categorizeKeyAction(key, ctx)).toBeNull();
+  });
+
+  test('without anything to undo nothing acts; a field still owns its keys', () => {
+    expect(categorizeKeyAction('z', { ...ctx, undoAvailable: false })).toBeNull();
+    expect(categorizeKeyAction('z', { ...ctx, typing: true })).toBeNull();
   });
 });

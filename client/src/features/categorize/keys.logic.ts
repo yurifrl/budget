@@ -20,6 +20,9 @@ export type CategorizeKeyAction =
   /** Escape in a field: leave it and return to the shortcuts. */
   | { kind: 'leaveField' };
 
+/** Which shortcuts the current view offers: the One by one view has a focused row, the Bundles view only has Undo. */
+export type KeyScope = 'row' | 'undoOnly';
+
 export interface CategorizeKeyContext {
   /** Suggestion chips on the focused row (0..3). */
   suggestions: number;
@@ -29,10 +32,13 @@ export interface CategorizeKeyContext {
   undoAvailable: boolean;
   /** A button or link has focus: Enter belongs to it, not to "file the top one". */
   onControl?: boolean;
+  /** Defaults to 'row'. In the Bundles view only Z (undo) acts; there is no focused row to file or leave out. */
+  scope?: KeyScope;
 }
 
 export function categorizeKeyAction(key: string, ctx: CategorizeKeyContext): CategorizeKeyAction | null {
   if (ctx.typing) return key === 'Escape' ? { kind: 'leaveField' } : null;
+  if (ctx.scope === 'undoOnly') return (key === 'z' || key === 'Z') && ctx.undoAvailable ? { kind: 'undo' } : null;
   if (key === '1' || key === '2' || key === '3') {
     const index = Number(key) - 1;
     return index < ctx.suggestions ? { kind: 'file', index } : null;
@@ -97,3 +103,29 @@ export function controlToBlur<T>(
   if (clickDetail <= 0 || !target?.closest) return null;
   return target.closest(CONTROL_SELECTOR);
 }
+
+/** What the key handler knows about where the key was pressed. */
+export interface KeyTargetFacts {
+  /** Nothing is focused: the event target is the document body (or the document element). */
+  onBody: boolean;
+  /** The event target lies inside the Categorize page's own root. */
+  inPage: boolean;
+  /** Any modal, dialog, menu or popover is open (or the target is inside one). */
+  overlayOpen: boolean;
+}
+
+/**
+ * May this key act on the page at all? Only when it was pressed on the bare
+ * document or inside the Categorize page, and never while an overlay is open:
+ * the shell's menus, the Run dialog and the category dropdown sit above the
+ * page, and a key meant for them must not file or skip the row behind the
+ * scrim. Decided from the target, not from a flag per dialog, so the next
+ * overlay is covered too.
+ */
+export function mayKeyAct(facts: KeyTargetFacts): boolean {
+  if (facts.overlayOpen) return false;
+  return facts.onBody || facts.inPage;
+}
+
+/** The selector of what counts as an open overlay (RN-web's Modal is role=dialog, aria-modal). */
+export const OVERLAY_SELECTOR = '[aria-modal="true"], [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';

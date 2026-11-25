@@ -60,6 +60,12 @@ export interface AcceptState {
   stack: UndoEntry[];
   /** A sentence for the failed request or the partly failed undo; kept until dismissed. */
   error: string | null;
+  /**
+   * Skips taken back WITHOUT the person asking (the send failed, or the row left
+   * the queue some other way), oldest first. The One by one view drops their
+   * lines and counts from it.
+   */
+  reverted: string[];
 }
 
 export const initialAcceptState: AcceptState = {
@@ -69,6 +75,7 @@ export const initialAcceptState: AcceptState = {
   toast: null,
   stack: [],
   error: null,
+  reverted: [],
 };
 
 export type AcceptAction =
@@ -91,6 +98,8 @@ export type AcceptAction =
   | { type: 'skipSending'; seq: number }
   | { type: 'skipDone'; requestId: string }
   | { type: 'skipFailed'; requestId: string; error: string }
+  /** The row left the queue some other way (categorized elsewhere, taken by a bulk accept): the pending skip is dropped, not sent. */
+  | { type: 'skipDropped'; transactionId: string }
   /** Undo took the entry off the stack (an accept whose rows are about to be restored). */
   | { type: 'undoClaimed'; seq: number }
   | { type: 'undoStarted' }
@@ -125,6 +134,23 @@ function settle(pending: FiledItem[], requestIds: readonly string[]): FiledItem[
 
 const less = (busy: number) => Math.max(0, busy - 1);
 
+/** Put an entry back where its press order says, not on top of newer actions. */
+export function insertBySeq(stack: readonly UndoEntry[], entry: UndoEntry): UndoEntry[] {
+  const next = [...stack];
+  const at = next.findIndex((e) => e.seq > entry.seq);
+  next.splice(at === -1 ? next.length : at, 0, entry);
+  return next;
+}
+
+/** Items of an accept without the rows that have a skip pending: the person already chose to leave those out. */
+export function withoutPendingSkips<T extends { transaction_id: string }>(
+  items: readonly T[],
+  state: Pick<AcceptState, 'stack'>,
+): T[] {
+  const leaving = new Set(pendingSkips(state).map((entry) => entry.item.transactionId));
+  return leaving.size === 0 ? [...items] : items.filter((item) => !leaving.has(item.transaction_id));
+}
+
 export function topEntry(state: Pick<AcceptState, 'stack'>): UndoEntry | null {
   return state.stack[state.stack.length - 1] ?? null;
 }
@@ -133,9 +159,13 @@ function toastFor(entry: UndoEntry | null): ToastState | null {
   return entry ? { label: entry.label, seq: entry.seq } : null;
 }
 
-/** After an entry is gone, the toast of an action that is still undoable comes back; a plain message stays. */
+/**
+ * After an entry is gone, a toast that speaks of another live action stays; a
+ * toast for the removed entry, or an old plain message ("Undid 1 transaction."),
+ * is replaced by the toast of the action that is now on top, if any.
+ */
 function toastAfterRemoval(state: AcceptState, stack: UndoEntry[], removedSeq: number): ToastState | null {
-  if (state.toast && state.toast.seq !== removedSeq) return state.toast;
+  if (state.toast && state.toast.seq !== removedSeq && state.toast.seq !== 0) return state.toast;
   return toastFor(stack[stack.length - 1] ?? null);
 }
 
@@ -221,7 +251,20 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
         pending: settle(state.pending, [action.requestId]),
         busy: less(state.busy),
         error: action.error,
+        reverted: [...state.reverted, action.requestId],
       };
+    case 'skipDropped': {
+      const gone = state.stack.find((e) => e.kind === 'skip' && e.item.transactionId === action.transactionId);
+      if (!gone) return state;
+      const stack = state.stack.filter((e) => e !== gone);
+      return {
+        ...state,
+        hiddenIds: without(state.hiddenIds, [action.transactionId]),
+        stack,
+        toast: toastAfterRemoval(state, stack, gone.seq),
+        reverted: [...state.reverted, action.transactionId],
+      };
+    }
     case 'undoClaimed': {
       const stack = state.stack.filter((entry) => entry.seq !== action.seq);
       return { ...state, stack, toast: state.toast?.seq === action.seq ? null : state.toast };
@@ -233,7 +276,7 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
         ...state,
         hiddenIds: without(state.hiddenIds, action.restoredIds),
         busy: less(state.busy),
-        stack: action.remaining ? [...state.stack, action.remaining] : state.stack,
+        stack: action.remaining ? insertBySeq(state.stack, action.remaining) : state.stack,
         toast: action.tone === 'ok' ? { label: action.message, seq: 0 } : null,
         error: action.tone === 'problem' ? action.message : null,
       };

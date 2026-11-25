@@ -5,7 +5,7 @@
  * rows are filed.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 
 import type { CategorizeQueueRow } from '@/budget/data/api';
@@ -18,6 +18,7 @@ import type { UndoEntry } from './accept.logic';
 import { leavingText, queueRowSubline, type FiledEntry } from './oneByOne.logic';
 import { thresholdPercent } from './page.logic';
 import { confidenceBand, type ConfidenceBand } from './queue.logic';
+import { useNow } from './useNow';
 
 const BAND_COLOR: Record<ConfidenceBand, string> = {
   high: colors.greenPillFg,
@@ -35,6 +36,7 @@ export function QueuePane({
   onCancelSkip,
   focusedId,
   total,
+  leaving,
   hiddenBelow,
   onFocus,
 }: {
@@ -47,6 +49,8 @@ export function QueuePane({
   focusedId: string | null;
   /** Rows the queue holds (all of them, not only this page). */
   total: number;
+  /** Skips still waiting for their timer; the total above still counts them. */
+  leaving: number;
   /** Rows beyond the loaded page. */
   hiddenBelow: number;
   onFocus: (row: CategorizeQueueRow) => void;
@@ -54,7 +58,7 @@ export function QueuePane({
   const { formatMoney, formatDateShort } = useMoneyFormat();
   const scroll = useRef<ScrollViewInstance>(null);
   const waiting = new Map(pendingSkips.map((entry) => [entry.item.transactionId, entry.sendAt]));
-  const now = useNow(waiting.size > 0);
+  const now = useNow(waiting.size > 0, [...waiting.values()].join(','));
   const layouts = useRef(new Map<string, { y: number; height: number }>());
 
   // Keep the focused row in view, with a couple of filed rows above it as the
@@ -78,7 +82,11 @@ export function QueuePane({
     <View style={styles.pane}>
       <View style={styles.head}>
         <Text style={styles.title}>
-          {t('one.queueTitle')} <Text style={styles.count}>{t('one.queueLeft', { count: total })}</Text>
+          {t('one.queueTitle')}{' '}
+          <Text style={styles.count}>
+            {t('one.queueLeft', { count: total })}
+            {leaving > 0 ? ` · ${t('one.queueLeaving', { count: leaving })}` : ''}
+          </Text>
         </Text>
         <Text style={styles.order}>{t('one.queueOrder')}</Text>
       </View>
@@ -198,15 +206,3 @@ const styles = StyleSheet.create({
   percent: { fontSize: 12, fontWeight: '700' },
   more: { color: colors.faint, fontSize: 12, textAlign: 'center', padding: 14 },
 });
-
-/** A clock that ticks once a second while `active`, for the pending-skip countdown. */
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return undefined;
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [active]);
-  return now;
-}

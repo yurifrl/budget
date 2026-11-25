@@ -7,12 +7,14 @@ import {
   filedCountLabel,
   filedLabel,
   hiddenIdSet,
+  insertBySeq,
   initialAcceptState,
   pendingSkips,
   skippedLabel,
   toastActionable,
   topEntry,
   visibleRows,
+  withoutPendingSkips,
   type AcceptAction,
   type AcceptState,
   type FiledItem,
@@ -250,5 +252,65 @@ describe('sentences', () => {
     expect(skippedLabel({ subject: 'Uber · –R$ 18,90' })).toBe(
       'Leaving Uber · –R$ 18,90 uncategorized. It will not come back to this list, for anyone in the budget.',
     );
+  });
+});
+
+describe('skips taken back without being asked', () => {
+  test('a failed send comes back with the error and is reported as reverted', () => {
+    const state = run([
+      skipStart(1, 's1'),
+      { type: 'skipSending', seq: 1 },
+      { type: 'skipFailed', requestId: 's1', error: 'No' },
+    ]);
+    expect(state.reverted).toEqual(['s1']);
+    expect(state.hiddenIds).toEqual([]);
+  });
+
+  test('a row that left the queue some other way drops its pending skip: not sent, reported as reverted', () => {
+    const state = run([start(1, 'a'), ok(1, 'a'), skipStart(2, 's1'), { type: 'skipDropped', transactionId: 's1' }]);
+    expect(pendingSkips(state)).toEqual([]);
+    expect(state.reverted).toEqual(['s1']);
+    expect(acceptIdle(state)).toBe(true);
+    expect(state.pending).toEqual([]);
+    expect(state.toast).toEqual({ label: 'A1', seq: 1 });
+  });
+
+  test('dropping a skip that is not pending changes nothing', () => {
+    const state = run([start(1, 'a')]);
+    expect(acceptReducer(state, { type: 'skipDropped', transactionId: 'zzz' })).toBe(state);
+  });
+
+  test('cancelling a skip clears an older message toast instead of keeping it', () => {
+    let state = run([start(1, 'a'), ok(1, 'a'), { type: 'undoClaimed', seq: 1 }, { type: 'undoStarted' }]);
+    state = run([{ type: 'undoFinished', restoredIds: ['a'], remaining: null, message: 'Undid 1 transaction.', tone: 'ok' }], state);
+    expect(state.toast?.label).toBe('Undid 1 transaction.');
+    state = run([skipStart(2, 's1'), { type: 'skipCancelled', transactionId: 's1' }], state);
+    expect(state.toast).toBeNull();
+  });
+});
+
+describe('a failed undo keeps its place in the press order', () => {
+  test('the unreached part goes back below newer actions, not on top of them', () => {
+    let state = run([start(1, 'a'), ok(1, 'a'), { type: 'undoClaimed', seq: 1 }, { type: 'undoStarted' }, start(2, 'b'), ok(2, 'b')]);
+    const rest = { ...acceptEntry(1, ['a']), confirmed: true };
+    state = run([{ type: 'undoFinished', restoredIds: [], remaining: rest, message: 'x', tone: 'problem' }], state);
+    expect(state.stack.map((e) => e.seq)).toEqual([1, 2]);
+    expect(topEntry(state)?.seq).toBe(2);
+  });
+
+  test('insertBySeq puts an entry in order wherever it fits', () => {
+    const e = (seq: number) => acceptEntry(seq, []);
+    expect(insertBySeq([e(1), e(3)], e(2)).map((x) => x.seq)).toEqual([1, 2, 3]);
+    expect(insertBySeq([], e(1)).map((x) => x.seq)).toEqual([1]);
+    expect(insertBySeq([e(1)], e(2)).map((x) => x.seq)).toEqual([1, 2]);
+  });
+});
+
+describe('bulk accepts leave pending skips out', () => {
+  test('rows with a pending skip are removed from the items', () => {
+    const state = run([skipStart(1, 's1')]);
+    const items = [{ transaction_id: 's1' }, { transaction_id: 'x' }];
+    expect(withoutPendingSkips(items, state)).toEqual([{ transaction_id: 'x' }]);
+    expect(withoutPendingSkips(items, initialAcceptState)).toEqual(items);
   });
 });

@@ -60,6 +60,7 @@ export function OneByOneView({
         onCancelSkip={flow.cancelSkip}
         focusedId={row.transaction_id}
         total={total}
+        leaving={flow.pendingSkips.length}
         hiddenBelow={Math.max(0, total - loadedRows)}
         onFocus={flow.focusRow}
       />
@@ -78,6 +79,7 @@ export function OneByOneView({
         row={row}
         budgetId={budgetId}
         canUndo={flow.canUndo}
+        searchReset={flow.searchReset}
         searchRef={flow.searchRef}
         onFile={flow.file}
         onPick={flow.pick}

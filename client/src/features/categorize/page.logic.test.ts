@@ -9,6 +9,7 @@ import {
   categoryOptions,
   bundleChangedMessage,
   isBundleChanged,
+  pageKey,
   rowSubject,
   runHeaderView,
   thresholdFromX,
@@ -313,5 +314,13 @@ describe('thresholdReloading', () => {
   test('a failed read does not leave the page locked; nothing pending is not reloading', () => {
     expect(thresholdReloading({ saving: false, stamp: 5, fulfilledAt: 5, failed: true })).toBe(false);
     expect(thresholdReloading({ saving: false, stamp: null, fulfilledAt: 5, failed: false })).toBe(false);
+  });
+});
+
+describe('pageKey', () => {
+  test('differs per budget, so a budget switch remounts the page', () => {
+    expect(pageKey('b1')).not.toBe(pageKey('b2'));
+    expect(pageKey('b1')).toBe(pageKey('b1'));
+    expect(pageKey(null)).toBe('no-budget');
   });
 });

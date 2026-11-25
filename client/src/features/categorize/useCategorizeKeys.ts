@@ -1,5 +1,5 @@
 /**
- * Web keyboard shortcuts of the One by one view. One document listener (in the
+ * Web keyboard shortcuts of the Categorize page (all of them in One by one, Z in Bundles). One document listener (in the
  * capture phase: RN-web's root stops keydown bubbling) maps the key through
  * `categorizeKeyAction`; keys typed into a field, or with a modifier held, are
  * never taken. Everything the keys mean lives in keys.logic.ts.
@@ -13,31 +13,52 @@ import {
   hasModifier,
   isControlTarget,
   isTypingTarget,
+  mayKeyAct,
+  OVERLAY_SELECTOR,
   type CategorizeKeyAction,
+  type KeyScope,
 } from './keys.logic';
+
+/** Where a key was pressed, read from the DOM: the input of `mayKeyAct`. */
+function targetFacts(target: HTMLElement | null, root: HTMLElement | null) {
+  const onBody = target === null || target === document.body || target === document.documentElement;
+  const inPage = target !== null && root !== null && root.contains(target);
+  // Any open overlay counts, wherever focus is: a menu opened from the shell
+  // keeps focus inside itself, or on the body behind it.
+  const overlayOpen = document.querySelector(OVERLAY_SELECTOR) !== null;
+  return { onBody, inPage, overlayOpen };
+}
 
 export function useCategorizeKeys({
   enabled,
+  scope = 'row',
+  rootRef,
   suggestions,
   undoAvailable,
   onAction,
 }: {
   enabled: boolean;
+  /** 'undoOnly' in the Bundles view: only Z acts there. */
+  scope?: KeyScope;
+  /** The Categorize page's root view: keys pressed outside it (the shell) are not for the page. */
+  rootRef: { current: unknown };
   /** Suggestion chips on the focused row. */
   suggestions: number;
   undoAvailable: boolean;
   onAction: (action: CategorizeKeyAction) => void;
 }): void {
   // The listener reads the latest values without being re-attached per render.
-  const latest = useRef({ suggestions, undoAvailable, onAction });
-  latest.current = { suggestions, undoAvailable, onAction };
+  const latest = useRef({ suggestions, undoAvailable, onAction, scope });
+  latest.current = { suggestions, undoAvailable, onAction, scope };
 
   useEffect(() => {
     if (!enabled || process.env.EXPO_OS !== 'web' || typeof document === 'undefined') return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.repeat || hasModifier(e)) return;
       const target = e.target as HTMLElement | null;
+      if (!mayKeyAct(targetFacts(target, rootRef.current as HTMLElement | null))) return;
       const action = categorizeKeyAction(e.key, {
+        scope: latest.current.scope,
         suggestions: latest.current.suggestions,
         undoAvailable: latest.current.undoAvailable,
         typing: isTypingTarget(target),
@@ -50,7 +71,7 @@ export function useCategorizeKeys({
     };
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
-  }, [enabled]);
+  }, [enabled, rootRef]);
 }
 
 /**

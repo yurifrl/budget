@@ -37,6 +37,8 @@ export interface OneByOne {
   focused: CategorizeQueueRow | null;
   progress: ProgressView;
   canUndo: boolean;
+  /** Part of the search picker's key: bumping it clears the typed text. */
+  searchReset: number;
   /** Skips still waiting for their own timer, each cancellable. */
   pendingSkips: Extract<UndoEntry, { kind: 'skip' }>[];
   searchRef: React.RefObject<TextInputInstance | null>;
@@ -50,12 +52,18 @@ export interface OneByOne {
 
 export function useOneByOne({
   enabled,
+  rowKeys,
+  rootRef,
   rows,
   pageRows,
   counts,
   accept,
 }: {
+  /** Keys are live (no overlay or reload in the way). */
   enabled: boolean;
+  /** One by one: all shortcuts. Bundles: only Z, for the skips still pending. */
+  rowKeys: boolean;
+  rootRef: { current: unknown };
   /** The queue page without optimistically hidden rows. */
   rows: readonly CategorizeQueueRow[];
   /** The queue page as read (hidden rows included): for the remaining count. */
@@ -68,6 +76,9 @@ export function useOneByOne({
   const lastIndex = useRef(0);
   const [done, setDone] = useState(0);
   const [filed, setFiled] = useState<FiledEntry[]>([]);
+  /** Bumped by Escape in the search: the picker remounts, so its text is gone. */
+  const [searchReset, setSearchReset] = useState(0);
+  const revertedSeen = useRef(0);
   const searchRef = useRef<TextInputInstance>(null);
 
   const focus = resolveFocus(ordered, focusedId, lastIndex.current);
@@ -114,6 +125,18 @@ export function useOneByOne({
     });
   };
 
+  // A skip taken back without the person asking (its send failed, or its row
+  // left the queue another way): its "left uncategorized" line and its place in
+  // the counter go with it. The error, when there is one, is already on screen.
+  const reverted = accept.state.reverted;
+  useEffect(() => {
+    const fresh = reverted.slice(revertedSeen.current);
+    if (fresh.length === 0) return;
+    revertedSeen.current = reverted.length;
+    setDone((n) => Math.max(0, n - fresh.length));
+    setFiled((list) => dropFiled(list, fresh));
+  }, [reverted]);
+
   const cancelSkip = (transactionId: string) => {
     if (!accept.cancelSkip(transactionId)) return;
     setDone((n) => Math.max(0, n - 1));
@@ -134,13 +157,16 @@ export function useOneByOne({
       case 'focusSearch':
         return searchRef.current?.focus();
       case 'leaveField':
+        setSearchReset((n) => n + 1);
         return (document.activeElement as HTMLElement | null)?.blur?.();
       case 'undo':
         return undo();
     }
   };
   useCategorizeKeys({
-    enabled: enabled && focused !== null,
+    enabled: enabled && (rowKeys ? focused !== null : canUndo),
+    scope: rowKeys ? 'row' : 'undoOnly',
+    rootRef,
     suggestions: focused ? topSuggestions(focused.suggestions).length : 0,
     undoAvailable: canUndo,
     onAction: onKey,
@@ -152,6 +178,7 @@ export function useOneByOne({
     focused,
     progress,
     canUndo,
+    searchReset,
     pendingSkips: pendingSkips(accept.state),
     searchRef,
     focusRow: (row) => setFocusedId(row.transaction_id),

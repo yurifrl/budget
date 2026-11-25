@@ -35,7 +35,7 @@ const RUN_POLL_MS = 2000;
 
 export type CategorizeViewMode = 'bundles' | 'one';
 
-export function useCategorizePage() {
+export function useCategorizePage(rootRef: { current: unknown }) {
   const budgetId = useAppSelector(selectActiveBudgetId);
   const dispatch = useAppDispatch();
   const format = useMoneyFormat();
@@ -149,7 +149,9 @@ export function useCategorizePage() {
     if (!reloading && thresholdStamp !== null) setThresholdStamp(null);
   }, [reloading, thresholdStamp]);
   const oneByOne = useOneByOne({
-    enabled: view === 'one' && !reloading && !modalOpen,
+    enabled: !reloading && !modalOpen,
+    rowKeys: view === 'one',
+    rootRef,
     rows: visibleQueueRows,
     pageRows: queue.data?.rows ?? [],
     counts,
@@ -196,6 +198,7 @@ export function useCategorizePage() {
     accept,
     /** Undo the last action and bring its rows back into the One by one lines. */
     undoLast: oneByOne.undo,
+    cancelSkip: oneByOne.cancelSkip,
     error,
     dismissError: () => {
       setThresholdError(null);

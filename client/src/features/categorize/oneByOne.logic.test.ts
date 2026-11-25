@@ -137,6 +137,8 @@ describe('pending skip countdown', () => {
     expect(secondsLeft(10_000, 9_001)).toBe(1);
     expect(secondsLeft(10_000, 10_000)).toBe(0);
     expect(secondsLeft(10_000, 12_000)).toBe(0);
+    // A clock that has not ticked since the skip began would read 11 s: clamp to the window.
+    expect(secondsLeft(10_000, -1_000)).toBe(10);
   });
 
   test('the line says what is about to happen', () => {
