@@ -36,6 +36,30 @@ async function assertMemberOrShared(
   }
 }
 
+/**
+ * 409 `account_name_exists` when another OPEN account of the budget has this
+ * name (case- and space-insensitive). Closed and deleted accounts never block.
+ *
+ * Concurrency without a unique index (the database is shared with another
+ * app): the check runs in the caller's transaction after taking a row lock on
+ * the budget, so two creates/renames of one budget run one after the other,
+ * and the second one sees the first one's committed row.
+ */
+async function assertOpenAccountNameFree(
+  client: Queryable,
+  budgetId: string,
+  name: string,
+  exceptAccountId: string | null,
+): Promise<void> {
+  if (!(await accountsStore.lockBudgetForAccountNames(client, budgetId))) throw new HttpError(404, 'budget not found');
+  const other = await accountsStore.findOpenAccountNamed(client, budgetId, name, exceptAccountId);
+  if (other) {
+    throw new HttpError(409, `An open account named "${other.name}" already exists. Choose a different name.`, 'account_name_exists', {
+      name: other.name,
+    });
+  }
+}
+
 const accountGroupFor = (type: AccountType): 'CASH' | 'CREDIT' => (CREDIT_TYPES[type] ? 'CREDIT' : 'CASH');
 
 /**
@@ -59,6 +83,7 @@ const createAccount = implement(
       if (!(await accountsStore.budgetExists(client, budget_id))) throw new HttpError(404, 'budget not found');
 
       await assertMemberOrShared(client, budget_id, user_id);
+      await assertOpenAccountNameFree(client, budget_id, name, null);
 
       // Open accounts start with an explicit positive/negative opening transaction,
       // so keep the stored balances at 0 and let that transaction carry the amount.
@@ -118,6 +143,16 @@ const updateAccount = implement(
         link !== undefined;
       if (isClosed && closed !== false && mutatesFields) {
         throw new HttpError(409, 'account is closed — reopen it to make changes', 'account_closed_edit');
+      }
+
+      // A rename, or a reopen, must not leave two open accounts with one name.
+      // An unchanged name (the editor re-sends it) and an existing duplicate
+      // that only has other fields edited or is closed are left alone.
+      const staysOpen = closed === undefined ? !isClosed : !closed;
+      const renamed = name !== undefined && name !== acc.name;
+      const reopened = isClosed && closed === false;
+      if (staysOpen && (renamed || reopened)) {
+        await assertOpenAccountNameFree(client, budget_id, name ?? acc.name, accountId);
       }
 
       // Working-balance edit is an OVERRIDE, not a ledger operation (product

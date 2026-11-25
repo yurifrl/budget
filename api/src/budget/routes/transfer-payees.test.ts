@@ -71,7 +71,19 @@ async function newBudget(): Promise<string> {
 }
 
 async function createAccount(budgetId: string, name: string, extra: Record<string, unknown> = {}): Promise<string> {
+  // The API refuses a second OPEN account of the same name, but these tests cover the duplicates
+  // that already exist in real budgets. Park the open namesakes (closed) for the create, then reopen
+  // them, so the new account goes through the real create path and ends up a duplicate.
+  const parked = (
+    await pool!.query<{ id: string }>(
+      `UPDATE accounts SET closed = true WHERE budget_id = $1 AND NOT deleted AND NOT closed
+          AND lower(btrim(regexp_replace(name, '\\s+', ' ', 'g'))) = lower(btrim(regexp_replace($2::text, '\\s+', ' ', 'g')))
+        RETURNING id`,
+      [budgetId, name],
+    )
+  ).rows.map((r) => r.id);
   const res = await send('POST', '/accounts', { budget_id: budgetId, name, type: 'checking', on_budget: true, balance: 0, ...extra });
+  if (parked.length > 0) await pool!.query('UPDATE accounts SET closed = false WHERE id = ANY($1)', [parked]);
   expect(res.status, await res.clone().text()).toBe(201);
   return ((await res.json()) as { id: string }).id;
 }
@@ -252,7 +264,10 @@ describe.skipIf(!dbReady)('lifecycle: created with the account, renamed with it,
     const b = await newBudget();
     const first = await createAccount(b, 'Clash First');
     const second = await createAccount(b, 'Clash Second');
-    await send('PATCH', `/accounts/${second}`, { budget_id: b, name: 'Clash First' });
+    // The API refuses this rename while both are open; it is still how a duplicate arises from a closed namesake.
+    await pool!.query('UPDATE accounts SET closed = true WHERE id = $1', [first]);
+    expect((await send('PATCH', `/accounts/${second}`, { budget_id: b, name: 'Clash First' })).status).toBe(200);
+    await pool!.query('UPDATE accounts SET closed = false WHERE id = $1', [first]);
     await expectOneTransferPayee(first, 'Transfer : Clash First');
     await expectOneTransferPayee(second, 'Transfer : Clash First (2)');
   });

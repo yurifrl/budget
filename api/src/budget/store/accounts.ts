@@ -38,6 +38,38 @@ export async function budgetExists(db: Queryable, budgetId: string): Promise<boo
   return budgetCheck.rowCount !== 0;
 }
 
+/**
+ * Serialize the account-name writes of one budget: a row lock on the budget
+ * that other writers (FK checks take only KEY SHARE) do not conflict with.
+ * Held until the caller's transaction ends. False when the budget is missing.
+ */
+export async function lockBudgetForAccountNames(db: Queryable, budgetId: string): Promise<boolean> {
+  const r = await db.query('SELECT 1 FROM budgets WHERE id = $1 FOR NO KEY UPDATE', [budgetId]);
+  return r.rowCount !== 0;
+}
+
+/**
+ * An OPEN (not closed, not deleted) account of the budget whose name equals
+ * `name` ignoring case and runs of spaces; `exceptAccountId` is left out.
+ */
+export async function findOpenAccountNamed(
+  db: Queryable,
+  budgetId: string,
+  name: string,
+  exceptAccountId: string | null,
+): Promise<{ id: string; name: string } | undefined> {
+  const norm = (col: string) => `lower(btrim(regexp_replace(${col}, '\\s+', ' ', 'g')))`;
+  const r = await db.query<{ id: string; name: string }>(
+    `SELECT id, name FROM accounts
+      WHERE budget_id = $1 AND NOT deleted AND NOT closed
+        AND ($3::uuid IS NULL OR id <> $3::uuid)
+        AND ${norm('name')} = ${norm('$2::text')}
+      ORDER BY created_at LIMIT 1`,
+    [budgetId, name, exceptAccountId],
+  );
+  return r.rows[0];
+}
+
 export async function getAccount(db: Queryable, accountId: string) {
   const row = await db.query('SELECT * FROM accounts WHERE id = $1', [accountId]);
   return row.rows[0];
