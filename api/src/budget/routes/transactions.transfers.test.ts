@@ -330,7 +330,7 @@ for (const lane of ['client', 'none'] as const) {
     });
 
     for (const side of ['source', 'mirror'] as const) {
-      test(`deleting the ${side} leg of a hand-made transfer deletes the other and reverses both balances (a bank row the matcher linked is restored instead: transfers.integrity.test.ts)`, async () => {
+      test(`deleting the ${side} leg of a hand-made transfer deletes the other and reverses both balances (a bank row the matcher linked is restored instead: connections/transfer-integrity.test.ts)`, async () => {
         const { body } = await create({ outflow: 12340, cleared: 'cleared' });
         const src = await getRow(body!.id);
         const [victim, other] = side === 'source' ? [src.id, src.transfer_transaction_id!] : [src.transfer_transaction_id!, src.id];

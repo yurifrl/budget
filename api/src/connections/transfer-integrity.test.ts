@@ -5,12 +5,12 @@
  *    edited to an ordinary payee, moved to another peer, or deleted) RESTORES
  *    the other bank-imported row, never deletes it; later syncs neither skip
  *    nor duplicate its bank id; a hand-made mirror is still removed;
- *  - R2: when the bank imports the real other side of a hand-made transfer, the
- *    hand-made mirror is replaced by it (one row, the bank's import id,
- *    balances right, idempotent);
+ *  - R2 is NOT automatic: a hand-made transfer plus a bank import of the other
+ *    side stays two rows, as on main (a suggestion-based fix is a separate task);
+ *  - a leg released from a pair re-links only the row it released;
  *  - imports (statement and bank sync) whose payee text means an account's
  *    transfer payee stay ordinary rows with a hint for the matcher;
- *  - the category of a leg of an on-budget pair is dropped on every write path.
+ *  - a leg of an on-budget pair loses a category sent with a write; a payee-only row from main is left alone.
  * DB-gated. Lives next to the sync tests: it drives the real bank sync.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
@@ -358,7 +358,7 @@ describe.skipIf(!dbReady)('transfer integrity (budget-nq2f)', () => {
   });
 
   describe('no category on a leg of an on-budget pair, whatever wrote it', () => {
-    test('a category patched onto a payee-only transfer leg is dropped; a leg to an off-budget account keeps its category', async () => {
+    test('a payee-only leg from main keeps its category; a pair loses a category sent with an edit; a leg to an off-budget account keeps it', async () => {
       await reset();
       const payee = (await pool.query('SELECT transfer_payee_id AS id FROM accounts WHERE id = $1', [nubank])).rows[0].id as string;
       const legacy = (
@@ -604,6 +604,114 @@ describe.skipIf(!dbReady)('transfer integrity (budget-nq2f)', () => {
       expect((await patch(out.id, { payee: 'Transfer : Nubank Conta' })).status).toBe(204);
       expect(await row(inn.id)).toMatchObject({ transfer_transaction_id: null, mark: 'dismissed' });
       expect((await rowsOf(nubank)).filter((r) => !r.deleted)).toHaveLength(2);
+    });
+  });
+
+
+  describe('round 4', () => {
+    test('S4: a refreshed row and its shadow agree when the new text adopts a name-only "Transfer : X" payee; the next sync changes nothing and a later correction applies', async () => {
+      await reset();
+      // Third has no pointer and a legacy name-only payee "Transfer : Third Conta".
+      await pool.query("UPDATE accounts SET transfer_payee_id = NULL WHERE id = $1", [third]);
+      await pool.query("UPDATE payees SET transfer_account_id = NULL WHERE budget_id = $1 AND name = 'Transfer : Third Conta'", [B]);
+      try {
+        upstream = { [EXT_ITAU]: [txn(EXT_ITAU, 's4', -80_000, 'Mercado S4')] };
+        await sync();
+        const r0 = await byImport(`${PROVIDER}:s4`);
+        // The bank changes the text of the untouched row to the name-only payee's name.
+        upstream = { [EXT_ITAU]: [txn(EXT_ITAU, 's4', -80_000, 'Transfer : Third Conta')] };
+        expect((await sync()).updated).toBe(1);
+        const shadow = (await pool.query('SELECT last_synced_payload AS p, blocked FROM connection_transactions WHERE transaction_id = $1', [r0.id])).rows[0];
+        const stored = await row(r0.id);
+        expect(shadow.blocked).toBe(false);
+        expect(shadow.p.payee ?? '').toBe(stored.payee ?? '');
+        const again = await sync();
+        expect(again).toMatchObject({ updated: 0, blocked: 0 });
+        upstream = { [EXT_ITAU]: [txn(EXT_ITAU, 's4', -81_000, 'Transfer : Third Conta')] };
+        expect((await sync()).updated).toBe(1);
+        expect((await row(r0.id)).amount).toBe(-81_000);
+      } finally {
+        await pool.query('UPDATE payees SET transfer_account_id = $2 WHERE budget_id = $1 AND name = $3', [B, third, 'Transfer : Third Conta']);
+        const p = (await pool.query("SELECT id FROM payees WHERE budget_id = $1 AND name = 'Transfer : Third Conta'", [B])).rows[0].id;
+        await pool.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [p, third]);
+      }
+    });
+
+    test('F2: unlinking a re-linked pair gives the leg back the payee and category it had before it became a transfer', async () => {
+      await reset();
+      const { out, inn } = await linkedPair('f2u');
+      expect((await patch(out.id, { payee: 'Padaria' })).status).toBe(204);
+      expect((await patch(out.id, { payee: 'Transfer : Nubank Conta' })).status).toBe(204);
+      expect((await row(inn.id)).transfer_transaction_id).toBe(out.id);
+      const undo = await op('budget_transfers_unlink', { budget_id: B, transaction_ids: [inn.id] });
+      expect(undo.json).toMatchObject({ unlinked: 1 });
+      expect(await row(out.id)).toMatchObject({ payee: 'Padaria', transfer_account_id: null, transfer_transaction_id: null });
+      expect(await row(inn.id)).toMatchObject({ payee: 'Transferência Recebida', transfer_transaction_id: null });
+    });
+
+    test('F5: a released row categorized since the release is not re-linked (a mirror is created)', async () => {
+      await reset();
+      const { out, inn } = await linkedPair('f5c', 350_000);
+      expect((await patch(out.id, { payee: 'Padaria' })).status).toBe(204);
+      expect((await patch(inn.id, { category_id: categoryId })).status).toBe(204);
+      expect((await patch(out.id, { payee: 'Transfer : Nubank Conta' })).status).toBe(204);
+      expect((await row(inn.id)).transfer_transaction_id).toBeNull();
+      expect((await rowsOf(nubank)).filter((r) => !r.deleted)).toHaveLength(2);
+    });
+
+    test('F5: a hint cannot name an account that was deleted: the hint goes with the account', async () => {
+      await reset();
+      const extra = crypto.randomUUID();
+      await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Hint Gone','checking','CASH',true)`, [extra, B]);
+      const t = await pool.query<{ id: string }>(
+        `INSERT INTO transactions (budget_id, account_id, date, amount, cleared, approved, repeat, deleted) VALUES ($1,$2,$3,-5000,'cleared',false,'never',false) RETURNING id`,
+        [B, itau, daysAgo(1)],
+      );
+      await pool.query('INSERT INTO transfer_hints (transaction_id, budget_id, account_id) VALUES ($1,$2,$3)', [t.rows[0]!.id, B, extra]);
+      await pool.query('DELETE FROM accounts WHERE id = $1', [extra]);
+      expect((await pool.query('SELECT count(*)::int AS n FROM transfer_hints WHERE transaction_id = $1', [t.rows[0]!.id])).rows[0].n).toBe(0);
+    });
+
+    describe('statement import', () => {
+      const bulk = (accountId: string, rows: { payee: string; outflow: number; date?: string }[]) =>
+        op('budget_transactions_bulk_import', {
+          budget_id: B,
+          account_id: accountId,
+          txns: rows.map((r) => ({ date: r.date ?? daysAgo(2), payee: r.payee, memo: '', outflow: r.outflow, inflow: 0, category_id: null })),
+        });
+      const payeeCount = async () => (await pool.query('SELECT count(*)::int AS n FROM payees WHERE budget_id = $1', [B])).rows[0].n as number;
+
+      test('F3a: re-importing a file whose rows are all duplicates creates no payee', async () => {
+        await reset();
+        const payee = (await pool.query('SELECT transfer_payee_id AS id FROM accounts WHERE id = $1', [nubank])).rows[0].id as string;
+        expect((await op('budget_payees_set_rename_rule', { id: payee, budget_id: B, match_type: 'is', condition: 'PIX F3A' })).status).toBe(204);
+        const rows = [{ payee: 'PIX F3A', outflow: 61_000 }];
+        expect((await bulk(itau, rows)).json).toEqual({ imported: 1, duplicates: 0 });
+        await pool.query("DELETE FROM payees WHERE budget_id = $1 AND name = 'PIX F3A'", [B]); // a file imported by main never made it
+        const before = await payeeCount();
+        expect((await bulk(itau, rows)).json).toEqual({ imported: 0, duplicates: 1 });
+        expect(await payeeCount()).toBe(before);
+      });
+
+      test('F3b: with an account pointer naming ANOTHER account\'s payee the import keys are those of main: a re-import is all duplicates', async () => {
+        await reset();
+        const itauPayee = (await pool.query('SELECT transfer_payee_id AS id FROM accounts WHERE id = $1', [itau])).rows[0].id as string;
+        const nubankPayee = (await pool.query('SELECT transfer_payee_id AS id FROM accounts WHERE id = $1', [nubank])).rows[0].id as string;
+        // Bad data: Nubank's pointer names Itau's payee. Main keyed "Transfer : Nubank Conta" rows by the POINTER.
+        await pool.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [itauPayee, nubank]);
+        try {
+          const main = `YNAB:-61000:${daysAgo(2)}:${itauPayee}:1`;
+          await pool.query(
+            `INSERT INTO transactions (budget_id, account_id, date, amount, payee_id, cleared, approved, repeat, deleted, import_id)
+             VALUES ($1,$2,$3,-61000,$4,'uncleared',false,'never',false,$5)`,
+            [B, third, daysAgo(2), itauPayee, main],
+          );
+          const res = await bulk(third, [{ payee: 'Transfer : Nubank Conta', outflow: 61_000 }]);
+          expect(res.json).toEqual({ imported: 0, duplicates: 1 });
+        } finally {
+          await pool.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [nubankPayee, nubank]);
+        }
+      });
     });
   });
 

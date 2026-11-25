@@ -365,7 +365,7 @@ export async function clearCategoryOfOnBudgetTransfers(db: Queryable, budgetId: 
   return r.rowCount ?? 0;
 }
 
-// ---- releasing and adopting legs ----------------------------------------------------
+// ---- releasing legs ----------------------------------------------------
 
 /** The link record of one leg (the undo record of the matcher / a person's link), if any. */
 export async function getTransferLink(db: Queryable, budgetId: string, transactionId: string): Promise<TransferLinkSql | undefined> {
@@ -396,7 +396,7 @@ export async function getMirrorFacts(db: Queryable, budgetId: string, id: string
   return r.rows[0];
 }
 
-/** The user-facing fields of a row (what an adoption merges). */
+/** The user-facing fields of a row (compared against the snapshot of a release). */
 export interface RowFields {
   id: string;
   account_id: string;
@@ -491,6 +491,7 @@ export async function findReleasedBankRow(
   const same =
     now &&
     now.payee_id === was.payee_id &&
+    now.category_id === was.category_id &&
     now.date === was.date &&
     now.amount === was.amount &&
     now.memo === was.memo &&

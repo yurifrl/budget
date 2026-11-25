@@ -10,7 +10,7 @@
 create table if not exists public.transfer_hints (
   transaction_id uuid primary key references public.transactions(id) on delete cascade,
   budget_id      uuid not null,
-  account_id     uuid not null,
+  account_id     uuid not null references public.accounts(id) on delete cascade,
   created_at     timestamptz not null default now()
 );
 create index if not exists transfer_hints_budget_idx

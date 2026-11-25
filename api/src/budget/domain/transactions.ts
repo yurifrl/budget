@@ -4,7 +4,7 @@ import type { z } from '@shared/zod';
 import { applyRules, type RenameRule } from '@shared/domain/payees';
 import { HttpError } from '../../core/validate';
 import { ensureTransferPayee, resolveTransferAccountFromText, resolveTransferPayeeText } from './transfer-payees';
-import { findPayeeRowByName } from '../store/transfer-payees';
+import { findPayeeRowByName, getAccountRow } from '../store/transfer-payees';
 import { ONE_WAY_ERROR, bothPositive, type subTxnListSchema } from '@shared/contracts/budget/schemas';
 
 /**
@@ -166,6 +166,44 @@ export async function resolveImportedPayee(
   }
   const id = plan.ordinaryName === null ? null : await upsertPayee(client, budgetId, plan.ordinaryName, { verbatim: opts.verbatim });
   return { ...plan, id, transferPayeeId };
+}
+
+/**
+ * The payee of one statement-import name (POST /bulk) with the writes deferred:
+ *  - `key` is the id the row counts under in its `YNAB:<milli>:<date>:<payee>`
+ *    import id. It is what main used: for text that names an account, the id main
+ *    resolved to (the account's own pointer when it has one, else its payee, created
+ *    only when the account has none), otherwise the ordinary payee's id;
+ *  - `ordinaryId()` creates the ordinary payee of the raw text ONLY when a row is
+ *    actually inserted, so re-importing a file whose rows are all duplicates creates
+ *    no payee.
+ */
+export interface StatementPayee {
+  plan: ImportedPayeePlan;
+  key: string | null;
+  ordinaryId(): Promise<string | null>;
+}
+
+export async function resolveStatementPayee(client: PoolClient, budgetId: string, rawText: string, effective: string): Promise<StatementPayee> {
+  let plan = await planImportedPayee(client, budgetId, rawText, effective);
+  let key: string | null = null;
+  if (plan.transferAccountId) {
+    const account = await getAccountRow(client, plan.transferAccountId);
+    key = account?.transfer_payee_id ?? (await ensureTransferPayee(client, budgetId, plan.transferAccountId));
+    // ensureTransferPayee may have adopted a name-only payee: judge the raw text again.
+    plan = await planImportedPayee(client, budgetId, rawText, effective);
+  }
+  let ordinary: Promise<string | null> | null = null;
+  const ordinaryId = () => {
+    ordinary ??= plan.ordinaryName === null ? Promise.resolve(null) : upsertPayee(client, budgetId, plan.ordinaryName);
+    return ordinary;
+  };
+  if (!plan.transferAccountId && plan.ordinaryName !== null) {
+    // An existing payee is found without a write; a new one is needed now (its rows are new).
+    const existing = await findPayeeRowByName(client, budgetId, plan.ordinaryName.trim());
+    key = existing ? existing.id : await ordinaryId();
+  }
+  return { plan, key, ordinaryId };
 }
 
 export async function resolvePayeeId(

@@ -717,18 +717,23 @@ async function syncOnce(
           // with the transfer payee keeps it (the engine never rewrites a payee only
           // because transfer text is resolved differently now).
           const keep = legacyForm;
-          const payeeId = keep ? existing.payee_id : (await resolver.resolve(txn.description)).id;
-          const storedName = keep ? current.payee : upstreamPayee.name;
+          // The row is being changed: ONE resolve() decides payee, shadow name, import name
+          // and hint, so the row and its shadow always agree (a peek made before the
+          // resolve could adopt a name-only payee would disagree with the stored row,
+          // and the next sync would freeze it).
+          const resolved = keep ? null : await resolver.resolve(txn.description);
+          const payeeId = resolved ? resolved.id : existing.payee_id;
+          const storedName = resolved ? resolved.name : current.payee;
           await ledger.refreshImportedTransaction(pg, existing.id, {
             date: txn.date.slice(0, 10),
             amount: milli,
             payeeId,
-            importPayeeName: (keep ? current.payee : upstreamPayee.importName) || null,
+            importPayeeName: (resolved ? resolved.importName : current.payee) || null,
           });
           // The hint follows the row: a refreshed row of transfer text keeps or gets it, any other text drops it.
-          if (!keep) {
-            if (upstreamPayee.transferAccountId && upstreamPayee.transferAccountId !== acc.id) {
-              await ledger.setTransferHint(pg, acc.budget_id, existing.id, upstreamPayee.transferAccountId);
+          if (resolved) {
+            if (resolved.transferAccountId && resolved.transferAccountId !== acc.id) {
+              await ledger.setTransferHint(pg, acc.budget_id, existing.id, resolved.transferAccountId);
             } else {
               await ledger.clearTransferHints(pg, acc.budget_id, [existing.id]);
             }

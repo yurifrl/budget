@@ -20,9 +20,9 @@ import {
   type BalanceDelta,
   insertSubTxns,
   loadRenameRules,
-  resolveImportedPayee,
+  resolveStatementPayee,
   resolvePayeeId,
-  type ImportedPayee,
+  type StatementPayee,
 } from '../domain/transactions';
 import { linkTransfers, transferOverview } from '../domain/transfer-links';
 import { setTransferHint } from '../store/transfers';
@@ -232,10 +232,11 @@ export const operations = [
       const rules = (await loadRenameRules(client, budget_id)).rows;
       // A text that names an account's transfer payee does NOT store that payee
       // (a payee-only half transfer): the row stays ordinary and the account is
-      // remembered as a hint for the matcher (see resolveImportedPayee).
-      const payeeByName = new Map<string, ImportedPayee>();
+      // remembered as a hint for the matcher (see planImportedPayee); payees are
+      // created only for rows that are inserted (resolveStatementPayee).
+      const payeeByName = new Map<string, StatementPayee>();
       for (const name of new Set(txns.map((t) => t.payee.trim()).filter(Boolean))) {
-        payeeByName.set(name, await resolveImportedPayee(client, budget_id, name, applyRules(rules, name)));
+        payeeByName.set(name, await resolveStatementPayee(client, budget_id, name, applyRules(rules, name)));
       }
 
       // Existing occurrence numbers per `YNAB:<milliunits>:<date>:<payee>`
@@ -250,7 +251,7 @@ export const operations = [
       // as before: re-importing a file stays idempotent across this change.
       const payeeKeyOf = (txn: (typeof txns)[number]) => {
         const p = payeeByName.get(txn.payee.trim());
-        return p?.transferPayeeId ?? p?.id ?? '-';
+        return p?.key ?? '-';
       };
       const prefixes = [
         ...new Set(
@@ -300,7 +301,7 @@ export const operations = [
           accountId: account_id,
           date: txn.date,
           amount: milliunits,
-          payeeId: payeeByName.get(txn.payee.trim())?.id ?? null,
+          payeeId: (await payeeByName.get(txn.payee.trim())?.ordinaryId()) ?? null,
           categoryId: txn.category_id,
           memo: txn.memo || null,
           importId,
@@ -312,7 +313,7 @@ export const operations = [
           duplicates += 1;
           continue;
         }
-        const hint = payeeByName.get(txn.payee.trim())?.transferAccountId;
+        const hint = payeeByName.get(txn.payee.trim())?.plan.transferAccountId;
         if (hint && hint !== account_id && !txn.category_id) await setTransferHint(client, budget_id, inserted, hint);
         imported += 1;
         unclearedDelta += milliunits;

@@ -254,7 +254,13 @@ async function ordinaryPayeeOfImport(client: Queryable, budgetId: string, import
  * No row is created and no balance moves. Both legs get a link record, so
  * POST /transfers/unlink works on the pair.
  */
-async function relinkReleasedBankRow(client: Queryable, budgetId: string, row: TransferLeg, peerAccountId: string): Promise<boolean> {
+async function relinkReleasedBankRow(
+  client: Queryable,
+  budgetId: string,
+  row: TransferLeg,
+  peerAccountId: string,
+  prev: { payeeId: string | null; categoryId: string | null },
+): Promise<boolean> {
   const foundId = await store.findReleasedBankRow(client, budgetId, row.id, peerAccountId, -Number(row.amount));
   if (!foundId) return false;
   const found = await store.getRowFields(client, budgetId, foundId);
@@ -282,8 +288,10 @@ async function relinkReleasedBankRow(client: Queryable, budgetId: string, row: T
     transaction_id: row.id,
     peer_transaction_id: found.id,
     method: 'user',
-    prev_payee_id: null,
-    prev_category_id: null,
+    // What the leg was before the person made it a transfer, so unlink restores it
+    // (never a transfer payee: that would leave a payee-only half transfer).
+    prev_payee_id: await usablePayee(client, budgetId, prev.payeeId),
+    prev_category_id: prev.categoryId,
     prev_blocked: null,
     created_mirror: false,
   });
@@ -304,6 +312,8 @@ export async function syncMirror(
   budgetId: string,
   txnId: string,
   requestedPeerId: string | null | undefined,
+  /** The leg's payee and category before this edit (the link record of a re-link keeps them for unlink). */
+  prev: { payeeId: string | null; categoryId: string | null } = { payeeId: null, categoryId: null },
 ): Promise<BalanceDelta[]> {
   const rowRes = await client.query<TransferLeg & { transfer_transaction_id: string | null }>(
     `SELECT id, account_id, date::text AS date, memo, amount, cleared, approved, transfer_transaction_id
@@ -352,7 +362,7 @@ export async function syncMirror(
   if (peerAccountId) {
     // The bank row this very leg released is the other side again: link it instead
     // of adding a mirror next to it (that counted the money twice until the next sync).
-    const released = await relinkReleasedBankRow(client, budgetId, row, peerAccountId);
+    const released = await relinkReleasedBankRow(client, budgetId, row, peerAccountId, prev);
     if (!released) deltas.push(...(await insertMirror(client, budgetId, row, peerAccountId)).deltas);
   } else {
     await client.query(

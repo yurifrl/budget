@@ -159,7 +159,7 @@ export async function updateTransactionInClient(
   }
   const mirrorDeltas =
     payeeChanged || existing.transfer_transaction_id || occurrencePeerId
-      ? await syncMirror(client, budget_id, id, payeeChanged ? (transferPeer?.accountId ?? null) : (occurrencePeerId ?? undefined))
+      ? await syncMirror(client, budget_id, id, payeeChanged ? (transferPeer?.accountId ?? null) : (occurrencePeerId ?? undefined), { payeeId: existingPayeeId, categoryId: existingCategory })
       : [];
 
   // A leg of a transfer between two on-budget accounts carries no category,
