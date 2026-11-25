@@ -119,6 +119,7 @@ export const SPECIFIC_ERROR_CODES = [
   'transaction_already_repeating',
   'bank_account_already_linked',
   'account_must_be_closed_first',
+  'account_name_exists',
   'member_not_in_budget',
   // Budget: payees, bundles, people, backup.
   'payee_name_reserved',
