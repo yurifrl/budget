@@ -81,7 +81,7 @@ let upstream: AggregatedTransaction[] = [];
 let activeUser = user.id;
 const aggregator = {
   environment: 'production',
-  listTransactions: async () => ({ transactions: upstream.map((t) => ({ ...t })), hasMore: false }),
+  listTransactions: async (accountId: string) => ({ transactions: accountId === EXT_ITAU ? upstream.map((t) => ({ ...t })) : [], hasMore: false }),
   fetchInstitution: async () => null,
 } as unknown as BankAggregator;
 /** What the provider object stored with the legacy rows says about the text: it carries it, lacks it, or there is no object at all (rows older than raw storage). */
@@ -775,14 +775,14 @@ describe.skipIf(!dbReady)('apply, revert and the sync share a per-budget lock; a
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const settled = async (p: Promise<unknown>) => (await Promise.race([p.then(() => true), wait(400).then(() => false)])) as boolean;
 
-  test('a sync, an apply and a revert wait for whoever holds the budget lock, and run once it is released', async () => {
+  test('an apply and a revert hold the budget lock exclusively: a sync, another apply and a revert wait for them, and run once it is released', async () => {
     const c = await buildWith('f2', 'text');
     const rule = ((await op('budget_payees_rename_rules_add', { id: c.idOf('Bakery'), budget_id: c.B, match_type: 'is', condition: 'Corner Shop' })).json as { id: string }).id;
     const applied = (await op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { apply_id: string };
     const holder = await pool.connect();
     try {
       await holder.query('BEGIN');
-      await lockBudgetImportWrites(holder, [c.B]);
+      await lockBudgetImportWrites(holder, [c.B], 'exclusive');
       upstream = mainUpstream();
       const sync = c.sync();
       const apply = op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule });
@@ -794,6 +794,77 @@ describe.skipIf(!dbReady)('apply, revert and the sync share a per-budget lock; a
       await Promise.all([sync, apply, revert]);
     } finally {
       holder.release();
+    }
+  });
+
+  test('syncs hold the budget lock SHARED: two connections of one budget sync together while a sync holds it; an apply and a revert wait for them', async () => {
+    const c = await buildWith('l1', 'text');
+    // A second connection with its own (empty) account in the same budget.
+    const second = await store.upsertConnection({ userId: user.id, provider: PROVIDER, externalId: `up-item-forward-l1b-${user.id}`, clientUserId: `cu-${user.id}-l1b`, status: 'connected', environment: 'production' });
+    const acc2 = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget, connection_id, external_account_id) VALUES ($1,$2,'Second Conta','checking','CASH',true,$3,'up-acc-forward-second')`, [acc2, c.B, second.id]);
+    const sync2 = () => syncConnectionTransactions({ userId: user.id, connectionId: second.id, aggregator, ignoreWatermark: true });
+    const rule = ((await op('budget_payees_rename_rules_add', { id: c.idOf('Bakery'), budget_id: c.B, match_type: 'is', condition: 'Corner Shop' })).json as { id: string }).id;
+    const applied = (await op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { apply_id: string };
+    // A session that holds the lock the way a running sync does (shared, to COMMIT).
+    const holder = await pool.connect();
+    try {
+      await holder.query('BEGIN');
+      await lockBudgetImportWrites(holder, [c.B], 'shared');
+      upstream = mainUpstream();
+      // Two syncs of one budget run in parallel with it: neither waits for the other or for the holder.
+      const both = Promise.all([c.sync(), sync2()]);
+      expect(await settled(both), 'two syncs of one budget do not wait for each other').toBe(true);
+      // An apply and a revert wait for the running sync.
+      const apply = op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule });
+      const revert = op('budget_payees_rename_rules_revert', { budget_id: c.B, apply_id: applied.apply_id });
+      expect(await settled(apply), 'apply waits for a running sync').toBe(false);
+      expect(await settled(revert), 'revert waits for a running sync').toBe(false);
+      await holder.query('COMMIT');
+      await Promise.all([apply, revert]);
+    } finally {
+      holder.release();
+    }
+  });
+
+  test('an apply or a revert that cannot get the lock in time answers 409 bank_sync_running, and writes nothing', async () => {
+    const c = await buildWith('l2', 'text');
+    const rule = ((await op('budget_payees_rename_rules_add', { id: c.idOf('Bakery'), budget_id: c.B, match_type: 'is', condition: 'Corner Shop' })).json as { id: string }).id;
+    const done = (await op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { apply_id: string };
+    const before = await c.snapshot();
+    const holder = await pool.connect();
+    try {
+      await holder.query('BEGIN');
+      await lockBudgetImportWrites(holder, [c.B], 'shared');
+      const t0 = Date.now();
+      const apply = await op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule });
+      const revert = await op('budget_payees_rename_rules_revert', { budget_id: c.B, apply_id: done.apply_id });
+      expect(Date.now() - t0).toBeLessThan(15_000);
+      for (const res of [apply, revert]) {
+        expect(res.status).toBe(409);
+        expect(res.json).toMatchObject({ code: 'bank_sync_running' });
+      }
+      await holder.query('COMMIT');
+    } finally {
+      holder.release();
+    }
+    expect(await c.snapshot()).toEqual(before);
+  }, 30_000);
+
+  test('the SQL prefilter trims like JavaScript: a raw text with a tab, a newline or a no-break space at an end is still found', async () => {
+    const c = await buildWith('l3', 'text');
+    const texts = ['\tPIX ZETA 1\n', '\u00a0PIX ZETA 2\u00a0', 'PIX ZETA 3\r\n', '\ufeffPIX ZETA 4'];
+    await pool.query('UPDATE connection_transactions SET raw_payload = jsonb_set(raw_payload, \'{description}\', to_jsonb($2::text)) WHERE budget_id = $1 AND external_transaction_id = $3', [c.B, texts[0], 'c1']);
+    await pool.query('UPDATE connection_transactions SET raw_payload = jsonb_set(raw_payload, \'{description}\', to_jsonb($2::text)) WHERE budget_id = $1 AND external_transaction_id = $3', [c.B, texts[1], 'c2']);
+    await pool.query('UPDATE connection_transactions SET raw_payload = jsonb_set(raw_payload, \'{description}\', to_jsonb($2::text)) WHERE budget_id = $1 AND external_transaction_id = $3', [c.B, texts[2], 'c3']);
+    await pool.query('UPDATE connection_transactions SET raw_payload = jsonb_set(raw_payload, \'{description}\', to_jsonb($2::text)) WHERE budget_id = $1 AND external_transaction_id = $3', [c.B, texts[3], 'c4']);
+    for (const type of ['is', 'starts_with', 'ends_with'] as const) {
+      const condition = type === 'is' ? 'PIX ZETA 1' : type === 'starts_with' ? 'PIX ZETA' : 'ZETA 2';
+      const rows = await listApplyRows(pool, c.B, { match_type: type, condition });
+      const found = new Set(rows.map((r) => r.bank_text));
+      if (type === 'is') expect(found.has('PIX ZETA 1')).toBe(true);
+      if (type === 'starts_with') for (const t of ['PIX ZETA 1', 'PIX ZETA 2', 'PIX ZETA 3', 'PIX ZETA 4']) expect(found.has(t), `${type} ${t}`).toBe(true);
+      if (type === 'ends_with') expect(found.has('PIX ZETA 2')).toBe(true);
     }
   });
 

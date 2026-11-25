@@ -568,11 +568,13 @@ async function syncOnce(
 
     // Only accounts we actually pulled (links may have changed meanwhile).
     const stillLinked = (await pg.query<LinkedAccountRow>(linkedSql, [row.id])).rows;
-    // Applying a renaming rule to past rows (and taking it back) writes the same rows: it takes this per-budget lock, so the two
-    // never lock rows in different orders. Budgets are locked in id order (two syncs never wait on each other in a cycle).
+    // Applying a renaming rule to past rows (and taking it back) writes the same rows: it takes this per-budget lock EXCLUSIVELY and syncs take
+    // it SHARED (syncs of one budget stay parallel; an apply waits for them and they for it), so the two never lock rows in
+    // different orders. Budgets are locked in id order.
     await ledger.lockBudgetImportWrites(
       pg,
       [...new Set(stillLinked.filter((a) => fetched.has(a.id)).map((a) => fetched.get(a.id)!.acc.budget_id))],
+      'shared',
     );
     rowsStart = Date.now();
 

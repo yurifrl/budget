@@ -9,13 +9,31 @@ import type { RuleMatchType } from '@shared/domain/payees';
 import { UNTOUCHED_LEDGER_SQL } from './transfers';
 
 /**
- * The per-budget lock every writer of a budget's IMPORTED rows takes first: the bank sync (for the budgets of its accounts, in
- * id order, right after it locks its connection) and an apply or a revert of a renaming rule. Transaction-scoped. With it the two
- * never hold row locks in different orders, so they cannot deadlock; whoever comes second waits for the first to commit.
+ * The per-budget advisory lock between the bank sync and an apply or revert of a renaming rule (transaction-scoped).
+ *  - `shared`: the bank sync (for the budgets of its accounts, in id order, right after it locks its connection). Syncs of
+ *    several connections of one budget all hold it together, so they stay parallel, exactly as before.
+ *  - `exclusive`: an apply or a revert. It waits for every running sync of the budget (and they for it), so the two never hold
+ *    row locks in different orders and cannot deadlock.
+ * An apply or revert also sets a short `lock_timeout` (see `withApplyLockTimeout`).
  */
-export async function lockBudgetImportWrites(db: Queryable, budgetIds: readonly string[]): Promise<void> {
+export async function lockBudgetImportWrites(db: Queryable, budgetIds: readonly string[], mode: 'shared' | 'exclusive'): Promise<void> {
+  const fn = mode === 'shared' ? 'pg_advisory_xact_lock_shared' : 'pg_advisory_xact_lock';
   for (const id of [...budgetIds].sort()) {
-    await db.query("SELECT pg_advisory_xact_lock(hashtextextended('budget-import-writes:' || $1::text, 0))", [id]);
+    await db.query(`SELECT ${fn}(hashtextextended('budget-import-writes:' || $1::text, 0))`, [id]);
+  }
+}
+
+/** How long an apply or revert waits for a running sync (or a row it holds) before it answers 409 `bank_sync_running`. */
+export const APPLY_LOCK_TIMEOUT = '5s';
+
+/** Run an apply or a revert body with a short lock_timeout; a timeout (SQLSTATE 55P03) becomes `onTimeout()`'s error. */
+export async function withApplyLockTimeout<T>(db: Queryable, body: () => Promise<T>, onTimeout: () => Error): Promise<T> {
+  await db.query(`SET LOCAL lock_timeout = '${APPLY_LOCK_TIMEOUT}'`);
+  try {
+    return await body();
+  } catch (err) {
+    if ((err as { code?: string }).code === '55P03') throw onTimeout();
+    throw err;
   }
 }
 
@@ -49,6 +67,14 @@ export interface ApplyRow {
   hint_account_id: string | null;
 }
 
+/**
+ * SQL for JavaScript's `String.prototype.trim` (what the adapters and the importers trim a text with): tab, newline, vertical
+ * tab, form feed, carriage return, space, no-break space, the other Unicode space separators, the line and paragraph separators
+ * and the byte order mark. `btrim` removes plain spaces only, so a text with a tab or NBSP at an end would be missed.
+ */
+const JS_SPACE = '[\\t\\n\\v\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]';
+export const jsTrim = (expr: string): string => `regexp_replace(${expr}, '^${JS_SPACE}+|${JS_SPACE}+$', '', 'g')`;
+
 interface ApplyRowSql extends Omit<ApplyRow, 'bank_text'> {
   statement_text: string;
   bank_text_recorded: string | null;
@@ -64,14 +90,14 @@ interface ApplyRowSql extends Omit<ApplyRow, 'bank_text'> {
  * exactly the rows read (an apply), so a concurrent edit waits for it.
  */
 export async function listApplyRows(db: Queryable, budgetId: string, rule: { match_type: RuleMatchType; condition: string }, lock = false): Promise<ApplyRow[]> {
-  const text = `COALESCE(CASE WHEN jsonb_typeof(cs.raw_payload->'description') = 'string' THEN NULLIF(btrim(cs.raw_payload->>'description'), '') END, cs.bank_text)`;
-  const textSql = `CASE WHEN cs.transaction_id IS NOT NULL THEN ${text} ELSE NULLIF(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name, '')), '') END`;
+  const text = `COALESCE(CASE WHEN jsonb_typeof(cs.raw_payload->'description') = 'string' THEN NULLIF(${jsTrim("cs.raw_payload->>'description'")}, '') END, cs.bank_text)`;
+  const textSql = `CASE WHEN cs.transaction_id IS NOT NULL THEN ${text} ELSE NULLIF(${jsTrim("COALESCE(t.import_payee_name_original, t.import_payee_name, '')")}, '') END`;
   const ascii = /^[\x00-\x7f]*$/.test(rule.condition);
-  const op = { is: 'lower(X) = lower($2)', contains: 'strpos(lower(X), lower($2)) > 0', starts_with: 'starts_with(lower(X), lower($2))', ends_with: 'right(lower(X), length($2)) = lower($2)' }[rule.match_type].replaceAll('X', textSql);
+  const op = { is: 'lower(X) = lower($2)', contains: 'strpos(lower(X), lower($2)) > 0', starts_with: 'starts_with(lower(X), lower($2))', ends_with: 'right(lower(X), length($2)) = lower($2)' }[rule.match_type].replaceAll('X', () => textSql);
   const prefilter = ascii ? `AND (${textSql} IS NULL OR ${op})` : '';
   const res = await db.query<ApplyRowSql>(
     `SELECT t.id, t.account_id, t.date::text AS date, t.amount, t.payee_id, p.name AS payee_name,
-            btrim(COALESCE(t.import_payee_name_original, t.import_payee_name, '')) AS statement_text,
+            ${jsTrim("COALESCE(t.import_payee_name_original, t.import_payee_name, '')")} AS statement_text,
             cs.bank_text AS bank_text_recorded, cs.raw_payload->'description' AS raw_description,
             (t.import_payee_name IS NOT NULL AND t.import_payee_name_original IS NOT NULL
               AND t.import_payee_name <> t.import_payee_name_original) AS chosen,

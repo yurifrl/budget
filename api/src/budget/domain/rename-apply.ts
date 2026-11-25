@@ -193,7 +193,7 @@ export interface RevertResult {
  * live one, the hint a live open account: anything else is left alone and reported. A second revert of the same apply restores nothing (`already_reverted`, from `reverted_at`), also after a later apply touched the same rows.
  */
 export async function revertRuleApply(db: Queryable, budgetId: string, applyId: string): Promise<RevertResult> {
-  await store.lockBudgetImportWrites(db, [budgetId]);
+  await store.lockBudgetImportWrites(db, [budgetId], 'exclusive');
   const apply = await store.lockApply(db, budgetId, applyId);
   if (!apply) throw new HttpError(404, 'apply not found');
   const rows = await store.listApplyRecordRows(db, budgetId, applyId);

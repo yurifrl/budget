@@ -22,7 +22,7 @@ import {
   payeesTransferRuleGet,
 } from '@shared/contracts/budget';
 import { planRuleApply, revertRuleApply, writeRuleApply } from '../domain/rename-apply';
-import { lockBudgetImportWrites } from '../store/rename-apply';
+import { lockBudgetImportWrites, withApplyLockTimeout } from '../store/rename-apply';
 import { linkTransfers } from '../domain/transfer-links';
 import { assertNotTransferPayee, transferPayeeProtected } from '../domain/transfer-payees';
 import * as transferStore from '../store/transfers';
@@ -116,6 +116,9 @@ async function ruleWrite<T>(db: Queryable, budgetId: string, matchType: string, 
   const holder = await rulesStore.findRuleHolder(db, budgetId, matchType, condition.trim(), null);
   throw new HttpError(409, 'Another payee already has that renaming rule.', 'rename_rule_exists', { name: holder?.payee_name ?? '' });
 }
+
+/** An apply or revert that could not get the budget's import lock (or a row) in time: 409, the person can simply try again. */
+const syncRunning = () => new HttpError(409, 'A bank sync is running for this budget. Try again in a moment.', 'bank_sync_running');
 
 export const operations = [
   // Transfer payees (one per account) are listed only on request: the pickers
@@ -316,16 +319,18 @@ export const operations = [
       await requirePayeeIn(client, budget_id, id);
       if (!(await rulesStore.getRule(client, budget_id, id, rule_id))) throw new HttpError(404, 'rule not found');
       // The same per-budget lock the bank sync takes for its writes: no deadlock with a running sync.
-      await lockBudgetImportWrites(client, [budget_id]);
-      const plan = await planRuleApply(client, budget_id, rule_id, true);
-      const user: IdentityUser | undefined = c.get('user');
-      const { applyId, rows } = await writeRuleApply(client, budget_id, plan, user?.id ?? null);
-      return { apply_id: applyId, rule_id, changed: rows.length, rows, skipped: plan.skipped };
+      return withApplyLockTimeout(client, async () => {
+        await lockBudgetImportWrites(client, [budget_id], 'exclusive');
+        const plan = await planRuleApply(client, budget_id, rule_id, true);
+        const user: IdentityUser | undefined = c.get('user');
+        const { applyId, rows } = await writeRuleApply(client, budget_id, plan, user?.id ?? null);
+        return { apply_id: applyId, rule_id, changed: rows.length, rows, skipped: plan.skipped };
+      }, syncRunning);
     }),
   ),
 
   implement(payeesRenameRulesRevert, async (_c, { budget_id, apply_id }) =>
-    withTransaction(pool, (client) => revertRuleApply(client, budget_id, apply_id)),
+    withTransaction(pool, (client) => withApplyLockTimeout(client, () => revertRuleApply(client, budget_id, apply_id), syncRunning)),
   ),
 
   // "Treat as transfer" rule (budget-mit6).
