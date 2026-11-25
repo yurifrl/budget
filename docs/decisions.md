@@ -2288,7 +2288,11 @@ on a sync, an ordinary request or a budget copy.
   automatic replacement was tried and cut: it ignored decisions, adopted unrelated
   same-amount rows over the whole history and merged the user's fields into a bank
   row. A suggestion-based fix (offer the pair, let the person confirm, undo-able)
-  is a separate task.
+  is a separate task (budget-kzof).
+  The same holds when a re-link is refused (the released bank row was edited, or
+  its leg was deleted): the peer account then has the released bank row plus a new
+  mirror, two rows for one movement, as with a hand-entered transfer; budget-kzof
+  will offer the merge as a suggestion.
 - **Imports never store a transfer payee without the transfer (item 6).** A NEW
   statement-import or bank-sync row whose payee text (after the renaming rules)
   means "Transfer : <account>" is not given that payee: it would be a payee-only
@@ -2305,8 +2309,12 @@ on a sync, an ordinary request or a budget copy.
   earlier sync stored with the transfer payee are not touched:** the sync compares
   the bank text in both forms it has been stored in, so such a row stays
   "unchanged" and, when the bank corrects its amount or date, keeps its payee.
-  Statement-import ids keep counting under the account's transfer payee. The
-  register still creates the mirror.
+  Statement-import ids keep counting under the id main used (the account's own
+  pointer when it has one, even a wrong one), so re-importing a file stays
+  idempotent; the ordinary payee of the raw text is created only for rows that are
+  inserted (an all-duplicate re-import creates no payee, as the sync). A row the
+  sync changes takes payee, shadow name, import name and hint from ONE resolution,
+  so row and shadow always agree. The register still creates the mirror.
 - **Complete transfers.** Repeat rules: occurrences behave as on main (a pending
   occurrence is one row: no mirror, no pointers, no engine or balance effect, Make
   Repeating unchanged). When an occurrence becomes a REAL transaction (the date

@@ -283,6 +283,26 @@ describe.skipIf(!dbReady)('a budget copy (fresh start) behaves as on main', () =
   });
 });
 
+describe.skipIf(!dbReady)('a budget copy writes nothing main does not', () => {
+  test('an account whose pointer names another account\'s payee gets no new payee in the copy', async () => {
+    const { id: b } = await newBudget('nq2f-copy-badptr');
+    const x = await account(b, 'Bad X');
+    const y = await account(b, 'Bad Y');
+    const ownPayee = await payeeOf(x);
+    await pool.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [await payeeOf(y), x]);
+    await pool.query('DELETE FROM payees WHERE id = $1', [ownPayee]); // no payee points at X any more
+    const oldCount = (await pool.query('SELECT count(*)::int AS n FROM payees WHERE budget_id = $1', [b])).rows[0].n;
+    const res = await op('budget_fresh_start', { budget_id: b });
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    const nb = res.json.created.id as string;
+    budgets.push(nb);
+    expect((await pool.query('SELECT count(*)::int AS n FROM payees WHERE budget_id = $1', [nb])).rows[0].n).toBe(oldCount);
+    const ptr = (await pool.query('SELECT a.name, p.name AS payee FROM accounts a JOIN payees p ON p.id = a.transfer_payee_id WHERE a.budget_id = $1 ORDER BY a.name', [nb])).rows;
+    expect(ptr).toEqual([{ name: 'Bad X', payee: 'Transfer : Bad Y' }, { name: 'Bad Y', payee: 'Transfer : Bad Y' }]);
+    expect((await pool.query("SELECT count(*)::int AS n FROM payees WHERE budget_id = $1 AND name = 'Transfer : Bad X'", [nb])).rows[0].n).toBe(0);
+  });
+});
+
 describe.skipIf(!dbReady)('repair of half-linked transfer rows: report first, --apply, idempotent', () => {
   const repair = (b: string, apply: boolean, createMirrors = false) =>
     withTransaction(pool, (c) => repairTransferPayees(c, b, { apply, createMirrors }));
