@@ -14,7 +14,7 @@
  */
 import { categorizeApi } from './api/categorize';
 
-export { CATEGORIZE_QUEUE_TAGS } from './api/categorize';
+export { CATEGORIZE_COUNT_LIMIT, CATEGORIZE_QUEUE_TAGS, queueProvidedTags } from './api/categorize';
 
 export type { AiCredentialStatus, AiModel } from './api/ai';
 export type { BudgetScope } from './api/base';

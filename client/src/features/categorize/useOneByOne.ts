@@ -1,8 +1,9 @@
 /**
  * State of the One by one view: which row is in focus, how many were done this
- * visit, and what each action does. Filing is optimistic: the accept flow hides
- * the row at once, so focus falls to the next row without waiting for the
- * server. Undo hands focus back to the row it restored.
+ * visit, the "✓ filed to X" lines of what was done, and what each action does.
+ * Filing is optimistic: the accept flow hides the row at once, so focus falls
+ * to the next row without waiting for the server. Undo hands focus back to the
+ * row it restored.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -11,15 +12,28 @@ import type { TextInputInstance } from 'react-native';
 import type { CategorizeCounts, CategorizeQueueRow } from '@/budget/data/api';
 
 import { canUndo as canUndoState } from './accept.logic';
-import type { CategorizeAccept } from './useCategorizeAccept';
 import type { CategorizeKeyAction } from './keys.logic';
-import { orderQueue, progressView, remainingCount, resolveFocus, type ProgressView } from './oneByOne.logic';
+import {
+  dropFiled,
+  filedToText,
+  orderQueue,
+  progressView,
+  recordFiled,
+  remainingCount,
+  resolveFocus,
+  type FiledEntry,
+  type ProgressView,
+} from './oneByOne.logic';
 import type { PickedCategory } from './page.logic';
+import { t } from './i18n';
 import { topSuggestions } from './queue.logic';
+import type { CategorizeAccept } from './useCategorizeAccept';
 import { useCategorizeKeys } from './useCategorizeKeys';
 
 export interface OneByOne {
   rows: CategorizeQueueRow[];
+  /** Rows done this visit, oldest first; shown dimmed above the queue. */
+  filed: FiledEntry[];
   focused: CategorizeQueueRow | null;
   progress: ProgressView;
   canUndo: boolean;
@@ -50,6 +64,7 @@ export function useOneByOne({
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const lastIndex = useRef(0);
   const [done, setDone] = useState(0);
+  const [filed, setFiled] = useState<FiledEntry[]>([]);
   const searchRef = useRef<TextInputInstance>(null);
 
   const focus = resolveFocus(ordered, focusedId, lastIndex.current);
@@ -65,29 +80,33 @@ export function useOneByOne({
   const remaining = remainingCount(counts, pageRows, hidden);
   const progress = progressView(done, remaining);
 
-  /** A row left the queue by this person's hand: count it, undo the count if the server refuses. */
-  const finish = (request: Promise<boolean>) => {
+  /** A row left the queue by this person's hand: count it and show its line; take both back if it fails. */
+  const finish = (request: Promise<boolean>, row: CategorizeQueueRow, text: string) => {
     setDone((n) => n + 1);
+    setFiled((list) => recordFiled(list, { row, text }));
     void request.then((ok) => {
-      if (!ok) setDone((n) => Math.max(0, n - 1));
+      if (ok) return;
+      setDone((n) => Math.max(0, n - 1));
+      setFiled((list) => dropFiled(list, [row.transaction_id]));
     });
   };
 
   const file = (index: number) => {
     if (!focused) return;
     const suggestion = topSuggestions(focused.suggestions)[index];
-    if (suggestion) finish(accept.fileRow(focused, suggestion));
+    if (suggestion) finish(accept.fileRow(focused, suggestion), focused, filedToText(suggestion.category_name));
   };
   const pick = (category: PickedCategory) => {
-    if (focused) finish(accept.pickCategory(focused, category));
+    if (focused) finish(accept.pickCategory(focused, category), focused, filedToText(category.label));
   };
   const skip = () => {
-    if (focused) finish(accept.skipRow(focused));
+    if (focused) finish(Promise.resolve(accept.skipRow(focused)), focused, t('one.filedLeft'));
   };
   const undo = () => {
     void accept.undoLast().then((restored) => {
       if (restored.length === 0) return;
       setDone((n) => Math.max(0, n - restored.length));
+      setFiled((list) => dropFiled(list, restored));
       setFocusedId(restored[0] ?? null);
     });
   };
@@ -103,6 +122,7 @@ export function useOneByOne({
       case 'skip':
         return skip();
       case 'focusSearch':
+      case 'typeToSearch':
         return searchRef.current?.focus();
       case 'undo':
         return undo();
@@ -117,6 +137,7 @@ export function useOneByOne({
 
   return {
     rows: ordered,
+    filed,
     focused,
     progress,
     canUndo,

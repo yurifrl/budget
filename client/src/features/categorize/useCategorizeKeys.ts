@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react';
 
 import {
   categorizeKeyAction,
+  controlToBlur,
   hasModifier,
   isControlTarget,
   isTypingTarget,
@@ -43,11 +44,32 @@ export function useCategorizeKeys({
         onControl: isControlTarget(target),
       });
       if (!action) return;
-      e.preventDefault();
-      e.stopPropagation();
+      // Typing to search: focus the field in this very event and let the
+      // browser deliver the character to it (no preventDefault).
+      if (action.kind !== 'typeToSearch') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       latest.current.onAction(action);
     };
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
   }, [enabled]);
+}
+
+/**
+ * Web: after a pointer press, the pressed button lets go of focus, so Enter
+ * keeps its documented meaning (confirm the focused row's top suggestion) and
+ * never re-presses Skip or Confirm. Mounted once by the page.
+ */
+export function useBlurAfterPointerPress(): void {
+  useEffect(() => {
+    if (process.env.EXPO_OS !== 'web' || typeof document === 'undefined') return undefined;
+    const onClick = (e: MouseEvent) => {
+      const control = controlToBlur(e.target as HTMLElement | null, e.detail) as HTMLElement | null;
+      control?.blur();
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, []);
 }

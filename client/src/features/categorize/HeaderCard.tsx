@@ -10,7 +10,7 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-na
 
 import { tCommon } from '@shared/i18n/common';
 
-import { IndigoButton, FundingBar } from '@/ui/bits';
+import { FundingBar, GhostButton, IndigoButton, OverlaySheet } from '@/ui/bits';
 import { colors, radius } from '@/ui/theme';
 
 import { t } from './i18n';
@@ -37,6 +37,7 @@ export function HeaderCard({
   left: number | undefined;
 }) {
   const { width } = useWindowDimensions();
+  const [confirming, setConfirming] = useState(false);
   const wide = width > 980;
   const running = run?.kind === 'active';
   const disabled = thresholdDisabled || !aiAvailable || runStarting || running;
@@ -64,7 +65,7 @@ export function HeaderCard({
           </View>
           <IndigoButton
             label={running ? t('header.running') : t('header.run')}
-            onPress={onRun}
+            onPress={() => setConfirming(true)}
             disabled={disabled}
           />
         </View>
@@ -82,6 +83,20 @@ export function HeaderCard({
         <Text style={styles.count}>{left ?? '—'}</Text>
         <Text style={styles.countLabel}>{t('header.left')}</Text>
       </View>
+
+      <OverlaySheet visible={confirming} onClose={() => setConfirming(false)} title={t('run.confirmTitle')}>
+        <Text style={styles.confirmBody}>{t('run.confirmBody')}</Text>
+        <View style={styles.confirmActions}>
+          <GhostButton label={tCommon('cancel')} onPress={() => setConfirming(false)} />
+          <IndigoButton
+            label={t('run.confirmGo')}
+            onPress={() => {
+              setConfirming(false);
+              onRun();
+            }}
+          />
+        </View>
+      </OverlaySheet>
     </View>
   );
 }
@@ -166,6 +181,8 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -7 }],
   },
   percent: { color: colors.text, fontSize: 15, fontWeight: '700', minWidth: 44, textAlign: 'right' },
+  confirmBody: { color: colors.muted, fontSize: 13, lineHeight: 19, paddingHorizontal: 10, paddingVertical: 6 },
+  confirmActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, padding: 10 },
   hint: { color: colors.faint, fontSize: 11, lineHeight: 16 },
   runRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: 2 },

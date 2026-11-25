@@ -52,6 +52,25 @@ export type CategorizeRunStartResult = OperationOutput<typeof categorizeRunStart
  */
 export const CATEGORIZE_QUEUE_TAGS = ['Categorize', 'Transactions', 'Categories', 'Payees'] as const; // eslint-disable-line budget-i18n/no-untranslated-string -- RTK cache tag names, never rendered
 
+/**
+ * The rail badge reads the queue with this limit just for `counts`. The API has
+ * no count-only read, and every queue read recomputes counts and bundles over
+ * the whole queue, so the badge is the cheapest to keep stale: it provides only
+ * the `Categorize` tag, refreshed by accept/undo/skip and by the revision
+ * watcher (a register edit shows within one poll), instead of refetching on
+ * every local write the way the page's own read does.
+ */
+export const CATEGORIZE_COUNT_LIMIT = 1;
+
+/** The cache tags a queue read provides: the badge's lightest read gets only `Categorize`. */
+export function queueProvidedTags(
+  budgetId: string,
+  arg: { limit?: number; bundle?: string },
+): { type: (typeof CATEGORIZE_QUEUE_TAGS)[number]; id: string }[] {
+  const badge = arg.limit === CATEGORIZE_COUNT_LIMIT && arg.bundle === undefined;
+  return (badge ? ['Categorize' as const] : CATEGORIZE_QUEUE_TAGS).map((type) => ({ type, id: budgetId })); // eslint-disable-line budget-i18n/no-untranslated-string -- RTK cache tag name, never rendered
+}
+
 export const categorizeApi = aiApi.injectEndpoints({
   endpoints: (b) => ({
     /** One queue page; counts and bundles cover the whole queue. `bundle` pages one bundle's rows. */
@@ -61,7 +80,7 @@ export const categorizeApi = aiApi.injectEndpoints({
     >({
       query: ({ budgetId, limit, offset, bundle }) =>
         contractRequest(categorizeQueueList, { budget_id: budgetId, limit, offset, bundle }),
-      providesTags: (_r, _e, { budgetId }) => CATEGORIZE_QUEUE_TAGS.map((type) => ({ type, id: budgetId })),
+      providesTags: (_r, _e, { budgetId, limit, bundle }) => queueProvidedTags(budgetId, { limit, bundle }),
     }),
 
     /** File explicit pairs, or one server-resolved bundle with the count the queue showed. */

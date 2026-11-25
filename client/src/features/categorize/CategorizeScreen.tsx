@@ -5,7 +5,7 @@
  */
 
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { tCommon } from '@shared/i18n/common';
 
@@ -15,18 +15,24 @@ import { colors, radius } from '@/ui/theme';
 
 import { BundlesView } from './BundlesView';
 import { ErrorBanner } from './CategorizeBits';
-import { EmptyState } from './EmptyState';
+import { EmptyState, NoKeyBanner } from './EmptyState';
 import { HeaderCard } from './HeaderCard';
 import { t } from './i18n';
 import { OneByOneView } from './OneByOneView';
+import { useBlurAfterPointerPress } from './useCategorizeKeys';
 import { useCategorizePage, type CategorizeViewMode } from './useCategorizePage';
 
 export function CategorizeScreen() {
   const shell = useBudgetShell();
   const router = useRouter();
   const page = useCategorizePage();
+  useBlurAfterPointerPress();
   const counts = page.queue.counts;
-  const empty = page.statusLoaded && !page.aiAvailable && page.view === 'bundles';
+  const hasBundles = (page.viewModel?.acceptAllCount ?? 0) > 0;
+  const noKey = page.statusLoaded && !page.aiAvailable;
+  // The empty state is for "no key AND nothing to show": existing suggestions stay reachable.
+  const empty = noKey && page.view === 'bundles' && page.queue.data !== undefined && !hasBundles;
+  const showNoKeyBanner = noKey && page.view === 'bundles' && hasBundles;
 
   return (
     <View style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
@@ -70,6 +76,13 @@ export function CategorizeScreen() {
           />
         ) : null}
 
+        {showNoKeyBanner ? (
+          <NoKeyBanner reason={page.runView?.detail ?? ''} onAddKey={() => router.push('/ai-keys')} />
+        ) : null}
+
+        {page.reloading ? <Text style={styles.note}>{t('queue.updating')}</Text> : null}
+        <View pointerEvents={page.reloading ? 'none' : 'auto'} style={page.reloading ? styles.reloading : undefined}>
+
         {!empty && page.viewModel && page.view === 'bundles' ? (
           <BundlesView
             budgetId={page.budgetId}
@@ -77,7 +90,7 @@ export function CategorizeScreen() {
             manualRows={page.manualRows}
             manualCount={page.viewModel.manualCount}
             threshold={page.threshold}
-            idle={page.accept.idle}
+            idle={page.accept.idle && !page.reloading}
             goneBundleKeys={page.accept.goneBundleKeys}
             bundleChangeTick={page.accept.bundleChangeTick}
             onAcceptBundle={(bundle, rows) => void page.accept.acceptBundle(bundle, rows)}
@@ -96,6 +109,8 @@ export function CategorizeScreen() {
           />
         ) : null}
 
+        </View>
+
         {page.view === 'bundles' && page.aiAvailable && page.viewModel && page.viewModel.acceptAllCount === 0 && counts?.left_to_categorize === 0 ? (
           <Text style={styles.note}>{t('queue.empty')}</Text>
         ) : null}
@@ -104,8 +119,9 @@ export function CategorizeScreen() {
       {page.accept.state.toast ? (
         <ActionToast
           message={page.accept.state.toast.label}
-          actionLabel={page.accept.state.toast.transactionIds.length > 0 ? t('undo') : undefined}
-          onAction={() => void page.accept.undoLast()}
+          actionLabel={page.accept.state.toast.actionable ? t('undo') : undefined}
+          actionKey={page.view === 'one' && Platform.OS === 'web' ? 'Z' : undefined}
+          onAction={page.undoLast}
         />
       ) : null}
     </View>
@@ -156,5 +172,6 @@ const styles = StyleSheet.create({
   segmentActive: { backgroundColor: colors.indigo },
   segmentText: { color: colors.muted, fontSize: 13, fontWeight: '600' },
   segmentTextActive: { color: colors.white },
+  reloading: { opacity: 0.45 },
   note: { color: colors.muted, fontSize: 13, paddingVertical: 8 },
 });

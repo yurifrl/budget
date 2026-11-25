@@ -5,7 +5,8 @@
  * rows are filed.
  */
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 
 import type { CategorizeQueueRow } from '@/budget/data/api';
 import { milliToCents } from '@/budget/data/mapping';
@@ -13,7 +14,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors } from '@/ui/theme';
 
 import { t } from './i18n';
-import { queueRowSubline } from './oneByOne.logic';
+import { queueRowSubline, type FiledEntry } from './oneByOne.logic';
 import { thresholdPercent } from './page.logic';
 import { confidenceBand, type ConfidenceBand } from './queue.logic';
 
@@ -23,14 +24,20 @@ const BAND_COLOR: Record<ConfidenceBand, string> = {
   low: colors.muted,
 };
 
+/** Rows of context kept above the focused row when the list scrolls to it. */
+const ROWS_ABOVE = 2;
+
 export function QueuePane({
   rows,
+  filed,
   focusedId,
   total,
   hiddenBelow,
   onFocus,
 }: {
   rows: readonly CategorizeQueueRow[];
+  /** Rows done this visit: dimmed lines above the queue, not focusable. */
+  filed: readonly FiledEntry[];
   focusedId: string | null;
   /** Rows the queue holds (all of them, not only this page). */
   total: number;
@@ -39,6 +46,26 @@ export function QueuePane({
   onFocus: (row: CategorizeQueueRow) => void;
 }) {
   const { formatMoney, formatDateShort } = useMoneyFormat();
+  const scroll = useRef<ScrollViewInstance>(null);
+  const layouts = useRef(new Map<string, { y: number; height: number }>());
+
+  // Keep the focused row in view, with a couple of filed rows above it as the
+  // mock shows. Scrolling to a row boundary never leaves a half-cut row on top.
+  // The row's position is only known after layout, so a layout of the focused
+  // row scrolls too (filing a row moves everything below it).
+  const focusedRef = useRef(focusedId);
+  focusedRef.current = focusedId;
+  const scrollToFocused = () => {
+    const at = focusedRef.current ? layouts.current.get(focusedRef.current) : undefined;
+    if (at) scroll.current?.scrollTo({ y: Math.max(0, at.y - ROWS_ABOVE * at.height), animated: false });
+  };
+  useEffect(scrollToFocused, [focusedId]);
+
+  const track = (id: string) => (e: { nativeEvent: { layout: { y: number; height: number } } }) => {
+    layouts.current.set(id, { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height });
+    if (id === focusedRef.current) scrollToFocused();
+  };
+
   return (
     <View style={styles.pane}>
       <View style={styles.head}>
@@ -47,7 +74,24 @@ export function QueuePane({
         </Text>
         <Text style={styles.order}>{t('one.queueOrder')}</Text>
       </View>
-      <ScrollView style={styles.list} nestedScrollEnabled>
+      <ScrollView ref={scroll} style={styles.list} nestedScrollEnabled>
+        {filed.map(({ row, text }) => {
+          const payee = row.payee?.trim() || row.raw_bank_description?.trim() || t('row.unnamed');
+          const cents = milliToCents(row.amount);
+          return (
+            <View key={`filed-${row.transaction_id}`} style={[styles.row, styles.rowFiled]}>
+              <View style={styles.rowText}>
+                <Text style={styles.payeeFiled} numberOfLines={1}>
+                  {payee}
+                </Text>
+                <Text style={styles.sub} numberOfLines={1}>
+                  {formatDateShort(row.date)} · ✓ {text}
+                </Text>
+              </View>
+              <Text style={styles.amountFiled}>{formatMoney(cents)}</Text>
+            </View>
+          );
+        })}
         {rows.map((row) => {
           const focused = row.transaction_id === focusedId;
           const payee = row.payee?.trim() || row.raw_bank_description?.trim() || t('row.unnamed');
@@ -56,6 +100,7 @@ export function QueuePane({
           return (
             <Pressable
               key={row.transaction_id}
+              onLayout={track(row.transaction_id)}
               onPress={() => onFocus(row)}
               accessibilityRole="button"
               accessibilityState={{ selected: focused }}
@@ -118,6 +163,9 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: 'transparent',
   },
+  rowFiled: { opacity: 0.55 },
+  payeeFiled: { color: colors.muted, fontSize: 13.5, fontWeight: '600' },
+  amountFiled: { color: colors.muted, fontSize: 13, fontWeight: '700' },
   rowFocused: { backgroundColor: colors.indigoSoft, borderLeftColor: colors.indigo2 },
   rowText: { flex: 1, minWidth: 0, gap: 1 },
   payee: { color: colors.text, fontSize: 13.5, fontWeight: '600' },

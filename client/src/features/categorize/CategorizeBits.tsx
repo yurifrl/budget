@@ -57,6 +57,7 @@ export function ConfidenceChip({
     <TagPill
       label={label}
       tone={TONE[confidenceBand(suggestion.confidence)]}
+      numberOfLines={1}
       style={[styles.chip, style]}
     />
   );

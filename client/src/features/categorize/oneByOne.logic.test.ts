@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  dropFiled,
+  filedToText,
   orderQueue,
   progressLabel,
   progressView,
   queueRowSubline,
+  recordFiled,
   remainingCount,
   resolveFocus,
 } from './oneByOne.logic';
@@ -94,5 +97,33 @@ describe('queueRowSubline', () => {
 
   test('a manual row says why it has no chips', () => {
     expect(queueRowSubline(row('a', [], 'no_suggestion'), '21/11')).toBe('21/11 · no suggestion');
+  });
+});
+
+describe('filed lines', () => {
+  const entry = (id: string, text = 'filed to Fuel') => ({ row: { transaction_id: id } as never, text });
+
+  test('newest last; filing the same row again replaces its line', () => {
+    const list = recordFiled(recordFiled([], entry('a')), entry('b'));
+    expect(list.map((e) => e.row.transaction_id)).toEqual(['a', 'b']);
+    const again = recordFiled(list, entry('a', 'filed to Travel'));
+    expect(again.map((e) => e.row.transaction_id)).toEqual(['b', 'a']);
+    expect(again[1]!.text).toBe('filed to Travel');
+  });
+
+  test('only the last few are kept', () => {
+    let list = [] as ReturnType<typeof recordFiled>;
+    for (let i = 0; i < 5; i += 1) list = recordFiled(list, entry(`r${i}`), 3);
+    expect(list.map((e) => e.row.transaction_id)).toEqual(['r2', 'r3', 'r4']);
+  });
+
+  test('rows that came back lose their line', () => {
+    const list = [entry('a'), entry('b'), entry('c')];
+    expect(dropFiled(list, ['b']).map((e) => e.row.transaction_id)).toEqual(['a', 'c']);
+    expect(dropFiled(list, [])).toEqual(list);
+  });
+
+  test('the line names the category', () => {
+    expect(filedToText('Fuel')).toBe('filed to Fuel');
   });
 });

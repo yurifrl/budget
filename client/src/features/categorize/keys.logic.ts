@@ -3,9 +3,12 @@
  * this pure function with the focused row's chip count and whether a text
  * field has focus; everything the keys mean lives here.
  *
- * 1/2/3 file with that chip, Enter files the top chip, S skips, / focuses the
- * category search, Z undoes the last accept. While a field is focused every
- * key belongs to the field (so "s" types an "s" in the search).
+ * 1/2/3 file with that chip, Enter files the top chip, S leaves the row
+ * uncategorized (pending until its toast runs out, so it can be undone), /
+ * focuses the category search, Z undoes the last action. Any other printable
+ * key starts typing in the search, so a category name typed without "/" first
+ * is not lost. While a field is focused every key belongs to the field (so "s"
+ * types an "s" in the search).
  */
 
 export type CategorizeKeyAction =
@@ -13,7 +16,9 @@ export type CategorizeKeyAction =
   | { kind: 'fileTop' }
   | { kind: 'skip' }
   | { kind: 'focusSearch' }
-  | { kind: 'undo' };
+  | { kind: 'undo' }
+  /** Any other printable key: the person is typing a category name, so the search takes it. */
+  | { kind: 'typeToSearch' };
 
 export interface CategorizeKeyContext {
   /** Suggestion chips on the focused row (0..3). */
@@ -30,7 +35,7 @@ export function categorizeKeyAction(key: string, ctx: CategorizeKeyContext): Cat
   if (ctx.typing) return null;
   if (key === '1' || key === '2' || key === '3') {
     const index = Number(key) - 1;
-    return index < ctx.suggestions ? { kind: 'file', index } : null;
+    return index < ctx.suggestions ? { kind: 'file', index } : { kind: 'typeToSearch' };
   }
   switch (key) {
     case 'Enter':
@@ -44,8 +49,13 @@ export function categorizeKeyAction(key: string, ctx: CategorizeKeyContext): Cat
     case 'Z':
       return ctx.undoAvailable ? { kind: 'undo' } : null;
     default:
-      return null;
+      return isPrintable(key) ? { kind: 'typeToSearch' } : null;
   }
+}
+
+/** One visible character that is not a space (space scrolls the page; named keys are longer). */
+export function isPrintable(key: string): boolean {
+  return [...key].length === 1 && key.trim() !== '';
 }
 
 /** The slice of a DOM element the key handler needs. */
@@ -73,4 +83,22 @@ export function isControlTarget(target: KeyTargetLike | null | undefined): boole
 /** Shortcuts never fire with a modifier held (Cmd+S, Ctrl+Z belong to the browser). */
 export function hasModifier(e: { metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean }): boolean {
   return Boolean(e.metaKey || e.ctrlKey || e.altKey);
+}
+
+/** The CSS selector of what RN-web renders a Pressable button as. */
+export const CONTROL_SELECTOR = 'button, a, [role="button"], [role="tab"]';
+
+/**
+ * The control to take focus off after a MOUSE or touch press. A pointer press
+ * leaves focus on the pressed button, and Enter would then press it again (the
+ * legend says Enter confirms the focused row), so every button on the page
+ * lets go of focus once clicked. A keyboard activation (detail 0) keeps it, so
+ * Tab navigation still works.
+ */
+export function controlToBlur<T>(
+  target: { closest?: (selector: string) => T | null } | null | undefined,
+  clickDetail: number,
+): T | null {
+  if (clickDetail <= 0 || !target?.closest) return null;
+  return target.closest(CONTROL_SELECTOR);
 }

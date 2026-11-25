@@ -8,7 +8,8 @@ export default {
   'header.threshold': 'CONFIDENCE THRESHOLD',
   'header.thresholdLabel': 'Confidence threshold',
   'header.thresholdValue': '{percent}%',
-  'header.thresholdHint': 'Suggestions below {percent}% are hidden. Those rows land in “No suggestion”.',
+  'header.thresholdHint':
+    'Suggestions below {percent}% are hidden for everyone in this budget. Those rows land in “No suggestion”.',
   'header.left': 'left to categorize',
   'header.run': 'Run classification',
   'header.running': 'Running…',
@@ -30,12 +31,18 @@ export default {
   'run.reason.unreadable': 'The budget owner’s AI key cannot be read on this server.',
   'run.reason.noModel': 'The budget owner’s AI key has no model chosen.',
   'run.reason.unknown': 'Category suggestions are unavailable right now.',
+  'run.confirmTitle': 'Run classification?',
+  'run.confirmBody':
+    'This reads the uncategorized transactions with the budget owner’s AI key and uses AI credit on that account. It only suggests: nothing is filed until you accept it.',
+  'run.confirmGo': 'Run classification',
   'run.startedFailed': 'Could not start the classification.',
 
   // Empty state: AI unavailable
   'empty.title': 'Add an AI key to get suggestions',
   'empty.body':
-    'Categorize asks an AI model to read each uncategorized transaction and propose up to three categories. This budget has no AI key yet, so nothing can be classified.',
+    'Categorize asks an AI model to read each uncategorized transaction and propose up to three categories. Right now nothing new can be classified, so there are no suggestions to show.',
+  'banner.noKeyTitle': 'Classification is unavailable',
+  'banner.noKeyBody': 'Suggestions already made stay below; new transactions get none until a key is added.',
   'empty.addKey': 'Add an AI key',
   'empty.byHand': 'Categorize by hand',
   'empty.footnote': {
@@ -99,6 +106,7 @@ export default {
 
   // Queue states
   'queue.loading': 'Loading the queue…',
+  'queue.updating': 'Updating the list for the new threshold…',
   'queue.failed': 'Could not load the queue.',
   'queue.empty': 'Nothing left to categorize.',
 
@@ -123,7 +131,7 @@ export default {
   'one.keys.enterKey': 'Enter',
   'one.keys.pick': 'pick',
   'one.keys.confirm': 'confirm',
-  'one.keys.skip': 'skip',
+  'one.keys.skip': 'leave out',
   'one.keys.search': 'search',
   'one.keys.undo': 'undo',
   'one.date': 'DATE',
@@ -137,7 +145,10 @@ export default {
   'one.search': 'Search another category…',
   'one.searchFirst': 'Search a category…',
   'one.confirm': 'Confirm {category}',
-  'one.skip': 'Skip',
+  'one.filedTo': 'filed to {category}',
+  'one.filedLeft': 'left uncategorized',
+  'one.skip': 'Leave uncategorized',
+  'one.skipHint': 'Takes it off this list for everyone in the budget. You can still categorize it in the register.',
   'one.undoLast': 'Undo last',
   'one.stateHint': 'Why no chips: {state}.',
   'one.suggestionA11y': 'Suggestion {rank}: {category}, {percent}% confidence',
@@ -150,10 +161,24 @@ export default {
   'error.bundleChanged':
     'That bundle changed from {expected} to {actual} transactions. The list is updated: check it and accept again.',
   'error.bundleChangedNoCounts': 'That bundle changed. The list is updated: check it and accept again.',
-  'error.undo': 'Could not undo.',
   'error.threshold': 'Could not save the confidence threshold.',
   'toast.filed': '{subject} → {category}',
-  'toast.skipped': 'Skipped {subject}. It stays uncategorized in the register.',
+  'toast.skipped':
+    'Leaving {subject} uncategorized. It will not come back to this list, for anyone in the budget.',
+  // Undo outcomes
+  'undo.done': { one: 'Undid {count} transaction.', other: 'Undid {count} transactions.' },
+  'undo.restored': {
+    one: 'Undid {count} of {requested} transactions.',
+    other: 'Undid {count} of {requested} transactions.',
+  },
+  'undo.changedSince': {
+    one: '{count} changed since and was left as it is.',
+    other: '{count} changed since and were left as they are.',
+  },
+  'undo.notReached': {
+    one: '{count} could not be undone right now: try Undo again.',
+    other: '{count} could not be undone right now: try Undo again.',
+  },
   'toast.filedCount': { one: '{count} transaction filed', other: '{count} transactions filed' },
   'toast.bundle': {
     one: '{payee} · {count} transaction → {category}',

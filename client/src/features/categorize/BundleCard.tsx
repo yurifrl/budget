@@ -94,6 +94,7 @@ export function BundleCard({
               row={row}
               budgetId={budgetId}
               disabled={disabled}
+              maxChips={1}
               onFileSuggestion={(suggestion) => onFileRow(row, suggestion)}
               onPickCategory={(category) => onPickCategory(row, category)}
             />

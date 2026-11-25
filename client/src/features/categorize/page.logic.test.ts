@@ -14,6 +14,7 @@ import {
   thresholdFromX,
   thresholdLabel,
   thresholdPercent,
+  thresholdReloading,
 } from './page.logic';
 
 const format = { formatDate: (iso: string) => iso.split('-').reverse().join('/') };
@@ -200,6 +201,7 @@ describe('categoryOptions', () => {
     group({ id: 'g1', name: 'Everyday' }),
     group({ id: 'cards', name: 'Credit Card Payments', is_credit_card_payments: true }),
     group({ id: 'hidden', name: 'Internal', internal: true }),
+    group({ id: 'hiddenGroup', name: 'Hidden group', hidden: true }),
   ];
   const categories = [
     category({ id: 'c1', name: 'Restaurants' }),
@@ -209,10 +211,12 @@ describe('categoryOptions', () => {
     category({ id: 'c5', name: 'Internal', internal: true }),
     category({ id: 'c6', name: 'Card payment', group_id: 'cards' }),
     category({ id: 'c7', name: 'In internal group', group_id: 'hidden' }),
+    category({ id: 'c8', name: 'In hidden group', group_id: 'hiddenGroup' }),
   ];
 
   test('keeps assignable categories and labels bundles', () => {
     const options = categoryOptions(categories, groups, [bundle('b1', 'Food')]);
+    // c8 sits in a hidden group: the server refuses it, so the search never offers it.
     expect(options.map((o) => o.id)).toEqual(['c1', 'c2']);
     expect(options[1]).toEqual({ id: 'c2', label: 'Food › Groceries', sub: 'Everyday' });
   });
@@ -261,5 +265,31 @@ describe('bundleChangedMessage', () => {
     expect(bundleChangedMessage({ status: 409, code: 'categorize_bundle_changed' })).toBe(
       'That bundle changed. The list is updated: check it and accept again.',
     );
+  });
+});
+
+describe('last run date', () => {
+  test('is the local calendar day of the instant, not the UTC day', () => {
+    // 23:30 local on 24 Nov: in UTC this is the 25th in zones behind UTC, the 24th elsewhere.
+    const lateEvening = new Date(2026, 10, 24, 23, 30).toISOString();
+    const view = runHeaderView(
+      status({ last_finished: { ...finishedRun, finished_at: lateEvening } }),
+      { left_to_categorize: 0, not_classified: 0 },
+      format,
+    );
+    expect(view.detail).toBe('Last run 24/11/2026 · 120 suggestions');
+  });
+});
+
+describe('thresholdReloading', () => {
+  test('from the save until a newer queue read lands', () => {
+    expect(thresholdReloading({ saving: true, stamp: null, fulfilledAt: 5, failed: false })).toBe(true);
+    expect(thresholdReloading({ saving: false, stamp: 5, fulfilledAt: 5, failed: false })).toBe(true);
+    expect(thresholdReloading({ saving: false, stamp: 5, fulfilledAt: 9, failed: false })).toBe(false);
+  });
+
+  test('a failed read does not leave the page locked; nothing pending is not reloading', () => {
+    expect(thresholdReloading({ saving: false, stamp: 5, fulfilledAt: 5, failed: true })).toBe(false);
+    expect(thresholdReloading({ saving: false, stamp: null, fulfilledAt: 5, failed: false })).toBe(false);
   });
 });

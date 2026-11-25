@@ -13,6 +13,7 @@ export function ActionToast({
   actionLabel,
   onAction,
   leading = '✓',
+  actionKey,
 }: {
   message: string;
   /** Omit both to show a plain message with no action. */
@@ -20,6 +21,8 @@ export function ActionToast({
   onAction?: () => void;
   /** Glyph before the message; null for none (errors). */
   leading?: string | null;
+  /** The keyboard shortcut of the action ("Z"), shown as a key cap; web only, omit elsewhere. */
+  actionKey?: string;
 }) {
   return (
     <View style={styles.toast} accessibilityLiveRegion="polite">
@@ -28,8 +31,13 @@ export function ActionToast({
         {message}
       </Text>
       {actionLabel && onAction ? (
-        <Pressable onPress={onAction} accessibilityRole="button" hitSlop={6}>
+        <Pressable onPress={onAction} accessibilityRole="button" hitSlop={6} style={styles.actionRow}>
           <Text style={styles.action}>{actionLabel}</Text>
+          {actionKey ? (
+            <View style={styles.keyCap}>
+              <Text style={styles.keyCapText}>{actionKey}</Text>
+            </View>
+          ) : null}
         </Pressable>
       ) : null}
     </View>
@@ -54,5 +62,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   text: { color: colors.text, fontSize: 13, fontWeight: '600', flexShrink: 1 },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  keyCap: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg2,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    borderRadius: 5,
+  },
+  keyCapText: { color: colors.muted, fontSize: 10.5, fontWeight: '700' },
   action: { color: colors.indigo3, fontSize: 13, fontWeight: '700' },
 });

@@ -13,7 +13,7 @@ import { Container } from '@/platform/di/container';
 import { Tokens } from '@/platform/di/tokens';
 import type { KVStore } from '@/platform/storage/types';
 
-import { budgetApi, CATEGORIZE_QUEUE_TAGS } from './api';
+import { budgetApi, CATEGORIZE_COUNT_LIMIT, CATEGORIZE_QUEUE_TAGS, queueProvidedTags } from './api';
 
 const BASE = 'http://api.test:3999';
 
@@ -329,6 +329,14 @@ describe('the split slice is still one api', () => {
     for (const type of ['Categorize', 'Transactions', 'Categories', 'Payees']) {
       expect(types).toContain(type);
     }
+  });
+
+  test("the rail badge's one-row read follows only the Categorize tag; the page's reads follow every write", () => {
+    expect(queueProvidedTags('b1', { limit: CATEGORIZE_COUNT_LIMIT })).toEqual([{ type: 'Categorize', id: 'b1' }]);
+    expect(queueProvidedTags('b1', { limit: 200 }).map((t) => t.type)).toEqual([...CATEGORIZE_QUEUE_TAGS]);
+    // A bundle's rows with limit 1 are not the badge.
+    expect(queueProvidedTags('b1', { limit: 1, bundle: 'k' }).length).toBe(CATEGORIZE_QUEUE_TAGS.length);
+    expect(queueProvidedTags('b1', {}).length).toBe(CATEGORIZE_QUEUE_TAGS.length);
   });
 
   test('one reducer path, the same tag types, every endpoint reachable from budgetApi', () => {

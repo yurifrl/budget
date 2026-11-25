@@ -10,7 +10,8 @@ const m: Translation<typeof en> = {
   'header.threshold': 'LIMITE DE CONFIANÇA',
   'header.thresholdLabel': 'Limite de confiança',
   'header.thresholdValue': '{percent}%',
-  'header.thresholdHint': 'Sugestões abaixo de {percent}% ficam ocultas. Essas transações vão para “Sem sugestão”.',
+  'header.thresholdHint':
+    'Sugestões abaixo de {percent}% ficam ocultas para todos neste orçamento. Essas transações vão para “Sem sugestão”.',
   'header.left': 'para categorizar',
   'header.run': 'Classificar',
   'header.running': 'Executando…',
@@ -32,11 +33,17 @@ const m: Translation<typeof en> = {
   'run.reason.unreadable': 'A chave de IA do dono do orçamento não pode ser lida neste servidor.',
   'run.reason.noModel': 'A chave de IA do dono do orçamento não tem um modelo escolhido.',
   'run.reason.unknown': 'As sugestões de categoria estão indisponíveis agora.',
+  'run.confirmTitle': 'Classificar agora?',
+  'run.confirmBody':
+    'Isto lê as transações sem categoria com a chave de IA do dono do orçamento e gasta crédito de IA dessa conta. Só sugere: nada é categorizado até você aceitar.',
+  'run.confirmGo': 'Classificar',
   'run.startedFailed': 'Não foi possível iniciar a classificação.',
 
   'empty.title': 'Adicione uma chave de IA para receber sugestões',
   'empty.body':
-    'O Categorizar pede a um modelo de IA para ler cada transação sem categoria e propor até três categorias. Este orçamento ainda não tem uma chave de IA, então nada pode ser classificado.',
+    'O Categorizar pede a um modelo de IA para ler cada transação sem categoria e propor até três categorias. Agora nada novo pode ser classificado, então não há sugestões para mostrar.',
+  'banner.noKeyTitle': 'Classificação indisponível',
+  'banner.noKeyBody': 'As sugestões já feitas continuam abaixo; transações novas não recebem nenhuma até adicionar uma chave.',
   'empty.addKey': 'Adicionar uma chave de IA',
   'empty.byHand': 'Categorizar à mão',
   'empty.footnote': {
@@ -94,6 +101,7 @@ const m: Translation<typeof en> = {
   'manual.notClassified': 'não classificada',
 
   'queue.loading': 'Carregando a fila…',
+  'queue.updating': 'Atualizando a lista com o novo limite…',
   'queue.failed': 'Não foi possível carregar a fila.',
   'queue.empty': 'Nada para categorizar.',
 
@@ -116,7 +124,7 @@ const m: Translation<typeof en> = {
   'one.keys.enterKey': 'Enter',
   'one.keys.pick': 'escolher',
   'one.keys.confirm': 'confirmar',
-  'one.keys.skip': 'pular',
+  'one.keys.skip': 'deixar de fora',
   'one.keys.search': 'buscar',
   'one.keys.undo': 'desfazer',
   'one.date': 'DATA',
@@ -130,7 +138,10 @@ const m: Translation<typeof en> = {
   'one.search': 'Buscar outra categoria…',
   'one.searchFirst': 'Buscar uma categoria…',
   'one.confirm': 'Confirmar {category}',
-  'one.skip': 'Pular',
+  'one.filedTo': 'em {category}',
+  'one.filedLeft': 'deixada sem categoria',
+  'one.skip': 'Deixar sem categoria',
+  'one.skipHint': 'Tira da lista para todos do orçamento. Você ainda pode categorizar no registro.',
   'one.undoLast': 'Desfazer a última',
   'one.stateHint': 'Por que sem sugestões: {state}.',
   'one.suggestionA11y': 'Sugestão {rank}: {category}, {percent}% de confiança',
@@ -142,10 +153,23 @@ const m: Translation<typeof en> = {
   'error.bundleChanged':
     'Esse pacote mudou de {expected} para {actual} transações. A lista foi atualizada: confira e aceite de novo.',
   'error.bundleChangedNoCounts': 'Esse pacote mudou. A lista foi atualizada: confira e aceite de novo.',
-  'error.undo': 'Não foi possível desfazer.',
   'error.threshold': 'Não foi possível salvar o limite de confiança.',
   'toast.filed': '{subject} → {category}',
-  'toast.skipped': 'Pulada: {subject}. Continua sem categoria no registro.',
+  'toast.skipped':
+    'Deixando {subject} sem categoria. Não voltará a esta lista, para ninguém do orçamento.',
+  'undo.done': { one: 'Desfeita {count} transação.', other: 'Desfeitas {count} transações.' },
+  'undo.restored': {
+    one: 'Desfeitas {count} de {requested} transações.',
+    other: 'Desfeitas {count} de {requested} transações.',
+  },
+  'undo.changedSince': {
+    one: '{count} mudou depois e foi deixada como está.',
+    other: '{count} mudaram depois e foram deixadas como estão.',
+  },
+  'undo.notReached': {
+    one: '{count} não pôde ser desfeita agora: tente Desfazer de novo.',
+    other: '{count} não puderam ser desfeitas agora: tente Desfazer de novo.',
+  },
   'toast.filedCount': { one: '{count} transação categorizada', other: '{count} transações categorizadas' },
   'toast.bundle': {
     one: '{payee} · {count} transação → {category}',

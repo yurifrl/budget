@@ -12,6 +12,22 @@ import { colors, radius } from '@/ui/theme';
 
 import { t } from './i18n';
 
+/**
+ * With suggestions already on the page but no way to classify new rows, a slim
+ * banner says why and offers the key; the bundles stay reachable below it.
+ */
+export function NoKeyBanner({ reason, onAddKey }: { reason: string; onAddKey: () => void }) {
+  return (
+    <View style={styles.banner}>
+      <View style={styles.bannerText}>
+        <Text style={styles.bannerTitle}>{t('banner.noKeyTitle')}</Text>
+        <Text style={styles.bannerBody}>{`${reason} ${t('banner.noKeyBody')}`}</Text>
+      </View>
+      <GhostButton label={t('empty.addKey')} onPress={onAddKey} />
+    </View>
+  );
+}
+
 export function EmptyState({
   reason,
   count,
@@ -50,6 +66,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  banner: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    borderRadius: radius.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  bannerText: { flex: 1, flexBasis: 320, gap: 2 },
+  bannerTitle: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  bannerBody: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   title: { color: colors.text, fontSize: 22, fontWeight: '800', textAlign: 'center', marginTop: 6 },
   body: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: 'center' },
   reason: { color: colors.faint, fontSize: 12, textAlign: 'center' },

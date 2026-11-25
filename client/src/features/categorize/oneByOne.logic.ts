@@ -97,3 +97,32 @@ export function queueRowSubline(
 export function keyHint(index: number): string {
   return String(index + 1);
 }
+
+/** A row this visit filed or left out: it stays in the queue pane as a dimmed "✓ filed to X" line. */
+export interface FiledEntry {
+  row: CategorizeQueueRow;
+  /** "filed to Transport" / "left uncategorized", already translated. */
+  text: string;
+}
+
+/** Filed lines kept for the visit (the oldest scroll away first). */
+export const FILED_KEPT = 30;
+
+/** Add (or replace) the line for `row`, newest last, bounded. */
+export function recordFiled(entries: readonly FiledEntry[], entry: FiledEntry, keep = FILED_KEPT): FiledEntry[] {
+  const next = entries.filter((e) => e.row.transaction_id !== entry.row.transaction_id);
+  next.push(entry);
+  return next.slice(-keep);
+}
+
+/** Drop the lines of rows that came back (undone, cancelled or failed). */
+export function dropFiled(entries: readonly FiledEntry[], ids: readonly string[]): FiledEntry[] {
+  if (ids.length === 0) return [...entries];
+  const gone = new Set(ids);
+  return entries.filter((e) => !gone.has(e.row.transaction_id));
+}
+
+/** "filed to Transport" for a row filed with a category. */
+export function filedToText(categoryName: string): string {
+  return t('one.filedTo', { category: categoryName });
+}

@@ -24,7 +24,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 
 import { hiddenIdSet, visibleRows } from './accept.logic';
 import { t } from './i18n';
-import { runHeaderView, type RunHeaderView } from './page.logic';
+import { runHeaderView, thresholdReloading, type RunHeaderView } from './page.logic';
 import { bundleView, queueSubtitle, type BundleView } from './queue.logic';
 import { useCategorizeAccept } from './useCategorizeAccept';
 import { useOneByOne } from './useOneByOne';
@@ -52,6 +52,7 @@ export function useCategorizePage() {
   const [threshold, setThreshold] = useState(0.8);
   const [savingThreshold, setSavingThreshold] = useState(false);
   const [thresholdError, setThresholdError] = useState<string | null>(null);
+  const [thresholdStamp, setThresholdStamp] = useState<number | null>(null);
   const [runStarting, setRunStarting] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
 
@@ -98,7 +99,9 @@ export function useCategorizePage() {
     setThresholdError(null);
     setSavingThreshold(true);
     try {
+      const readAt = queue.fulfilledTimeStamp ?? 0;
       await setSettings({ budgetId, confidenceThreshold: next }).unwrap();
+      setThresholdStamp(readAt);
     } catch (err) {
       setThreshold(serverThreshold ?? 0.8);
       setThresholdError(apiErrorMessage(err, t('error.threshold')));
@@ -132,8 +135,19 @@ export function useCategorizePage() {
   );
 
   const counts = queue.data?.counts;
+  // The old bundles and rows were cut at the old threshold: until the read that
+  // follows the change lands they are shown as updating and cannot be acted on.
+  const reloading = thresholdReloading({
+    saving: savingThreshold,
+    stamp: thresholdStamp,
+    fulfilledAt: queue.fulfilledTimeStamp ?? 0,
+    failed: queue.isError,
+  });
+  useEffect(() => {
+    if (!reloading && thresholdStamp !== null) setThresholdStamp(null);
+  }, [reloading, thresholdStamp]);
   const oneByOne = useOneByOne({
-    enabled: view === 'one',
+    enabled: view === 'one' && !reloading,
     rows: visibleQueueRows,
     pageRows: queue.data?.rows ?? [],
     counts,
@@ -165,6 +179,7 @@ export function useCategorizePage() {
     visibleQueueRows,
     oneByOne,
     threshold,
+    reloading,
     savingThreshold,
     commitThreshold,
     runView,
@@ -173,6 +188,8 @@ export function useCategorizePage() {
     startRun,
     statusLoaded: status.data !== undefined,
     accept,
+    /** Undo the last action and bring its rows back into the One by one lines. */
+    undoLast: oneByOne.undo,
     error,
     dismissError: () => {
       setThresholdError(null);

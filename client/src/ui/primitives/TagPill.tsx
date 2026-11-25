@@ -22,11 +22,12 @@ export function TagPill({
   label,
   tone,
   style,
-  numberOfLines = 1,
+  numberOfLines,
 }: {
   label: string;
   tone: TagTone;
   style?: StyleProp<TextStyle>;
+  /** Unset wraps (the transfers match pill); the Categorize chips pass 1. */
   numberOfLines?: number;
 }) {
   const c = TONES[tone];

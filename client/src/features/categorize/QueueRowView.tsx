@@ -15,7 +15,7 @@ import { colors } from '@/ui/theme';
 import { CategoryPicker, ConfidenceChip } from './CategorizeBits';
 import { t } from './i18n';
 import type { PickedCategory } from './page.logic';
-import { manualStateLabel, topSuggestions } from './queue.logic';
+import { manualStateLabel, SUGGESTION_LIMIT, topSuggestions } from './queue.logic';
 
 export function QueueRowView({
   row,
@@ -24,6 +24,7 @@ export function QueueRowView({
   onPickCategory,
   disabled,
   showState,
+  maxChips = SUGGESTION_LIMIT,
 }: {
   row: CategorizeQueueRow;
   budgetId: string | null;
@@ -32,9 +33,11 @@ export function QueueRowView({
   disabled?: boolean;
   /** Manual rows show why they have no suggestion. */
   showState?: boolean;
+  /** Chips drawn (the expanded bundle rows keep one: the bundle already names the category). */
+  maxChips?: number;
 }) {
   const { formatMoney, formatDate } = useMoneyFormat();
-  const chips = topSuggestions(row.suggestions);
+  const chips = topSuggestions(row.suggestions).slice(0, maxChips);
   const payee = row.payee?.trim() || t('row.unnamed');
   const raw = row.raw_bank_description?.trim();
   return (

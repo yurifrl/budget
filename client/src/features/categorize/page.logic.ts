@@ -13,6 +13,7 @@ import type {
 } from '@/budget/data/api';
 import type { BundleRow, CategoryRow, GroupRow } from '@/budget/data/rows';
 import { milliToCents } from '@/budget/data/mapping';
+import { localToday } from '@/domain/date';
 import type { MoneyFormat } from '@/domain/format';
 
 import { t } from './i18n';
@@ -43,8 +44,10 @@ export interface RunHeaderView {
   fraction: number;
 }
 
+/** The calendar day of an instant in the person's own time zone (not the UTC day the server wrote). */
 function runDate(iso: string): string {
-  return iso.slice(0, 10);
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? iso.slice(0, 10) : localToday(at);
 }
 
 function lastRunLine(run: CategorizeRunStatus['last_finished'], format: Pick<MoneyFormat, 'formatDate'>): string | null {
@@ -121,8 +124,9 @@ export interface PickedCategory {
 }
 
 /**
- * The categories a transaction may be filed into: not hidden, internal,
- * deleted, nor inside an internal or credit-card-payment group. Labels carry
+ * The categories a transaction may be filed into: not hidden, internal or
+ * deleted, nor inside a hidden, deleted, internal or credit-card-payment group
+ * (what the server accepts as assignable; it refuses the rest with a 400). Labels carry
  * the bundle when the category belongs to one.
  */
 export function categoryOptions(
@@ -136,7 +140,7 @@ export function categoryOptions(
     .filter((category) => !category.deleted && !category.hidden && !category.internal)
     .filter((category) => {
       const group = groupById.get(category.group_id);
-      return !group || (!group.deleted && !group.internal && !group.is_credit_card_payments);
+      return !group || (!group.deleted && !group.hidden && !group.internal && !group.is_credit_card_payments);
     })
     .map((category) => {
       const bundle = category.bundle_id ? bundleById.get(category.bundle_id) : undefined;
@@ -192,4 +196,25 @@ export function bundleToastLabel(bundle: Pick<CategorizeBundle, 'payee' | 'count
     count: bundle.count,
     category: bundle.suggestion.category_name,
   });
+}
+
+/**
+ * The page is reloading after a threshold change: from the save until the
+ * queue read that follows it lands (or fails), the old bundles and rows must
+ * not be actionable, because they were cut at the old threshold.
+ */
+export function thresholdReloading({
+  saving,
+  stamp,
+  fulfilledAt,
+  failed,
+}: {
+  saving: boolean;
+  /** `fulfilledTimeStamp` of the queue read when the threshold was saved; null when none is pending. */
+  stamp: number | null;
+  fulfilledAt: number;
+  failed: boolean;
+}): boolean {
+  if (saving) return true;
+  return stamp !== null && fulfilledAt <= stamp && !failed;
 }

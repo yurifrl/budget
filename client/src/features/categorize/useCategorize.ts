@@ -13,7 +13,7 @@
 import { skipToken } from '@reduxjs/toolkit/query';
 import { useEffect, useState } from 'react';
 
-import { budgetApi, useGetCategorizeQueueQuery } from '@/budget/data/api';
+import { budgetApi, CATEGORIZE_COUNT_LIMIT, useGetCategorizeQueueQuery } from '@/budget/data/api';
 import { useAppSelector } from '@/state/hooks';
 import { selectActiveBudgetId } from '@/state/ui';
 
@@ -29,7 +29,7 @@ export function useCategorizeLeft(): number | undefined {
 
   const zeroStillFresh =
     budgetId != null && revision !== undefined && knownZero?.budgetId === budgetId && knownZero.revision === revision;
-  const query = useGetCategorizeQueueQuery(zeroStillFresh || !budgetId ? skipToken : { budgetId, limit: 1 }, {
+  const query = useGetCategorizeQueueQuery(zeroStillFresh || !budgetId ? skipToken : { budgetId, limit: CATEGORIZE_COUNT_LIMIT }, {
     refetchOnFocus: false,
     refetchOnReconnect: false,
   });

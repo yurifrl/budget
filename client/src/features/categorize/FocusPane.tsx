@@ -160,6 +160,7 @@ export function FocusPane({
           disabled={!canUndo}
         />
       </View>
+      <Text style={styles.skipHint}>{t('one.skipHint')}</Text>
     </View>
   );
 }
@@ -242,4 +243,5 @@ const styles = StyleSheet.create({
   searchKey: { position: 'absolute', right: 10, zIndex: 31 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 },
   spacer: { flexGrow: 1 },
+  skipHint: { color: colors.faint, fontSize: 11.5 },
 });

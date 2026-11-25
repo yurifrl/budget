@@ -55,6 +55,7 @@ export function OneByOneView({
     <View style={[styles.queueCol, stacked && styles.queueColStacked]} key="queue">
       <QueuePane
         rows={flow.rows}
+        filed={flow.filed}
         focusedId={row.transaction_id}
         total={total}
         hiddenBelow={Math.max(0, total - loadedRows)}
