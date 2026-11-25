@@ -7,6 +7,7 @@ import {
   filedCountLabel,
   filedLabel,
   hiddenIdSet,
+  skippedLabel,
   initialAcceptState,
   visibleRows,
   type FiledItem,
@@ -23,7 +24,7 @@ describe('acceptReducer', () => {
   test('start hides the filed rows and keeps them pending', () => {
     const state = acceptReducer(initialAcceptState, { type: 'start', items: [filed('t1'), filed('t2')] });
     expect(state.hiddenIds).toEqual(['t1', 't2']);
-    expect(state.pending?.map((item) => item.transactionId)).toEqual(['t1', 't2']);
+    expect(state.pending.map((item) => item.transactionId)).toEqual(['t1', 't2']);
     expect(state.toast).toBeNull();
     expect(state.error).toBeNull();
     expect(acceptIdle(state)).toBe(false);
@@ -31,9 +32,9 @@ describe('acceptReducer', () => {
 
   test('a failure restores only the rows the failed accept hid', () => {
     const state = acceptReducer(initialAcceptState, { type: 'start', items: [filed('t1'), filed('t2')] });
-    const failed = acceptReducer(state, { type: 'failed', error: 'Server down' });
+    const failed = acceptReducer(state, { type: 'failed', error: 'Server down', requestIds: ['t1', 't2'] });
     expect(failed.hiddenIds).toEqual([]);
-    expect(failed.pending).toBeNull();
+    expect(failed.pending).toEqual([]);
     expect(failed.error).toBe('Server down');
     expect(acceptIdle(failed)).toBe(true);
   });
@@ -43,10 +44,11 @@ describe('acceptReducer', () => {
     const done = acceptReducer(state, {
       type: 'succeeded',
       transactionIds: ['t1'],
+      requestIds: ['t1'],
       label: 'Uber · –R$ 18,90 → Transport',
     });
     expect(done.hiddenIds).toEqual(['t1']);
-    expect(done.pending).toBeNull();
+    expect(done.pending).toEqual([]);
     expect(done.toast).toEqual({ label: 'Uber · –R$ 18,90 → Transport', transactionIds: ['t1'] });
     expect(canUndo(done)).toBe(true);
   });
@@ -55,6 +57,7 @@ describe('acceptReducer', () => {
     const accepted = acceptReducer(initialAcceptState, {
       type: 'succeeded',
       transactionIds: ['t1', 't2'],
+      requestIds: [],
       label: '2 filed',
     });
     const undoing = acceptReducer(accepted, { type: 'undoStarted' });
@@ -75,6 +78,7 @@ describe('acceptReducer', () => {
     const accepted = acceptReducer(initialAcceptState, {
       type: 'succeeded',
       transactionIds: ['t1'],
+      requestIds: [],
       label: 'Uber → Transport',
     });
     const failed = acceptReducer(acceptReducer(accepted, { type: 'undoStarted' }), {
@@ -90,6 +94,7 @@ describe('acceptReducer', () => {
     const accepted = acceptReducer(initialAcceptState, {
       type: 'succeeded',
       transactionIds: ['t1'],
+      requestIds: [],
       label: 'Uber → Transport',
     });
     const dismissed = acceptReducer(accepted, { type: 'dismissToast' });
@@ -99,7 +104,7 @@ describe('acceptReducer', () => {
 
   test('clearing an error keeps the toast and the hidden rows', () => {
     const failed = acceptReducer(
-      acceptReducer(initialAcceptState, { type: 'succeeded', transactionIds: ['t1'], label: 'x' }),
+      acceptReducer(initialAcceptState, { type: 'succeeded', transactionIds: ['t1'], requestIds: [], label: 'x' }),
       { type: 'undoFailed', error: 'Nope' },
     );
     const cleared = acceptReducer(failed, { type: 'clearError' });
@@ -114,6 +119,68 @@ describe('acceptReducer', () => {
       items: [filed('t1')],
     });
     expect(acceptReducer(accepted, { type: 'reset' })).toEqual(initialAcceptState);
+  });
+});
+
+describe('overlapping single-row filings (keyboard flow)', () => {
+  test('a failure restores only its own row; the other stays hidden and in flight', () => {
+    let state = acceptReducer(initialAcceptState, { type: 'start', items: [filed('t1')] });
+    state = acceptReducer(state, { type: 'start', items: [filed('t2')] });
+    expect(state.busy).toBe(2);
+    state = acceptReducer(state, { type: 'failed', error: 'Nope', requestIds: ['t1'] });
+    expect(state.hiddenIds).toEqual(['t2']);
+    expect(state.pending.map((item) => item.transactionId)).toEqual(['t2']);
+    expect(acceptIdle(state)).toBe(false);
+    state = acceptReducer(state, { type: 'succeeded', transactionIds: ['t2'], requestIds: ['t2'], label: 'x' });
+    expect(acceptIdle(state)).toBe(true);
+    expect(state.toast?.transactionIds).toEqual(['t2']);
+  });
+
+  test('a second filing starts while the first toast is still up and replaces it', () => {
+    let state = acceptReducer(initialAcceptState, { type: 'succeeded', transactionIds: ['t1'], requestIds: [], label: 'a' });
+    state = acceptReducer(state, { type: 'start', items: [filed('t2')] });
+    expect(state.toast).toBeNull();
+    state = acceptReducer(state, { type: 'succeeded', transactionIds: ['t2'], requestIds: ['t2'], label: 'b' });
+    expect(state.hiddenIds).toEqual(['t1', 't2']);
+    expect(state.toast?.label).toBe('b');
+  });
+});
+
+describe('skip', () => {
+  test('hides the row, keeps the current undo toast and has nothing to undo afterwards', () => {
+    const accepted = acceptReducer(initialAcceptState, { type: 'succeeded', transactionIds: ['t1'], requestIds: [], label: 'a' });
+    const skipping = acceptReducer(accepted, { type: 'skipStarted', item: filed('t2') });
+    expect(skipping.hiddenIds).toEqual(['t1', 't2']);
+    expect(skipping.toast?.transactionIds).toEqual(['t1']);
+    const done = acceptReducer(skipping, { type: 'skipSucceeded', requestId: 't2', label: 'Skipped Uber' });
+    expect(done.toast).toEqual({ label: 'Skipped Uber', transactionIds: [] });
+    expect(canUndo(done)).toBe(false);
+    expect(acceptIdle(done)).toBe(true);
+  });
+
+  test('a failed skip brings the row back', () => {
+    const skipping = acceptReducer(initialAcceptState, { type: 'skipStarted', item: filed('t2') });
+    const failed = acceptReducer(skipping, { type: 'failed', error: 'x', requestIds: ['t2'] });
+    expect(failed.hiddenIds).toEqual([]);
+    expect(acceptIdle(failed)).toBe(true);
+  });
+
+  test('the sentence names the subject', () => {
+    expect(skippedLabel({ subject: 'Uber · –R$ 18,90' })).toBe('Skipped Uber · –R$ 18,90. It stays uncategorized in the register.');
+  });
+});
+
+describe('prune', () => {
+  test('drops hidden ids the queue no longer lists, keeps listed and in-flight ones', () => {
+    let state = acceptReducer(initialAcceptState, { type: 'succeeded', transactionIds: ['t1', 't2'], requestIds: [], label: 'x' });
+    state = acceptReducer(state, { type: 'start', items: [filed('t3')] });
+    const pruned = acceptReducer(state, { type: 'prune', presentIds: ['t2'] });
+    expect(pruned.hiddenIds.sort()).toEqual(['t2', 't3']);
+  });
+
+  test('returns the same state when nothing is dropped', () => {
+    const state = acceptReducer(initialAcceptState, { type: 'succeeded', transactionIds: ['t1'], requestIds: [], label: 'x' });
+    expect(acceptReducer(state, { type: 'prune', presentIds: ['t1'] })).toBe(state);
   });
 });
 

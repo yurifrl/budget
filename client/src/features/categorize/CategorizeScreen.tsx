@@ -18,7 +18,7 @@ import { ErrorBanner } from './CategorizeBits';
 import { EmptyState } from './EmptyState';
 import { HeaderCard } from './HeaderCard';
 import { t } from './i18n';
-import { ManualQueueView } from './ManualQueueView';
+import { OneByOneView } from './OneByOneView';
 import { useCategorizePage, type CategorizeViewMode } from './useCategorizePage';
 
 export function CategorizeScreen() {
@@ -87,18 +87,16 @@ export function CategorizeScreen() {
           />
         ) : null}
 
-        {!empty && page.view === 'one' ? (
-          <ManualQueueView
+        {!empty && page.view === 'one' && page.queue.data ? (
+          <OneByOneView
             budgetId={page.budgetId}
-            rows={page.visibleQueueRows}
+            flow={page.oneByOne}
             total={counts?.left_to_categorize ?? 0}
-            idle={page.accept.idle}
-            onFileRow={(row, suggestion) => void page.accept.fileRow(row, suggestion)}
-            onPickCategory={(row, category) => void page.accept.pickCategory(row, category)}
+            loadedRows={page.queue.data.rows.length}
           />
         ) : null}
 
-        {page.aiAvailable && page.viewModel && page.viewModel.acceptAllCount === 0 && counts?.left_to_categorize === 0 ? (
+        {page.view === 'bundles' && page.aiAvailable && page.viewModel && page.viewModel.acceptAllCount === 0 && counts?.left_to_categorize === 0 ? (
           <Text style={styles.note}>{t('queue.empty')}</Text>
         ) : null}
       </ScrollView>
@@ -106,7 +104,7 @@ export function CategorizeScreen() {
       {page.accept.state.toast ? (
         <ActionToast
           message={page.accept.state.toast.label}
-          actionLabel={t('undo')}
+          actionLabel={page.accept.state.toast.transactionIds.length > 0 ? t('undo') : undefined}
           onAction={() => void page.accept.undoLast()}
         />
       ) : null}

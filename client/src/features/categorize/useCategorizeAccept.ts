@@ -12,6 +12,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import {
   budgetApi,
   useAcceptCategorizeMutation,
+  useSkipCategorizeMutation,
   useUndoCategorizeMutation,
   type CategorizeBundle,
   type CategorizeDecisionItem,
@@ -27,6 +28,7 @@ import {
   filedCountLabel,
   filedLabel,
   initialAcceptState,
+  skippedLabel,
   type AcceptState,
   type FiledItem,
 } from './accept.logic';
@@ -48,9 +50,12 @@ export interface CategorizeAccept {
   bundleChangeTick: number;
   fileRow: (row: CategorizeQueueRow, suggestion: CategorizeSuggestion) => Promise<boolean>;
   pickCategory: (row: CategorizeQueueRow, category: PickedCategory) => Promise<boolean>;
+  /** Leave the row without a category for good (budget-wide skip decision). */
+  skipRow: (row: CategorizeQueueRow) => Promise<boolean>;
   acceptBundle: (bundle: CategorizeBundle, knownRows: readonly CategorizeQueueRow[]) => Promise<boolean>;
   acceptAll: (bundles: readonly CategorizeBundle[]) => Promise<boolean>;
-  undoLast: () => Promise<void>;
+  /** Reverse the last accept; resolves to the transactions the server restored. */
+  undoLast: () => Promise<string[]>;
   dismissError: () => void;
 }
 
@@ -59,23 +64,30 @@ export function useCategorizeAccept({
   formatMoney,
   queueRefetch,
   queueUpdatedAt,
+  queueRowIds,
 }: {
   budgetId: string | null;
   formatMoney: (cents: number) => string;
   queueRefetch: () => void;
   /** The queue read's fulfilled timestamp: clears optimistic bundle removals. */
   queueUpdatedAt: number;
+  /** The rows the queue read lists now: hidden ids outside it are forgotten. */
+  queueRowIds: readonly string[];
 }): CategorizeAccept {
   const [accept] = useAcceptCategorizeMutation();
   const [undo] = useUndoCategorizeMutation();
+  const [skip] = useSkipCategorizeMutation();
   const storeDispatch = useAppDispatch();
   const [state, reduce] = useReducer(acceptReducer, initialAcceptState);
   const [goneBundleKeys, setGoneBundleKeys] = useState<ReadonlySet<string>>(new Set());
   const [bundleChangeTick, setBundleChangeTick] = useState(0);
   const inFlight = useRef(false);
 
+  const rowIdsRef = useRef(queueRowIds);
+  rowIdsRef.current = queueRowIds;
   useEffect(() => {
     setGoneBundleKeys(new Set());
+    reduce({ type: 'prune', presentIds: rowIdsRef.current });
   }, [queueUpdatedAt]);
 
   useEffect(() => {
@@ -99,28 +111,36 @@ export function useCategorizeAccept({
     subject: rowSubject(row, formatMoney),
   });
 
+  /**
+   * File explicit pairs. A single row (keyboard filing) may overlap another
+   * request so quick presses are never dropped; a batch is exclusive.
+   */
   const runItems = async (
     items: CategorizeDecisionItem[],
     filed: FiledItem[],
     label: string,
+    { exclusive = false }: { exclusive?: boolean } = {},
   ): Promise<boolean> => {
-    if (!budgetId || inFlight.current || items.length === 0) return false;
-    inFlight.current = true;
+    if (!budgetId || items.length === 0) return false;
+    if (exclusive && inFlight.current) return false;
+    if (exclusive) inFlight.current = true;
+    const requestIds = filed.map((item) => item.transactionId);
     reduce({ type: 'start', items: filed });
     try {
       const result = await accept({ budgetId, items }).unwrap();
       reduce({
         type: 'succeeded',
         transactionIds: result.items.map((item) => item.transaction_id),
+        requestIds,
         label,
       });
       return true;
     } catch (err) {
-      reduce({ type: 'failed', error: apiErrorMessage(err, t('error.accept')) });
+      reduce({ type: 'failed', error: apiErrorMessage(err, t('error.accept')), requestIds });
       queueRefetch();
       return false;
     } finally {
-      inFlight.current = false;
+      if (exclusive) inFlight.current = false;
     }
   };
 
@@ -142,6 +162,21 @@ export function useCategorizeAccept({
     );
   };
 
+  const skipRow = async (row: CategorizeQueueRow): Promise<boolean> => {
+    if (!budgetId) return false;
+    const item = filedItem(row, '', '');
+    reduce({ type: 'skipStarted', item });
+    try {
+      await skip({ budgetId, transactionId: row.transaction_id }).unwrap();
+      reduce({ type: 'skipSucceeded', requestId: row.transaction_id, label: skippedLabel(item) });
+      return true;
+    } catch (err) {
+      reduce({ type: 'failed', error: apiErrorMessage(err, t('error.skip')), requestIds: [row.transaction_id] });
+      queueRefetch();
+      return false;
+    }
+  };
+
   const acceptBundle = async (
     bundle: CategorizeBundle,
     knownRows: readonly CategorizeQueueRow[],
@@ -152,6 +187,7 @@ export function useCategorizeAccept({
     const filed = knownRows.map((row) =>
       filedItem(row, bundle.suggestion.category_id, bundle.suggestion.category_name),
     );
+    const requestIds = filed.map((item) => item.transactionId);
     reduce({ type: 'start', items: filed });
     try {
       const result = await accept({
@@ -162,11 +198,12 @@ export function useCategorizeAccept({
       reduce({
         type: 'succeeded',
         transactionIds: result.items.map((item) => item.transaction_id),
+        requestIds,
         label: bundleToastLabel(bundle),
       });
       return true;
     } catch (err) {
-      reduce({ type: 'failed', error: apiErrorMessage(err, t('error.accept')) });
+      reduce({ type: 'failed', error: apiErrorMessage(err, t('error.accept')), requestIds });
       markGone(bundle.bundle_key, false);
       if (isBundleChanged(err)) setBundleChangeTick((tick) => tick + 1);
       queueRefetch();
@@ -205,7 +242,7 @@ export function useCategorizeAccept({
       const items: CategorizeDecisionItem[] = [];
       for (const bundle of bundles) items.push(...(await bundleItems(bundle)));
       if (items.length === 0) {
-        reduce({ type: 'failed', error: t('error.accept') });
+        reduce({ type: 'failed', error: t('error.accept'), requestIds: [] });
         setGoneBundleKeys(new Set());
         queueRefetch();
         return false;
@@ -217,6 +254,7 @@ export function useCategorizeAccept({
       reduce({
         type: 'succeeded',
         transactionIds: accepted.map((item) => item.transaction_id),
+        requestIds: [],
         label: filedCountLabel(accepted.length),
       });
       return true;
@@ -225,10 +263,11 @@ export function useCategorizeAccept({
         reduce({
           type: 'succeeded',
           transactionIds: accepted.map((item) => item.transaction_id),
+          requestIds: [],
           label: filedCountLabel(accepted.length),
         });
       }
-      reduce({ type: 'failed', error: apiErrorMessage(err, t('error.accept')) });
+      reduce({ type: 'failed', error: apiErrorMessage(err, t('error.accept')), requestIds: [] });
       setGoneBundleKeys(new Set());
       queueRefetch();
       return false;
@@ -237,9 +276,9 @@ export function useCategorizeAccept({
     }
   };
 
-  const undoLast = async (): Promise<void> => {
+  const undoLast = async (): Promise<string[]> => {
     const transactionIds = state.toast?.transactionIds ?? [];
-    if (!budgetId || inFlight.current || transactionIds.length === 0) return;
+    if (!budgetId || inFlight.current || transactionIds.length === 0) return [];
     inFlight.current = true;
     reduce({ type: 'undoStarted' });
     try {
@@ -250,8 +289,10 @@ export function useCategorizeAccept({
         restored: result.restored,
         skipped: result.skipped.length,
       });
+      return result.transaction_ids;
     } catch (err) {
       reduce({ type: 'undoFailed', error: apiErrorMessage(err, t('error.undo')) });
+      return [];
     } finally {
       inFlight.current = false;
     }
@@ -264,6 +305,7 @@ export function useCategorizeAccept({
     bundleChangeTick,
     fileRow,
     pickCategory,
+    skipRow,
     acceptBundle,
     acceptAll,
     undoLast,

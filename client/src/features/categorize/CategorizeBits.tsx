@@ -6,8 +6,17 @@
  */
 
 import { skipToken } from '@reduxjs/toolkit/query';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { useState, type Ref } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type TextInputInstance,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
 
 import { tCommon } from '@shared/i18n/common';
 
@@ -91,6 +100,8 @@ export function CategoryPicker({
   disabled,
   style,
   label,
+  placeholder,
+  inputRef,
 }: {
   budgetId: string | null;
   onPick: (category: PickedCategory) => void;
@@ -98,6 +109,8 @@ export function CategoryPicker({
   style?: StyleProp<ViewStyle>;
   /** Row-specific accessible name (e.g. "Choose a category for Uber"). */
   label?: string;
+  placeholder?: string;
+  inputRef?: Ref<TextInputInstance>;
 }) {
   const scope = budgetId ? { budgetId } : skipToken;
   const categories = useGetCategoriesQuery(scope);
@@ -121,10 +134,50 @@ export function CategoryPicker({
         setDraft('');
         if (picked) onPick({ id: picked.key, label: picked.label });
       }}
-      placeholder={t('row.chooseCategory')}
+      placeholder={placeholder ?? t('row.chooseCategory')}
+      inputRef={inputRef}
       accessibilityLabel={label ?? t('row.chooseCategory')}
       containerStyle={[styles.picker, style]}
     />
+  );
+}
+
+/** A keyboard key drawn as a small cap: "1", "Enter", "S". */
+export function KeyCap({ label, style }: { label: string; style?: StyleProp<ViewStyle> }) {
+  return (
+    <View style={[styles.keyCap, style]} accessible={false}>
+      <Text style={styles.keyCapText}>{label}</Text>
+    </View>
+  );
+}
+
+/** A button with its key hint on the right ("Skip  S"). */
+export function KeyButton({
+  label,
+  keyLabel,
+  onPress,
+  primary,
+  disabled,
+}: {
+  label: string;
+  /** The shortcut shown on the button; omitted where there is no keyboard. */
+  keyLabel?: string;
+  onPress: () => void;
+  primary?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      style={[styles.keyButton, primary && styles.keyButtonPrimary, disabled && styles.keyButtonOff]}>
+      <Text style={[styles.keyButtonText, primary && styles.keyButtonTextPrimary]} numberOfLines={1}>
+        {label}
+      </Text>
+      {keyLabel ? <KeyCap label={keyLabel} style={primary ? styles.keyCapOnPrimary : undefined} /> : null}
+    </Pressable>
   );
 }
 
@@ -141,6 +194,35 @@ export function ErrorBanner({ message, onDismiss }: { message: string; onDismiss
 }
 
 const styles = StyleSheet.create({
+  keyCap: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg2,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    borderRadius: 5,
+  },
+  keyCapText: { color: colors.muted, fontSize: 11, fontWeight: '700' },
+  keyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    borderRadius: radius.sm,
+    maxWidth: '100%',
+  },
+  keyButtonPrimary: { backgroundColor: colors.indigo, borderColor: colors.indigo },
+  keyButtonOff: { opacity: 0.45 },
+  keyButtonText: { color: colors.text, fontSize: 13.5, fontWeight: '700', flexShrink: 1 },
+  keyButtonTextPrimary: { color: colors.white },
+  keyCapOnPrimary: { backgroundColor: colors.indigo2, borderColor: colors.indigo3 },
   chip: { fontSize: 12, fontWeight: '700', paddingVertical: 4, paddingHorizontal: 10 },
   dot: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   dotLetter: { fontWeight: '800' },

@@ -197,6 +197,19 @@ describe('merchantFacts', () => {
     expect(merchantFacts(merchant).map((f) => f.key)).toEqual(['operation_type', 'counterparty_name']);
   });
 
+  test('the trade name is dropped when it is the payee already shown', () => {
+    const merchant: CategorizeMerchantPanel = {
+      name: 'Posto Ipiranga',
+      legal_name: 'Posto Ipiranga Ltda',
+      cnpj: '12.345.678/0001-90',
+      business_category: null,
+      operation_type: null,
+      counterparty_name: null,
+    };
+    expect(merchantFacts(merchant, ' posto ipiranga ').map((f) => f.key)).toEqual(['legal_name', 'cnpj']);
+    expect(merchantFacts(merchant, 'Ipiranga').map((f) => f.key)).toEqual(['name', 'legal_name', 'cnpj']);
+  });
+
   test('no merchant block means no panel', () => {
     expect(merchantFacts(null)).toEqual([]);
   });

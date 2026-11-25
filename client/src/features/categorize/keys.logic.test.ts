@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { categorizeKeyAction } from './keys.logic';
+import { categorizeKeyAction, hasModifier, isControlTarget, isTypingTarget } from './keys.logic';
 
 const base = { suggestions: 2, typing: false, undoAvailable: false };
 
@@ -35,5 +35,32 @@ describe('categorizeKeyAction', () => {
   test('unmapped keys do nothing', () => {
     expect(categorizeKeyAction('q', base)).toBeNull();
     expect(categorizeKeyAction('Escape', base)).toBeNull();
+  });
+});
+
+describe('key targets', () => {
+  test('inputs, textareas, selects and contenteditable are typing', () => {
+    expect(isTypingTarget({ tagName: 'INPUT' })).toBe(true);
+    expect(isTypingTarget({ tagName: 'textarea' })).toBe(true);
+    expect(isTypingTarget({ tagName: 'DIV', isContentEditable: true })).toBe(true);
+    expect(isTypingTarget({ tagName: 'DIV' })).toBe(false);
+    expect(isTypingTarget(null)).toBe(false);
+  });
+
+  test('buttons and role=button elements are controls', () => {
+    expect(isControlTarget({ tagName: 'BUTTON' })).toBe(true);
+    expect(isControlTarget({ tagName: 'DIV', getAttribute: (n) => (n === 'role' ? 'button' : null) })).toBe(true);
+    expect(isControlTarget({ tagName: 'DIV', getAttribute: () => null })).toBe(false);
+  });
+
+  test('Enter on a focused control is left to the control', () => {
+    expect(categorizeKeyAction('Enter', { ...base, onControl: true })).toBeNull();
+    expect(categorizeKeyAction('1', { ...base, onControl: true })).toEqual({ kind: 'file', index: 0 });
+  });
+
+  test('modifiers disable shortcuts', () => {
+    expect(hasModifier({ metaKey: true })).toBe(true);
+    expect(hasModifier({ ctrlKey: true })).toBe(true);
+    expect(hasModifier({})).toBe(false);
   });
 });

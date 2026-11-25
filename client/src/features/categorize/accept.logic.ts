@@ -27,8 +27,10 @@ export interface UndoToast {
 export interface AcceptState {
   /** Rows hidden from the queue while an accept is in flight or confirmed. */
   hiddenIds: string[];
-  /** The in-flight accept; null when idle. */
-  pending: FiledItem[] | null;
+  /** Rows of the accepts still in flight (single-row filings may overlap). */
+  pending: FiledItem[];
+  /** Requests in flight: accepts and undos. Idle at 0. */
+  busy: number;
   toast: UndoToast | null;
   /** A sentence for the failed accept/undo; cleared when the next action starts. */
   error: string | null;
@@ -38,7 +40,8 @@ export interface AcceptState {
 
 export const initialAcceptState: AcceptState = {
   hiddenIds: [],
-  pending: null,
+  pending: [],
+  busy: 0,
   toast: null,
   error: null,
   lastUndo: null,
@@ -46,13 +49,19 @@ export const initialAcceptState: AcceptState = {
 
 export type AcceptAction =
   | { type: 'start'; items: FiledItem[] }
-  | { type: 'failed'; error: string }
-  | { type: 'succeeded'; transactionIds: string[]; label: string }
+  /** `requestIds` are the ids the failed request hid (what `start` was given). */
+  | { type: 'failed'; error: string; requestIds: string[] }
+  | { type: 'succeeded'; transactionIds: string[]; requestIds: string[]; label: string }
+  /** A skip hides its row like an accept but keeps the current undo toast; a failure is `failed`. */
+  | { type: 'skipStarted'; item: FiledItem }
+  | { type: 'skipSucceeded'; requestId: string; label: string }
   | { type: 'undoStarted' }
   | { type: 'undoSucceeded'; transactionIds: string[]; restored: number; skipped: number }
   | { type: 'undoFailed'; error: string }
   | { type: 'dismissToast' }
   | { type: 'clearError' }
+  /** The queue was re-read: ids it no longer lists need no optimistic hiding. */
+  | { type: 'prune'; presentIds: readonly string[] }
   | { type: 'reset' };
 
 function without(ids: readonly string[], remove: readonly string[]): string[] {
@@ -60,46 +69,82 @@ function without(ids: readonly string[], remove: readonly string[]): string[] {
   return ids.filter((id) => !drop.has(id));
 }
 
+function settle(pending: FiledItem[], requestIds: readonly string[]): FiledItem[] {
+  const done = new Set(requestIds);
+  return pending.filter((item) => !done.has(item.transactionId));
+}
+
+const less = (busy: number) => Math.max(0, busy - 1);
+
 export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptState {
   switch (action.type) {
     case 'start':
       return {
         ...state,
         hiddenIds: [...new Set([...state.hiddenIds, ...action.items.map((item) => item.transactionId)])],
-        pending: action.items,
+        pending: [...state.pending, ...action.items],
+        busy: state.busy + 1,
         toast: null,
         error: null,
         lastUndo: null,
       };
-    case 'failed': {
-      const restore = state.pending?.map((item) => item.transactionId) ?? [];
-      return { ...state, hiddenIds: without(state.hiddenIds, restore), pending: null, error: action.error };
-    }
+    case 'failed':
+      return {
+        ...state,
+        hiddenIds: without(state.hiddenIds, action.requestIds),
+        pending: settle(state.pending, action.requestIds),
+        busy: less(state.busy),
+        error: action.error,
+      };
     case 'succeeded':
       return {
         ...state,
         hiddenIds: [...new Set([...state.hiddenIds, ...action.transactionIds])],
-        pending: null,
+        pending: settle(state.pending, action.requestIds),
+        busy: less(state.busy),
         toast: { label: action.label, transactionIds: action.transactionIds },
         error: null,
       };
+    case 'skipStarted':
+      return {
+        ...state,
+        hiddenIds: [...new Set([...state.hiddenIds, action.item.transactionId])],
+        pending: [...state.pending, action.item],
+        busy: state.busy + 1,
+        error: null,
+      };
+    case 'skipSucceeded':
+      return {
+        ...state,
+        pending: settle(state.pending, [action.requestId]),
+        busy: less(state.busy),
+        // A skip has nothing to undo: the toast only says it happened.
+        toast: { label: action.label, transactionIds: [] },
+      };
     case 'undoStarted':
-      return { ...state, pending: [], error: null };
+      return { ...state, busy: state.busy + 1, error: null };
     case 'undoSucceeded':
       return {
         ...state,
         hiddenIds: without(state.hiddenIds, action.transactionIds),
-        pending: null,
+        busy: less(state.busy),
         toast: null,
         error: null,
         lastUndo: { restored: action.restored, skipped: action.skipped },
       };
     case 'undoFailed':
-      return { ...state, pending: null, error: action.error };
+      return { ...state, busy: less(state.busy), error: action.error };
     case 'dismissToast':
       return { ...state, toast: null };
     case 'clearError':
       return { ...state, error: null };
+    case 'prune': {
+      if (state.hiddenIds.length === 0) return state;
+      const present = new Set(action.presentIds);
+      const inFlight = new Set(state.pending.map((item) => item.transactionId));
+      const hiddenIds = state.hiddenIds.filter((id) => present.has(id) || inFlight.has(id));
+      return hiddenIds.length === state.hiddenIds.length ? state : { ...state, hiddenIds };
+    }
     case 'reset':
       return initialAcceptState;
   }
@@ -118,18 +163,23 @@ export function visibleRows<T extends { transaction_id: string }>(
 }
 
 /** Nothing may be accepted or skipped while a request is in flight. */
-export function acceptIdle(state: Pick<AcceptState, 'pending'>): boolean {
-  return state.pending === null;
+export function acceptIdle(state: Pick<AcceptState, 'busy'>): boolean {
+  return state.busy === 0;
 }
 
 /** The undo toast is actionable while no request is in flight and something is undoable. */
-export function canUndo(state: Pick<AcceptState, 'pending' | 'toast'>): boolean {
-  return state.pending === null && state.toast !== null;
+export function canUndo(state: Pick<AcceptState, 'busy' | 'toast'>): boolean {
+  return state.busy === 0 && state.toast !== null && state.toast.transactionIds.length > 0;
 }
 
 /** "Uber · –R$ 18,90 → Transport" for a single filed row. */
 export function filedLabel(item: Pick<FiledItem, 'subject' | 'categoryName'>): string {
   return t('toast.filed', { subject: item.subject, category: item.categoryName });
+}
+
+/** "Skipped Uber · –R$ 18,90" for a skip. */
+export function skippedLabel(item: Pick<FiledItem, 'subject'>): string {
+  return t('toast.skipped', { subject: item.subject });
 }
 
 /** "96 transactions filed" for a batch (accept-all). */

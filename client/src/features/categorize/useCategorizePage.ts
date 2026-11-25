@@ -27,6 +27,7 @@ import { t } from './i18n';
 import { runHeaderView, type RunHeaderView } from './page.logic';
 import { bundleView, queueSubtitle, type BundleView } from './queue.logic';
 import { useCategorizeAccept } from './useCategorizeAccept';
+import { useOneByOne } from './useOneByOne';
 
 /** The page holds one page of rows; the bundles cover the whole queue. */
 const QUEUE_PAGE = 200;
@@ -54,11 +55,13 @@ export function useCategorizePage() {
   const [runStarting, setRunStarting] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
 
+  const queueRowIds = useMemo(() => queue.data?.rows.map((row) => row.transaction_id) ?? [], [queue.data]);
   const accept = useCategorizeAccept({
     budgetId,
     formatMoney: format.formatMoney,
     queueRefetch: () => void queue.refetch(),
     queueUpdatedAt: queue.fulfilledTimeStamp ?? 0,
+    queueRowIds,
   });
 
   const active = status.data?.active;
@@ -129,6 +132,13 @@ export function useCategorizePage() {
   );
 
   const counts = queue.data?.counts;
+  const oneByOne = useOneByOne({
+    enabled: view === 'one',
+    rows: visibleQueueRows,
+    pageRows: queue.data?.rows ?? [],
+    counts,
+    accept,
+  });
   const runView: RunHeaderView | null = status.data
     ? runHeaderView(
         status.data,
@@ -153,6 +163,7 @@ export function useCategorizePage() {
     viewModel,
     manualRows,
     visibleQueueRows,
+    oneByOne,
     threshold,
     savingThreshold,
     commitThreshold,

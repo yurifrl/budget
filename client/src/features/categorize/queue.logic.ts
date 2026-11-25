@@ -133,14 +133,19 @@ const MERCHANT_LABELS: Record<MerchantFactKey, () => string> = {
 
 /**
  * The merchant panel's rows: the facts the bank actually sent, in a fixed
- * order, with null/empty ones omitted. No map: the bank data has no location.
+ * order, with null/empty ones omitted (and the trade name when it equals the
+ * payee). No map: the bank data has no location.
  */
-export function merchantFacts(merchant: CategorizeMerchantPanel | null): MerchantFact[] {
+export function merchantFacts(merchant: CategorizeMerchantPanel | null, payee?: string | null): MerchantFact[] {
   if (!merchant) return [];
   const facts: MerchantFact[] = [];
+  const title = payee?.trim().toLowerCase();
   for (const key of Object.keys(MERCHANT_LABELS) as MerchantFactKey[]) {
     const value = merchant[key];
-    if (value) facts.push({ key, label: MERCHANT_LABELS[key](), value });
+    if (!value) continue;
+    // The trade name only adds something when it is not the title already shown.
+    if (key === 'name' && title && value.trim().toLowerCase() === title) continue;
+    facts.push({ key, label: MERCHANT_LABELS[key](), value });
   }
   return facts;
 }
