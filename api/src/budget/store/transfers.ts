@@ -12,6 +12,8 @@ export interface TransferCandidateSql {
   account_id: string;
   account_name: string;
   kind: 'cash' | 'card' | 'other';
+  /** The account type is 'checking' (kind 'cash' also covers savings and cash). */
+  checking: boolean;
   on_budget: boolean;
   amount: string;
   date: string;
@@ -35,6 +37,7 @@ const CANDIDATE_SELECT = `
   SELECT t.id, t.budget_id, t.account_id, a.name AS account_name,
          CASE WHEN a.type = 'creditCard' OR a.account_group = 'CREDIT' THEN 'card'
               WHEN a.type IN ('checking','savings','cash') THEN 'cash' ELSE 'other' END AS kind,
+         (a.type = 'checking') AS checking,
          a.on_budget, t.amount::text AS amount, t.date::text AS date,
          to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
          t.category_id,

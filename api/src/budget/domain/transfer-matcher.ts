@@ -14,9 +14,9 @@
  *    amounts, opposite signs, dates at most MAX_TRANSFER_DAYS_APART apart;
  *  - account rules (budget-zkts, see `pairViolation`): a card only receives
  *    (a card outflow is a purchase, a refund or a cash advance, never a
- *    transfer); cash pays a card only of the same bank; cash to cash only
- *    across banks. The bank rules apply only when both banks are known (see
- *    `sameBank`); a fixed-account payee rule ('account') is the person's own
+ *    transfer); cash pays a card only of the same bank; checking to checking
+ *    only across banks (savings and cash accounts are not judged). The bank
+ *    rules apply only when both banks are known (see `sameBank`); a fixed-account payee rule ('account') is the person's own
  *    choice and skips the bank rules. Candidates that break a rule are
  *    dropped before any tie-breaking;
  *  - only uncategorized, unsplit, unlinked rows; a row marked "not a transfer"
@@ -86,6 +86,8 @@ export interface MatchRow {
   bank: string | null;
   /** The account's bank connection, when linked (same connection = same bank). */
   connectionId: string | null;
+  /** A checking account (kind 'cash' also covers savings and cash-in-hand; only checking is judged by rule 3). */
+  checking: boolean;
 }
 
 /** What the account rules need to know about one side of a transfer. */
@@ -93,13 +95,20 @@ export interface TransferSide {
   accountKind: AccountKind;
   bank: string | null;
   connectionId: string | null;
+  checking: boolean;
 }
 
 /** Why a pair breaks the account rules. */
 export type PairViolation = 'card_outflow' | 'card_payment_other_bank' | 'cash_same_bank';
 
-/** Do two accounts belong to the same bank? Null when unknown. */
-export function sameBank(a: Omit<TransferSide, 'accountKind'>, b: Omit<TransferSide, 'accountKind'>): boolean | null {
+/**
+ * Do two accounts belong to the same bank? Null when unknown. Two labels are
+ * compared as is. Without two labels, the same connection counts as the same
+ * bank, also when only one side carries a label (the unlabelled account is
+ * taken to share the connection's bank). Different connections with a missing
+ * label are unknown.
+ */
+export function sameBank(a: Pick<TransferSide, 'bank' | 'connectionId'>, b: Pick<TransferSide, 'bank' | 'connectionId'>): boolean | null {
   if (a.bank && b.bank) return a.bank === b.bank;
   if (a.connectionId && a.connectionId === b.connectionId) return true;
   return null;
@@ -107,15 +116,17 @@ export function sameBank(a: Omit<TransferSide, 'accountKind'>, b: Omit<TransferS
 
 /**
  * The account rule an outflow -> inflow pair breaks, if any: a card is never
- * the outflow side; cash -> card only within one bank; cash -> cash only
- * across banks. Unknown banks pass the bank rules. Other kinds are not judged.
+ * the outflow side; cash -> card only within one bank; checking -> checking
+ * only across banks (savings and cash-in-hand accounts are not judged: a move
+ * between a checking and a savings account of one bank is an ordinary
+ * transfer). Unknown banks pass the bank rules. Other kinds are not judged.
  */
 export function pairViolation(o: TransferSide, i: TransferSide): PairViolation | null {
   if (o.accountKind === 'card') return 'card_outflow';
   if (o.accountKind !== 'cash') return null;
   const same = sameBank(o, i);
   if (i.accountKind === 'card' && same === false) return 'card_payment_other_bank';
-  if (i.accountKind === 'cash' && same === true) return 'cash_same_bank';
+  if (i.accountKind === 'cash' && o.checking && i.checking && same === true) return 'cash_same_bank';
   return null;
 }
 
@@ -226,6 +237,9 @@ function fits(o: Node, i: Node): boolean {
   const chosen = o.rule?.mode === 'account' || i.rule?.mode === 'account';
   return chosen || pairViolation(o.row, i.row) == null;
 }
+
+/** A card row that leaves money: a purchase, never a leg of a transfer (rule 1). */
+const cardOutflow = (row: MatchRow): boolean => row.accountKind === 'card' && row.amount < 0;
 
 const order = (a: Node, b: Node): number =>
   a.row.date.localeCompare(b.row.date) ||
@@ -440,8 +454,9 @@ export function planTransfers(
       const age = n.row.date > today ? 0 : daysApart(n.row.date, today);
       if (age <= n.rule.waitDays) plan.pending.set(n.row.id, 'waiting');
       else if (n.rule.noMatch === 'outside') plan.pending.set(n.row.id, 'outside');
-      else plan.suggestions.push({ id: n.row.id, confidence: 'one_side', basis: 'unmatched', candidateIds: [] });
-    } else if (n.evidence === 'strong' && (n.row.accountKind === 'cash' || n.row.amount > 0)) {
+      else if (!cardOutflow(n.row)) plan.suggestions.push({ id: n.row.id, confidence: 'one_side', basis: 'unmatched', candidateIds: [] });
+      // A card outflow with a rule can never pair (rule 1), so it is never offered as one side either.
+    } else if (n.evidence === 'strong' && !cardOutflow(n.row)) {
       // A lone card outflow is never one side of a transfer (cards only receive).
       plan.suggestions.push({ id: n.row.id, confidence: 'one_side', basis: 'unmatched', candidateIds: [] });
     }

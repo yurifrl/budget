@@ -56,6 +56,7 @@ function toMatchRow(r: store.TransferCandidateSql, hint: ImportHint | undefined)
     budgetId: r.budget_id,
     accountId: r.account_id,
     accountKind: r.kind,
+    checking: r.checking,
     onBudget: r.on_budget,
     amount: Number(r.amount),
     date: r.date,
@@ -74,7 +75,7 @@ function toMatchRow(r: store.TransferCandidateSql, hint: ImportHint | undefined)
   };
 }
 
-const sideOf = (r: store.TransferCandidateSql) => ({ accountKind: r.kind, bank: bankKey(r.institution), connectionId: r.connection_id });
+const sideOf = (r: store.TransferCandidateSql) => ({ accountKind: r.kind, checking: r.checking, bank: bankKey(r.institution), connectionId: r.connection_id });
 
 async function loadRules(db: Queryable, budgetId: string): Promise<Map<string, TransferRule>> {
   const rules = await store.listTransferRules(db, budgetId);

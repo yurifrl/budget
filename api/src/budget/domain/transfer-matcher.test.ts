@@ -24,6 +24,7 @@ const row = (over: Partial<MatchRow>): MatchRow => ({
   mark: null,
   bank: null,
   connectionId: null,
+  checking: true,
   ...over,
 });
 const out = (over: Partial<MatchRow> = {}) => row(over);
@@ -295,7 +296,12 @@ describe('planTransfers: account rules (budget-zkts)', () => {
   const i = (acc: Partial<MatchRow>, over: Partial<MatchRow> = {}) => row({ ...acc, amount: 100_000, ...over });
 
   test('pairViolation / sameBank: each rule, unknown banks pass', () => {
-    const side = (accountKind: 'cash' | 'card', bank: string | null, connectionId: string | null = null) => ({ accountKind, bank, connectionId });
+    const side = (accountKind: 'cash' | 'card', bank: string | null, connectionId: string | null = null, checking = accountKind === 'cash') => ({
+      accountKind,
+      bank,
+      connectionId,
+      checking,
+    });
     expect(pairViolation(side('card', 'itau'), side('card', 'itau'))).toBe('card_outflow');
     expect(pairViolation(side('card', null), side('cash', null))).toBe('card_outflow');
     expect(pairViolation(side('cash', 'itau'), side('card', 'itau'))).toBeNull();
@@ -310,6 +316,13 @@ describe('planTransfers: account rules (budget-zkts)', () => {
     expect(sameBank({ bank: 'itau', connectionId: 'c1' }, { bank: 'nubank', connectionId: 'c1' })).toBe(false);
     expect(pairViolation(side('cash', null, 'c1'), side('card', null, 'c1'))).toBeNull();
     expect(pairViolation(side('cash', null, 'c1'), side('cash', null, 'c1'))).toBe('cash_same_bank');
+    // Rule 3 judges checking -> checking only: a savings (or cash-in-hand) account on either side passes.
+    expect(pairViolation(side('cash', 'itau', null, true), side('cash', 'itau', null, false))).toBeNull();
+    expect(pairViolation(side('cash', 'itau', null, false), side('cash', 'itau', null, true))).toBeNull();
+    expect(pairViolation(side('cash', 'itau', null, false), side('cash', 'itau', null, false))).toBeNull();
+    // One side labelled, the other not, on one connection: the same bank (documented in docs/decisions.md).
+    expect(sameBank({ bank: 'itau', connectionId: 'c1' }, { bank: null, connectionId: 'c1' })).toBe(true);
+    expect(sameBank({ bank: 'itau', connectionId: 'c1' }, { bank: null, connectionId: 'c2' })).toBeNull();
   });
 
   test('rule 1: a card outflow is never paired, whatever the evidence or the other account', () => {
@@ -347,9 +360,38 @@ describe('planTransfers: account rules (budget-zkts)', () => {
     const a = o(itauConta);
     const b = i(nuConta);
     expect(pairsOf([a, b])).toEqual([[a.id, b.id]]);
-    const p = plan([o(nuConta), i({ accountId: 'nusavings', accountKind: 'cash', bank: 'nubank' })]);
+    const p = plan([o(nuConta), i({ accountId: 'nucheck2', accountKind: 'cash', bank: 'nubank' })]);
     expect(p.links).toEqual([]);
     expect(p.suggestions).toEqual([]);
+  });
+
+  test('rule 3 does not apply to savings: same-bank checking <-> savings still links, either way', () => {
+    const nuSavings = { accountId: 'nusavings', accountKind: 'cash' as const, bank: 'nubank', checking: false };
+    const toSavings = [o(nuConta), i(nuSavings)];
+    expect(pairsOf(toSavings)).toEqual([[toSavings[0].id, toSavings[1].id]]);
+    const fromSavings = [o(nuSavings), i(nuConta)];
+    expect(pairsOf(fromSavings)).toEqual([[fromSavings[0].id, fromSavings[1].id]]);
+    // Same connection without labels: also still linked.
+    const conn = { connectionId: 'c1' };
+    const viaConn = [o({ accountId: 'x', accountKind: 'cash', ...conn }), i({ accountId: 'y', accountKind: 'cash', checking: false, ...conn })];
+    expect(pairsOf(viaConn)).toEqual([[viaConn[0].id, viaConn[1].id]]);
+    // Cross-bank is unchanged either way.
+    const cross = [o(itauConta), i(nuSavings)];
+    expect(pairsOf(cross)).toEqual([[cross[0].id, cross[1].id]]);
+  });
+
+  test('one side labelled and the other not, on one connection: treated as the same bank', () => {
+    const conn = { connectionId: 'c1' };
+    // checking -> checking: refused (same bank by connection).
+    expect(plan([o({ ...itauConta, ...conn }), i({ accountId: 'y', accountKind: 'cash', ...conn })]).links).toEqual([]);
+    // checking -> card: allowed (same bank).
+    const a = o({ ...itauConta, ...conn });
+    const b = i({ accountId: 'y', accountKind: 'card', ...conn });
+    expect(pairsOf([a, b])).toEqual([[a.id, b.id]]);
+    // Different connections with one label: unknown, so both rules pass.
+    const c = o({ ...itauConta, connectionId: 'c1' });
+    const d = i({ accountId: 'y', accountKind: 'cash', connectionId: 'c2' });
+    expect(pairsOf([c, d])).toEqual([[c.id, d.id]]);
   });
 
   test('the chain case: Itaú conta -> Nubank conta -> Nubank cartão, same day, same amount', () => {
@@ -408,6 +450,19 @@ describe('planTransfers: account rules (budget-zkts)', () => {
     const a = o({ accountId: 'x', accountKind: 'cash', ...conn });
     const b = i({ accountId: 'y', accountKind: 'card', ...conn });
     expect(pairsOf([a, b])).toEqual([[a.id, b.id]]);
+  });
+
+  test('a card outflow with a payee rule is never a one-side suggestion either (it can never pair)', () => {
+    const rules = new Map<string, TransferRule>([['p', { mode: 'auto', accountId: null, noMatch: 'review', waitDays: 2, since: null }]]);
+    const purchase = o(nuCard, { payeeId: 'p', date: '2026-11-03' });
+    // Past waitDays and no pair possible: no suggestion (the guard for rule-less rows agrees).
+    expect(plan([purchase], rules).suggestions).toEqual([]);
+    // A card inflow (a payment received) and a cash row keep their one-side suggestion.
+    expect(plan([i(nuCard, { payeeId: 'p', date: '2026-11-03' })], rules).suggestions.map((s) => s.confidence)).toEqual(['one_side']);
+    expect(plan([o(nuConta, { payeeId: 'p', date: '2026-11-03' })], rules).suggestions.map((s) => s.confidence)).toEqual(['one_side']);
+    // Within waitDays it still waits (unchanged).
+    const waiting = o(nuCard, { payeeId: 'p', date: '2026-11-22' });
+    expect(plan([waiting], rules).pending.get(waiting.id)).toBe('waiting');
   });
 
   test('a fixed-account payee rule is the person\'s choice: the bank rules do not drop it', () => {

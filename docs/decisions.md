@@ -1891,13 +1891,25 @@ app. The two now ship independently.
 - The person's rules, enforced in the matcher's `fits` (`pairViolation`), so
   breaking candidates are dropped before any tie-break: (1) a card only
   receives (card→card is no longer paired; a lone card outflow is never a
-  one-side suggestion); (2) cash→card only within one bank; (3) cash→cash
-  only across banks.
+  one-side suggestion, also when its payee has a rule: such a row can never
+  pair); (2) cash→card only within one bank; (3) checking→checking only
+  across banks. Rule 3 is judged on the account type, not the matcher's
+  `cash` kind: savings and cash-in-hand accounts are `cash` too, and a move
+  between a checking and a savings account of one bank (either way) is an
+  ordinary transfer that keeps linking and being suggested.
 - Bank of an account: `bankKey(accounts.institution ?? connections.institution)`
   (`domain/bank-key.ts`: accents/punctuation/suffixes stripped, known brands
   mapped, so "Itaú Unibanco PF" = "itau", "Nu Pagamentos S.A." = "Nubank").
   With no label on either side, the same `connection_id` means the same bank.
   Otherwise unknown: rules 2 and 3 do not apply (old behaviour).
+  One side labelled and the other not, on the same connection: the same bank
+  (the unlabelled account is taken to share the connection's bank); with
+  different connections it is unknown. Pinned in `transfer-matcher.test.ts`.
+  How "same bank" is decided (labels versus connection id) stays open until
+  production data and an owner decision.
+- Re-running the matcher never touches a link that already exists, even one
+  that breaks these rules: only unlinked rows are candidates and nothing
+  unlinks (tested in `budget/routes/transfers.test.ts`).
 - A fixed-account payee rule is the person's choice and skips rules 2–3.
   `POST /transfers/link` with a counterpart never blocks; a pair that breaks
   a rule is linked and listed in `warnings`.
