@@ -69,7 +69,7 @@ export function CategorizeScreen() {
 
         {empty ? (
           <EmptyState
-            reason={page.runView?.detail ?? ''}
+            reason={page.aiReason}
             count={counts?.left_to_categorize}
             onAddKey={() => router.push('/ai-keys')}
             onByHand={() => page.setView('one')}
@@ -77,7 +77,7 @@ export function CategorizeScreen() {
         ) : null}
 
         {showNoKeyBanner ? (
-          <NoKeyBanner reason={page.runView?.detail ?? ''} onAddKey={() => router.push('/ai-keys')} />
+          <NoKeyBanner reason={page.aiReason} onAddKey={() => router.push('/ai-keys')} />
         ) : null}
 
         {page.reloading ? <Text style={styles.note}>{t('queue.updating')}</Text> : null}

@@ -132,6 +132,7 @@ export function FocusPane({
 
       <View style={styles.searchRow}>
         <CategoryPicker
+          key={row.transaction_id}
           budgetId={budgetId}
           label={t('row.chooseA11y', { payee })}
           onPick={onPick}

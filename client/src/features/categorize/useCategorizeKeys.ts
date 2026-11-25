@@ -69,7 +69,7 @@ export function useBlurAfterPointerPress(): void {
       const control = controlToBlur(e.target as HTMLElement | null, e.detail) as HTMLElement | null;
       control?.blur();
     };
-    document.addEventListener('click', onClick);
-    return () => document.removeEventListener('click', onClick);
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
   }, []);
 }

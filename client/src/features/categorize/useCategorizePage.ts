@@ -24,7 +24,7 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 
 import { hiddenIdSet, visibleRows } from './accept.logic';
 import { t } from './i18n';
-import { runHeaderView, thresholdReloading, type RunHeaderView } from './page.logic';
+import { aiReasonMessage, runHeaderView, thresholdReloading, type RunHeaderView } from './page.logic';
 import { bundleView, queueSubtitle, type BundleView } from './queue.logic';
 import { useCategorizeAccept } from './useCategorizeAccept';
 import { useOneByOne } from './useOneByOne';
@@ -161,6 +161,8 @@ export function useCategorizePage() {
       )
     : null;
   const aiAvailable = status.data?.ai.available ?? false;
+  /** Why classification is off, whatever else the header shows (an active run wins there). */
+  const aiReason = aiReasonMessage(status.data?.ai.reason ?? null);
   const error = thresholdError ?? runError ?? accept.state.error;
 
   return {
@@ -184,6 +186,7 @@ export function useCategorizePage() {
     commitThreshold,
     runView,
     aiAvailable,
+    aiReason,
     runStarting,
     startRun,
     statusLoaded: status.data !== undefined,
