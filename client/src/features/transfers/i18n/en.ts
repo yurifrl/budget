@@ -16,7 +16,14 @@ export default {
   'popover.noMatchSub': 'account not in this budget?',
   'popover.pick': 'Pick the other side:',
   'popover.remember': 'Always treat "{payee}" as a transfer',
-  'popover.rememberSub': 'Saved on the payee. Future rows are linked automatically.',
+  'popover.rememberSub': 'Saved as a renaming rule on the transfer payee “{account}”: future rows like this are offered as a transfer with that account.',
+  'popover.rememberSubAny': 'Saved as a renaming rule on the transfer payee of the account you pick.',
+  'rule.is': 'Is',
+  'rule.startsWith': 'Starts with',
+  'rule.endsWith': 'Ends with',
+  'rule.contains': 'Contains',
+  'rule.textLabel': 'Text of the rule',
+  'rule.matchLabel': 'Match type',
   'popover.notTransfer': 'Not a transfer',
   'popover.otherAccount': 'Other account…',
   'popover.link': 'Link as transfer',
@@ -41,8 +48,6 @@ export default {
   'why.edited': 'edited after import, so not linked on its own',
 
   'other.title': 'Link to which account?',
-  'other.outside': 'An account outside this budget',
-  'other.outsideSub': 'Keep it as a transfer, no category',
   'other.offBudget': 'Off budget',
   'other.back': 'Back',
 
@@ -72,13 +77,13 @@ export default {
   'bulk.link': { one: 'Link {count} as transfer', other: 'Link {count} as transfers' },
 
   'toast.linked': { one: '{count} linked as transfer', other: '{count} linked as transfers' },
-  'toast.rules': { one: '{count} payee rule created', other: '{count} payee rules created' },
+  'toast.ruleSaved': 'rule saved',
   'toast.dismissed': { one: '{count} marked as not a transfer', other: '{count} marked as not transfers' },
-  'toast.outside': 'Kept as a transfer to an account outside the budget',
   'toast.undo': 'Undo',
   'toast.undone': 'Undone',
 
   'error.link': 'Could not link the transfer.',
+  'error.rule': 'Could not save the renaming rule.',
   'error.dismiss': 'Could not save the decision.',
   'error.unlink': 'Could not undo the link.',
 } as const;

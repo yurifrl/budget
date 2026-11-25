@@ -21,7 +21,7 @@ import {
   useUpdateTransactionMutation,
 } from '@/budget/data/api';
 import type { PayeeAdminRow } from '@/budget/data/rows';
-import { isTransferBetweenOnBudget } from '@shared/domain/transfers';
+import { isTransferToOnBudget } from '@shared/domain/transfers';
 import { isPickableCategory } from '@/domain/pickable';
 import { transferChoices } from '@/domain/transfers';
 import { categoryLabel } from '@/domain/bundles';
@@ -112,7 +112,7 @@ export function useAddTransaction({
     (payeeId && payeeId === (editTxn?.payeeId ?? null) ? editTxn?.transferAccountId : undefined) ??
     (payeeId ? (payees.data ?? []).find((p) => p.id === payeeId)?.transfer_account_id : null) ??
     null;
-  const categoryLocked = !!account && isTransferBetweenOnBudget(budgetAccounts, account.id, transferAccountId);
+  const categoryLocked = !!account && isTransferToOnBudget(budgetAccounts, account.id, transferAccountId);
   const resolvedCategoryId = categoryLocked ? null : resolveSheetCategory({ isIncome, categoryId }, !!editTxn);
   const category = categories.data?.find((c) => c.id === resolvedCategoryId) ?? null;
 

@@ -212,7 +212,9 @@ describe('review list and bulk bar', () => {
     expect(s.dismissIds).toEqual(['o1', 'i1', 'o2', 'o3']);
   });
   test('toast text', () => {
-    expect(linkedToast({ linked: ['a', 'b', 'c', 'd', 'e', 'f'], rules_created: 1 })).toBe('3 linked as transfers · 1 payee rule created');
-    expect(linkedToast({ linked: ['a', 'b'], rules_created: 0 })).toBe('1 linked as transfer');
+    expect(linkedToast({ linked: ['a', 'b', 'c', 'd', 'e', 'f'] }, { saved: true })).toBe('3 linked as transfers · rule saved');
+    expect(linkedToast({ linked: ['a', 'b'] })).toBe('1 linked as transfer');
+    expect(linkedToast({ linked: ['a', 'b'] }, { saved: false })).toBe('1 linked as transfer');
+    expect(linkedToast({ linked: ['a', 'b'] }, { saved: false, message: 'Too short' })).toBe('1 linked as transfer · Too short');
   });
 });

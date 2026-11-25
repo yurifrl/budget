@@ -19,7 +19,14 @@ const m: Translation<typeof en> = {
   'popover.noMatchSub': 'conta fora deste orçamento?',
   'popover.pick': 'Escolha o outro lado:',
   'popover.remember': 'Sempre tratar "{payee}" como transferência',
-  'popover.rememberSub': 'Fica salvo no favorecido. As próximas linhas são vinculadas sozinhas.',
+  'popover.rememberSub': 'Fica salvo como regra de renomeação no favorecido de transferência “{account}”: as próximas linhas assim são oferecidas como transferência com essa conta.',
+  'popover.rememberSubAny': 'Fica salvo como regra de renomeação no favorecido de transferência da conta que você escolher.',
+  'rule.is': 'É',
+  'rule.startsWith': 'Começa com',
+  'rule.endsWith': 'Termina com',
+  'rule.contains': 'Contém',
+  'rule.textLabel': 'Texto da regra',
+  'rule.matchLabel': 'Tipo de correspondência',
   'popover.notTransfer': 'Não é transferência',
   'popover.otherAccount': 'Outra conta…',
   'popover.link': 'Vincular como transferência',
@@ -44,8 +51,6 @@ const m: Translation<typeof en> = {
   'why.edited': 'editada depois da importação, por isso não foi vinculada sozinha',
 
   'other.title': 'Vincular a qual conta?',
-  'other.outside': 'Uma conta fora deste orçamento',
-  'other.outsideSub': 'Manter como transferência, sem categoria',
   'other.offBudget': 'Fora do orçamento',
   'other.back': 'Voltar',
 
@@ -75,13 +80,13 @@ const m: Translation<typeof en> = {
   'bulk.link': { one: 'Vincular {count} como transferência', other: 'Vincular {count} como transferências' },
 
   'toast.linked': { one: '{count} vinculada como transferência', other: '{count} vinculadas como transferências' },
-  'toast.rules': { one: '{count} regra de favorecido criada', other: '{count} regras de favorecido criadas' },
+  'toast.ruleSaved': 'regra salva',
   'toast.dismissed': { one: '{count} marcada como não transferência', other: '{count} marcadas como não transferências' },
-  'toast.outside': 'Mantida como transferência para uma conta fora do orçamento',
   'toast.undo': 'Desfazer',
   'toast.undone': 'Desfeito',
 
   'error.link': 'Não foi possível vincular a transferência.',
+  'error.rule': 'Não foi possível salvar a regra de renomeação.',
   'error.dismiss': 'Não foi possível salvar a decisão.',
   'error.unlink': 'Não foi possível desfazer o vínculo.',
 };

@@ -45,12 +45,12 @@ export function registerCategoryCell(
       return { text: tr('register.split', { count: t.splits?.length ?? 0 }), warn: false };
     case 'transfer_waiting':
       return { text: tr('register.transferWaiting'), warn: false };
-    case 'transfer_outside':
-      return { text: tr('register.transferOutside'), warn: false };
     case 'transfer':
       return { text: tr('register.notNeeded'), warn: false, notNeeded: true };
     case 'inflow':
       return { text: tr('register.readyToAssign'), warn: false };
+    // `transfer_outside` is no longer produced by the client (see the mapping); it reads like any uncategorized row.
+    case 'transfer_outside':
     case 'needs_category':
       return { text: tr('register.needsCategory'), warn: true };
   }

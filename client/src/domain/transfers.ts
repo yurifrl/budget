@@ -2,20 +2,20 @@
  * Transfers on the client: a transfer is defined by its payee (an account's
  * "Transfer : <account>" payee, `transfer_account_id` set) or the row's
  * transfer pointer, never by reading the payee text or matching account
- * names. One rule for "needs no category" (shared `isTransferBetweenOnBudget`)
+ * names (the one exception is `legacyTransferAccountByName`). One rule for "needs no category" (shared `isTransferToOnBudget`)
  * and one list of the accounts a transfer may go to. PURE.
  */
 
-import { isTransferBetweenOnBudget } from '@shared/domain/transfers';
+import { isTransferToOnBudget, transferPeerAccountId } from '@shared/domain/transfers';
 
 import type { Account, Transaction } from './types';
 
-/** A transfer between two on-budget accounts: no category needed, none settable. */
+/** A transfer to an on-budget account (the money stays in the budget): no category needed, none settable. */
 export function isBudgetTransfer(
   accounts: readonly Pick<Account, 'id' | 'onBudget'>[],
   txn: Pick<Transaction, 'accountId' | 'transferAccountId'>,
 ): boolean {
-  return isTransferBetweenOnBudget(accounts, txn.accountId, txn.transferAccountId);
+  return isTransferToOnBudget(accounts, txn.accountId, txn.transferAccountId);
 }
 
 /** The same rule for a draft: the row's account and the picked transfer payee's account. */
@@ -24,7 +24,7 @@ export function isBudgetTransferTo(
   accountId: string,
   transferAccountId: string | null | undefined,
 ): boolean {
-  return isTransferBetweenOnBudget(accounts, accountId, transferAccountId);
+  return isTransferToOnBudget(accounts, accountId, transferAccountId);
 }
 
 /**
@@ -80,4 +80,24 @@ export function patchForRow<P extends object>(
   if (!('categoryId' in patch) || !isBudgetTransfer(accounts, txn)) return patch;
   const { categoryId: _dropped, ...rest } = patch as { categoryId?: unknown };
   return Object.keys(rest).length > 0 ? (rest as unknown as P) : null;
+}
+
+/**
+ * LEGACY FALLBACK, kept only until the server repair has linked the old
+ * name-only duplicate payees (`repair-transfer-payees`): a row that has no
+ * pointer and whose payee is not a linked transfer payee, but whose payee name
+ * is "Transfer : <name>" of exactly one account of the budget, is a transfer
+ * to that account, as the client has always treated it (so Ready to Assign and
+ * the balances do not move when this client replaces the old one). Case and
+ * spacing around the colon are ignored, as before. Two accounts of that name
+ * (ambiguous), no account of that name (a renamed account's old payee text) or
+ * the row's own account: not a transfer. Closed accounts count, as before.
+ * Called by the mapping layer only; delete it with the repair.
+ */
+export function legacyTransferAccountByName(
+  payeeName: string,
+  accounts: readonly { id: string; name: string }[],
+  ownAccountId: string,
+): string | null {
+  return transferPeerAccountId(payeeName, accounts, ownAccountId) ?? null;
 }

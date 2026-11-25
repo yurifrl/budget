@@ -279,13 +279,28 @@ describe('transfer links (spec T1)', () => {
     expect(t.payeeId).toBe('p-tr');
   });
 
-  test('the payee text never makes a transfer: a "Transfer : <account>" text without a pointer or a transfer payee is an ordinary row', () => {
-    const [byText] = map([transferTxn({ id: 'x3', account_id: 'a-nubank', payee_id: null, payee_name: 'Transfer : Itau', transfer_account_id: null })]);
-    expect(byText.transferAccountId).toBeNull();
-    const [ordinaryPayee] = map([transferTxn({ id: 'x3b', payee_id: 'p-tr', transfer_account_id: null })], [
+  test('legacy fallback: a row with no pointer and no transfer payee whose payee text names one account is a transfer to it (as the client always treated it)', () => {
+    const [byName] = map([transferTxn({ id: 'x3', account_id: 'a-nubank', payee_id: null, payee_name: 'Transfer : itau', transfer_account_id: null })]);
+    expect(byName.transferAccountId).toBe('a-itau'); // case-insensitive, whitespace-tolerant
+    // An ordinary (not linked) payee that happens to be named like a transfer payee behaves the same.
+    const [ordinaryNamed] = map([transferTxn({ id: 'x3b', payee_id: 'p-tr', transfer_account_id: null })], [
       { id: 'p-tr', name: 'Transfer : Nubank', transfer_account_id: null, deleted: false },
     ]);
-    expect(ordinaryPayee.transferAccountId).toBeNull();
+    expect(ordinaryNamed.transferAccountId).toBe('a-nubank');
+  });
+
+  test('the old "outside the budget" mark is dropped: the row maps as an ordinary one', () => {
+    const [t] = map([transferTxn({ id: 'o1', transfer_account_id: null, transfer_pending: 'outside' })]);
+    expect(t.transferPending).toBeUndefined();
+  });
+
+  test('the fallback never overrides a pointer or a linked transfer payee', () => {
+    const [pointer] = map([transferTxn({ id: 'x3c', account_id: 'a-itau', payee_name: 'Transfer : Nubank', transfer_account_id: 'a-itau-other' })]);
+    expect(pointer.transferAccountId).toBe('a-itau-other');
+    const [linked] = map([transferTxn({ id: 'x3d', account_id: 'a-itau', payee_id: 'tp', payee_name: 'Transfer : Nubank', transfer_account_id: null })], [
+      { id: 'tp', name: 'Transfer : Nubank', transfer_account_id: 'a-itau-other', deleted: false },
+    ]);
+    expect(linked.transferAccountId).toBe('a-itau-other');
   });
 
   test('the wire column wins over the payee convention', () => {

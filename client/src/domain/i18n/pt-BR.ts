@@ -39,7 +39,6 @@ const m: Translation<typeof en> = {
   'register.split': 'Divisão ({count})',
   'register.notNeeded': 'Categoria não necessária',
   'register.transferWaiting': 'Transferência · aguardando o outro lado',
-  'register.transferOutside': 'Transferência · fora do orçamento',
   'register.needsCategory': 'precisa de categoria',
 
   'flag.red': 'Vermelho',

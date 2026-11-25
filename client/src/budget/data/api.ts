@@ -172,7 +172,6 @@ export const {
   useLinkTransfersMutation,
   useUnlinkTransfersMutation,
   useMarkTransfersMutation,
-  useGetPayeeTransferRuleQuery,
   useSetPayeeTransferRuleMutation,
   useGetCategorizeQueueQuery,
   useAcceptCategorizeMutation,

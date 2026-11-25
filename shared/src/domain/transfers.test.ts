@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { isInternalTransferPayee, transferPayeeName, transferPeerAccountId } from './transfers';
+import { isInternalTransferPayee, isTransferToOnBudget, transferPayeeName, transferPeerAccountId } from './transfers';
 
 const accounts = [
   { name: 'QA Cash', onBudget: true },
@@ -40,5 +40,27 @@ describe('transferPeerAccountId (legacy payee -> account id, spec T1)', () => {
     expect(transferPeerAccountId('Transfer : Nowhere', accts, 'a1')).toBeUndefined();
     expect(transferPeerAccountId('Transfer : Twin', accts, 'a1')).toBeUndefined();
     expect(transferPeerAccountId('Transfer : Itau Cartão', accts, 'a2')).toBeUndefined();
+  });
+});
+
+describe('isTransferToOnBudget', () => {
+  const accounts = [
+    { id: 'chk', onBudget: true },
+    { id: 'sav', onBudget: true },
+    { id: 'house', onBudget: false },
+  ];
+
+  test('a pointer to another on-budget account: the money stays in the budget', () => {
+    expect(isTransferToOnBudget(accounts, 'chk', 'sav')).toBe(true);
+    // The register has always looked at the peer only: a leg on an off-budget account pointing at an on-budget one counts.
+    expect(isTransferToOnBudget(accounts, 'house', 'chk')).toBe(true);
+  });
+
+  test('an off-budget peer, an unknown account, no pointer or its own account: no', () => {
+    expect(isTransferToOnBudget(accounts, 'chk', 'house')).toBe(false);
+    expect(isTransferToOnBudget(accounts, 'chk', 'gone')).toBe(false);
+    expect(isTransferToOnBudget(accounts, 'chk', null)).toBe(false);
+    expect(isTransferToOnBudget(accounts, 'chk', undefined)).toBe(false);
+    expect(isTransferToOnBudget(accounts, 'chk', 'chk')).toBe(false);
   });
 });

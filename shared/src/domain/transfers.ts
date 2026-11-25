@@ -54,18 +54,17 @@ export function transferPeerAccountId(
 
 /**
  * THE definition of a transfer that needs no category: the row points at
- * another account (`peerAccountId`, the server's transfer pointer, which a
- * transfer payee sets) and both accounts are on budget, so the money stays
- * inside the budget. A transfer to an off-budget account is not one (it leaves
- * the budget and keeps its category). Never read from the payee text.
+ * another account (`peerAccountId`: the server's transfer pointer, which a
+ * transfer payee sets) and that account is on budget, so the money stays inside
+ * the budget. A transfer to an off-budget account leaves the budget and keeps
+ * its category. Same outcome as the register always had (it looked at the peer
+ * only). Never read from the payee text.
  */
-export function isTransferBetweenOnBudget(
+export function isTransferToOnBudget(
   accounts: readonly { id: string; onBudget: boolean }[],
   accountId: string,
   peerAccountId: string | null | undefined,
 ): boolean {
   if (!peerAccountId || peerAccountId === accountId) return false;
-  const own = accounts.find((a) => a.id === accountId);
-  const peer = accounts.find((a) => a.id === peerAccountId);
-  return !!own && !!peer && own.onBudget && peer.onBudget;
+  return !!accounts.find((a) => a.id === peerAccountId)?.onBudget;
 }

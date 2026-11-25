@@ -222,10 +222,12 @@ export interface Transaction {
    */
   transferSuggestion?: { confidence: 'sure' | 'choose' | 'oneSide'; candidateCount: number; counterpartId: string | null };
   /**
-   * A "treat as transfer" payee's row with no linked other side: `waiting` =
-   * the other side has not arrived yet (a transfer in flight: no category, no
-   * budget effect); `outside` = a transfer to an account outside the budget
-   * (no category asked; moves Ready to Assign like any money leaving the budget).
+   * An old per-payee "treat as transfer" rule's row with no linked other side:
+   * `waiting` = the other side has not arrived yet (a transfer in flight: no
+   * category, no budget effect). `outside` (a transfer to an account outside the
+   * budget) is no longer offered or read by the app: the mapping drops it, so
+   * such a row is an ordinary one; the engine still takes it as an ordinary
+   * uncategorized row if a caller passes it (its money moves Ready to Assign).
    */
   transferPending?: 'waiting' | 'outside';
   /** Who linked this transfer leg (`rule` shows "auto · payee rule"). */

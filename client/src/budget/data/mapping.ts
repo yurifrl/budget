@@ -9,6 +9,7 @@
  */
 
 import { recomputeActivity } from '../domain/engine';
+import { legacyTransferAccountByName } from '../../domain/transfers';
 import type {
   Account,
   AccountType,
@@ -194,8 +195,12 @@ export function assembleBudget(src: BudgetSource): Budget {
       ...(t.installment ? { installment: t.installment } : {}),
       importId: t.import_id ?? null,
       matchedTransactionId: t.matched_transaction_id ?? null,
-      // The server's pointer, else the account of the row's transfer payee; never the payee text.
-      transferAccountId: t.transfer_account_id ?? (t.payee_id ? payeeTransferAccount.get(t.payee_id) : undefined) ?? null,
+      // The server's pointer, else the account of the row's transfer payee; only a row with
+      // neither falls back to its payee's name (legacy rows, see legacyTransferAccountByName).
+      transferAccountId:
+        t.transfer_account_id ??
+        (t.payee_id ? payeeTransferAccount.get(t.payee_id) : undefined) ??
+        legacyTransferAccountByName(payee, src.accounts, t.account_id),
       ...(t.transfer_suggestion
         ? {
             transferSuggestion: {
@@ -205,7 +210,9 @@ export function assembleBudget(src: BudgetSource): Budget {
             },
           }
         : {}),
-      ...(t.transfer_pending ? { transferPending: t.transfer_pending } : {}),
+      // `waiting` rows (an old per-payee rule's row with no other side yet) stay. `outside` (a transfer to an
+      // account outside the budget) is no longer a thing: such a row reads as an ordinary one needing a category.
+      ...(t.transfer_pending === 'waiting' ? { transferPending: 'waiting' as const } : {}),
       ...(t.transfer_link_method ? { transferLinkMethod: t.transfer_link_method } : {}),
       // Only real splits: the engine treats an empty `splits` array as a split
       // with no legs (the transaction would vanish from every figure).

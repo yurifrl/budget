@@ -1,8 +1,7 @@
 /**
  * View rules for transfers between own accounts (budget-mit6): register chips
  * and their counts, the suggestion behind a register row, the popover's two
- * sides and "why" line, the review list rows and the bulk bar totals, the
- * transfer rules list. Pure (wire types allowed); tested in transfers.logic.test.ts.
+ * sides and "why" line, the review list rows and the bulk bar totals. Pure (wire types allowed); tested in transfers.logic.test.ts.
  */
 import type { TransferLinkInput, TransferSuggestion } from '@/budget/data/api';
 import { milliToCents } from '@/budget/data/mapping';
@@ -15,7 +14,7 @@ export type CandidateLeg = TransferSuggestion['candidates'][number];
 export type MatchKind = 'sure' | 'confirm' | 'choose' | 'oneSide';
 export type TransferRule = NonNullable<CandidateLeg['rule']>;
 
-/** A linked transfer leg, or a rule row counted as a transfer (waiting / outside the budget). */
+/** A linked transfer leg, or an old payee-rule row waiting for its other side. */
 export const isTransferRow = (tx: Pick<Transaction, 'transferAccountId' | 'transferPending'>): boolean =>
   !!tx.transferAccountId || tx.transferPending != null;
 
@@ -226,9 +225,14 @@ export function allSelected(rows: readonly ReviewRow[], selected: ReadonlySet<st
   return ticks.length > 0 && ticks.every((r) => selected.has(r.id));
 }
 
-/** Toast after linking: "3 linked as transfers · 1 payee rule created". */
-export function linkedToast(result: { linked: string[]; rules_created: number }): string {
+/**
+ * Toast after linking: "3 linked as transfers", plus what happened to the
+ * renaming rule when one was asked for ("rule saved", or why it was not).
+ */
+export function linkedToast(result: { linked: string[] }, rule?: { saved: boolean; message?: string } | null): string {
   const pairs = Math.round(result.linked.length / 2);
   const linked = t('toast.linked', { count: pairs });
-  return result.rules_created > 0 ? `${linked} · ${t('toast.rules', { count: result.rules_created })}` : linked;
+  if (!rule) return linked;
+  if (rule.saved) return `${linked} · ${t('toast.ruleSaved')}`;
+  return rule.message ? `${linked} · ${rule.message}` : linked;
 }

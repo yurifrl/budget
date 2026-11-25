@@ -36,7 +36,6 @@ export default {
   'register.split': 'Split ({count})',
   'register.notNeeded': 'Category not needed',
   'register.transferWaiting': 'Transfer · waiting for the other side',
-  'register.transferOutside': 'Transfer · outside the budget',
   'register.needsCategory': 'needs category',
 
   'flag.red': 'Red',

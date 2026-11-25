@@ -20,7 +20,7 @@ import { ApplyPastConfirm } from './ApplyPastConfirm';
 import { t } from './i18n';
 import { NEW_KEY, RULE_MATCH_LABEL, RULE_MATCH_ORDER, ruleMatchFromLabel, transferPayeeLabel, type EditorRow } from './renameRules.logic';
 import { styles } from './styles';
-import { useRenameRules } from './useRenameRules';
+import { useRenameRules, type RenameRules } from './useRenameRules';
 
 function RuleRow({
   row,
@@ -28,7 +28,7 @@ function RuleRow({
   countText,
 }: {
   row: EditorRow;
-  rules: ReturnType<typeof useRenameRules>;
+  rules: RenameRules;
   countText: (count: number) => string;
 }) {
   const { edit, commit, pickMatchType, remove, openApply, closeApply, confirmApply, applyView } = rules;
