@@ -99,7 +99,7 @@ export async function setRowPayees(db: Queryable, budgetId: string, pairs: reado
   // A synced row's shadow keeps saying what the last sync wrote: its payee follows, so the next sync sees an unedited row.
   await db.query(
     `UPDATE connection_transactions cs
-        SET last_synced_payload = jsonb_set(cs.last_synced_payload, '{payee}', to_jsonb(COALESCE(p.name, ''))), updated_at = now()
+        SET last_synced_payload = jsonb_set(cs.last_synced_payload, '{payee}', to_jsonb(COALESCE(p.name, '')))
        FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id
       WHERE cs.transaction_id = ANY($2) AND cs.budget_id = $1 AND t.id = cs.transaction_id AND t.budget_id = $1`,
     [budgetId, ids],
