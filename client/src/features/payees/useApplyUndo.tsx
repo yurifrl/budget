@@ -5,11 +5,13 @@
  */
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { View, useWindowDimensions } from 'react-native';
 
 import { useRevertRenameRuleApplyMutation, type RenameRuleApplyResult } from '@/budget/data/api';
 import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { ActionToast } from '@/ui/primitives/ActionToast';
 import { t } from './i18n';
+import { styles } from './styles';
 import { appliedMessage, revertedMessage } from './renameRules.logic';
 
 interface ToastState {
@@ -25,6 +27,8 @@ const NOTE_MS = 5_000;
 export function useApplyUndo(budgetId: string): { show: (result: RenameRuleApplyResult) => void; node: ReactNode } {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [revert] = useRevertRenameRuleApplyMutation();
+  // Phone: lift the toast above the shell's floating "+ Transaction" button, which would cover Undo.
+  const narrow = useWindowDimensions().width < 700;
 
   useEffect(() => {
     if (!toast) return;
@@ -49,12 +53,14 @@ export function useApplyUndo(budgetId: string): { show: (result: RenameRuleApply
   };
 
   const node = toast ? (
-    <ActionToast
-      message={toast.message}
-      leading={toast.error ? null : '✓'}
-      actionLabel={toast.applyId ? t('apply.undo') : undefined}
-      onAction={toast.applyId ? () => void undo() : undefined}
-    />
+    <View pointerEvents="box-none" style={[styles.toastHost, narrow && styles.toastHostPhone]}>
+      <ActionToast
+        message={toast.message}
+        leading={toast.error ? null : '✓'}
+        actionLabel={toast.applyId ? t('apply.undo') : undefined}
+        onAction={toast.applyId ? () => void undo() : undefined}
+      />
+    </View>
   ) : null;
   return { show, node };
 }

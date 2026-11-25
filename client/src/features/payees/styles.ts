@@ -71,6 +71,9 @@ export const styles = StyleSheet.create({
   empty: { color: colors.muted, fontSize: 13, paddingVertical: 8 },
   // Phone: the shell's floating "+ Transaction" button must not cover the last row.
   phoneBottom: { paddingBottom: 96 },
+  // The undo toast's frame: fills the screen so the toast sits at its bottom; phone lifts it over the shell's floating button.
+  toastHost: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  toastHostPhone: { bottom: 66 },
   detailPane: { flex: 1 },
   detailContent: { paddingBottom: 10, gap: 2 },
   sectionLabel: {
