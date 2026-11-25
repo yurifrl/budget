@@ -18,6 +18,8 @@ export interface HeldLeave {
 }
 
 export interface LeaveState {
+  /** What each budget's Categorize page has in its strip right now. */
+  live: Record<string, SkipEntry[]>;
   /** Rows waiting for the person's answer. */
   held: HeldLeave | null;
   /** Rows to put back into the strip of the next page opened for their budget. */
@@ -25,7 +27,7 @@ export interface LeaveState {
 }
 
 export function createLeaveStore() {
-  let state: LeaveState = { held: null, restore: null };
+  let state: LeaveState = { live: {}, held: null, restore: null };
   const listeners = new Set<() => void>();
   const set = (next: LeaveState) => {
     state = next;
@@ -37,10 +39,24 @@ export function createLeaveStore() {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    /** The page went away with rows in its strip: ask what to do with them. */
-    hold(held: HeldLeave) {
-      if (held.entries.length === 0) return;
-      set({ ...state, held });
+    /** The page reports its strip (empty included: a fresh page clears what an earlier one left). */
+    publish(budgetId: string, entries: SkipEntry[]) {
+      set({ ...state, live: { ...state.live, [budgetId]: entries } });
+    },
+    /**
+     * The route or the active budget no longer matches the page the rows were
+     * taken on: ask what to do with them. Returns true when the prompt opens.
+     */
+    holdIfLeft(where: { onCategorize: boolean; activeBudgetId: string | null }): boolean {
+      if (state.held) return false;
+      for (const [budgetId, entries] of Object.entries(state.live)) {
+        if (entries.length === 0) continue;
+        if (where.onCategorize && budgetId === where.activeBudgetId) continue;
+        const { [budgetId]: _gone, ...rest } = state.live;
+        set({ ...state, live: rest, held: { budgetId, entries } });
+        return true;
+      }
+      return false;
     },
     /** Keep only what could not be sent (the prompt stays open for it). */
     narrow(entries: SkipEntry[]) {
@@ -55,7 +71,7 @@ export function createLeaveStore() {
     stay() {
       if (!state.held) return null;
       const held = state.held;
-      set({ held: null, restore: held });
+      set({ ...state, held: null, restore: held });
       return held;
     },
     /** A page for `budgetId` opened: take the rows it must show again, once. */
@@ -69,3 +85,8 @@ export function createLeaveStore() {
 }
 
 export const leaveStore = createLeaveStore();
+
+/** True while the route is the Categorize page (or something below it). */
+export function onCategorizeRoute(pathname: string): boolean {
+  return pathname === '/categorize' || pathname.startsWith('/categorize/');
+}

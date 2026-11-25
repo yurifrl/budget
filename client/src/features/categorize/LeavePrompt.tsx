@@ -7,8 +7,8 @@
  * nothing is sent then, and the strip says so.
  */
 
-import { useRouter } from 'expo-router';
-import { useState, useSyncExternalStore } from 'react';
+import { usePathname, useRouter } from 'expo-router';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { budgetApi } from '@/budget/data/api';
@@ -20,17 +20,23 @@ import { colors } from '@/ui/theme';
 
 import { t } from './i18n';
 import { sendEntries } from './leave.logic';
-import { leaveStore } from './leave.store';
+import { leaveStore, onCategorizeRoute } from './leave.store';
 
 export function CategorizeLeavePrompt() {
   const { held } = useSyncExternalStore(leaveStore.subscribe, leaveStore.getState, leaveStore.getState);
   const dispatch = useAppDispatch();
   const router = useRouter();
   const activeBudgetId = useAppSelector(selectActiveBudgetId);
+  const pathname = usePathname();
   const [sending, setSending] = useState(false);
   const [failedCount, setFailedCount] = useState(0);
 
   const count = held?.entries.length ?? 0;
+
+  // The route or the active budget moved away from the page the rows were taken on.
+  useEffect(() => {
+    leaveStore.holdIfLeft({ onCategorize: onCategorizeRoute(pathname), activeBudgetId });
+  }, [pathname, activeBudgetId]);
 
   const sendAndLeave = async () => {
     if (!held || sending) return;

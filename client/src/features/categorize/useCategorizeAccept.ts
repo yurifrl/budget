@@ -154,16 +154,20 @@ export function useCategorizeAccept({
     });
   }, [budgetId]);
 
-  // The page goes away (in-app navigation, a budget switch) with rows in the
-  // strip: hand them to the leave prompt. Nothing is sent from here.
+  // The page publishes what is in its strip, every time it changes. The shell
+  // watches the route and the active budget: when either leaves this page with rows
+  // still in the strip, it asks what to do with them (a page torn down by the
+  // navigator cannot be relied on to speak for itself). Nothing is sent from here.
+  const stack = state.stack;
+  useEffect(() => {
+    if (budgetId) leaveStore.publish(budgetId, pendingSkips({ stack }));
+  }, [budgetId, stack]);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      const entries = pendingSkips(stateRef.current);
-      if (budgetId && entries.length > 0) leaveStore.hold({ budgetId, entries });
     };
-  }, [budgetId]);
+  }, []);
 
   const markGone = (key: string, gone: boolean) =>
     setGoneBundleKeys((prev) => {
