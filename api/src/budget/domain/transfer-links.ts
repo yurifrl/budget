@@ -170,7 +170,7 @@ async function adoptHandMadeMirrors(client: PoolClient, budgetId: string): Promi
       const hints = await listImportHints(client, [bank.id]);
       const peerPayee = await ensureTransferPayee(client, budgetId, pair.peer_account_id);
       await store.writeTransferLeg(client, bank.id, pair.peer_account_id, pair.peer_id, peerPayee);
-      await store.repointPeerLeg(client, pair.peer_id, bank.account_id, bank.id);
+      await store.repointPeerLeg(client, budgetId, pair.peer_id, bank.account_id, bank.id);
       await store.insertTransferLink(client, budgetId, {
         transaction_id: bank.id,
         peer_transaction_id: pair.peer_id,

@@ -454,6 +454,11 @@ export async function listAdoptablePairs(db: Queryable, budgetId: string, maxDay
 }
 
 /** Point the peer of an adopted pair at the imported row (both pointers). */
-export async function repointPeerLeg(db: Queryable, peerId: string, ownAccountId: string, newPeerId: string): Promise<void> {
-  await db.query('UPDATE transactions SET transfer_transaction_id = $3, transfer_account_id = $2 WHERE id = $1', [peerId, ownAccountId, newPeerId]);
+export async function repointPeerLeg(db: Queryable, budgetId: string, peerId: string, ownAccountId: string, newPeerId: string): Promise<void> {
+  await db.query('UPDATE transactions SET transfer_transaction_id = $4, transfer_account_id = $3 WHERE id = $1 AND budget_id = $2', [
+    peerId,
+    budgetId,
+    ownAccountId,
+    newPeerId,
+  ]);
 }
