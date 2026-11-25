@@ -35,6 +35,7 @@ import { selectActiveBudgetId } from '@/state/ui';
 import { useBudgetRevisionWatcher } from '@/state/useBudgetRevisionWatcher';
 import { colors, radius } from '@/ui/theme';
 import { AddTransactionSheet } from '@/features/accounts';
+import { CategorizeLeavePrompt } from '@/features/categorize';
 import { budgetMenuPanes } from '@/features/settings';
 import { t } from './i18n';
 import { BudgetRail } from './rail/BudgetRail';
@@ -198,6 +199,9 @@ function BudgetShell({ budgetId }: { budgetId: string }) {
         <View style={{ flex: 1 }}>
           <BudgetTabs isPhone={isPhone} />
         </View>
+
+        {/* Asks what to do with rows left in the Categorize strip when its page goes away. */}
+        <CategorizeLeavePrompt />
 
         {/* Tablet/phone chrome: ☰ opens the rail drawer (Settings lives there). */}
         {!isDesktop ? (

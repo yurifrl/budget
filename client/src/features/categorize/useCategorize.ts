@@ -11,11 +11,13 @@
  */
 
 import { skipToken } from '@reduxjs/toolkit/query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { budgetApi, CATEGORIZE_COUNT_LIMIT, useGetCategorizeQueueQuery } from '@/budget/data/api';
 import { useAppSelector } from '@/state/hooks';
 import { selectActiveBudgetId } from '@/state/ui';
+
+import { leaveStore } from './leave.store';
 
 type ZeroSync = { budgetId: string; revision: number };
 
@@ -41,6 +43,13 @@ export function useCategorizeLeft(): number | undefined {
     );
   }, [budgetId, revision, query.data]);
 
+  // Rows waiting in the "Leaving uncategorized" strip are still counted by the
+  // server until Done; the header leaves them out, so the badge does too.
+  const leaving = useSyncExternalStore(
+    leaveStore.subscribe,
+    () => (budgetId ? leaveStore.getState().live[budgetId] : undefined)?.length ?? 0,
+  );
   if (zeroStillFresh) return 0;
-  return query.data?.counts.left_to_categorize;
+  const left = query.data?.counts.left_to_categorize;
+  return left === undefined ? undefined : Math.max(0, left - leaving);
 }

@@ -10,6 +10,8 @@ import {
   bundleChangedMessage,
   isBundleChanged,
   pageKey,
+  rowsGoneFromQueue,
+  skipFailureKind,
   rowSubject,
   runHeaderView,
   thresholdFromX,
@@ -322,5 +324,35 @@ describe('pageKey', () => {
     expect(pageKey('b1')).not.toBe(pageKey('b2'));
     expect(pageKey('b1')).toBe(pageKey('b1'));
     expect(pageKey(null)).toBe('no-budget');
+  });
+});
+
+describe('skipFailureKind', () => {
+  test('a row that no longer needs a category is refused; anything else is retried', () => {
+    expect(skipFailureKind({ status: 409, code: 'categorize_already_categorized' })).toBe('refused');
+    expect(skipFailureKind({ status: 409, code: 'categorize_not_needing_category' })).toBe('refused');
+    expect(skipFailureKind({ status: 500 })).toBe('retry');
+    expect(skipFailureKind({ status: 400 })).toBe('rejected');
+    expect(skipFailureKind({ status: 403 })).toBe('rejected');
+    expect(skipFailureKind({ status: 404 })).toBe('rejected');
+    expect(skipFailureKind({ status: 409, code: 'something_else' })).toBe('retry');
+    expect(skipFailureKind({ status: 'FETCH_ERROR' })).toBe('retry');
+    expect(skipFailureKind(null)).toBe('retry');
+  });
+});
+
+describe('rowsGoneFromQueue', () => {
+  const loaded = new Set(['a', 'b']);
+
+  test('with the whole queue loaded, a missing row is gone', () => {
+    expect(rowsGoneFromQueue(['a', 'x'], loaded, 2, 2)).toEqual(['x']);
+  });
+
+  test('with only a page of a longer queue loaded, nothing is known to be gone', () => {
+    expect(rowsGoneFromQueue(['a', 'x'], loaded, 250, 200)).toEqual([]);
+  });
+
+  test('rows still listed stay', () => {
+    expect(rowsGoneFromQueue(['a', 'b'], loaded, 2, 2)).toEqual([]);
   });
 });

@@ -8,7 +8,7 @@ import { StyleSheet, Text, View, Pressable } from 'react-native';
 
 import { tCommon } from '@shared/i18n/common';
 
-import type { CategorizeBundle, CategorizeQueueRow, CategorizeSuggestion } from '@/budget/data/api';
+import type { CategorizeQueueRow, CategorizeSuggestion } from '@/budget/data/api';
 import { milliToCents } from '@/budget/data/mapping';
 import { GhostButton, IndigoButton } from '@/ui/bits';
 import { useMoneyFormat } from '@/ui/moneyFormat';
@@ -17,7 +17,7 @@ import { colors, radius } from '@/ui/theme';
 import { ConfidenceChip, PayeeDot } from './CategorizeBits';
 import { t } from './i18n';
 import type { PickedCategory } from './page.logic';
-import { bundleDateRange } from './queue.logic';
+import { bundleDateRange, type ShownBundle } from './queue.logic';
 import { QueueRowView } from './QueueRowView';
 import { useBundleRows } from './useBundleRows';
 
@@ -27,16 +27,19 @@ export function BundleCard({
   expanded,
   onToggle,
   disabled,
+  hiddenIds,
   onAccept,
   onFileRow,
   onPickCategory,
 }: {
   budgetId: string | null;
-  bundle: CategorizeBundle;
+  bundle: ShownBundle;
   expanded: boolean;
   onToggle: () => void;
   disabled?: boolean;
-  onAccept: (bundle: CategorizeBundle, rows: readonly CategorizeQueueRow[]) => void;
+  /** Rows hidden from the page (filed, or waiting in the strip): not drawn inside the card either. */
+  hiddenIds: ReadonlySet<string>;
+  onAccept: (bundle: ShownBundle, rows: readonly CategorizeQueueRow[]) => void;
   onFileRow: (row: CategorizeQueueRow, suggestion: CategorizeSuggestion) => void;
   onPickCategory: (row: CategorizeQueueRow, category: PickedCategory) => void;
 }) {
@@ -88,7 +91,7 @@ export function BundleCard({
               <GhostButton label={tCommon('retry')} onPress={() => void rows.refetch()} />
             </View>
           ) : null}
-          {rows.rows.map((row) => (
+          {rows.rows.filter((row) => !hiddenIds.has(row.transaction_id)).map((row) => (
             <QueueRowView
               key={row.transaction_id}
               row={row}

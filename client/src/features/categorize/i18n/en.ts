@@ -148,11 +148,36 @@ export default {
   'one.searchFirst': 'Search a category…',
   'one.confirm': 'Confirm {category}',
   'one.filedTo': 'filed to {category}',
-  'one.filedLeft': 'left uncategorized',
-  'one.leavingIn': 'leaving uncategorized in {seconds}s',
-  'one.queueLeaving': '{count} leaving',
+  'one.filedLeft': 'in “Leaving uncategorized”',
+  'strip.sending': 'sending…',
   'strip.title': 'LEAVING UNCATEGORIZED',
-  'strip.line': '{subject} · in {seconds}s',
+  'strip.hint':
+    'Nothing is sent until you press Done. If you leave the page you will be asked first. Close or reload the tab and they are not sent: they come back next visit.',
+  'strip.done': {
+    one: 'Done · remove {count} from the list for everyone in the budget',
+    other: 'Done · remove {count} from the list for everyone in the budget',
+  },
+  'leave.title': 'Rows in “Leaving uncategorized”',
+  'leave.body': {
+    one: '{count} transaction of {budget} is waiting to leave the list for everyone in that budget. Send it now?',
+    other: '{count} transactions of {budget} are waiting to leave the list for everyone in that budget. Send them now?',
+  },
+  'leave.sending': 'Sending…',
+  'leave.send': 'Send and leave',
+  'leave.keep': 'Keep them and leave',
+  'leave.stay': 'Stay',
+  'leave.sendFailed': {
+    one: '{count} could not be sent. Try again, or keep it and leave: it comes back next visit.',
+    other: '{count} could not be sent. Try again, or keep them and leave: they come back next visit.',
+  },
+  'leave.sentSoFar': {
+    one: '{count} sent.',
+    other: '{count} sent.',
+  },
+  'leave.droppedNote': {
+    one: '{count} more could not be sent for good and left the list.',
+    other: '{count} more could not be sent for good and left the list.',
+  },
   'one.skip': 'Leave uncategorized',
   'one.skipHint': 'Takes it off this list for everyone in the budget. You can still categorize it in the register.',
   'one.undoLast': 'Undo last',
@@ -163,6 +188,9 @@ export default {
   // Actions and outcomes
   undo: 'Undo',
   'error.accept': 'Could not file these transactions.',
+  'error.skipRefused': '{subject} was already categorized elsewhere, so it left the list on its own.',
+  'error.skipRejected': '{subject} cannot be sent (not allowed, or it no longer exists), so it left the strip.',
+  'toast.sending': 'These rows are being sent: they can no longer be undone.',
   'error.skip': 'Could not skip this transaction.',
   'error.bundleChanged':
     'That bundle changed from {expected} to {actual} transactions. The list is updated: check it and accept again.',
@@ -170,7 +198,7 @@ export default {
   'error.threshold': 'Could not save the confidence threshold.',
   'toast.filed': '{subject} → {category}',
   'toast.skipped':
-    'Leaving {subject} uncategorized. It will not come back to this list, for anyone in the budget.',
+    '{subject} moved to “Leaving uncategorized”. Nothing is sent until you press Done.',
   // Undo outcomes
   'undo.done': { one: 'Undid {count} transaction.', other: 'Undid {count} transactions.' },
   'undo.restored': {

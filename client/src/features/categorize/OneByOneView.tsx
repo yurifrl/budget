@@ -56,11 +56,8 @@ export function OneByOneView({
       <QueuePane
         rows={flow.rows}
         filed={flow.filed}
-        pendingSkips={flow.pendingSkips}
-        onCancelSkip={flow.cancelSkip}
         focusedId={row.transaction_id}
         total={total}
-        leaving={flow.pendingSkips.length}
         hiddenBelow={Math.max(0, total - loadedRows)}
         onFocus={flow.focusRow}
       />

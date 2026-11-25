@@ -238,3 +238,35 @@ export function thresholdReloading({
 export function pageKey(budgetId: string | null): string {
   return budgetId ?? 'no-budget';
 }
+
+/**
+ * Why a skip send failed. `refused`: the server says the row no longer needs a
+ * category (categorized elsewhere, already decided): it leaves the strip with a
+ * note. `rejected`: 400, 403 or 404, the request can never succeed (not allowed,
+ * gone): it leaves the strip with a note instead of being retried forever.
+ * `retry`: anything else (network, 5xx): the row stays in the strip.
+ */
+export function skipFailureKind(error: unknown): 'refused' | 'rejected' | 'retry' {
+  const read = (key: string): unknown =>
+    typeof error === 'object' && error !== null && key in error ? (error as Record<string, unknown>)[key] : null;
+  const code = read('code');
+  if (code === 'categorize_already_categorized' || code === 'categorize_not_needing_category') return 'refused';
+  const status = read('status');
+  return status === 400 || status === 403 || status === 404 ? 'rejected' : 'retry';
+}
+
+/**
+ * Strip rows whose transaction has left the queue. The queue read holds one
+ * page of rows, so a row missing from it is only known to be gone when the page
+ * is the WHOLE queue; beyond that it may simply be past the page, and the row
+ * stays until Done (whose 409 settles it).
+ */
+export function rowsGoneFromQueue(
+  stripIds: readonly string[],
+  loadedIds: ReadonlySet<string>,
+  queueSize: number,
+  loadedCount: number,
+): string[] {
+  if (loadedCount < queueSize) return [];
+  return stripIds.filter((id) => !loadedIds.has(id));
+}
