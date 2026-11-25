@@ -104,7 +104,11 @@ async function accountNameIsUnique(db: Queryable, account: AccountPayeeRow): Pro
  * any pointer: callers decide whether that is allowed). Used by
  * `ensureTransferPayee` (pointer empty) and by the repair.
  */
-export async function createTransferPayee(db: Queryable, account: AccountPayeeRow): Promise<string> {
+export async function createTransferPayee(
+  db: Queryable,
+  account: AccountPayeeRow,
+  opts: { setPointer?: boolean } = {},
+): Promise<string> {
   const unique = await accountNameIsUnique(db, account);
   for (let attempt = 0; attempt < 5; attempt++) {
     const choice = await chooseNewName(db, account, unique);
@@ -113,7 +117,7 @@ export async function createTransferPayee(db: Queryable, account: AccountPayeeRo
     else if (choice.kind === 'adopt') payeeId = (await store.adoptPayee(db, choice.holder.id, account.id)) ? choice.holder.id : null;
     else payeeId = await store.insertTransferPayee(db, account.budget_id, choice.name, account.id);
     if (payeeId) {
-      await store.setAccountTransferPayee(db, account.id, payeeId);
+      if (opts.setPointer !== false) await store.setAccountTransferPayee(db, account.id, payeeId);
       return payeeId;
     }
   }
@@ -122,7 +126,9 @@ export async function createTransferPayee(db: Queryable, account: AccountPayeeRo
 
 /**
  * The account's transfer payee id. Uses what exists without writing: the
- * account's pointer, else the canonical payee that points at the account.
+ * account's pointer (as it is, also an unlinked name-only payee), else the
+ * canonical payee that points at the account. A pointer at ANOTHER account's
+ * payee is ignored for the request (never handed out, never re-pointed).
  * Only when there is neither does it CREATE one (and set the account's
  * pointer). It never un-hides, un-deletes, re-points or merges: inconsistent
  * data is the repair's job (a hidden, retired or duplicated payee is used as
@@ -139,11 +145,35 @@ export async function ensureTransferPayee(
   if (!account || account.budget_id !== budgetId || account.deleted) {
     throw new HttpError(400, 'account not found in budget', 'account_not_in_budget');
   }
-  if (account.transfer_payee_id) return account.transfer_payee_id;
+  if (account.transfer_payee_id) {
+    const pointed = await store.getPayeeRow(db, budgetId, account.transfer_payee_id);
+    if (!pointed || pointed.transfer_account_id === accountId || pointed.transfer_account_id === null) return account.transfer_payee_id;
+    // The pointer names ANOTHER account's payee (bad data): this request ignores
+    // it and writes nothing to repair it (that is the repair's job). It uses the
+    // payee that points at this account, else creates one the way a missing payee
+    // is created, WITHOUT touching the pointer.
+    const linked = await store.listPayeesLinkedTo(db, budgetId, accountId);
+    const canonical = pickCanonical(null, linked);
+    return canonical ? canonical.id : createTransferPayee(db, account, { setPointer: false });
+  }
   const linked = await store.listPayeesLinkedTo(db, budgetId, accountId);
   const canonical = pickCanonical(null, linked);
   if (canonical) return canonical.id;
   return createTransferPayee(db, account);
+}
+
+/**
+ * The payees that belong to an account and go with it when it is deleted: every
+ * payee pointing at it, plus the account's own pointer unless that payee points
+ * at ANOTHER account (never touch another account's payee).
+ */
+export async function transferPayeeIdsOf(db: Queryable, budgetId: string, accountId: string, pointerId: string | null): Promise<string[]> {
+  const ids = (await store.listPayeesLinkedTo(db, budgetId, accountId)).map((p) => p.id);
+  if (pointerId && !ids.includes(pointerId)) {
+    const pointed = await store.getPayeeRow(db, budgetId, pointerId);
+    if (pointed && pointed.transfer_account_id === null) ids.push(pointerId);
+  }
+  return ids;
 }
 
 export interface AbsorbResult {
@@ -169,6 +199,11 @@ export async function absorbPayee(db: Queryable, budgetId: string, fromId: strin
   const result: AbsorbResult = { transactions: 0, ruleMoved: false, keptReferencedFromOtherBudget: false, dropped: [] };
   if (!from || !into || from.id === into.id) return result;
   result.transactions = await store.repointPayeeReferences(db, budgetId, from.id, into.id);
+  // The released client re-sends the payee text it cached on every edit: the
+  // folded payee's name and every name IT had stay "this row's own payee" on the
+  // kept one, so a stale edit after the repair cannot move a mirror.
+  await store.recordFormerName(db, budgetId, into.id, from.name);
+  await store.copyFormerNames(db, budgetId, from.id, into.id);
   if (from.rename_condition !== null && from.rename_match_type !== null) {
     await store.clearRenameRule(db, from.id);
     if (into.rename_condition === null) {
@@ -188,6 +223,9 @@ export async function absorbPayee(db: Queryable, budgetId: string, fromId: strin
     else if (into.transfer_rule !== from.transfer_rule) {
       result.dropped.push({ kind: 'transfer_rule', payee_id: from.id, payee_name: from.name, detail: from.transfer_rule });
     }
+    // Moved or reported, never left behind: a payee that survives unlinked (kept
+    // for another budget) must not go on treating rows as transfers.
+    await store.clearTransferRule(db, from.id);
   }
   // A payee another budget still references is never deleted (the foreign keys
   // would null those rows); it stays, unlinked, and the report lists it.

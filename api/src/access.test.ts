@@ -204,7 +204,7 @@ async function budgetSnapshot(budgetId: string, withConnection = false): Promise
   const tables = [
     'budgets', 'accounts', 'category_groups', 'categories', 'category_bundles', 'payees', 'transactions',
     'subtransactions', 'txn_repeat_rules', 'category_targets', 'category_notes', 'month_notes', 'assignments', 'budget_members',
-    'transfer_marks', 'transfer_links',
+    'transfer_marks', 'transfer_links', 'transfer_hints',
   ];
   const out: Record<string, unknown> = {};
   for (const t of tables) {
@@ -244,6 +244,8 @@ const POINTERS: Array<[table: string, column: string, target: string]> = [
   ['transfer_marks', 'transaction_id', 'transactions'],
   ['transfer_links', 'transaction_id', 'transactions'],
   ['transfer_links', 'peer_transaction_id', 'transactions'],
+  ['transfer_hints', 'transaction_id', 'transactions'],
+  ['transfer_hints', 'account_id', 'accounts'],
   ['txn_repeat_rules', 'account_id', 'accounts'],
   ['txn_repeat_rules', 'category_id', 'categories'],
   ['txn_repeat_rules', 'payee_id', 'payees'],
