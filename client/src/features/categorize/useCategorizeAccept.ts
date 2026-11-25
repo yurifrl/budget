@@ -6,11 +6,12 @@
  * refetches the queue; a bundle whose count moved (409) also drops the
  * optimistic card so the fresh count shows.
  *
- * Undo and Z reverse the LAST thing the person did (by press order, not by
- * response order); pressing Undo while its request is still in flight waits for
- * the answer. A skip is permanent and budget-wide, so it is only sent when its
- * toast runs out or another action begins; Undo inside that window cancels it,
- * and leaving the page cancels it too (the row simply comes back).
+ * Undo and Z pop a STACK of the visit's actions in key-press order. An accept
+ * is undone through the API (waiting for its answer if it is still in flight);
+ * a skip is permanent and budget-wide, so it only goes out when ITS OWN 10 s
+ * timer ends, no other action sends it, and Undo before then cancels it and its
+ * row returns. A sent skip leaves the stack. Leaving the page cancels every
+ * pending skip (nothing was sent, the rows simply come back).
  */
 
 import { useEffect, useReducer, useRef, useState } from 'react';
@@ -35,14 +36,16 @@ import {
   filedLabel,
   initialAcceptState,
   skippedLabel,
+  topEntry,
+  type AcceptAction,
   type AcceptState,
   type FiledItem,
 } from './accept.logic';
 import { t } from './i18n';
 import { bundleChangedMessage, bundleToastLabel, isBundleChanged, rowSubject, type PickedCategory } from './page.logic';
-import { beginTarget, confirmTarget, failTarget, undoInChunks, undoOutcome, type UndoTarget } from './undo.logic';
+import { undoInChunks, undoOutcome } from './undo.logic';
 
-/** The mock's undo window; a pending skip is sent when it runs out. */
+/** The mock's undo window; a pending skip is sent when ITS timer runs out. */
 const UNDO_TOAST_MS = 10_000;
 /** The queue contract's page cap; bundle rows page through it. */
 const QUEUE_PAGE = 200;
@@ -57,20 +60,15 @@ export interface CategorizeAccept {
   bundleChangeTick: number;
   fileRow: (row: CategorizeQueueRow, suggestion: CategorizeSuggestion) => Promise<boolean>;
   pickCategory: (row: CategorizeQueueRow, category: PickedCategory) => Promise<boolean>;
-  /** Leave the row uncategorized: pending for the toast window, then permanent for the whole budget. */
+  /** Leave the row uncategorized: pending for 10 s, then permanent for the whole budget. */
   skipRow: (row: CategorizeQueueRow) => boolean;
+  /** Cancel one pending skip (its row returns); false when it is not pending any more. */
+  cancelSkip: (transactionId: string) => boolean;
   acceptBundle: (bundle: CategorizeBundle, knownRows: readonly CategorizeQueueRow[]) => Promise<boolean>;
   acceptAll: (bundles: readonly CategorizeBundle[]) => Promise<boolean>;
-  /** Reverse the last action; resolves to the transactions that came back to the queue. */
+  /** Undo the most recent action; resolves to the transactions that came back to the queue. */
   undoLast: () => Promise<string[]>;
   dismissError: () => void;
-}
-
-interface PendingSkip {
-  row: CategorizeQueueRow;
-  item: FiledItem;
-  seq: number;
-  timer: ReturnType<typeof setTimeout>;
 }
 
 export function useCategorizeAccept({
@@ -93,44 +91,45 @@ export function useCategorizeAccept({
   const [skip] = useSkipCategorizeMutation();
   const storeDispatch = useAppDispatch();
   const [state, reduce] = useReducer(acceptReducer, initialAcceptState);
+  /** The latest state, updated in step with every dispatch so async code reads it fresh. */
+  const stateRef = useRef(state);
+  const send = (action: AcceptAction) => {
+    stateRef.current = acceptReducer(stateRef.current, action);
+    reduce(action);
+  };
   const [goneBundleKeys, setGoneBundleKeys] = useState<ReadonlySet<string>>(new Set());
   const [bundleChangeTick, setBundleChangeTick] = useState(0);
   const inFlight = useRef(false);
   const seqRef = useRef(0);
-  /** The target Undo reverses, kept in step with `state.undoable` (a ref so async code reads it fresh). */
-  const targetRef = useRef<UndoTarget | null>(null);
-  /** Settles when the newest accept request has answered: Undo waits for it. */
-  const settledRef = useRef<Promise<unknown>>(Promise.resolve());
-  const pendingSkip = useRef<PendingSkip | null>(null);
-  const undoRunning = useRef(false);
+  /** Each accept's request, so Undo can wait for the answer of the action it is about to reverse. */
+  const requests = useRef(new Map<number, Promise<boolean>>());
+  /** The transactions the server accepted for a request. */
+  const resultIds = useRef(new Map<number, string[]>());
+  /** One timer per pending skip, keyed by its stack entry. */
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 
   const rowIdsRef = useRef(queueRowIds);
   rowIdsRef.current = queueRowIds;
   useEffect(() => {
     setGoneBundleKeys(new Set());
-    reduce({ type: 'prune', presentIds: rowIdsRef.current });
+    send({ type: 'prune', presentIds: rowIdsRef.current });
   }, [queueUpdatedAt]);
 
   useEffect(() => {
     if (!state.toast) return;
-    const id = setTimeout(() => reduce({ type: 'dismissToast' }), UNDO_TOAST_MS);
+    const id = setTimeout(() => send({ type: 'dismissToast' }), UNDO_TOAST_MS);
     return () => clearTimeout(id);
   }, [state.toast]);
 
-  // Leaving the page cancels a pending skip: the row was never sent, so it is
-  // simply back in the queue next time. Nothing permanent happens by leaving.
-  useEffect(
-    () => () => {
-      if (pendingSkip.current) clearTimeout(pendingSkip.current.timer);
-      pendingSkip.current = null;
-    },
-    [],
-  );
-
-  const setTarget = (target: UndoTarget | null) => {
-    targetRef.current = target;
-    reduce({ type: 'setUndoable', target });
-  };
+  // Leaving the page cancels every pending skip: none was sent, so the rows
+  // are simply back in the queue next time. Nothing permanent happens by leaving.
+  useEffect(() => {
+    const live = timers.current;
+    return () => {
+      for (const timer of live.values()) clearTimeout(timer);
+      live.clear();
+    };
+  }, []);
 
   const markGone = (key: string, gone: boolean) =>
     setGoneBundleKeys((prev) => {
@@ -147,46 +146,9 @@ export function useCategorizeAccept({
     subject: rowSubject(row, formatMoney),
   });
 
-  /** The pending skip goes out now (its window ended, or the person moved on). */
-  const commitPendingSkip = (): void => {
-    const pending = pendingSkip.current;
-    if (!pending || !budgetId) return;
-    pendingSkip.current = null;
-    clearTimeout(pending.timer);
-    if (targetRef.current?.seq === pending.seq) setTarget(null);
-    reduce({ type: 'skipSending', item: pending.item });
-    skip({ budgetId, transactionId: pending.row.transaction_id })
-      .unwrap()
-      .then(
-        () => reduce({ type: 'skipDone', requestId: pending.item.transactionId }),
-        (err: unknown) => {
-          reduce({
-            type: 'failed',
-            error: apiErrorMessage(err, t('error.skip')),
-            requestIds: [pending.item.transactionId],
-          });
-          queueRefetch();
-        },
-      );
-  };
-
-  const beginAction = (label: string, ids: string[]): number => {
+  const nextSeq = () => {
     seqRef.current += 1;
-    setTarget(beginTarget(seqRef.current, 'accept', label, ids));
     return seqRef.current;
-  };
-
-  /** The answer for action `seq`: is it still the latest press? Fills in the target if so. */
-  const answered = (seq: number, transactionIds: string[]): boolean => {
-    const latest = targetRef.current?.seq === seq;
-    const next = confirmTarget(targetRef.current, seq, transactionIds);
-    if (next !== targetRef.current) setTarget(next);
-    return latest;
-  };
-
-  const failed = (seq: number) => {
-    const next = failTarget(targetRef.current, seq);
-    if (next !== targetRef.current) setTarget(next);
   };
 
   /**
@@ -201,27 +163,30 @@ export function useCategorizeAccept({
   ): Promise<boolean> => {
     if (!budgetId || items.length === 0) return Promise.resolve(false);
     if (exclusive && inFlight.current) return Promise.resolve(false);
-    commitPendingSkip();
     if (exclusive) inFlight.current = true;
     const requestIds = filed.map((item) => item.transactionId);
-    const seq = beginAction(label, requestIds);
-    reduce({ type: 'start', items: filed });
+    const seq = nextSeq();
+    send({
+      type: 'acceptStarted',
+      items: filed,
+      entry: { seq, kind: 'accept', label, transactionIds: requestIds, confirmed: false },
+    });
     const request = (async () => {
       try {
         const result = await accept({ budgetId, items }).unwrap();
         const ids = result.items.map((item) => item.transaction_id);
-        reduce({ type: 'succeeded', transactionIds: ids, requestIds, label, showToast: answered(seq, ids) });
+        resultIds.current.set(seq, ids);
+        send({ type: 'acceptSucceeded', seq, transactionIds: ids, requestIds, label });
         return true;
       } catch (err) {
-        failed(seq);
-        reduce({ type: 'failed', error: apiErrorMessage(err, t('error.accept')), requestIds });
+        send({ type: 'acceptFailed', seq, requestIds, error: apiErrorMessage(err, t('error.accept')) });
         queueRefetch();
         return false;
       } finally {
         if (exclusive) inFlight.current = false;
       }
     })();
-    settledRef.current = request;
+    requests.current.set(seq, request);
     return request;
   };
 
@@ -243,22 +208,46 @@ export function useCategorizeAccept({
     );
   };
 
+  /** This skip's own timer ended: it goes out now and leaves the undo stack. */
+  const sendSkip = (seq: number) => {
+    timers.current.delete(seq);
+    const entry = stateRef.current.stack.find((e) => e.seq === seq);
+    if (!budgetId || !entry || entry.kind !== 'skip') return;
+    const { item } = entry;
+    send({ type: 'skipSending', seq });
+    skip({ budgetId, transactionId: item.transactionId })
+      .unwrap()
+      .then(
+        () => send({ type: 'skipDone', requestId: item.transactionId }),
+        (err: unknown) => {
+          send({ type: 'skipFailed', requestId: item.transactionId, error: apiErrorMessage(err, t('error.skip')) });
+          queueRefetch();
+        },
+      );
+  };
+
   const skipRow = (row: CategorizeQueueRow): boolean => {
     if (!budgetId) return false;
-    commitPendingSkip();
     const item = filedItem(row, '', '');
-    const label = skippedLabel(item);
-    seqRef.current += 1;
-    const seq = seqRef.current;
-    setTarget(beginTarget(seq, 'skip', label, [row.transaction_id]));
-    reduce({ type: 'skipStarted', item, label });
-    pendingSkip.current = { row, item, seq, timer: setTimeout(commitPendingSkip, UNDO_TOAST_MS) };
+    const seq = nextSeq();
+    const sendAt = Date.now() + UNDO_TOAST_MS;
+    send({ type: 'skipStarted', entry: { seq, kind: 'skip', label: skippedLabel(item), item, sendAt } });
+    timers.current.set(seq, setTimeout(() => sendSkip(seq), UNDO_TOAST_MS));
+    return true;
+  };
+
+  const cancelSkip = (transactionId: string): boolean => {
+    const entry = stateRef.current.stack.find((e) => e.kind === 'skip' && e.item.transactionId === transactionId);
+    if (!entry) return false;
+    const timer = timers.current.get(entry.seq);
+    if (timer) clearTimeout(timer);
+    timers.current.delete(entry.seq);
+    send({ type: 'skipCancelled', transactionId });
     return true;
   };
 
   const acceptBundle = (bundle: CategorizeBundle, knownRows: readonly CategorizeQueueRow[]): Promise<boolean> => {
     if (!budgetId || inFlight.current) return Promise.resolve(false);
-    commitPendingSkip();
     inFlight.current = true;
     markGone(bundle.bundle_key, true);
     const filed = knownRows.map((row) =>
@@ -266,8 +255,12 @@ export function useCategorizeAccept({
     );
     const requestIds = filed.map((item) => item.transactionId);
     const label = bundleToastLabel(bundle);
-    const seq = beginAction(label, []);
-    reduce({ type: 'start', items: filed });
+    const seq = nextSeq();
+    send({
+      type: 'acceptStarted',
+      items: filed,
+      entry: { seq, kind: 'accept', label, transactionIds: [], confirmed: false },
+    });
     const request = (async () => {
       try {
         const result = await accept({
@@ -276,15 +269,16 @@ export function useCategorizeAccept({
           expectedCount: bundle.count,
         }).unwrap();
         const ids = result.items.map((item) => item.transaction_id);
-        reduce({ type: 'succeeded', transactionIds: ids, requestIds, label, showToast: answered(seq, ids) });
+        resultIds.current.set(seq, ids);
+        send({ type: 'acceptSucceeded', seq, transactionIds: ids, requestIds, label });
         return true;
       } catch (err) {
         const changed = isBundleChanged(err);
-        failed(seq);
-        reduce({
-          type: 'failed',
-          error: changed ? bundleChangedMessage(err) : apiErrorMessage(err, t('error.accept')),
+        send({
+          type: 'acceptFailed',
+          seq,
           requestIds,
+          error: changed ? bundleChangedMessage(err) : apiErrorMessage(err, t('error.accept')),
         });
         markGone(bundle.bundle_key, false);
         if (changed) setBundleChangeTick((tick) => tick + 1);
@@ -294,7 +288,7 @@ export function useCategorizeAccept({
         inFlight.current = false;
       }
     })();
-    settledRef.current = request;
+    requests.current.set(seq, request);
     return request;
   };
 
@@ -319,20 +313,29 @@ export function useCategorizeAccept({
 
   const acceptAll = (bundles: readonly CategorizeBundle[]): Promise<boolean> => {
     if (!budgetId || inFlight.current || bundles.length === 0) return Promise.resolve(false);
-    commitPendingSkip();
     inFlight.current = true;
     setGoneBundleKeys(new Set(bundles.map((bundle) => bundle.bundle_key)));
-    const seq = beginAction('', []);
-    reduce({ type: 'start', items: [] });
+    const seq = nextSeq();
+    send({
+      type: 'acceptStarted',
+      items: [],
+      entry: { seq, kind: 'accept', label: '', transactionIds: [], confirmed: false },
+    });
     const accepted: CategorizeDecisionItem[] = [];
     const finish = (error?: string) => {
       const ids = accepted.map((item) => item.transaction_id);
       if (ids.length > 0) {
-        const label = filedCountLabel(ids.length);
-        reduce({ type: 'succeeded', transactionIds: ids, requestIds: [], label, showToast: answered(seq, ids), error });
+        resultIds.current.set(seq, ids);
+        send({
+          type: 'acceptSucceeded',
+          seq,
+          transactionIds: ids,
+          requestIds: [],
+          label: filedCountLabel(ids.length),
+          error,
+        });
       } else {
-        failed(seq);
-        reduce({ type: 'failed', error: error ?? t('error.accept'), requestIds: [] });
+        send({ type: 'acceptFailed', seq, requestIds: [], error: error ?? t('error.accept') });
       }
     };
     const request = (async () => {
@@ -360,50 +363,41 @@ export function useCategorizeAccept({
         inFlight.current = false;
       }
     })();
-    settledRef.current = request;
+    requests.current.set(seq, request);
     return request;
   };
 
   const undoLast = async (): Promise<string[]> => {
     if (!budgetId) return [];
-    // Pressed while the last request is in flight: wait for its answer, never drop the press.
-    await settledRef.current;
-    const target = targetRef.current;
-    if (!target) return [];
+    // Claim the top entry NOW, in press order: a press made while this waits
+    // takes the next one down, never the one the person saw undone.
+    const entry = topEntry(stateRef.current);
+    if (!entry) return [];
 
-    if (target.kind === 'skip') {
-      const pending = pendingSkip.current;
-      if (!pending || pending.seq !== target.seq) return [];
-      clearTimeout(pending.timer);
-      pendingSkip.current = null;
-      setTarget(null);
-      reduce({ type: 'skipCancelled', transactionId: pending.item.transactionId });
-      return [pending.item.transactionId];
+    if (entry.kind === 'skip') {
+      return cancelSkip(entry.item.transactionId) ? [entry.item.transactionId] : [];
     }
 
-    if (target.transactionIds.length === 0 || undoRunning.current) return [];
-    undoRunning.current = true;
-    reduce({ type: 'undoStarted' });
-    try {
-      const summary = await undoInChunks(target.transactionIds, (chunk) =>
-        undo({ budgetId, transactionIds: chunk }).unwrap(),
-      );
-      const outcome = undoOutcome(summary);
-      // What was not reached stays undoable; what the server left alone cannot be undone.
-      const rest = summary.remaining.length > 0 ? { ...target, transactionIds: summary.remaining } : null;
-      setTarget(rest);
-      reduce({
-        type: 'undoFinished',
-        restoredIds: summary.restored,
-        undoable: rest,
-        message: outcome.text,
-        tone: outcome.tone,
-      });
-      if (summary.failed) queueRefetch();
-      return summary.restored;
-    } finally {
-      undoRunning.current = false;
-    }
+    send({ type: 'undoClaimed', seq: entry.seq });
+    // Pressed while its request is in flight: wait for the answer, never drop the press.
+    const answered = await (requests.current.get(entry.seq) ?? Promise.resolve(true));
+    const ids = resultIds.current.get(entry.seq) ?? (answered ? entry.transactionIds : []);
+    requests.current.delete(entry.seq);
+    resultIds.current.delete(entry.seq);
+    if (!answered || ids.length === 0) return [];
+
+    send({ type: 'undoStarted' });
+    const summary = await undoInChunks(ids, (chunk) => undo({ budgetId, transactionIds: chunk }).unwrap());
+    const outcome = undoOutcome(summary);
+    // What was not reached stays undoable, on top; what the server left alone cannot be undone.
+    const remaining =
+      summary.remaining.length > 0
+        ? { seq: entry.seq, kind: 'accept' as const, label: entry.label, transactionIds: summary.remaining, confirmed: true }
+        : null;
+    const back = [...summary.restored, ...summary.alreadyRestored];
+    send({ type: 'undoFinished', restoredIds: back, remaining, message: outcome.text, tone: outcome.tone });
+    if (summary.failed) queueRefetch();
+    return back;
   };
 
   return {
@@ -414,9 +408,10 @@ export function useCategorizeAccept({
     fileRow,
     pickCategory,
     skipRow,
+    cancelSkip,
     acceptBundle,
     acceptAll,
     undoLast,
-    dismissError: () => reduce({ type: 'clearError' }),
+    dismissError: () => send({ type: 'clearError' }),
   };
 }

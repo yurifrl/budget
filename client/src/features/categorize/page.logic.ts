@@ -62,6 +62,11 @@ export function runHeaderView(
   counts: Pick<CategorizeCounts, 'left_to_categorize' | 'not_classified'>,
   format: Pick<MoneyFormat, 'formatDate'>,
 ): RunHeaderView {
+  // No AI means no run can make progress: say so before anything about a run
+  // in progress, so the header never calls a dead run healthy.
+  if (!status.ai.available) {
+    return { kind: 'unavailable', title: t('run.unavailable'), detail: aiReasonMessage(status.ai.reason), fraction: 0 };
+  }
   const active = status.active;
   if (active) {
     return {
@@ -70,9 +75,6 @@ export function runHeaderView(
       detail: t('run.activeHint'),
       fraction: active.total > 0 ? Math.max(0, Math.min(1, active.done / active.total)) : 0,
     };
-  }
-  if (!status.ai.available) {
-    return { kind: 'unavailable', title: t('run.unavailable'), detail: aiReasonMessage(status.ai.reason), fraction: 0 };
   }
   const last = lastRunLine(status.last_finished, format);
   if (counts.left_to_categorize === 0) {
@@ -86,7 +88,15 @@ export function runHeaderView(
       fraction: 0,
     };
   }
-  if (last) return { kind: 'finished', title: last, detail: t('run.nextRun'), fraction: 0 };
+  if (status.last_finished) {
+    // Title and detail on their own lines: the one-line "Last run … · N suggestions" wrapped in the header.
+    return {
+      kind: 'finished',
+      title: t('run.lastDate', { date: format.formatDate(runDate(status.last_finished.finished_at ?? status.last_finished.created_at)) }),
+      detail: `${t('run.lastSuggestions', { count: status.last_finished.suggested ?? 0 })} ${t('run.nextRun')}`,
+      fraction: 0,
+    };
+  }
   return { kind: 'never', title: t('run.never'), detail: t('run.neverHint'), fraction: 0 };
 }
 

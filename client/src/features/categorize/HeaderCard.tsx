@@ -24,6 +24,7 @@ export function HeaderCard({
   aiAvailable,
   runStarting,
   onRun,
+  onModalChange,
   left,
 }: {
   threshold: number;
@@ -34,10 +35,16 @@ export function HeaderCard({
   aiAvailable: boolean;
   runStarting: boolean;
   onRun: () => void;
+  /** Tells the page a modal opened or closed, so its key shortcuts stand down behind it. */
+  onModalChange?: (open: boolean) => void;
   left: number | undefined;
 }) {
   const { width } = useWindowDimensions();
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirmingState] = useState(false);
+  const setConfirming = (open: boolean) => {
+    setConfirmingState(open);
+    onModalChange?.(open);
+  };
   const wide = width > 980;
   const running = run?.kind === 'active';
   const disabled = thresholdDisabled || !aiAvailable || runStarting || running;
@@ -84,7 +91,8 @@ export function HeaderCard({
         <Text style={styles.countLabel}>{t('header.left')}</Text>
       </View>
 
-      <OverlaySheet visible={confirming} onClose={() => setConfirming(false)} title={t('run.confirmTitle')}>
+      <OverlaySheet visible={confirming} onClose={() => setConfirming(false)}>
+        <Text style={styles.confirmTitle}>{t('run.confirmTitle')}</Text>
         <Text style={styles.confirmBody}>{t('run.confirmBody')}</Text>
         <View style={styles.confirmActions}>
           <GhostButton label={tCommon('cancel')} onPress={() => setConfirming(false)} />
@@ -181,6 +189,7 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -7 }],
   },
   percent: { color: colors.text, fontSize: 15, fontWeight: '700', minWidth: 44, textAlign: 'right' },
+  confirmTitle: { color: colors.text, fontSize: 17, fontWeight: '800', paddingHorizontal: 10, paddingTop: 10 },
   confirmBody: { color: colors.muted, fontSize: 13, lineHeight: 19, paddingHorizontal: 10, paddingVertical: 6 },
   confirmActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, padding: 10 },
   hint: { color: colors.faint, fontSize: 11, lineHeight: 16 },

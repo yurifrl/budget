@@ -1,16 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-  beginTarget,
-  chunkIds,
-  confirmTarget,
-  failTarget,
-  undoInChunks,
-  undoOutcome,
-  UNDO_CHUNK,
-} from './undo.logic';
+import { chunkIds, undoInChunks, undoOutcome, UNDO_CHUNK, type UndoSummary } from './undo.logic';
 
 const ids = (n: number, from = 0) => Array.from({ length: n }, (_, i) => `t${from + i}`);
+const summary = (over: Partial<UndoSummary>): UndoSummary => ({
+  requested: 0,
+  restored: [],
+  alreadyRestored: [],
+  skipped: 0,
+  remaining: [],
+  failed: false,
+  ...over,
+});
 
 describe('chunkIds', () => {
   test('splits at the contract cap', () => {
@@ -31,27 +32,36 @@ describe('undoInChunks', () => {
 
   test('1500 ids go out as 1000 + 500 and are all restored', async () => {
     const sizes: number[] = [];
-    const summary = await undoInChunks(ids(1500), async (chunk) => {
+    const result = await undoInChunks(ids(1500), async (chunk) => {
       sizes.push(chunk.length);
       return ok(chunk);
     });
     expect(sizes).toEqual([1000, 500]);
-    expect(summary).toEqual({ requested: 1500, restored: ids(1500), skipped: 0, remaining: [], failed: false });
+    expect(result).toEqual(summary({ requested: 1500, restored: ids(1500) }));
   });
 
-  test('counts what the server left alone', async () => {
-    const summary = await undoInChunks(ids(3), async (chunk) => ({
+  test('counts what the server left alone because it changed', async () => {
+    const result = await undoInChunks(ids(3), async (chunk) => ({
       transaction_ids: chunk.slice(0, 2),
       skipped: [{ transaction_id: chunk[2], reason: 'category_changed' }],
     }));
-    expect(summary.restored).toEqual(['t0', 't1']);
-    expect(summary.skipped).toBe(1);
-    expect(summary.failed).toBe(false);
+    expect(result.restored).toEqual(['t0', 't1']);
+    expect(result.skipped).toBe(1);
+    expect(result.alreadyRestored).toEqual([]);
+  });
+
+  test('a retried chunk that had gone through is "already restored", not "changed since"', async () => {
+    const result = await undoInChunks(ids(3), async (chunk) => ({
+      transaction_ids: [],
+      skipped: chunk.map((id) => ({ transaction_id: id, reason: 'no_decision' })),
+    }));
+    expect(result.alreadyRestored).toEqual(ids(3));
+    expect(result.skipped).toBe(0);
   });
 
   test('a failed chunk stops the run and keeps it and the later chunks undoable', async () => {
     let call = 0;
-    const summary = await undoInChunks(
+    const result = await undoInChunks(
       ids(25),
       async (chunk) => {
         call += 1;
@@ -61,54 +71,36 @@ describe('undoInChunks', () => {
       10,
     );
     expect(call).toBe(2);
-    expect(summary.restored).toEqual(ids(10));
-    expect(summary.remaining).toEqual(ids(15, 10));
-    expect(summary.failed).toBe(true);
+    expect(result.restored).toEqual(ids(10));
+    expect(result.remaining).toEqual(ids(15, 10));
+    expect(result.failed).toBe(true);
   });
 });
 
 describe('undoOutcome', () => {
   test('everything reversed is ok', () => {
-    const outcome = undoOutcome({ requested: 3, restored: ids(3), skipped: 0, remaining: [], failed: false });
-    expect(outcome).toEqual({ tone: 'ok', text: 'Undid 3 transactions.' });
+    expect(undoOutcome(summary({ requested: 3, restored: ids(3) }))).toEqual({
+      tone: 'ok',
+      text: 'Undid 3 transactions.',
+    });
   });
 
-  test('rows the server skipped are said, never reported as success', () => {
-    const outcome = undoOutcome({ requested: 5, restored: ids(3), skipped: 2, remaining: [], failed: false });
+  test('rows already restored by an earlier attempt are said, and still count as back', () => {
+    const outcome = undoOutcome(summary({ requested: 3, restored: ids(1), alreadyRestored: ids(2, 1) }));
+    expect(outcome).toEqual({ tone: 'ok', text: 'Undid 3 transactions. 2 of them were already restored.' });
+  });
+
+  test('rows the server skipped because they changed are never reported as success', () => {
+    const outcome = undoOutcome(summary({ requested: 5, restored: ids(3), skipped: 2 }));
     expect(outcome.tone).toBe('problem');
     expect(outcome.text).toBe('Undid 3 of 5 transactions. 2 changed since and were left as they are.');
   });
 
   test('chunks that could not be reached are counted', () => {
-    const outcome = undoOutcome({ requested: 2500, restored: ids(1000), skipped: 0, remaining: ids(1500, 1000), failed: true });
+    const outcome = undoOutcome(
+      summary({ requested: 2500, restored: ids(1000), remaining: ids(1500, 1000), failed: true }),
+    );
     expect(outcome.tone).toBe('problem');
     expect(outcome.text).toBe('Undid 1000 of 2500 transactions. 1500 could not be undone right now: try Undo again.');
-  });
-});
-
-describe('undo target', () => {
-  test('a late answer for an earlier press does not replace the latest target', () => {
-    const a = beginTarget(1, 'accept', 'A', ['a']);
-    const b = beginTarget(2, 'accept', 'B', ['b']);
-    // B is the target; A's response lands afterwards.
-    expect(confirmTarget(b, 1, ['a'])).toBe(b);
-    expect(confirmTarget(a, 1, ['a'])?.confirmed).toBe(true);
-  });
-
-  test('the latest answer fills in the ids a batch did not know up front', () => {
-    const batch = beginTarget(3, 'accept', 'Batch', []);
-    expect(batch.confirmed).toBe(false);
-    expect(confirmTarget(batch, 3, ['x', 'y'])).toEqual({ ...batch, transactionIds: ['x', 'y'], confirmed: true });
-  });
-
-  test('a failure clears only its own target', () => {
-    const a = beginTarget(1, 'accept', 'A', ['a']);
-    expect(failTarget(a, 1)).toBeNull();
-    expect(failTarget(a, 2)).toBe(a);
-    expect(failTarget(null, 1)).toBeNull();
-  });
-
-  test('a pending skip starts confirmed: nothing was sent yet', () => {
-    expect(beginTarget(4, 'skip', 'S', ['s']).confirmed).toBe(true);
   });
 });

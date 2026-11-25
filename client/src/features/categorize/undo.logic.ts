@@ -1,53 +1,13 @@
 /**
- * Pure logic of undoing a Categorize action: which action "Undo" and the Z key
- * reverse (always the one the person did LAST, whichever response lands
- * first), the chunked undo (the contract caps one request at 1000 ids) and the
- * sentence that says exactly what was reversed.
+ * Pure logic of undoing a Categorize accept: the chunked undo (the contract
+ * caps one request at 1000 ids) and the sentence that says exactly what was
+ * reversed. Which action Undo reverses is the undo stack in accept.logic.ts.
  */
 
 import { t } from './i18n';
 
 /** The undo contract's cap on `transaction_ids` per request. */
 export const UNDO_CHUNK = 1000;
-
-/** The action Undo/Z would reverse. A skip is only undoable while it is still pending. */
-export interface UndoTarget {
-  /** Press order: the highest is the latest action. */
-  seq: number;
-  kind: 'accept' | 'skip';
-  label: string;
-  /** Known up front for a single row, filled from the server's answer for batches. */
-  transactionIds: string[];
-  confirmed: boolean;
-}
-
-export function beginTarget(
-  seq: number,
-  kind: UndoTarget['kind'],
-  label: string,
-  transactionIds: string[],
-): UndoTarget {
-  return { seq, kind, label, transactionIds, confirmed: kind === 'skip' };
-}
-
-/**
- * The server answered for action `seq`: it becomes the confirmed target only
- * if it is still the latest one. A late answer for an earlier press changes
- * nothing, so Z undoes the last key press, not the last response.
- */
-export function confirmTarget(
-  current: UndoTarget | null,
-  seq: number,
-  transactionIds: string[],
-): UndoTarget | null {
-  if (!current || current.seq !== seq) return current;
-  return { ...current, transactionIds, confirmed: true };
-}
-
-/** Action `seq` failed: if it was the target there is nothing to undo any more. */
-export function failTarget(current: UndoTarget | null, seq: number): UndoTarget | null {
-  return current && current.seq === seq ? null : current;
-}
 
 export function chunkIds(ids: readonly string[], size = UNDO_CHUNK): string[][] {
   const chunks: string[][] = [];
@@ -59,6 +19,8 @@ export interface UndoSummary {
   requested: number;
   /** Ids the server restored. */
   restored: string[];
+  /** Ids the server found already restored (a retried chunk that had gone through): they are back. */
+  alreadyRestored: string[];
   /** Ids the server left alone (changed since the accept). */
   skipped: number;
   /** Ids in chunks never sent or that failed: still undoable. */
@@ -68,7 +30,7 @@ export interface UndoSummary {
 
 export interface UndoChunkResult {
   transaction_ids: readonly string[];
-  skipped: readonly unknown[];
+  skipped: readonly { transaction_id?: string; reason?: string }[];
 }
 
 /**
@@ -82,17 +44,29 @@ export async function undoInChunks(
 ): Promise<UndoSummary> {
   const chunks = chunkIds(ids, size);
   const restored: string[] = [];
+  const alreadyRestored: string[] = [];
   let skipped = 0;
   for (let i = 0; i < chunks.length; i += 1) {
     try {
       const result = await send(chunks[i]!);
       restored.push(...result.transaction_ids);
-      skipped += result.skipped.length;
+      for (const left of result.skipped) {
+        // `no_decision`: never accepted or already undone, i.e. a retry of a chunk that had gone through.
+        if (left.reason === 'no_decision' && left.transaction_id) alreadyRestored.push(left.transaction_id);
+        else skipped += 1;
+      }
     } catch {
-      return { requested: ids.length, restored, skipped, remaining: chunks.slice(i).flat(), failed: true };
+      return {
+        requested: ids.length,
+        restored,
+        alreadyRestored,
+        skipped,
+        remaining: chunks.slice(i).flat(),
+        failed: true,
+      };
     }
   }
-  return { requested: ids.length, restored, skipped, remaining: [], failed: false };
+  return { requested: ids.length, restored, alreadyRestored, skipped, remaining: [], failed: false };
 }
 
 export interface UndoOutcome {
@@ -103,10 +77,19 @@ export interface UndoOutcome {
 
 /** What the undo did, in numbers: never a bare "undone" when some rows were not. */
 export function undoOutcome(summary: UndoSummary): UndoOutcome {
-  const restored = summary.restored.length;
-  const left = summary.requested - restored;
-  if (left <= 0) return { tone: 'ok', text: t('undo.done', { count: restored }) };
-  const parts = [t('undo.restored', { count: restored, requested: summary.requested })];
+  const back = summary.restored.length + summary.alreadyRestored.length;
+  const left = summary.requested - back;
+  if (left <= 0) {
+    const text = t('undo.done', { count: back });
+    return {
+      tone: 'ok',
+      text:
+        summary.alreadyRestored.length > 0
+          ? `${text} ${t('undo.alreadyRestored', { count: summary.alreadyRestored.length })}`
+          : text,
+    };
+  }
+  const parts = [t('undo.restored', { count: back, requested: summary.requested })];
   if (summary.skipped > 0) parts.push(t('undo.changedSince', { count: summary.skipped }));
   if (summary.remaining.length > 0) parts.push(t('undo.notReached', { count: summary.remaining.length }));
   return { tone: 'problem', text: parts.join(' ') };

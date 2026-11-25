@@ -13,13 +13,14 @@ import { useBudgetShell } from '@/shell/context';
 import { ActionToast, SettingsCardFailed } from '@/ui/bits';
 import { colors, radius } from '@/ui/theme';
 
+import { toastActionable } from './accept.logic';
 import { BundlesView } from './BundlesView';
 import { ErrorBanner } from './CategorizeBits';
 import { EmptyState, NoKeyBanner } from './EmptyState';
 import { HeaderCard } from './HeaderCard';
 import { t } from './i18n';
 import { OneByOneView } from './OneByOneView';
-import { useBlurAfterPointerPress } from './useCategorizeKeys';
+import { useBlurAfterPointerPress, useFieldFocused } from './useCategorizeKeys';
 import { useCategorizePage, type CategorizeViewMode } from './useCategorizePage';
 
 export function CategorizeScreen() {
@@ -27,6 +28,7 @@ export function CategorizeScreen() {
   const router = useRouter();
   const page = useCategorizePage();
   useBlurAfterPointerPress();
+  const fieldFocused = useFieldFocused();
   const counts = page.queue.counts;
   const hasBundles = (page.viewModel?.acceptAllCount ?? 0) > 0;
   const noKey = page.statusLoaded && !page.aiAvailable;
@@ -53,6 +55,7 @@ export function CategorizeScreen() {
           aiAvailable={page.aiAvailable}
           runStarting={page.runStarting}
           onRun={() => void page.startRun()}
+          onModalChange={page.setModalOpen}
           left={counts?.left_to_categorize}
         />
 
@@ -119,8 +122,8 @@ export function CategorizeScreen() {
       {page.accept.state.toast ? (
         <ActionToast
           message={page.accept.state.toast.label}
-          actionLabel={page.accept.state.toast.actionable ? t('undo') : undefined}
-          actionKey={page.view === 'one' && Platform.OS === 'web' ? 'Z' : undefined}
+          actionLabel={toastActionable(page.accept.state) ? t('undo') : undefined}
+          actionKey={page.view === 'one' && Platform.OS === 'web' && !fieldFocused ? 'Z' : undefined}
           onAction={page.undoLast}
         />
       ) : null}

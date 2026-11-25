@@ -5,7 +5,7 @@
  * rows are filed.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 
 import type { CategorizeQueueRow } from '@/budget/data/api';
@@ -14,7 +14,8 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors } from '@/ui/theme';
 
 import { t } from './i18n';
-import { queueRowSubline, type FiledEntry } from './oneByOne.logic';
+import type { UndoEntry } from './accept.logic';
+import { leavingText, queueRowSubline, type FiledEntry } from './oneByOne.logic';
 import { thresholdPercent } from './page.logic';
 import { confidenceBand, type ConfidenceBand } from './queue.logic';
 
@@ -30,6 +31,8 @@ const ROWS_ABOVE = 2;
 export function QueuePane({
   rows,
   filed,
+  pendingSkips,
+  onCancelSkip,
   focusedId,
   total,
   hiddenBelow,
@@ -38,6 +41,9 @@ export function QueuePane({
   rows: readonly CategorizeQueueRow[];
   /** Rows done this visit: dimmed lines above the queue, not focusable. */
   filed: readonly FiledEntry[];
+  /** Skips waiting for their own timer: each shows its countdown and its own Undo. */
+  pendingSkips: readonly Extract<UndoEntry, { kind: 'skip' }>[];
+  onCancelSkip: (transactionId: string) => void;
   focusedId: string | null;
   /** Rows the queue holds (all of them, not only this page). */
   total: number;
@@ -47,6 +53,8 @@ export function QueuePane({
 }) {
   const { formatMoney, formatDateShort } = useMoneyFormat();
   const scroll = useRef<ScrollViewInstance>(null);
+  const waiting = new Map(pendingSkips.map((entry) => [entry.item.transactionId, entry.sendAt]));
+  const now = useNow(waiting.size > 0);
   const layouts = useRef(new Map<string, { y: number; height: number }>());
 
   // Keep the focused row in view, with a couple of filed rows above it as the
@@ -78,16 +86,26 @@ export function QueuePane({
         {filed.map(({ row, text }) => {
           const payee = row.payee?.trim() || row.raw_bank_description?.trim() || t('row.unnamed');
           const cents = milliToCents(row.amount);
+          const sendAt = waiting.get(row.transaction_id);
           return (
-            <View key={`filed-${row.transaction_id}`} style={[styles.row, styles.rowFiled]}>
+            <View key={`filed-${row.transaction_id}`} style={[styles.row, styles.rowFiled, sendAt !== undefined && styles.rowLeaving]}>
               <View style={styles.rowText}>
                 <Text style={styles.payeeFiled} numberOfLines={1}>
                   {payee}
                 </Text>
-                <Text style={styles.sub} numberOfLines={1}>
-                  {formatDateShort(row.date)} · ✓ {text}
+                <Text style={sendAt !== undefined ? styles.leaving : styles.sub} numberOfLines={1}>
+                  {formatDateShort(row.date)} · {sendAt !== undefined ? leavingText(sendAt, now) : `✓ ${text}`}
                 </Text>
               </View>
+              {sendAt !== undefined ? (
+                <Pressable
+                  onPress={() => onCancelSkip(row.transaction_id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('undo')} ${payee}`}
+                  hitSlop={6}>
+                  <Text style={styles.undo}>{t('undo')}</Text>
+                </Pressable>
+              ) : null}
               <Text style={styles.amountFiled}>{formatMoney(cents)}</Text>
             </View>
           );
@@ -164,6 +182,10 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
   },
   rowFiled: { opacity: 0.55 },
+  // A pending skip is at full strength: it is the one thing on this list that can still be undone.
+  rowLeaving: { opacity: 1, backgroundColor: colors.bg2 },
+  leaving: { color: colors.yellowPillFg, fontSize: 11.5 },
+  undo: { color: colors.indigo3, fontSize: 12.5, fontWeight: '700' },
   payeeFiled: { color: colors.muted, fontSize: 13.5, fontWeight: '600' },
   amountFiled: { color: colors.muted, fontSize: 13, fontWeight: '700' },
   rowFocused: { backgroundColor: colors.indigoSoft, borderLeftColor: colors.indigo2 },
@@ -176,3 +198,15 @@ const styles = StyleSheet.create({
   percent: { fontSize: 12, fontWeight: '700' },
   more: { color: colors.faint, fontSize: 12, textAlign: 'center', padding: 14 },
 });
+
+/** A clock that ticks once a second while `active`, for the pending-skip countdown. */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return undefined;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}

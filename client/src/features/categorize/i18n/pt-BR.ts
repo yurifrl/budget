@@ -23,6 +23,8 @@ const m: Translation<typeof en> = {
   'run.allClassified': 'Todas as {count} classificadas',
   'run.nothingLeft': 'Nada para categorizar',
   'run.lastShort': 'Última execução {date} · {suggested} sugestões',
+  'run.lastDate': 'Última execução {date}',
+  'run.lastSuggestions': { one: '{count} sugestão.', other: '{count} sugestões.' },
   'run.nextRun': 'Novas importações são classificadas na próxima execução.',
   'run.never': 'Nenhuma classificação ainda.',
   'run.neverHint': 'Execute para receber sugestões de categoria para a fila.',
@@ -140,6 +142,7 @@ const m: Translation<typeof en> = {
   'one.confirm': 'Confirmar {category}',
   'one.filedTo': 'em {category}',
   'one.filedLeft': 'deixada sem categoria',
+  'one.leavingIn': 'deixada sem categoria em {seconds}s',
   'one.skip': 'Deixar sem categoria',
   'one.skipHint': 'Tira da lista para todos do orçamento. Você ainda pode categorizar no registro.',
   'one.undoLast': 'Desfazer a última',
@@ -161,6 +164,10 @@ const m: Translation<typeof en> = {
   'undo.restored': {
     one: 'Desfeitas {count} de {requested} transações.',
     other: 'Desfeitas {count} de {requested} transações.',
+  },
+  'undo.alreadyRestored': {
+    one: '{count} delas já estava restaurada.',
+    other: '{count} delas já estavam restauradas.',
   },
   'undo.changedSince': {
     one: '{count} mudou depois e foi deixada como está.',

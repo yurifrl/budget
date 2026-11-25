@@ -52,6 +52,8 @@ export function useCategorizePage() {
   const [threshold, setThreshold] = useState(0.8);
   const [savingThreshold, setSavingThreshold] = useState(false);
   const [thresholdError, setThresholdError] = useState<string | null>(null);
+  /** A modal (the Run confirmation) is open: the page's key shortcuts must not act behind it. */
+  const [modalOpen, setModalOpen] = useState(false);
   const [thresholdStamp, setThresholdStamp] = useState<number | null>(null);
   const [runStarting, setRunStarting] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
@@ -147,7 +149,7 @@ export function useCategorizePage() {
     if (!reloading && thresholdStamp !== null) setThresholdStamp(null);
   }, [reloading, thresholdStamp]);
   const oneByOne = useOneByOne({
-    enabled: view === 'one' && !reloading,
+    enabled: view === 'one' && !reloading && !modalOpen,
     rows: visibleQueueRows,
     pageRows: queue.data?.rows ?? [],
     counts,
@@ -182,6 +184,7 @@ export function useCategorizePage() {
     oneByOne,
     threshold,
     reloading,
+    setModalOpen,
     savingThreshold,
     commitThreshold,
     runView,

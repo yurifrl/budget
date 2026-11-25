@@ -176,8 +176,30 @@ describe('runHeaderView', () => {
       format,
     );
     expect(view.kind).toBe('finished');
-    expect(view.title).toBe('Last run 21/11/2026 · 120 suggestions');
-    expect(view.detail).toBe('New imports are classified on the next run.');
+    expect(view.title).toBe('Last run 21/11/2026');
+    expect(view.detail).toBe('120 suggestions. New imports are classified on the next run.');
+  });
+
+  test('an active run is not shown as healthy when AI is unavailable', () => {
+    const view = runHeaderView(
+      status({
+        active: {
+          id: 'r1',
+          status: 'running',
+          created_at: '2026-11-21T14:00:00Z',
+          started_at: '2026-11-21T14:00:00Z',
+          requested_by: null,
+          done: 25,
+          total: 57,
+        },
+        ai: { available: false, reason: 'shared_key_missing', provider: null, model: null, source: null },
+      }),
+      { left_to_categorize: 57, not_classified: 30 },
+      format,
+    );
+    expect(view.kind).toBe('unavailable');
+    expect(view.fraction).toBe(0);
+    expect(view.detail).toContain('this server has none configured');
   });
 
   test('no run yet invites one; an empty queue says so', () => {

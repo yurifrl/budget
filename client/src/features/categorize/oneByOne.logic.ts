@@ -126,3 +126,13 @@ export function dropFiled(entries: readonly FiledEntry[], ids: readonly string[]
 export function filedToText(categoryName: string): string {
   return t('one.filedTo', { category: categoryName });
 }
+
+/** Whole seconds until a pending skip is sent, never below 0 (rounded up, so "10s" shows first). */
+export function secondsLeft(sendAt: number, now: number): number {
+  return Math.max(0, Math.ceil((sendAt - now) / 1000));
+}
+
+/** "leaving uncategorized in 7s" for a skip still waiting for its timer. */
+export function leavingText(sendAt: number, now: number): string {
+  return t('one.leavingIn', { seconds: secondsLeft(sendAt, now) });
+}

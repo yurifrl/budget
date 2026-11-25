@@ -4,11 +4,11 @@
  * field has focus; everything the keys mean lives here.
  *
  * 1/2/3 file with that chip, Enter files the top chip, S leaves the row
- * uncategorized (pending until its toast runs out, so it can be undone), /
- * focuses the category search, Z undoes the last action. Any other printable
- * key starts typing in the search, so a category name typed without "/" first
- * is not lost. While a field is focused every key belongs to the field (so "s"
- * types an "s" in the search).
+ * uncategorized (pending for 10 s, so it can be undone), / focuses the category
+ * search, Z undoes the last action. Nothing else is a shortcut: other letters do
+ * nothing, so typing a category name never skips or files anything; only "/"
+ * opens the search. While a field is focused every key belongs to the field (S,
+ * Z and the digits type), except Escape, which leaves the field.
  */
 
 export type CategorizeKeyAction =
@@ -17,8 +17,8 @@ export type CategorizeKeyAction =
   | { kind: 'skip' }
   | { kind: 'focusSearch' }
   | { kind: 'undo' }
-  /** Any other printable key: the person is typing a category name, so the search takes it. */
-  | { kind: 'typeToSearch' };
+  /** Escape in a field: leave it and return to the shortcuts. */
+  | { kind: 'leaveField' };
 
 export interface CategorizeKeyContext {
   /** Suggestion chips on the focused row (0..3). */
@@ -32,10 +32,10 @@ export interface CategorizeKeyContext {
 }
 
 export function categorizeKeyAction(key: string, ctx: CategorizeKeyContext): CategorizeKeyAction | null {
-  if (ctx.typing) return null;
+  if (ctx.typing) return key === 'Escape' ? { kind: 'leaveField' } : null;
   if (key === '1' || key === '2' || key === '3') {
     const index = Number(key) - 1;
-    return index < ctx.suggestions ? { kind: 'file', index } : { kind: 'typeToSearch' };
+    return index < ctx.suggestions ? { kind: 'file', index } : null;
   }
   switch (key) {
     case 'Enter':
@@ -49,13 +49,8 @@ export function categorizeKeyAction(key: string, ctx: CategorizeKeyContext): Cat
     case 'Z':
       return ctx.undoAvailable ? { kind: 'undo' } : null;
     default:
-      return isPrintable(key) ? { kind: 'typeToSearch' } : null;
+      return null;
   }
-}
-
-/** One visible character that is not a space (space scrolls the page; named keys are longer). */
-export function isPrintable(key: string): boolean {
-  return [...key].length === 1 && key.trim() !== '';
 }
 
 /** The slice of a DOM element the key handler needs. */

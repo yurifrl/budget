@@ -6,7 +6,9 @@ import {
   orderQueue,
   progressLabel,
   progressView,
+  leavingText,
   queueRowSubline,
+  secondsLeft,
   recordFiled,
   remainingCount,
   resolveFocus,
@@ -125,5 +127,19 @@ describe('filed lines', () => {
 
   test('the line names the category', () => {
     expect(filedToText('Fuel')).toBe('filed to Fuel');
+  });
+});
+
+describe('pending skip countdown', () => {
+  test('rounds up so the full window shows first and never goes below zero', () => {
+    expect(secondsLeft(10_000, 0)).toBe(10);
+    expect(secondsLeft(10_000, 500)).toBe(10);
+    expect(secondsLeft(10_000, 9_001)).toBe(1);
+    expect(secondsLeft(10_000, 10_000)).toBe(0);
+    expect(secondsLeft(10_000, 12_000)).toBe(0);
+  });
+
+  test('the line says what is about to happen', () => {
+    expect(leavingText(10_000, 3_000)).toBe('leaving uncategorized in 7s');
   });
 });

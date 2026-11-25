@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { categorizeKeyAction, controlToBlur, hasModifier, isControlTarget, isPrintable, isTypingTarget } from './keys.logic';
+import { categorizeKeyAction, controlToBlur, hasModifier, isControlTarget, isTypingTarget } from './keys.logic';
 
 const base = { suggestions: 2, typing: false, undoAvailable: false };
 
@@ -8,8 +8,8 @@ describe('categorizeKeyAction', () => {
   test('1/2/3 file with that chip only when the chip exists', () => {
     expect(categorizeKeyAction('1', base)).toEqual({ kind: 'file', index: 0 });
     expect(categorizeKeyAction('2', base)).toEqual({ kind: 'file', index: 1 });
-    expect(categorizeKeyAction('3', base)).toEqual({ kind: 'typeToSearch' });
-    expect(categorizeKeyAction('1', { ...base, suggestions: 0 })).toEqual({ kind: 'typeToSearch' });
+    expect(categorizeKeyAction('3', base)).toBeNull();
+    expect(categorizeKeyAction('1', { ...base, suggestions: 0 })).toBeNull();
   });
 
   test('Enter files the top chip, and does nothing without one', () => {
@@ -32,24 +32,22 @@ describe('categorizeKeyAction', () => {
     }
   });
 
-  test('any other printable key starts typing in the search, named keys do nothing', () => {
-    expect(categorizeKeyAction('q', base)).toEqual({ kind: 'typeToSearch' });
-    expect(categorizeKeyAction('M', base)).toEqual({ kind: 'typeToSearch' });
-    expect(categorizeKeyAction('ú', base)).toEqual({ kind: 'typeToSearch' });
-    expect(categorizeKeyAction('Escape', base)).toBeNull();
-    expect(categorizeKeyAction('Tab', base)).toBeNull();
-    expect(categorizeKeyAction(' ', base)).toBeNull();
-  });
-
-  test('printable keys are single visible characters', () => {
-    expect(isPrintable('a')).toBe(true);
-    expect(isPrintable('Enter')).toBe(false);
-    expect(isPrintable(' ')).toBe(false);
+  test('no other key is a shortcut: letters do nothing, so typing a name never skips or files', () => {
+    for (const key of ['u', 'b', 'q', 'M', 'ú', 'Escape', 'Tab', ' ']) {
+      expect(categorizeKeyAction(key, base)).toBeNull();
+    }
   });
 
   test('S, Z and the digits never act while a field is focused, typing is left to the field', () => {
     const typing = { ...base, typing: true, undoAvailable: true };
-    for (const key of ['s', 'z', '1', '2', '3', 'm']) expect(categorizeKeyAction(key, typing)).toBeNull();
+    for (const key of ['s', 'S', 'z', 'Z', '1', '2', '3', 'm', 'Enter', '/']) {
+      expect(categorizeKeyAction(key, typing)).toBeNull();
+    }
+  });
+
+  test('Escape leaves the field and returns to the shortcuts', () => {
+    expect(categorizeKeyAction('Escape', { ...base, typing: true })).toEqual({ kind: 'leaveField' });
+    expect(categorizeKeyAction('Escape', base)).toBeNull();
   });
 });
 

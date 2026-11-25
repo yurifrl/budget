@@ -5,7 +5,7 @@
  * never taken. Everything the keys mean lives in keys.logic.ts.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   categorizeKeyAction,
@@ -44,12 +44,8 @@ export function useCategorizeKeys({
         onControl: isControlTarget(target),
       });
       if (!action) return;
-      // Typing to search: focus the field in this very event and let the
-      // browser deliver the character to it (no preventDefault).
-      if (action.kind !== 'typeToSearch') {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      e.preventDefault();
+      e.stopPropagation();
       latest.current.onAction(action);
     };
     document.addEventListener('keydown', onKey, true);
@@ -72,4 +68,23 @@ export function useBlurAfterPointerPress(): void {
     document.addEventListener('click', onClick, true);
     return () => document.removeEventListener('click', onClick, true);
   }, []);
+}
+
+/**
+ * True while a text field has focus. The toast hides its Z key cap then (Z types
+ * a letter in a field), leaving the Undo button as the cue.
+ */
+export function useFieldFocused(): boolean {
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (process.env.EXPO_OS !== 'web' || typeof document === 'undefined') return undefined;
+    const update = () => setFocused(isTypingTarget(document.activeElement as HTMLElement | null));
+    document.addEventListener('focusin', update);
+    document.addEventListener('focusout', update);
+    return () => {
+      document.removeEventListener('focusin', update);
+      document.removeEventListener('focusout', update);
+    };
+  }, []);
+  return focused;
 }

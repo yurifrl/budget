@@ -21,6 +21,8 @@ export default {
   'run.allClassified': 'All {count} classified',
   'run.nothingLeft': 'Nothing left to categorize',
   'run.lastShort': 'Last run {date} · {suggested} suggestions',
+  'run.lastDate': 'Last run {date}',
+  'run.lastSuggestions': { one: '{count} suggestion.', other: '{count} suggestions.' },
   'run.nextRun': 'New imports are classified on the next run.',
   'run.never': 'No classification run yet.',
   'run.neverHint': 'Run it to get category suggestions for the queue.',
@@ -147,6 +149,7 @@ export default {
   'one.confirm': 'Confirm {category}',
   'one.filedTo': 'filed to {category}',
   'one.filedLeft': 'left uncategorized',
+  'one.leavingIn': 'leaving uncategorized in {seconds}s',
   'one.skip': 'Leave uncategorized',
   'one.skipHint': 'Takes it off this list for everyone in the budget. You can still categorize it in the register.',
   'one.undoLast': 'Undo last',
@@ -170,6 +173,10 @@ export default {
   'undo.restored': {
     one: 'Undid {count} of {requested} transactions.',
     other: 'Undid {count} of {requested} transactions.',
+  },
+  'undo.alreadyRestored': {
+    one: '{count} of them was already restored.',
+    other: '{count} of them were already restored.',
   },
   'undo.changedSince': {
     one: '{count} changed since and was left as it is.',

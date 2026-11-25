@@ -11,7 +11,7 @@ import type { TextInputInstance } from 'react-native';
 
 import type { CategorizeCounts, CategorizeQueueRow } from '@/budget/data/api';
 
-import { canUndo as canUndoState } from './accept.logic';
+import { canUndo as canUndoState, pendingSkips, type UndoEntry } from './accept.logic';
 import type { CategorizeKeyAction } from './keys.logic';
 import {
   dropFiled,
@@ -37,12 +37,15 @@ export interface OneByOne {
   focused: CategorizeQueueRow | null;
   progress: ProgressView;
   canUndo: boolean;
+  /** Skips still waiting for their own timer, each cancellable. */
+  pendingSkips: Extract<UndoEntry, { kind: 'skip' }>[];
   searchRef: React.RefObject<TextInputInstance | null>;
   focusRow: (row: CategorizeQueueRow) => void;
   file: (index: number) => void;
   pick: (category: PickedCategory) => void;
   skip: () => void;
   undo: () => void;
+  cancelSkip: (transactionId: string) => void;
 }
 
 export function useOneByOne({
@@ -111,6 +114,13 @@ export function useOneByOne({
     });
   };
 
+  const cancelSkip = (transactionId: string) => {
+    if (!accept.cancelSkip(transactionId)) return;
+    setDone((n) => Math.max(0, n - 1));
+    setFiled((list) => dropFiled(list, [transactionId]));
+    setFocusedId(transactionId);
+  };
+
   const canUndo = canUndoState(accept.state);
 
   const onKey = (action: CategorizeKeyAction) => {
@@ -122,8 +132,9 @@ export function useOneByOne({
       case 'skip':
         return skip();
       case 'focusSearch':
-      case 'typeToSearch':
         return searchRef.current?.focus();
+      case 'leaveField':
+        return (document.activeElement as HTMLElement | null)?.blur?.();
       case 'undo':
         return undo();
     }
@@ -141,11 +152,13 @@ export function useOneByOne({
     focused,
     progress,
     canUndo,
+    pendingSkips: pendingSkips(accept.state),
     searchRef,
     focusRow: (row) => setFocusedId(row.transaction_id),
     file,
     pick,
     skip,
     undo,
+    cancelSkip,
   };
 }

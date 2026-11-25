@@ -1,15 +1,17 @@
 /**
  * Optimistic state of accepting, skipping and undoing categories. Filing is
  * optimistic: the rows leave the queue at once, the server answer keeps them
- * out and turns the action into an undo toast. A failure restores exactly the
- * rows the failed request hid. A skip is permanent and budget-wide, so it is
- * only SENT when its toast runs out: until then it is a hidden row that Undo
- * (or Z) puts back. The hook owns the requests and timers; this reducer owns
- * only what the person sees.
+ * out and a failure restores exactly the rows the failed request hid.
+ *
+ * Undo is a STACK of the visit's actions in key-press order. Undo and Z pop
+ * the top: an accept is undone through the API, a pending skip is cancelled and
+ * its row comes back. A skip is permanent and budget-wide, so it is only SENT
+ * when ITS OWN timer runs out; no other action ever sends it. A sent skip
+ * leaves the stack (it cannot be undone), so Z goes to the action before it.
+ * The hook owns the requests and timers; this reducer owns what the person sees.
  */
 
 import { t } from './i18n';
-import type { UndoTarget } from './undo.logic';
 
 /** One row filed optimistically: enough to hide it and name it in the toast. */
 export interface FiledItem {
@@ -20,11 +22,29 @@ export interface FiledItem {
   subject: string;
 }
 
+export type UndoEntry =
+  | {
+      seq: number;
+      kind: 'accept';
+      label: string;
+      /** Known up front for a single row, filled from the server's answer for batches. */
+      transactionIds: string[];
+      confirmed: boolean;
+    }
+  | {
+      seq: number;
+      kind: 'skip';
+      label: string;
+      item: FiledItem;
+      /** When the skip is sent unless it is cancelled first (epoch ms). */
+      sendAt: number;
+    };
+
 export interface ToastState {
   /** The whole sentence, already translated. */
   label: string;
-  /** Shows the Undo action. */
-  actionable: boolean;
+  /** The stack entry the toast speaks of; 0 for a plain message. Undo shows while that entry is on top. */
+  seq: number;
 }
 
 export interface AcceptState {
@@ -36,11 +56,8 @@ export interface AcceptState {
   busy: number;
   /** The message toast on screen; it times out. */
   toast: ToastState | null;
-  /**
-   * What Undo and Z reverse: the last thing the person did. It outlives the
-   * toast, so a timed-out accept can still be undone (the server has no limit).
-   */
-  undoable: UndoTarget | null;
+  /** What Undo and Z reverse, oldest first: the last element is the next to undo. */
+  stack: UndoEntry[];
   /** A sentence for the failed request or the partly failed undo; kept until dismissed. */
   error: string | null;
 }
@@ -50,39 +67,39 @@ export const initialAcceptState: AcceptState = {
   pending: [],
   busy: 0,
   toast: null,
-  undoable: null,
+  stack: [],
   error: null,
 };
 
 export type AcceptAction =
-  | { type: 'start'; items: FiledItem[] }
-  /** `requestIds` are the ids the failed request hid (what `start` was given). */
-  | { type: 'failed'; error: string; requestIds: string[] }
+  | { type: 'acceptStarted'; items: FiledItem[]; entry: Extract<UndoEntry, { kind: 'accept' }> }
   | {
-      type: 'succeeded';
+      type: 'acceptSucceeded';
+      seq: number;
       transactionIds: string[];
       requestIds: string[];
       label: string;
-      /** False when a later press already owns the toast. */
-      showToast: boolean;
       /** Set when only part of a batch went through: the accepted part stays, the failure is said. */
       error?: string;
     }
-  | { type: 'setUndoable'; target: UndoTarget | null }
+  | { type: 'acceptFailed'; seq: number; requestIds: string[]; error: string }
   /** A skip begins: the row is hidden and the toast offers Undo; nothing is sent yet. */
-  | { type: 'skipStarted'; item: FiledItem; label: string }
-  /** The skip was undone inside its window: the row comes back. */
+  | { type: 'skipStarted'; entry: Extract<UndoEntry, { kind: 'skip' }> }
+  /** Undone (or cancelled) inside its window: the row comes back. */
   | { type: 'skipCancelled'; transactionId: string }
-  /** The window ran out (or another action began): the skip request goes out. */
-  | { type: 'skipSending'; item: FiledItem }
+  /** Its own timer ended: the request goes out and the skip leaves the stack. */
+  | { type: 'skipSending'; seq: number }
   | { type: 'skipDone'; requestId: string }
+  | { type: 'skipFailed'; requestId: string; error: string }
+  /** Undo took the entry off the stack (an accept whose rows are about to be restored). */
+  | { type: 'undoClaimed'; seq: number }
   | { type: 'undoStarted' }
   | {
       type: 'undoFinished';
-      /** Rows the server put back in the queue. */
+      /** Rows that are back in the queue. */
       restoredIds: string[];
-      /** What stays undoable (chunks not reached); null when nothing does. */
-      undoable: UndoTarget | null;
+      /** What was not reached stays undoable, on top. */
+      remaining: Extract<UndoEntry, { kind: 'accept' }> | null;
       message: string;
       tone: 'ok' | 'problem';
     }
@@ -108,53 +125,107 @@ function settle(pending: FiledItem[], requestIds: readonly string[]): FiledItem[
 
 const less = (busy: number) => Math.max(0, busy - 1);
 
+export function topEntry(state: Pick<AcceptState, 'stack'>): UndoEntry | null {
+  return state.stack[state.stack.length - 1] ?? null;
+}
+
+function toastFor(entry: UndoEntry | null): ToastState | null {
+  return entry ? { label: entry.label, seq: entry.seq } : null;
+}
+
+/** After an entry is gone, the toast of an action that is still undoable comes back; a plain message stays. */
+function toastAfterRemoval(state: AcceptState, stack: UndoEntry[], removedSeq: number): ToastState | null {
+  if (state.toast && state.toast.seq !== removedSeq) return state.toast;
+  return toastFor(stack[stack.length - 1] ?? null);
+}
+
 export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptState {
   switch (action.type) {
-    case 'start':
+    case 'acceptStarted':
       return {
         ...state,
         hiddenIds: union(state.hiddenIds, action.items.map((item) => item.transactionId)),
         pending: [...state.pending, ...action.items],
         busy: state.busy + 1,
+        stack: [...state.stack, action.entry],
         toast: null,
         error: null,
       };
-    case 'failed':
-      return {
-        ...state,
-        hiddenIds: without(state.hiddenIds, action.requestIds),
-        pending: settle(state.pending, action.requestIds),
-        busy: less(state.busy),
-        error: action.error,
-      };
-    case 'succeeded':
+    case 'acceptSucceeded': {
+      const stack = state.stack.map((entry) =>
+        entry.kind === 'accept' && entry.seq === action.seq
+          ? { ...entry, label: action.label, transactionIds: action.transactionIds, confirmed: true }
+          : entry,
+      );
+      const latest = stack[stack.length - 1]?.seq === action.seq;
       return {
         ...state,
         hiddenIds: union(state.hiddenIds, action.transactionIds),
         pending: settle(state.pending, action.requestIds),
         busy: less(state.busy),
-        toast: action.showToast ? { label: action.label, actionable: true } : state.toast,
+        stack,
+        // A late answer for an earlier press leaves the later press's toast alone.
+        toast: latest ? { label: action.label, seq: action.seq } : state.toast,
         error: action.error ?? null,
       };
-    case 'setUndoable':
-      return { ...state, undoable: action.target };
+    }
+    case 'acceptFailed': {
+      const stack = state.stack.filter((entry) => entry.seq !== action.seq);
+      return {
+        ...state,
+        hiddenIds: without(state.hiddenIds, action.requestIds),
+        pending: settle(state.pending, action.requestIds),
+        busy: less(state.busy),
+        stack,
+        toast: toastAfterRemoval(state, stack, action.seq),
+        error: action.error,
+      };
+    }
     case 'skipStarted':
       return {
         ...state,
-        hiddenIds: union(state.hiddenIds, [action.item.transactionId]),
-        toast: { label: action.label, actionable: true },
+        hiddenIds: union(state.hiddenIds, [action.entry.item.transactionId]),
+        stack: [...state.stack, action.entry],
+        toast: toastFor(action.entry),
         error: null,
       };
-    case 'skipCancelled':
+    case 'skipCancelled': {
+      const gone = state.stack.find((e) => e.kind === 'skip' && e.item.transactionId === action.transactionId);
+      const stack = state.stack.filter((e) => e !== gone);
       return {
         ...state,
         hiddenIds: without(state.hiddenIds, [action.transactionId]),
-        toast: null,
+        stack,
+        toast: gone ? toastAfterRemoval(state, stack, gone.seq) : state.toast,
       };
-    case 'skipSending':
-      return { ...state, pending: [...state.pending, action.item], busy: state.busy + 1 };
+    }
+    case 'skipSending': {
+      const entry = state.stack.find((e) => e.seq === action.seq);
+      if (!entry || entry.kind !== 'skip') return state;
+      const stack = state.stack.filter((e) => e !== entry);
+      return {
+        ...state,
+        stack,
+        pending: [...state.pending, entry.item],
+        busy: state.busy + 1,
+        // Sent: it cannot be undone any more, so its toast goes (it never falls back to an older one).
+        toast: state.toast?.seq === action.seq ? null : state.toast,
+      };
+    }
     case 'skipDone':
       return { ...state, pending: settle(state.pending, [action.requestId]), busy: less(state.busy) };
+    case 'skipFailed':
+      return {
+        ...state,
+        hiddenIds: without(state.hiddenIds, [action.requestId]),
+        pending: settle(state.pending, [action.requestId]),
+        busy: less(state.busy),
+        error: action.error,
+      };
+    case 'undoClaimed': {
+      const stack = state.stack.filter((entry) => entry.seq !== action.seq);
+      return { ...state, stack, toast: state.toast?.seq === action.seq ? null : state.toast };
+    }
     case 'undoStarted':
       return { ...state, busy: state.busy + 1, error: null };
     case 'undoFinished':
@@ -162,8 +233,8 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
         ...state,
         hiddenIds: without(state.hiddenIds, action.restoredIds),
         busy: less(state.busy),
-        undoable: action.undoable,
-        toast: action.tone === 'ok' ? { label: action.message, actionable: false } : null,
+        stack: action.remaining ? [...state.stack, action.remaining] : state.stack,
+        toast: action.tone === 'ok' ? { label: action.message, seq: 0 } : null,
         error: action.tone === 'problem' ? action.message : null,
       };
     case 'dismissToast':
@@ -174,7 +245,10 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
       if (state.hiddenIds.length === 0) return state;
       const present = new Set(action.presentIds);
       const inFlight = new Set(state.pending.map((item) => item.transactionId));
-      const hiddenIds = state.hiddenIds.filter((id) => present.has(id) || inFlight.has(id));
+      const pendingSkips = new Set(
+        state.stack.flatMap((entry) => (entry.kind === 'skip' ? [entry.item.transactionId] : [])),
+      );
+      const hiddenIds = state.hiddenIds.filter((id) => present.has(id) || inFlight.has(id) || pendingSkips.has(id));
       return hiddenIds.length === state.hiddenIds.length ? state : { ...state, hiddenIds };
     }
     case 'reset':
@@ -200,12 +274,22 @@ export function acceptIdle(state: Pick<AcceptState, 'busy'>): boolean {
 }
 
 /**
- * Undo is offered whenever the last thing done can be reversed, even while its
- * request is still in flight: pressing Z then waits for the answer instead of
- * being ignored.
+ * Undo is offered whenever the stack has an entry, even while its request is
+ * still in flight: pressing Z then waits for the answer instead of being ignored.
  */
-export function canUndo(state: Pick<AcceptState, 'undoable'>): boolean {
-  return state.undoable !== null;
+export function canUndo(state: Pick<AcceptState, 'stack'>): boolean {
+  return state.stack.length > 0;
+}
+
+/** The toast shows its Undo only while the action it speaks of is the one Undo would reverse. */
+export function toastActionable(state: Pick<AcceptState, 'toast' | 'stack'>): boolean {
+  const top = state.stack[state.stack.length - 1];
+  return state.toast !== null && top !== undefined && top.seq === state.toast.seq;
+}
+
+/** The skips still waiting for their timer, oldest first. */
+export function pendingSkips(state: Pick<AcceptState, 'stack'>): Extract<UndoEntry, { kind: 'skip' }>[] {
+  return state.stack.filter((entry): entry is Extract<UndoEntry, { kind: 'skip' }> => entry.kind === 'skip');
 }
 
 /** "Uber · –R$ 18,90 → Transport" for a single filed row. */
