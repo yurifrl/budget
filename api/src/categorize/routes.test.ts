@@ -516,6 +516,96 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
       .toEqual([{ rank: 1, status: 'pending', source: 'ai' }]);
   });
 
+  test('an accepted row whose category was cleared by hand is back in the queue, counted and accepted again', async () => {
+    const payee = await newPayee('Cleared');
+    const t = await txn({ payeeId: payee });
+    await suggest(t, a.food, { rank: 1, confidence: 0.9 });
+    await suggest(t, a.dining, { rank: 2, confidence: 0.85 });
+    expect((await (await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }])).json()).accepted).toBe(1);
+
+    // The register clears the category by hand; nothing on the shared
+    // transactions table touches the decision, so it went stale.
+    await pool.query('update public.transactions set category_id = null where id = $1', [t]);
+
+    const page = await queueJson(ownerUser());
+    expect(page.rows.map((row) => row.transaction_id)).toEqual([t]);
+    expect(page.rows[0]).toMatchObject({ state: 'has_suggestions' });
+    expect(page.rows[0].suggestions.map((s: { category_id: string }) => s.category_id)).toEqual([a.food, a.dining]);
+    expect(page.counts).toMatchObject({ left_to_categorize: 1, above_threshold: 1, has_suggestions: 1 });
+    expect(page.bundles).toHaveLength(1);
+    expect(page.bundles[0]).toMatchObject({ payee: 'Cleared', count: 1, suggestion: { category_id: a.food } });
+
+    // Undo is unchanged: a category cleared by hand is not accept's to revert,
+    // and it must leave the stale record alone.
+    expect(await (await undo(ownerUser(), [t])).json())
+      .toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'category_changed' }] });
+    expect((await pool.query('select count(*)::int as n from public.categorize_decisions where transaction_id = $1', [t])).rows[0].n).toBe(1);
+
+    // The bundle still resolves the revived row; accepting it replaces the
+    // stale record (the user changes) instead of no-op'ing or refusing.
+    expect((await (await acceptBundle(memberUser(), page.bundles[0].bundle_key, 1)).json()).accepted).toBe(1);
+    expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBe(a.food);
+    expect((await pool.query('select kind, category_id, user_id from public.categorize_decisions where transaction_id = $1', [t])).rows)
+      .toEqual([{ kind: 'accept', category_id: a.food, user_id: memberId }]);
+    expect((await pool.query('select status from public.category_suggestions where transaction_id = $1 order by rank', [t])).rows.map((r) => r.status))
+      .toEqual(['accepted', 'dismissed']);
+    expect((await queueJson(ownerUser())).rows).toEqual([]);
+
+    // Cleared again and accepted with a DIFFERENT category: a stale accept
+    // takes another pair too.
+    await pool.query('update public.transactions set category_id = null where id = $1', [t]);
+    expect((await (await accept(ownerUser(), [{ transaction_id: t, category_id: a.dining }])).json()).accepted).toBe(1);
+    expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBe(a.dining);
+    expect((await pool.query('select kind, category_id from public.categorize_decisions where transaction_id = $1', [t])).rows)
+      .toEqual([{ kind: 'accept', category_id: a.dining }]);
+  });
+
+  test('a stale accept is a candidate again, the engine write replaces its suggestions, and skip then freezes it', async () => {
+    const t = await txn({ payeeId: await newPayee('Reclassified') });
+    await suggest(t, a.food, { rank: 1, confidence: 0.9 });
+    await suggest(t, a.dining, { rank: 2, confidence: 0.85 });
+    await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
+    await pool.query('update public.transactions set category_id = null where id = $1', [t]);
+
+    expect((await candidateWindow(pool, a.budgetId, false)).count).toBe(1);
+    // The run's write is not blocked by the accepted/dismissed rows: they are
+    // restored to pending and the fresh answer replaces them.
+    expect(
+      await replaceSuggestions(pool, a.budgetId, t, [
+        { categoryId: a.dining, confidence: 0.95, reason: 'fresh', source: 'ai', provider: null, model: null },
+      ]),
+    ).toBe(true);
+    const page = await queueJson(ownerUser());
+    expect(page.rows[0].suggestions).toEqual([
+      { category_id: a.dining, category_name: 'Dining', confidence: 0.95, reason: 'fresh', source: 'ai' },
+    ]);
+
+    const skipped = await skip(ownerUser(), t);
+    expect(await skipped.json()).toEqual({ dismissed: 1 });
+    expect((await pool.query('select kind, category_id from public.categorize_decisions where transaction_id = $1', [t])).rows)
+      .toEqual([{ kind: 'skip', category_id: null }]);
+    expect((await queueJson(ownerUser())).rows).toEqual([]);
+    expect((await candidateWindow(pool, a.budgetId, false)).count).toBe(0);
+    expect(
+      await replaceSuggestions(pool, a.budgetId, t, [
+        { categoryId: a.food, confidence: 0.9, reason: 'late', source: 'ai', provider: null, model: null },
+      ]),
+    ).toBe(false);
+  });
+
+  test('an accepted row whose category was changed by hand stays out of the queue and undo reports category_changed', async () => {
+    const t = await txn({ payeeId: await newPayee('Hand changed') });
+    await suggest(t, a.food);
+    await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
+    await pool.query('update public.transactions set category_id = $2 where id = $1', [t, a.dining]);
+
+    expect((await queueJson(ownerUser())).rows).toEqual([]);
+    expect((await candidateWindow(pool, a.budgetId, false)).count).toBe(0);
+    const back = await undo(ownerUser(), [t]);
+    expect(await back.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'category_changed' }] });
+    expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBe(a.dining);
+  });
+
   test('P1: undo does not clear a category a person set by hand', async () => {
     const t = await txn({ categoryId: a.food, payeeId: await newPayee('Hand set') });
     const res = await undo(ownerUser(), [t]);
