@@ -13,7 +13,8 @@ import { t } from './i18n';
 export type RegisterChip = 'all' | 'needsCategory' | 'suggested' | 'transfers';
 export type TransferLeg = TransferSuggestion['leg'];
 export type CandidateLeg = TransferSuggestion['candidates'][number];
-export type MatchKind = 'sure' | 'choose' | 'oneSide';
+export type MatchKind = 'sure' | 'confirm' | 'choose' | 'oneSide';
+export type TransferRule = NonNullable<CandidateLeg['rule']>;
 
 /** A linked transfer leg, or a rule row counted as a transfer (waiting / outside the budget). */
 export const isTransferRow = (tx: Pick<Transaction, 'transferAccountId' | 'transferPending'>): boolean =>
@@ -56,8 +57,9 @@ export function findSuggestion(list: readonly TransferSuggestion[], txnId: strin
   );
 }
 
-export const matchKind = (s: Pick<TransferSuggestion, 'confidence'>): MatchKind =>
-  s.confidence === 'one_side' ? 'oneSide' : s.confidence;
+/** `confirm`: a lone pair the account rules refuse, so it is never "sure": the person decides. */
+export const matchKind = (s: Pick<TransferSuggestion, 'confidence' | 'basis'>): MatchKind =>
+  s.confidence === 'one_side' ? 'oneSide' : s.confidence === 'sure' && s.basis === 'refused' ? 'confirm' : s.confidence;
 
 /** What the popover shows for `txnId`: the row, the proposed other side (or choices), and the link to send. */
 export interface PopoverSides {
@@ -97,6 +99,30 @@ export function popoverSides(s: TransferSuggestion, txnId: string, pick?: string
 const daysBetween = (a: string, b: string): number =>
   Math.round(Math.abs(Date.parse(a.slice(0, 10)) - Date.parse(b.slice(0, 10))) / 86_400_000);
 
+const RULE_KEYS = {
+  card_outflow: 'why.refused.cardOutflow',
+  card_payment_other_bank: 'why.refused.cardOtherBank',
+  cash_same_bank: 'why.refused.cashSameBank',
+} as const satisfies Record<TransferRule, string>;
+
+/** One short line for the account rule a pairing breaks. */
+export function ruleReason(rule: TransferRule): string {
+  const key = (RULE_KEYS as Record<string, (typeof RULE_KEYS)[TransferRule] | undefined>)[rule];
+  return key ? t(key) : t('why.refusedAny'); // a rule this client does not know yet
+}
+
+/** Rules of the proposed side, else of every candidate that breaks one; distinct lines, in candidate order. */
+function ruleLines(s: TransferSuggestion, other: PopoverSides['other']): string[] {
+  const rules = other && 'rule' in other && other.rule ? [other.rule] : s.candidates.flatMap((c) => (c.rule ? [c.rule] : []));
+  return [...new Set(rules.map(ruleReason))];
+}
+
+/** Why a refused suggestion is only offered: the rule of the proposed side, else of its candidates. */
+function refusedReason(s: TransferSuggestion, other: PopoverSides['other']): string {
+  const lines = ruleLines(s, other);
+  return lines.length > 0 ? lines.join(' / ') : t('why.refusedAny');
+}
+
 /** "Why: same amount, same day · Pluggy says "…" on both sides · only candidate". */
 export function whyLine(s: TransferSuggestion, sides: Pick<PopoverSides, 'row' | 'other'>): string {
   const parts: string[] = [];
@@ -116,8 +142,10 @@ export function whyLine(s: TransferSuggestion, sides: Pick<PopoverSides, 'row' |
   else if (s.basis === 'evidence') parts.push(t('why.evidence'));
   else if (s.basis === 'rule') parts.push(t('why.rule'));
   else if (s.basis === 'ambiguous') parts.push(t('why.ambiguous', { count: s.candidates.length }));
+  else if (s.basis === 'refused') parts.push(refusedReason(s, other));
   else parts.push(t('why.unmatched'));
-  if (s.confidence === 'sure' && (!row.untouched || (other && !other.untouched))) parts.push(t('why.edited'));
+  if (s.basis !== 'refused' && other && 'rule' in other && other.rule) parts.push(ruleReason(other.rule));
+  if (s.basis !== 'refused' && s.confidence === 'sure' && (!row.untouched || (other && !other.untouched))) parts.push(t('why.edited'));
   return `${t('why.label')} ${parts.join(' · ')}`;
 }
 
@@ -137,14 +165,19 @@ export interface ReviewRow {
   dismissIds: string[];
   /** The subject row's payee (accessibility label). */
   payee: string;
+  /** A pair the account rules refuse: never ticked by Select all, linked only when ticked by hand. */
+  needsConfirm: boolean;
+  /** The account rule(s) a refused suggestion or refused candidate breaks, one short line; null when none. */
+  reason: string | null;
 }
 
 export function reviewRow(s: TransferSuggestion, pick?: string | null): ReviewRow {
   const sides = popoverSides(s, s.leg.transaction_id, pick);
+  const match = matchKind(s);
   return {
     id: s.id,
     date: s.leg.date,
-    match: matchKind(s),
+    match,
     from: sides.from,
     to: sides.to,
     choices: sides.other ? [] : sides.choices,
@@ -152,11 +185,21 @@ export function reviewRow(s: TransferSuggestion, pick?: string | null): ReviewRo
     link: sides.link,
     dismissIds: s.confidence === 'sure' ? [s.leg.transaction_id, ...s.candidates.map((c) => c.transaction_id)] : [s.leg.transaction_id],
     payee: s.leg.payee_name ?? '',
+    needsConfirm: match === 'confirm',
+    reason: s.basis === 'refused' ? refusedReason(s, sides.other) : ruleLines(s, sides.other).join(' / ') || null,
   };
 }
 
 /** Bulk bar: how many are selected, money out / in (cents) and the links that can be sent now. */
-export function bulkSummary(rows: readonly ReviewRow[]): { count: number; out: Cents; in: Cents; links: TransferLinkInput[]; dismissIds: string[] } {
+export function bulkSummary(rows: readonly ReviewRow[]): {
+  count: number;
+  out: Cents;
+  in: Cents;
+  links: TransferLinkInput[];
+  dismissIds: string[];
+  /** Selected pairs the account rules refuse (linked only because they were ticked by hand). */
+  needConfirm: number;
+} {
   let out = 0;
   let inn = 0;
   for (const r of rows) {
@@ -169,7 +212,19 @@ export function bulkSummary(rows: readonly ReviewRow[]): { count: number; out: C
     in: inn,
     links: rows.flatMap((r) => (r.link ? [r.link] : [])),
     dismissIds: [...new Set(rows.flatMap((r) => r.dismissIds))],
+    needConfirm: rows.filter((r) => r.needsConfirm).length,
   };
+}
+
+/** Select all ticks every row except the refused pairs (those need a deliberate tick); ticked-by-hand ones stay. */
+export function selectAllRows(rows: readonly ReviewRow[], selected: ReadonlySet<string>): Set<string> {
+  return new Set(rows.filter((r) => !r.needsConfirm || selected.has(r.id)).map((r) => r.id));
+}
+
+/** The header checkbox is on when every row Select all would tick is ticked. */
+export function allSelected(rows: readonly ReviewRow[], selected: ReadonlySet<string>): boolean {
+  const ticks = rows.filter((r) => !r.needsConfirm);
+  return ticks.length > 0 && ticks.every((r) => selected.has(r.id));
 }
 
 /** Toast after linking: "3 linked as transfers · 1 payee rule created". */
