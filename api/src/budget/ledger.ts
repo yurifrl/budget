@@ -29,6 +29,7 @@ export { applyBalanceDeltas, type BalanceDelta } from './domain/transactions';
 export { linkTransfers, linkTransfers as linkCardPayments } from './domain/transfer-links';
 export { adoptAccountCurrency } from './store/accounts';
 export { clearTransferHints, setTransferHint } from './store/transfers';
+export { lockBudgetImportWrites } from './store/rename-apply';
 export {
   insertImportedTransaction,
   refreshImportedTransaction,

@@ -58,7 +58,7 @@ export async function planRuleApply(db: Queryable, budgetId: string, ruleId: str
   const rules = await loadRenameRules(db, budgetId);
   const rule = rules.find((r) => r.id === ruleId);
   if (!rule) throw new HttpError(404, 'rule not found');
-  const rows = await store.listApplyRows(db, budgetId, lock);
+  const rows = await store.listApplyRows(db, budgetId, rule, lock);
   const skipped: SkippedCounts = { edited: 0, transfer: 0, reconciled: 0, bank_rules: 0, unknown_text: 0 };
   const changes: PlannedChange[] = [];
   // What the rule makes of one text (read only), once per text.
@@ -183,19 +183,23 @@ async function writeHints(db: Queryable, budgetId: string, rows: { id: string; h
 
 export interface RevertResult {
   reverted: number;
-  skipped: { transaction_id: string; reason: 'changed_since' | 'payee_gone' | 'not_found' }[];
+  skipped: { transaction_id: string; reason: 'changed_since' | 'payee_gone' | 'not_found' | 'already_reverted' }[];
 }
 
 /**
  * Put back what ONE recorded apply changed. Only the apply's own record is read (the client sends nothing but the id), and a row
  * is restored only while it is still exactly what the apply left (same payee and hint, a synced row's shadow unblocked and still
  * saying that payee), still live in an open account, not reconciled, linked or a transfer. The payee put back is an ordinary,
- * live one, the hint a live open account: anything else is left alone and reported. A second revert restores nothing.
+ * live one, the hint a live open account: anything else is left alone and reported. A second revert of the same apply restores nothing (`already_reverted`, from `reverted_at`), also after a later apply touched the same rows.
  */
 export async function revertRuleApply(db: Queryable, budgetId: string, applyId: string): Promise<RevertResult> {
+  await store.lockBudgetImportWrites(db, [budgetId]);
   const apply = await store.lockApply(db, budgetId, applyId);
   if (!apply) throw new HttpError(404, 'apply not found');
   const rows = await store.listApplyRecordRows(db, budgetId, applyId);
+  // An apply is taken back ONCE: after that its record says what a later apply of the same rows may have changed again, and
+  // putting the old payees back would undo that one.
+  if (apply.reverted) return { reverted: 0, skipped: rows.map((r) => ({ transaction_id: r.transaction_id, reason: 'already_reverted' as const })) };
   const current = new Map((await store.lockRows(db, budgetId, rows.map((r) => r.transaction_id))).map((r) => [r.id, r]));
   const payees = await store.livePayeeIds(db, budgetId, rows.map((r) => r.previous_payee_id).filter((x): x is string => x !== null));
   const accounts = await store.liveAccountIds(db, budgetId, rows.map((r) => r.previous_hint_account_id).filter((x): x is string => x !== null));

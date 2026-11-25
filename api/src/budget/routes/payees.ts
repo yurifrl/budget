@@ -22,6 +22,7 @@ import {
   payeesTransferRuleGet,
 } from '@shared/contracts/budget';
 import { planRuleApply, revertRuleApply, writeRuleApply } from '../domain/rename-apply';
+import { lockBudgetImportWrites } from '../store/rename-apply';
 import { linkTransfers } from '../domain/transfer-links';
 import { assertNotTransferPayee, transferPayeeProtected } from '../domain/transfer-payees';
 import * as transferStore from '../store/transfers';
@@ -314,6 +315,8 @@ export const operations = [
     withTransaction(pool, async (client) => {
       await requirePayeeIn(client, budget_id, id);
       if (!(await rulesStore.getRule(client, budget_id, id, rule_id))) throw new HttpError(404, 'rule not found');
+      // The same per-budget lock the bank sync takes for its writes: no deadlock with a running sync.
+      await lockBudgetImportWrites(client, [budget_id]);
       const plan = await planRuleApply(client, budget_id, rule_id, true);
       const user: IdentityUser | undefined = c.get('user');
       const { applyId, rows } = await writeRuleApply(client, budget_id, plan, user?.id ?? null);

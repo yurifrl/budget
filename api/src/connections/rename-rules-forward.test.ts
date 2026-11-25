@@ -24,6 +24,9 @@ import { httpOnError } from '../core/validate';
 import type { IdentityUser } from '../user';
 import budget from '../budget';
 import * as store from './store';
+// The store under test (a test may reach into a feature's internals).
+// eslint-disable-next-line import/no-restricted-paths
+import { lockBudgetImportWrites, listApplyRows } from '../budget/store/rename-apply';
 import { syncConnectionTransactions } from './sync';
 import type { AggregatedTransaction, BankAggregator } from './types';
 
@@ -407,7 +410,7 @@ describe.skipIf(!dbReady)('applying one rule to past transactions', () => {
     // Reverting twice changes nothing: the rows are no longer as the apply left them.
     const twice = (await op('budget_payees_rename_rules_revert', { budget_id: c.B, apply_id: result.apply_id })).json as { reverted: number; skipped: { reason: string }[] };
     expect(twice.reverted).toBe(0);
-    expect(twice.skipped.every((s) => s.reason === 'changed_since')).toBe(true);
+    expect(twice.skipped.every((s) => s.reason === 'already_reverted')).toBe(true);
     void cafe;
   });
 
@@ -658,5 +661,188 @@ describe.skipIf(!dbReady)('statement import with no rule change: another case is
     expect(await c.bulk('Savings Conta', [row('COFFEE SHOP')])).toEqual({ imported: 1, duplicates: 0 });
     expect(await c.bulk('Savings Conta', [row('COFFEE  SHOP')])).toEqual({ imported: 1, duplicates: 0 });
     expect(await c.bulk('Savings Conta', [row('Coffee Shop'), row('COFFEE SHOP'), row(' Coffee Shop ')])).toEqual({ imported: 0, duplicates: 3 });
+  });
+});
+
+describe.skipIf(!dbReady)('the recorded bank text is the text of the latest pull (round 3, N1 + N2)', () => {
+  const textOf = async (c: Ctx, ext: string) => (await pool.query<{ bank_text: string | null }>('SELECT cs.bank_text FROM connection_transactions cs JOIN transactions t ON t.id = cs.transaction_id WHERE t.budget_id = $1 AND t.import_id = $2', [c.B, `${PROVIDER}:${ext}`])).rows[0]!.bank_text;
+  const pull = (texts: Record<string, string>, extra: { id: string; text: string; amount: number }[]) => {
+    const base = mainUpstream().map((t) => (texts[t.externalId] ? { ...t, description: texts[t.externalId]!, raw: { ...t.raw, description: texts[t.externalId]! } } : t));
+    return [...base, ...extra.map((e) => up(e.id, e.text, e.amount))];
+  };
+  const sync2 = async (c: Ctx, extra: { id: string; text: string; amount: number }[]) => {
+    for (let i = 0; i < 2; i++) {
+      upstream = pull({}, extra);
+      expect(await c.sync(), `sync ${i}`).toMatchObject({ added: 0, updated: 0, failed: 0 });
+    }
+  };
+
+  test('pending -> posted keeps the payee; the text is recorded on that duplicate pull; a later rule edit and rule add re-point nothing', async () => {
+    const c = await buildWith('n1', 'text');
+    upstream = pull({}, [{ id: 'n1', text: 'UBER TRIP PENDING', amount: -1100 }]);
+    expect(await c.sync()).toMatchObject({ added: 1, failed: 0 });
+    expect(await textOf(c, 'n1')).toBe('UBER TRIP PENDING');
+    // The bank posts it: the text changes to one that still resolves to the same payee (Uber, contains "UBER TRIP").
+    const posted = [{ id: 'n1', text: 'UBER TRIP', amount: -1100 }];
+    upstream = pull({}, posted);
+    expect(await c.sync()).toMatchObject({ added: 0, updated: 0, failed: 0 });
+    expect(await textOf(c, 'n1')).toBe('UBER TRIP'); // not the stale "UBER TRIP PENDING"
+    const before = (await c.snapshot()) as Snap;
+    const [uber] = await rulesOf(c, 'Uber');
+    expect((await op('budget_payees_rename_rules_update', { id: c.idOf('Uber'), budget_id: c.B, rule_id: uber!.id, match_type: 'contains', condition: 'UBER EATS' })).status).toBe(200);
+    expect((await op('budget_payees_rename_rules_add', { id: c.idOf('Bakery'), budget_id: c.B, match_type: 'is', condition: 'UBER TRIP' })).status).toBe(201);
+    await sync2(c, posted);
+    const after = (await c.snapshot()) as Snap;
+    expect(txnOf(after, 'n1')).toEqual(txnOf(before, 'n1'));
+    expect(after.payees).toEqual(before.payees);
+    expect(after.shadows).toEqual(before.shadows);
+  });
+
+  test('preview and apply match the posted text, and the next syncs leave the applied row alone', async () => {
+    const c = await buildWith('n2', 'text');
+    upstream = pull({}, [{ id: 'n2', text: 'UBER TRIP PENDING', amount: -1200 }]);
+    await c.sync();
+    const posted = [{ id: 'n2', text: 'UBER TRIP', amount: -1200 }];
+    upstream = pull({}, posted);
+    await c.sync();
+    const rule = ((await op('budget_payees_rename_rules_add', { id: c.idOf('Bakery'), budget_id: c.B, match_type: 'is', condition: 'UBER TRIP' })).json as { id: string }).id;
+    const p = (await op('budget_payees_rename_rules_apply_preview', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { count: number; sample: { bank_text: string }[] };
+    expect(p.count).toBe(1);
+    expect(p.sample[0]!.bank_text).toBe('UBER TRIP');
+    const r = (await op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { changed: number };
+    expect(r.changed).toBe(1);
+    const applied = (await c.snapshot()) as Snap;
+    expect(txnOf(applied, 'n2').payee_id).toBe(c.idOf('Bakery'));
+    await sync2(c, posted);
+    expect(((await c.snapshot()) as Snap).transactions).toEqual(applied.transactions);
+    // Even if the recorded text were stale, the stored provider object (the bank's own words) wins.
+    await pool.query("UPDATE connection_transactions SET bank_text = 'SOMETHING OLD' WHERE external_transaction_id = 'n2' AND budget_id = $1", [c.B]);
+    const again = (await op('budget_payees_rename_rules_apply_preview', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { count: number; skipped: { edited: number } };
+    expect(again.count).toBe(0);
+    expect(await pool.query("SELECT 1 FROM transactions WHERE budget_id = $1 AND import_id = $2 AND payee_id = $3", [c.B, `${PROVIDER}:n2`, c.idOf('Bakery')])).toHaveProperty('rowCount', 1);
+  });
+});
+
+describe.skipIf(!dbReady)('an apply is reverted once; revert restores the payee and hint only (round 3, F1 + F5)', () => {
+  const addRule = async (c: Ctx, text: string) => ((await op('budget_payees_rename_rules_add', { id: c.idOf('Bakery'), budget_id: c.B, match_type: 'is', condition: text })).json as { id: string }).id;
+  const applyOp = async (c: Ctx, rule: string) => (await op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { apply_id: string; changed: number; rows: { transaction_id: string }[] };
+  const revertOp = async (c: Ctx, apply: string) => (await op('budget_payees_rename_rules_revert', { budget_id: c.B, apply_id: apply })).json as { reverted: number; skipped: { reason: string }[] };
+
+  test('apply1 -> revert1 -> apply2 -> revert1 again (nothing) -> revert2 (restores)', async () => {
+    const c = await buildWith('f1', 'text');
+    const rule = await addRule(c, 'Corner Shop');
+    const original = (await c.snapshot()) as Snap;
+    const a1 = await applyOp(c, rule);
+    expect(a1.changed).toBeGreaterThan(0);
+    expect((await revertOp(c, a1.apply_id)).reverted).toBe(a1.changed);
+    expect(await c.snapshot()).toEqual(original);
+    const a2 = await applyOp(c, rule);
+    expect(a2.changed).toBe(a1.changed);
+    const applied = (await c.snapshot()) as Snap;
+    const again = await revertOp(c, a1.apply_id);
+    expect(again.reverted).toBe(0);
+    expect(again.skipped.length).toBe(a1.changed);
+    expect(again.skipped.every((x) => x.reason === 'already_reverted')).toBe(true);
+    expect(await c.snapshot()).toEqual(applied);
+    expect((await revertOp(c, a2.apply_id)).reverted).toBe(a2.changed);
+    expect(await c.snapshot()).toEqual(original);
+  });
+
+  test('a category, memo or approval changed after the apply stays as the person left it', async () => {
+    const c = await buildWith('f5', 'text');
+    const rule = await addRule(c, 'Corner Shop');
+    const a = await applyOp(c, rule);
+    const id = a.rows[0]!.transaction_id;
+    const cat = crypto.randomUUID();
+    const group = crypto.randomUUID();
+    await pool.query("INSERT INTO category_groups (id, budget_id, name) VALUES ($1,$2,'G5')", [group, c.B]);
+    await pool.query("INSERT INTO categories (id, budget_id, group_id, name) VALUES ($1,$2,$3,'Cat5')", [cat, c.B, group]);
+    await pool.query("UPDATE transactions SET category_id = $2, memo = 'mine', approved = true WHERE id = $1", [id, cat]);
+    expect((await revertOp(c, a.apply_id)).reverted).toBe(a.changed);
+    const row = (await pool.query('SELECT payee_id, category_id, memo, approved FROM transactions WHERE id = $1', [id])).rows[0];
+    expect(row).toMatchObject({ category_id: cat, memo: 'mine', approved: true });
+    expect(row.payee_id).not.toBe(c.idOf('Bakery'));
+  });
+});
+
+describe.skipIf(!dbReady)('apply, revert and the sync share a per-budget lock; apply reads and locks only the rows the rule can match (round 3, F2 + F3)', () => {
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const settled = async (p: Promise<unknown>) => (await Promise.race([p.then(() => true), wait(400).then(() => false)])) as boolean;
+
+  test('a sync, an apply and a revert wait for whoever holds the budget lock, and run once it is released', async () => {
+    const c = await buildWith('f2', 'text');
+    const rule = ((await op('budget_payees_rename_rules_add', { id: c.idOf('Bakery'), budget_id: c.B, match_type: 'is', condition: 'Corner Shop' })).json as { id: string }).id;
+    const applied = (await op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule })).json as { apply_id: string };
+    const holder = await pool.connect();
+    try {
+      await holder.query('BEGIN');
+      await lockBudgetImportWrites(holder, [c.B]);
+      upstream = mainUpstream();
+      const sync = c.sync();
+      const apply = op('budget_payees_rename_rules_apply', { id: c.idOf('Bakery'), budget_id: c.B, rule_id: rule });
+      const revert = op('budget_payees_rename_rules_revert', { budget_id: c.B, apply_id: applied.apply_id });
+      expect(await settled(sync), 'sync waits').toBe(false);
+      expect(await settled(apply), 'apply waits').toBe(false);
+      expect(await settled(revert), 'revert waits').toBe(false);
+      await holder.query('COMMIT');
+      await Promise.all([sync, apply, revert]);
+    } finally {
+      holder.release();
+    }
+  });
+
+  test('apply locks only the rows the rule can match, and reads fewer rows than the budget imported', async () => {
+    const c = await buildWith('f3', 'text');
+    const all = (await pool.query("SELECT id, import_payee_name FROM transactions WHERE budget_id = $1 AND import_id IS NOT NULL AND NOT deleted", [c.B])).rows as { id: string; import_payee_name: string }[];
+    const corner = all.find((r) => r.import_payee_name === 'Corner Shop')!;
+    const other = all.find((r) => r.import_payee_name !== 'Corner Shop' && !/corner/i.test(r.import_payee_name))!;
+    const holder = await pool.connect();
+    try {
+      await holder.query('BEGIN');
+      const rows = await listApplyRows(holder, c.B, { match_type: 'is', condition: 'Corner Shop' }, true);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.length).toBeLessThan(all.length / 2);
+      const nowait = async (id: string) => pool.query('SELECT 1 FROM transactions WHERE id = $1 FOR UPDATE NOWAIT', [id]).then(() => 'free', () => 'locked');
+      expect(await nowait(other.id)).toBe('free');
+      expect(await nowait(corner.id)).toBe('locked');
+      await holder.query('ROLLBACK');
+    } finally {
+      holder.release();
+    }
+    // A pattern with a non-ASCII character is not prefiltered (lower() is locale dependent in SQL): it reads every imported row.
+    const wide = await listApplyRows(pool, c.B, { match_type: 'contains', condition: 'cafÉ' });
+    expect(wide.length).toBeGreaterThanOrEqual(all.length - 5);
+    const idx = await pool.query("SELECT 1 FROM pg_indexes WHERE tablename = 'rename_rule_apply_rows' AND indexdef LIKE '%(transaction_id)%'");
+    expect(idx.rowCount).toBeGreaterThan(0);
+  });
+});
+
+describe.skipIf(!dbReady)('re-importing main\'s statement files into a fresh-start copy (round 3, F6)', () => {
+  test('imports nothing now (the carried rows are recognised by amount, date and text, whatever payee ids their keys name); main imported every row again', async () => {
+    const c = await buildWith('f6', 'text');
+    // (A linked account's copy would collide with the original on the link's unique index: unlink it, the copied rows carry no shadow anyway.)
+    await pool.query('UPDATE accounts SET connection_id = NULL, external_account_id = NULL WHERE budget_id = $1', [c.B]);
+    const res = (await op('budget_fresh_start', { budget_id: c.B })).json as { created: { id: string } };
+    budgets.push(res.created.id);
+    const accounts = (await pool.query<{ id: string; name: string }>('SELECT id, name FROM accounts WHERE budget_id = $1', [res.created.id])).rows;
+    // Fresh start carries the history of LINKED accounts only, copying each row with the new budget's payee and account ids and
+    // its import id untouched (the key still names the OLD payee's id). The statement accounts here are not linked (a linked copy
+    // collides with the original on the link's unique index), so the carry-over is reproduced as it does it.
+    await pool.query(
+      `INSERT INTO transactions (budget_id, account_id, date, amount, payee_id, cleared, approved, repeat, deleted, import_id, import_payee_name, import_payee_name_original)
+       SELECT $2, na.id, t.date, t.amount, np.id, t.cleared, t.approved, t.repeat, false, t.import_id, t.import_payee_name, t.import_payee_name_original
+         FROM transactions t
+         JOIN accounts oa ON oa.id = t.account_id AND oa.name IN ('Savings Conta', 'Cartao Conta')
+         JOIN accounts na ON na.budget_id = $2 AND na.name = oa.name
+         LEFT JOIN payees op ON op.id = t.payee_id
+         LEFT JOIN payees np ON np.budget_id = $2 AND np.name = op.name
+        WHERE t.budget_id = $1 AND NOT t.deleted`,
+      [c.B, res.created.id],
+    );
+    const copied = (await pool.query('SELECT count(*)::int AS n FROM transactions WHERE budget_id = $1', [res.created.id])).rows[0].n as number;
+    expect(copied).toBe(28);
+    const into = async (name: string, rows: object[]) => (await op('budget_transactions_bulk_import', { budget_id: res.created.id, account_id: accounts.find((a) => a.name === name)!.id, txns: rows })).json as { imported: number; duplicates: number };
+    expect(await into('Savings Conta', plainRows())).toEqual({ imported: 0, duplicates: 24 });
+    expect(await into('Cartao Conta', clientRows())).toEqual({ imported: 0, duplicates: 4 });
   });
 });

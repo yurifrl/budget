@@ -5,7 +5,19 @@
  */
 import type { Queryable } from '../../core/db';
 import { rawBankText } from '../../connections';
+import type { RuleMatchType } from '@shared/domain/payees';
 import { UNTOUCHED_LEDGER_SQL } from './transfers';
+
+/**
+ * The per-budget lock every writer of a budget's IMPORTED rows takes first: the bank sync (for the budgets of its accounts, in
+ * id order, right after it locks its connection) and an apply or a revert of a renaming rule. Transaction-scoped. With it the two
+ * never hold row locks in different orders, so they cannot deadlock; whoever comes second waits for the first to commit.
+ */
+export async function lockBudgetImportWrites(db: Queryable, budgetIds: readonly string[]): Promise<void> {
+  for (const id of [...budgetIds].sort()) {
+    await db.query("SELECT pg_advisory_xact_lock(hashtextextended('budget-import-writes:' || $1::text, 0))", [id]);
+  }
+}
 
 /** A bank-imported row an apply may look at, with the facts "untouched", "transfer" and the matcher's bank rules need. */
 export interface ApplyRow {
@@ -44,10 +56,19 @@ interface ApplyRowSql extends Omit<ApplyRow, 'bank_text'> {
 }
 
 /**
- * Every live bank-imported row of open accounts of the budget with a stored import text, newest first. `lock`: lock the rows (an
- * apply), so a concurrent sync or edit waits for it.
+ * The live bank-imported rows of open accounts of the budget whose stored text could be matched by `rule`, newest first, plus the
+ * synced rows whose text is not known (they are counted, not matched). The match is made in SQL on the same text the caller uses
+ * (the stored provider object's description, else the recorded one; a statement row's import text), lower-cased as
+ * `normalizeRuleText` does; it is only a PREFILTER (the caller still decides which rule wins). A pattern with a non-ASCII
+ * character is not prefiltered (lower() is locale dependent in SQL), so such a rule reads every imported row. `lock`: lock
+ * exactly the rows read (an apply), so a concurrent edit waits for it.
  */
-export async function listApplyRows(db: Queryable, budgetId: string, lock = false): Promise<ApplyRow[]> {
+export async function listApplyRows(db: Queryable, budgetId: string, rule: { match_type: RuleMatchType; condition: string }, lock = false): Promise<ApplyRow[]> {
+  const text = `COALESCE(CASE WHEN jsonb_typeof(cs.raw_payload->'description') = 'string' THEN NULLIF(btrim(cs.raw_payload->>'description'), '') END, cs.bank_text)`;
+  const textSql = `CASE WHEN cs.transaction_id IS NOT NULL THEN ${text} ELSE NULLIF(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name, '')), '') END`;
+  const ascii = /^[\x00-\x7f]*$/.test(rule.condition);
+  const op = { is: 'lower(X) = lower($2)', contains: 'strpos(lower(X), lower($2)) > 0', starts_with: 'starts_with(lower(X), lower($2))', ends_with: 'right(lower(X), length($2)) = lower($2)' }[rule.match_type].replaceAll('X', textSql);
+  const prefilter = ascii ? `AND (${textSql} IS NULL OR ${op})` : '';
   const res = await db.query<ApplyRowSql>(
     `SELECT t.id, t.account_id, t.date::text AS date, t.amount, t.payee_id, p.name AS payee_name,
             btrim(COALESCE(t.import_payee_name_original, t.import_payee_name, '')) AS statement_text,
@@ -66,15 +87,16 @@ export async function listApplyRows(db: Queryable, budgetId: string, lock = fals
        LEFT JOIN transfer_hints h ON h.transaction_id = t.id
       WHERE t.budget_id = $1 AND NOT t.deleted AND NOT t.upcoming AND NOT a.deleted AND NOT a.closed
         AND t.import_id IS NOT NULL
+        ${prefilter}
       ORDER BY t.date DESC, t.id
       ${lock ? 'FOR UPDATE OF t' : ''}`,
-    [budgetId],
+    ascii ? [budgetId, rule.condition] : [budgetId],
   );
   return res.rows.map(({ statement_text, bank_text_recorded, raw_description, ...row }) => ({
     ...row,
     // A synced row's text is the one the bank sent (recorded by the sync, else read from the stored provider object by the
     // adapter's own expression); a statement row has only its import text. Unknown (null), never guessed.
-    bank_text: row.has_shadow ? (bank_text_recorded ?? rawBankText({ description: raw_description })) : statement_text === '' ? null : statement_text,
+    bank_text: row.has_shadow ? ((rawBankText({ description: raw_description }) || null) ?? bank_text_recorded) : statement_text === '' ? null : statement_text,
   }));
 }
 

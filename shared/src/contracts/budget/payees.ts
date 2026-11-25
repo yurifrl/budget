@@ -227,7 +227,7 @@ export const payeesRenameRulesApply = defineOperation({
 export const payeesRenameRulesRevert = defineOperation({
   name: 'budget_payees_rename_rules_revert',
   description:
-    'Undo a budget_payees_rename_rules_apply by its apply_id, in one transaction: each row of that apply that still has exactly the payee and hint the apply gave it (and is still live, unreconciled, not a transfer, and a synced row\'s shadow is unblocked and agrees) gets its previous payee and hint back; every other row is left as it is and reported in `skipped`. Nothing else is touched, and nothing the caller sends names a row, payee or account.',
+    'Undo a budget_payees_rename_rules_apply by its apply_id, in one transaction: each row of that apply that still has exactly the payee and hint the apply gave it (and is still live, unreconciled, not a transfer, and a synced row\'s shadow is unblocked and agrees) gets its previous payee and hint back; every other row is left as it is and reported in `skipped`. Only the payee and the transfer hint are put back: a category, memo, approval or amount changed after the apply stays as the person left it. An apply can be reverted once (a second revert, even after a later apply touched the same rows, restores nothing: `already_reverted`). Nothing the caller sends names a row, payee or account.',
   input: z.object({ budget_id: budgetId, apply_id: uuidSchema }),
   output: renameRuleRevertResultSchema,
   method: 'POST',

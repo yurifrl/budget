@@ -27,3 +27,4 @@ create table if not exists public.rename_rule_apply_rows (
   hint_account_id           uuid,
   primary key (apply_id, transaction_id)
 );
+create index if not exists rename_rule_apply_rows_transaction_idx on public.rename_rule_apply_rows (transaction_id);

@@ -568,6 +568,12 @@ async function syncOnce(
 
     // Only accounts we actually pulled (links may have changed meanwhile).
     const stillLinked = (await pg.query<LinkedAccountRow>(linkedSql, [row.id])).rows;
+    // Applying a renaming rule to past rows (and taking it back) writes the same rows: it takes this per-budget lock, so the two
+    // never lock rows in different orders. Budgets are locked in id order (two syncs never wait on each other in a cycle).
+    await ledger.lockBudgetImportWrites(
+      pg,
+      [...new Set(stillLinked.filter((a) => fetched.has(a.id)).map((a) => fetched.get(a.id)!.acc.budget_id))],
+    );
     rowsStart = Date.now();
 
     for (const { id } of stillLinked) {
@@ -678,9 +684,12 @@ async function syncOnce(
           // too. Never touches user-visible fields or updated_at. Skipped bank
           // ids (deleted, or imported into another account) get no raw write.
           if (existing.shadow_payload != null) {
+            // The bank text of the latest pull is recorded in the same statement as the object it came from, on every path
+            // that sees the row (the refresh and duplicate paths below only READ the previous values, selected above), so
+            // `bank_text` always equals the text of the last pull and a text change that keeps the payee is not forgotten.
             await pg.query(
-              'UPDATE connection_transactions SET raw_payload = $2, raw_received_at = now() WHERE transaction_id = $1',
-              [existing.id, JSON.stringify(txn.raw)],
+              'UPDATE connection_transactions SET raw_payload = $2, raw_received_at = now(), bank_text = $3 WHERE transaction_id = $1',
+              [existing.id, JSON.stringify(txn.raw), txn.description.trim() || null],
             );
           }
 
@@ -711,13 +720,10 @@ async function syncOnce(
           // behaviour hold the rewritten name as import name, and rows older than raw storage have no stored text at all:
           // nothing is known about their past text, so the text counts as UNCHANGED (never re-resolved merely for that).
           const bankText = txn.description.trim();
-          const storedText = existing.shadow_bank_text ?? rawBankText(existing.shadow_raw);
+          // The stored object's text wins over the recorded one when both exist (the object is the bank's own words).
+          const storedText = rawBankText(existing.shadow_raw) ?? existing.shadow_bank_text;
           const textKept = bankText !== '' && (existing.import_payee_name === bankText || storedText === null || storedText === bankText);
           const sameDateAndAmount = current.date === txn.date.slice(0, 10) && current.amount === milli;
-          if (textKept && storedText === null) {
-            // From now on later pulls compare against this text.
-            await pg.query('UPDATE connection_transactions SET bank_text = $2 WHERE transaction_id = $1 AND bank_text IS NULL', [existing.id, bankText]);
-          }
           if (textKept && sameDateAndAmount) {
             result.duplicates += 1;
             continue;
@@ -778,9 +784,9 @@ async function syncOnce(
           }
           await pg.query(
             `UPDATE connection_transactions
-             SET last_synced_payload = $2, bank_text = $3, updated_at = now()
+             SET last_synced_payload = $2, updated_at = now()
              WHERE transaction_id = $1`,
-            [existing.id, JSON.stringify(upstreamPayload(storedName)), bankText || null],
+            [existing.id, JSON.stringify(upstreamPayload(storedName))],
           );
           result.updated += 1;
           const bucket = existing.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';

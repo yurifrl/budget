@@ -244,8 +244,8 @@ export const renameRuleApplyResultSchema = z.object({
 /** POST .../revert: what was put back. */
 export const renameRuleRevertResultSchema = z.object({
   reverted: z.number().int(),
-  /** Rows left as they are: changed since the apply (`changed_since`), their old payee is gone (`payee_gone`), or the row is gone. */
-  skipped: z.array(z.object({ transaction_id: id, reason: z.enum(['changed_since', 'payee_gone', 'not_found']) })),
+  /** Rows left as they are: changed since the apply (`changed_since`), their old payee is gone (`payee_gone`), the row is gone (`not_found`), or the whole apply was reverted before (`already_reverted`). */
+  skipped: z.array(z.object({ transaction_id: id, reason: z.enum(['changed_since', 'payee_gone', 'not_found', 'already_reverted']) })),
 });
 
 /** GET /payees: the base payee plus visibility, categorization and usage stats. */
