@@ -15,7 +15,7 @@
  * Keep them and leave / Stay); closing the tab sends nothing.
  */
 
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
   budgetApi,
@@ -168,8 +168,29 @@ export function useCategorizeAccept({
     mounted.current = true;
     return () => {
       mounted.current = false;
+      // Gone (a budget switch): the prompt can no longer reach this page, only its last strip.
+      if (budgetId) leaveStore.pageClosed(budgetId);
     };
-  }, []);
+  }, [budgetId]);
+
+  // The prompt dealt with rows of this strip while the page was behind another route.
+  const commands = useSyncExternalStore(leaveStore.subscribe, () => leaveStore.getState().commands);
+  useEffect(() => {
+    if (!budgetId || commands.length === 0) return;
+    for (const command of leaveStore.takeCommands(budgetId)) {
+      for (const id of command.ids) {
+        const entry = stateRef.current.stack.find((e) => e.kind === 'skip' && e.item.transactionId === id);
+        if (!entry) continue;
+        if (command.kind === 'sent') {
+          // Already sent by the prompt: leave the strip, rows stay hidden.
+          send({ type: 'skipSending', seq: entry.seq });
+          send({ type: 'skipDone', requestId: id });
+        } else {
+          send({ type: 'skipDropped', transactionId: id });
+        }
+      }
+    }
+  }, [budgetId, commands]);
 
   const markGone = (key: string, gone: boolean) =>
     setGoneBundleKeys((prev) => {

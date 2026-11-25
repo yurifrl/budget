@@ -41,18 +41,18 @@ export function CategorizeLeavePrompt() {
   const sendAndLeave = async () => {
     if (!held || sending) return;
     setSending(true);
-    const { failed } = await sendEntries(held.entries, (transactionId) =>
+    const { sent, failed } = await sendEntries(held.entries, (transactionId) =>
       dispatch(budgetApi.endpoints.skipCategorize.initiate({ budgetId: held.budgetId, transactionId })).unwrap(),
     );
     setSending(false);
     setFailedCount(failed.length);
-    // What could not be sent stays in the prompt for another try; the rest is done.
-    leaveStore.narrow(failed);
+    // What was sent leaves the prompt and the page's strip; what could not be sent stays for another try.
+    leaveStore.settle('sent', sent.map((entry) => entry.item.transactionId));
   };
 
   const keepAndLeave = () => {
     setFailedCount(0);
-    leaveStore.clearHeld();
+    if (held) leaveStore.settle('discard', held.entries.map((entry) => entry.item.transactionId));
   };
 
   const stay = () => {
@@ -60,7 +60,8 @@ export function CategorizeLeavePrompt() {
     const stayed = leaveStore.stay();
     if (!stayed) return;
     if (stayed.budgetId !== activeBudgetId) void dispatch(switchBudget(stayed.budgetId));
-    router.push('/categorize');
+    // Back to the page (a stacked screen on top of it just closes; another tab brings it forward).
+    router.navigate('/categorize');
   };
 
   return (
