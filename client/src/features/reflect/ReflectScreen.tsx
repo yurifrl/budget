@@ -18,7 +18,7 @@ import { transactionActivity, workingBalance } from '@/domain/engine';
 import { formatMonth, monthOfDate } from '@/domain/format';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { budgetForPerson } from '@/domain/people';
-import { isBudgetTransfer } from '@/domain/transfers';
+import { isEngineTransfer } from '@/domain/transfers';
 import type { Budget, Cents, MonthKey } from '@/domain/types';
 import { colors, radius } from '@/ui/theme';
 import { useBudgetModel } from '@/state/useBudgetModel';
@@ -114,8 +114,8 @@ export function ReflectScreen() {
     const catIds = categoryFilter ? selectionCategoryIds(categoryFilter, budget.categories) : null;
     return budget.transactions.filter(
       (t) =>
-        // Money moving between two on-budget accounts is not spending.
-        !isBudgetTransfer(budget.accounts, t) &&
+        // Money moving between two on-budget accounts is not spending: exactly what the engine skips.
+        !isEngineTransfer(budget.accounts, t) &&
         (accountFilter ? t.accountId === accountFilter : true) &&
         (catIds ? t.categoryId != null && catIds.has(t.categoryId) : true) &&
         (months.length ? months.includes(monthOfDate(t.date)) : true),

@@ -9,7 +9,8 @@ import {
   NEW_KEY,
   appliedMessage,
   closedAccountIds,
-  conversionRule,
+  conversionEntries,
+  conversionPlan,
   conversionTargets,
   defaultConversionTarget,
   editorReducer,
@@ -20,7 +21,8 @@ import {
   revertedMessage,
   ruleMatchFromLabel,
   skippedLines,
-  targetHasConversionRule,
+  targetHasRule,
+  waitingCount,
   transferPayeeLabel,
   withRule,
   withoutRule,
@@ -184,7 +186,8 @@ describe('apply messages', () => {
   test('the toast after an undo says what was put back and what was left', () => {
     const r = (reverted: number, skippedRows: RenameRuleRevertResult['skipped']): RenameRuleRevertResult => ({ reverted, skipped: skippedRows });
     expect(revertedMessage(r(3, []))).toBe('3 transactions put back.');
-    expect(revertedMessage(r(2, [{ transaction_id: 'a', reason: 'changed_since' }]))).toBe('2 put back, 1 left as they are.');
+    expect(revertedMessage(r(2, [{ transaction_id: 'a', reason: 'changed_since' }]))).toBe('2 transactions put back, 1 left as they are.');
+    expect(revertedMessage(r(1, [{ transaction_id: 'a', reason: 'changed_since' }]))).toBe('1 transaction put back, 1 left as they are.');
     expect(revertedMessage(r(0, [{ transaction_id: 'a', reason: 'already_reverted' }]))).toBe('That change was already undone.');
   });
 });
@@ -234,6 +237,11 @@ describe('groupPayees', () => {
   });
 });
 
+const accts = [
+  { id: 'acc1', group: 'CASH' as const, onBudget: true },
+  { id: 'acc2', group: 'CASH' as const, onBudget: true },
+];
+
 describe('old "treat as transfer" rule', () => {
   test('only auto and account rules of an ordinary payee are converted; never stays', () => {
     expect(hasLegacyTransferRule(payee({ transfer_rule: 'auto' }))).toBe(true);
@@ -244,18 +252,79 @@ describe('old "treat as transfer" rule', () => {
   });
 
   test('an account rule starts on that account; an auto rule starts on none', () => {
-    const targets = conversionTargets([transfer('t1', 'A', 'acc1'), transfer('t2', 'B', 'acc2'), payee()], new Set());
+    const targets = conversionTargets([transfer('t1', 'A', 'acc1'), transfer('t2', 'B', 'acc2'), payee()], accts);
     expect(defaultConversionTarget(payee({ transfer_rule: 'account', transfer_rule_account_id: 'acc2' }), targets)?.id).toBe('t2');
     expect(defaultConversionTarget(payee({ transfer_rule: 'auto' }), targets)).toBeNull();
     expect(defaultConversionTarget(payee({ transfer_rule: 'account', transfer_rule_account_id: 'gone' }), targets)).toBeNull();
   });
 
-  test('the conversion rule is "is <payee name>", and a target that has it already is not given it twice', () => {
-    expect(conversionRule(payee({ name: ' Uber ' }))).toEqual({ match_type: 'is', condition: 'Uber' });
-    const target = transfer('t1', 'A', 'acc1', { rename_rules: [rule('r', 'is', ' uber', 't1')] });
-    expect(targetHasConversionRule(target, payee({ name: 'Uber' }))).toBe(true);
-    expect(targetHasConversionRule(transfer('t2', 'B', 'acc2'), payee({ name: 'Uber' }))).toBe(false);
-    expect(targetHasConversionRule(transfer('t3', 'C', 'acc3', { rename_rules: [rule('r', 'contains', 'uber', 't3')] }), payee({ name: 'Uber' }))).toBe(false);
+  test('targets are the payees of open, on-budget accounts only', () => {
+    const all = [transfer('t1', 'A', 'acc1'), transfer('t2', 'B', 'acc2'), transfer('t3', 'C', 'acc3'), transfer('t4', 'D', 'acc4')];
+    const accounts = [
+      { id: 'acc1', group: 'CASH' as const, onBudget: true },
+      { id: 'acc2', group: 'CASH' as const, onBudget: false },
+      { id: 'acc3', group: 'CLOSED' as const, onBudget: true },
+      { id: 'acc4', group: 'CREDIT' as const, onBudget: true },
+    ];
+    expect(conversionTargets(all, accounts).map((p) => p.id)).toEqual(['t1', 't4']);
+    // An account rule that pointed at an off-budget account starts on nothing.
+    expect(defaultConversionTarget(payee({ transfer_rule: 'account', transfer_rule_account_id: 'acc2' }), conversionTargets(all, accounts))).toBeNull();
+  });
+});
+
+describe('conversion entries and plan', () => {
+  test('"is <name>" first, then one entry per own renaming rule (same type and text, moved)', () => {
+    const p = payee({ name: ' Uber ', rename_rules: [rule('r1', 'contains', 'UBER *TRIP'), rule('r2', 'starts_with', 'UBER EATS')] });
+    expect(conversionEntries(p).map((e) => [e.matchType, e.text, e.moveFrom])).toEqual([
+      ['is', 'Uber', null],
+      ['contains', 'UBER *TRIP', 'r1'],
+      ['starts_with', 'UBER EATS', 'r2'],
+    ]);
+  });
+
+  test('an own rule that already is "is <name>" is that entry (moved, not duplicated)', () => {
+    const p = payee({ name: 'Uber', rename_rules: [rule('r1', 'is', 'uber')] });
+    expect(conversionEntries(p).map((e) => [e.matchType, e.text, e.moveFrom])).toEqual([['is', 'uber', 'r1']]);
+  });
+
+  test('no rules: just "is <name>"', () => {
+    expect(conversionEntries(payee({ name: 'Pagamento fatura' })).map((e) => [e.matchType, e.text])).toEqual([['is', 'Pagamento fatura']]);
+  });
+
+  test('the plan trims, drops blanks and duplicates, and flags a loose pattern that is too short', () => {
+    const entries = [
+      { key: 'a', matchType: 'is' as const, text: ' Uber ', moveFrom: null },
+      { key: 'b', matchType: 'is' as const, text: 'uber', moveFrom: 'r1' },
+      { key: 'c', matchType: 'contains' as const, text: ' ', moveFrom: null },
+      { key: 'd', matchType: 'contains' as const, text: 'U', moveFrom: null },
+      { key: 'e', matchType: 'is' as const, text: 'U', moveFrom: null },
+    ];
+    const plan = conversionPlan(entries);
+    expect(plan.rules.map((r) => [r.key, r.matchType, r.text])).toEqual([
+      ['a', 'is', 'Uber'],
+      ['d', 'contains', 'U'],
+      ['e', 'is', 'U'],
+    ]);
+    expect(plan.tooShort).toEqual(['d']);
+  });
+
+  test('a transfer payee that already holds a rule is told apart (a conversion that stopped half-way)', () => {
+    const target = transfer('t1', 'A', 'acc1', { rename_rules: [rule('r', 'contains', ' uber *trip', 't1')] });
+    expect(targetHasRule(target, { matchType: 'contains', text: 'UBER *TRIP' })).toBe(true);
+    expect(targetHasRule(target, { matchType: 'is', text: 'UBER *TRIP' })).toBe(false);
+    expect(targetHasRule(transfer('t2', 'B', 'acc2'), { matchType: 'is', text: 'x' })).toBe(false);
+  });
+
+  test('waiting rows of the payee are counted from the transactions the client has', () => {
+    const txns = [
+      { payeeId: 'p1', transferPending: 'waiting' as const },
+      { payeeId: 'p1', transferPending: 'waiting' as const },
+      { payeeId: 'p1', transferPending: undefined },
+      { payeeId: 'p2', transferPending: 'waiting' as const },
+      { payeeId: null, transferPending: 'waiting' as const },
+    ];
+    expect(waitingCount(txns, 'p1')).toBe(2);
+    expect(waitingCount(txns, 'none')).toBe(0);
   });
 });
 

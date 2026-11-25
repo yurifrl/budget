@@ -2681,3 +2681,19 @@ Client only (`client/src/features/payees/`); plan `.agents/plans/2026-11-24_tran
   stopped half-way) is not added twice. An "account" rule starts with its account picked.
   "Never a transfer" stays (owner decision 1), as a checkbox on ordinary payees; it is
   hidden while an old rule is waiting for its conversion.
+
+## Transfers on the client: what a pointer-less row is, and what Reflect counts (budget-p8td review)
+
+- **Existing rows keep their numbers.** A row with no server pointer is resolved exactly as before the
+  refactor: by its payee's NAME ("Transfer : <account>") when that names exactly one other account
+  (`legacyTransferAccountByName`, client `domain/transfers.ts`; same guards: case and spacing, own account
+  and ambiguous names are not transfers). The payee's link (`transfer_account_id` of the payee) is NOT read
+  for such a row: it can answer differently from the name (two same-named accounts, "(2)" names, stale
+  names) and would move Ready to Assign with no user action. The server repair turns those rows into
+  pointers, after which the pointer is the answer. Checked with a probe of main against the branch on the
+  same wire rows: 0 numeric differences (Ready to Assign, card payments, every category, every row).
+- **Reflect.** Its monthly trend and spending by category leave out exactly what the engine skips: a
+  transfer between two on-budget accounts (`isEngineTransfer`, both accounts on budget). Intended change
+  for the owner: Reflect's past monthly totals drop, because on-budget transfers and card payments are no
+  longer counted as spending. The register's "Category not needed" and the category lock look at the peer
+  account only (`isBudgetTransfer`), as the register always did.

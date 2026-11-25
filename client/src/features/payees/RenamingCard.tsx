@@ -88,12 +88,14 @@ export function RenamingCard({
   budgetId,
   payee,
   onApplied,
+  onRemoved,
 }: {
   budgetId: string;
   payee: PayeeAdminRow;
   onApplied: (result: RenameRuleApplyResult) => void;
+  onRemoved: (rule: { condition: string }, restore: () => Promise<void>) => void;
 }) {
-  const rules = useRenameRules({ budgetId, payee, onApplied });
+  const rules = useRenameRules({ budgetId, payee, onApplied, onRemoved });
   const isTransfer = payee.transfer_account_id !== null;
   const accountLabel = transferPayeeLabel(payee);
   const countText = (count: number) =>

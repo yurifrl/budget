@@ -18,6 +18,19 @@ export function isBudgetTransfer(
   return isTransferToOnBudget(accounts, txn.accountId, txn.transferAccountId);
 }
 
+/**
+ * What the engine treats as a transfer (zeroSum): the row's own account AND its
+ * peer are on budget, so the money never leaves the budget. Reflect uses this
+ * to leave such rows out of spending. `isBudgetTransfer` (peer only, as the
+ * register always read it) is for the category cell and the lock.
+ */
+export function isEngineTransfer(
+  accounts: readonly Pick<Account, 'id' | 'onBudget'>[],
+  txn: Pick<Transaction, 'accountId' | 'transferAccountId'>,
+): boolean {
+  return !!accounts.find((a) => a.id === txn.accountId)?.onBudget && isBudgetTransfer(accounts, txn);
+}
+
 /** The same rule for a draft: the row's account and the picked transfer payee's account. */
 export function isBudgetTransferTo(
   accounts: readonly Pick<Account, 'id' | 'onBudget'>[],
@@ -100,4 +113,19 @@ export function legacyTransferAccountByName(
   ownAccountId: string,
 ): string | null {
   return transferPeerAccountId(payeeName, accounts, ownAccountId) ?? null;
+}
+
+/**
+ * The account a row being edited or entered transfers to, for locking its
+ * category. A row whose payee was not touched keeps the transfer state it has
+ * (so a legacy row with no payee id is locked like any other); a payee picked
+ * now is a transfer when it is an account's transfer payee.
+ */
+export function draftTransferAccount(
+  original: Pick<Transaction, 'payee' | 'payeeId' | 'transferAccountId'> | null | undefined,
+  draft: { payee: string; payeeId: string | null },
+  payees: readonly { id: string; transfer_account_id: string | null }[],
+): string | null {
+  const untouched = !!original && draft.payeeId === (original.payeeId ?? null) && draft.payee === original.payee;
+  return untouched ? (original.transferAccountId ?? null) : transferAccountOfPayee(payees, draft.payeeId);
 }

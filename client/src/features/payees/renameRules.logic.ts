@@ -7,13 +7,13 @@
  */
 
 import { labels } from '@shared/i18n';
-import { ruleMatchTypes, type RuleMatchType } from '@shared/domain/payees';
+import { MIN_RULE_PATTERN_LENGTH, ruleMatchTypes, type RuleMatchType } from '@shared/domain/payees';
 import { transferPayeeName } from '@shared/domain/transfers';
 
 import type { RenameRulePreview, RenameRuleRevertResult, RenameRuleRow } from '@/budget/data/api';
 import type { PayeeAdminRow } from '@/budget/data/rows';
 import { displaySystemName, matchesSystemName } from '@/domain/systemNames';
-import type { Account } from '@/domain/types';
+import type { Account, Transaction } from '@/domain/types';
 import { t } from './i18n';
 
 /** Display labels of the four match types in the active language. */
@@ -252,9 +252,19 @@ export function hasLegacyTransferRule(p: Pick<PayeeAdminRow, 'transfer_rule' | '
   return p.transfer_account_id === null && (p.transfer_rule === 'auto' || p.transfer_rule === 'account');
 }
 
-/** Transfer payees an old rule can be converted onto: open accounts first. */
-export function conversionTargets(all: readonly PayeeAdminRow[], closed: ReadonlySet<string>): PayeeAdminRow[] {
-  return groupPayees(all, '', closed).transfers;
+/**
+ * Transfer payees an old rule can be converted onto: the payees of OPEN,
+ * ON-BUDGET accounts (the old rule refused off-budget ones; closed ones take
+ * no new rows). By account name.
+ */
+export function conversionTargets(
+  all: readonly PayeeAdminRow[],
+  accounts: readonly Pick<Account, 'id' | 'group' | 'onBudget'>[],
+): PayeeAdminRow[] {
+  const open = new Set(accounts.filter((a) => a.onBudget && a.group !== 'CLOSED').map((a) => a.id));
+  return groupPayees(all, '', new Set())
+    .transfers.filter((p) => p.transfer_account_id !== null && open.has(p.transfer_account_id))
+    .sort((x, y) => transferPayeeLabel(x).localeCompare(transferPayeeLabel(y)));
 }
 
 /** The transfer payee of the account an "account" rule pointed at; null for "auto" or an account that is gone. */
@@ -268,15 +278,69 @@ export function defaultConversionTarget(
 
 const norm = (s: string) => s.trim().toLowerCase();
 
-/** The rule a conversion adds: imported payees that ARE this payee's name. */
-export function conversionRule(payee: Pick<PayeeAdminRow, 'name'>): { match_type: RuleMatchType; condition: string } {
-  return { match_type: 'is', condition: payee.name.trim() };
+/**
+ * One rule the conversion will create on the chosen account's transfer payee.
+ * `moveFrom` is the id of a renaming rule of the converted payee itself that
+ * is MOVED (a rule belongs to one payee, so it is removed there and added on
+ * the transfer payee); null for a new rule.
+ */
+export interface ConversionEntry {
+  key: string;
+  matchType: RuleMatchType;
+  text: string;
+  moveFrom: string | null;
 }
 
-/** True when the target already holds that rule (a conversion that stopped half-way): it is not added twice. */
-export function targetHasConversionRule(target: Pick<PayeeAdminRow, 'rename_rules'>, payee: Pick<PayeeAdminRow, 'name'>): boolean {
-  const rule = conversionRule(payee);
-  return (target.rename_rules ?? []).some((r) => r.match_type === rule.match_type && norm(r.condition) === norm(rule.condition));
+/**
+ * What a conversion starts with, shown to the person before Convert: every
+ * renaming rule the payee has (bank text that reaches the payee through them
+ * keeps counting as a transfer candidate), plus "is <payee name>" (rows whose
+ * payee is already this payee, however the text got there) unless one of the
+ * rules already is exactly that. Nothing is created until Convert.
+ */
+export function conversionEntries(payee: Pick<PayeeAdminRow, 'name' | 'rename_rules'>): ConversionEntry[] {
+  const own: ConversionEntry[] = (payee.rename_rules ?? []).map((r) => ({
+    key: `rule:${r.id}`,
+    matchType: r.match_type,
+    text: r.condition,
+    moveFrom: r.id,
+  }));
+  const hasName = own.some((e) => e.matchType === 'is' && norm(e.text) === norm(payee.name));
+  return hasName ? own : [{ key: 'name', matchType: 'is', text: payee.name.trim(), moveFrom: null }, ...own];
+}
+
+export interface ConversionPlan {
+  /** The rules to create, trimmed, in order, without duplicates. */
+  rules: (ConversionEntry & { text: string })[];
+  /** Keys of entries a "contains / starts with / ends with" rule of fewer than the minimum characters. */
+  tooShort: string[];
+}
+
+/** The entries as they will be sent: blank ones dropped, duplicates merged, loose short patterns flagged. */
+export function conversionPlan(entries: readonly ConversionEntry[]): ConversionPlan {
+  const seen = new Set<string>();
+  const rules: ConversionPlan['rules'] = [];
+  const tooShort: string[] = [];
+  for (const e of entries) {
+    const text = e.text.trim();
+    if (text === '') continue;
+    const id = `${e.matchType}\u0000${norm(text)}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (e.matchType !== 'is' && text.length < MIN_RULE_PATTERN_LENGTH) tooShort.push(e.key);
+    rules.push({ ...e, text });
+  }
+  return { rules, tooShort };
+}
+
+/** True when the transfer payee already holds that exact rule (a conversion that stopped half-way). */
+export function targetHasRule(target: Pick<PayeeAdminRow, 'rename_rules'>, rule: { matchType: RuleMatchType; text: string }): boolean {
+  return (target.rename_rules ?? []).some((r) => r.match_type === rule.matchType && norm(r.condition) === norm(rule.text));
+}
+
+/** How many of the payee's transactions are held as transfers waiting for their other side (they need a category or a link once the old rule is off). */
+export function waitingCount(transactions: readonly Pick<Transaction, 'payeeId' | 'transferPending'>[], payeeId: string): number {
+  return transactions.filter((t) => t.payeeId === payeeId && t.transferPending === 'waiting').length;
 }
 
 // --- keeping the payee list in step with a saved rule ----------------------------

@@ -68,7 +68,7 @@ export function usePayeeAdmin() {
   const closedIds = useMemo(() => closedAccountIds(pickerBudget?.accounts ?? []), [pickerBudget]);
   const groups = useMemo(() => groupPayees(all, search, closedIds), [all, search, closedIds]);
   /** Transfer payees an old "treat as transfer" rule can be converted onto. */
-  const transferTargets = useMemo(() => conversionTargets(all, closedIds), [all, closedIds]);
+  const transferTargets = useMemo(() => conversionTargets(all, pickerBudget?.accounts ?? []), [all, pickerBudget]);
 
   const selected = all.find((p) => p.id === selectedId) ?? null;
   const mergeCandidates = mergeCandidatesFor(all, selected);

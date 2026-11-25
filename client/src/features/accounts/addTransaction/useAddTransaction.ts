@@ -23,7 +23,7 @@ import {
 import type { PayeeAdminRow } from '@/budget/data/rows';
 import { isTransferToOnBudget } from '@shared/domain/transfers';
 import { isPickableCategory } from '@/domain/pickable';
-import { transferChoices } from '@/domain/transfers';
+import { draftTransferAccount, transferChoices } from '@/domain/transfers';
 import { categoryLabel } from '@/domain/bundles';
 import { addDaysToDate } from '@/domain/date';
 import { todayIso } from '@/domain/format';
@@ -108,10 +108,7 @@ export function useAddTransaction({
   const account = sheetAccount(accounts.data, accountId);
   // A transfer payee between two on-budget accounts: no category, and none can be set.
   const budgetAccounts = (accounts.data ?? []).map((a) => ({ id: a.id, onBudget: a.on_budget }));
-  const transferAccountId =
-    (payeeId && payeeId === (editTxn?.payeeId ?? null) ? editTxn?.transferAccountId : undefined) ??
-    (payeeId ? (payees.data ?? []).find((p) => p.id === payeeId)?.transfer_account_id : null) ??
-    null;
+  const transferAccountId = draftTransferAccount(editTxn, { payee, payeeId }, payees.data ?? []);
   const categoryLocked = !!account && isTransferToOnBudget(budgetAccounts, account.id, transferAccountId);
   const resolvedCategoryId = categoryLocked ? null : resolveSheetCategory({ isIncome, categoryId }, !!editTxn);
   const category = categories.data?.find((c) => c.id === resolvedCategoryId) ?? null;

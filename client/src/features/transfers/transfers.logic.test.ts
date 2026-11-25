@@ -214,7 +214,7 @@ describe('review list and bulk bar', () => {
   test('toast text', () => {
     expect(linkedToast({ linked: ['a', 'b', 'c', 'd', 'e', 'f'] }, { saved: true })).toBe('3 linked as transfers · rule saved');
     expect(linkedToast({ linked: ['a', 'b'] })).toBe('1 linked as transfer');
-    expect(linkedToast({ linked: ['a', 'b'] }, { saved: false })).toBe('1 linked as transfer');
-    expect(linkedToast({ linked: ['a', 'b'] }, { saved: false, message: 'Too short' })).toBe('1 linked as transfer · Too short');
+    expect(linkedToast({ linked: ['a', 'b'] }, { saved: false, message: 'Too short' })).toBe('1 linked as transfer · rule not saved: Too short');
+    expect(linkedToast({ linked: ['a', 'b'] }, { saved: false })).toContain('rule not saved');
   });
 });

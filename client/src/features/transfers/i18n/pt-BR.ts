@@ -19,7 +19,7 @@ const m: Translation<typeof en> = {
   'popover.noMatchSub': 'conta fora deste orçamento?',
   'popover.pick': 'Escolha o outro lado:',
   'popover.remember': 'Sempre tratar "{payee}" como transferência',
-  'popover.rememberSub': 'Fica salvo como regra de renomeação no favorecido de transferência “{account}”: as próximas linhas assim são oferecidas como transferência com essa conta.',
+  'popover.rememberSub': 'Fica salvo como regra de renomeação em “{payee}”: as próximas linhas assim são oferecidas como transferência com essa conta.',
   'popover.rememberSubAny': 'Fica salvo como regra de renomeação no favorecido de transferência da conta que você escolher.',
   'rule.is': 'É',
   'rule.startsWith': 'Começa com',
@@ -81,6 +81,9 @@ const m: Translation<typeof en> = {
 
   'toast.linked': { one: '{count} vinculada como transferência', other: '{count} vinculadas como transferências' },
   'toast.ruleSaved': 'regra salva',
+  'toast.ruleNotSaved': 'regra não salva: {reason}',
+  'rule.notSaved.invalid': 'o texto da regra está vazio ou curto demais',
+  'rule.notSaved.noPayee': 'o favorecido de transferência da conta não foi carregado',
   'toast.dismissed': { one: '{count} marcada como não transferência', other: '{count} marcadas como não transferências' },
   'toast.undo': 'Desfazer',
   'toast.undone': 'Desfeito',

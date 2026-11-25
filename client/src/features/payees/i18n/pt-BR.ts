@@ -78,6 +78,9 @@ const m: Translation<typeof en> = {
   'rule.empty': 'Nenhuma regra de renomeação ainda.',
   'rule.add': 'Adicionar uma regra de renomeação',
   'rule.remove': 'Remover esta regra',
+  'rule.removed': 'Regra “{text}” removida.',
+  'rule.restored': 'Regra restaurada.',
+  'rule.undoError': 'Não foi possível restaurar a regra.',
   'rule.applyLink': 'Aplicar às transações anteriores',
 
   'apply.loading': 'Verificando as transações anteriores…',
@@ -106,14 +109,26 @@ const m: Translation<typeof en> = {
   'apply.doneNone': 'Nada mudou.',
   'apply.undo': 'Desfazer',
   'apply.undone': { one: '{count} transação restaurada.', other: '{count} transações restauradas.' },
-  'apply.undone.partial': '{count} restauradas, {left} mantidas como estão.',
+  'apply.undone.partial': {
+    one: '{count} transação restaurada, {left} mantidas como estão.',
+    other: '{count} transações restauradas, {left} mantidas como estão.',
+  },
   'apply.undone.already': 'Essa alteração já foi desfeita.',
   'apply.error.preview': 'Não foi possível verificar as transações anteriores.',
   'apply.error.apply': 'Não foi possível aplicar a regra.',
   'apply.error.undo': 'Não foi possível desfazer a alteração.',
 
   'legacy.notice':
-    'Este favorecido estava configurado para ser tratado como transferência. Escolha a conta e ele vira uma regra de renomeação no favorecido de transferência dessa conta.',
+    'Este favorecido estava configurado para ser tratado como transferência. Escolha a conta: as regras abaixo são criadas no favorecido de transferência dessa conta e a configuração antiga é desligada. Nada muda até você tocar em Converter.',
+  'legacy.rulesTitle': 'REGRAS A CRIAR',
+  'legacy.moved': 'As regras que este favorecido já tem são movidas para o favorecido de transferência, então o texto do banco que chega aqui por elas continua contando.',
+  'legacy.removeEntry': 'Não criar esta regra',
+  'legacy.waiting': {
+    one: '{count} transação deste favorecido está retida como transferência ainda aguardando o outro lado. Depois de converter, ela precisa de categoria ou de um vínculo.',
+    other: '{count} transações deste favorecido estão retidas como transferências ainda aguardando o outro lado. Depois de converter, elas precisam de categoria ou de um vínculo.',
+  },
+  'legacy.tooShort': 'Uma regra “contém”, “começa com” ou “termina com” precisa de pelo menos {min} caracteres.',
+  'legacy.noRules': 'Mantenha pelo menos uma regra.',
   'legacy.pick': 'Escolha uma conta…',
   'legacy.accountLabel': 'Conta do favorecido de transferência',
   'legacy.convert': 'Converter',

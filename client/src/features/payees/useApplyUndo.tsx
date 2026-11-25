@@ -16,15 +16,22 @@ import { appliedMessage, revertedMessage } from './renameRules.logic';
 
 interface ToastState {
   message: string;
-  /** Set while the Undo is on offer. */
+  /** Set while the Undo of an apply is on offer. */
   applyId: string | null;
+  /** Set while the Undo of a removed rule is on offer. */
+  restore?: () => Promise<void>;
   error?: boolean;
 }
 
 const UNDO_MS = 10_000;
 const NOTE_MS = 5_000;
 
-export function useApplyUndo(budgetId: string): { show: (result: RenameRuleApplyResult) => void; node: ReactNode } {
+export function useApplyUndo(budgetId: string): {
+  show: (result: RenameRuleApplyResult) => void;
+  /** A rule was removed: offer Undo, which runs `restore`. */
+  showRemoved: (rule: { condition: string }, restore: () => Promise<void>) => void;
+  node: ReactNode;
+} {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [revert] = useRevertRenameRuleApplyMutation();
   // Phone: lift the toast above the shell's floating "+ Transaction" button, which would cover Undo.
@@ -32,7 +39,7 @@ export function useApplyUndo(budgetId: string): { show: (result: RenameRuleApply
 
   useEffect(() => {
     if (!toast) return;
-    const timer = setTimeout(() => setToast(null), toast.applyId ? UNDO_MS : NOTE_MS);
+    const timer = setTimeout(() => setToast(null), toast.applyId || toast.restore ? UNDO_MS : NOTE_MS);
     return () => clearTimeout(timer);
   }, [toast]);
 
@@ -40,7 +47,22 @@ export function useApplyUndo(budgetId: string): { show: (result: RenameRuleApply
     setToast({ message: appliedMessage(result.changed), applyId: result.changed > 0 ? result.apply_id : null });
   }, []);
 
+  const showRemoved = useCallback((rule: { condition: string }, restore: () => Promise<void>) => {
+    setToast({ message: t('rule.removed', { text: rule.condition }), applyId: null, restore });
+  }, []);
+
   const undo = async () => {
+    if (toast?.restore) {
+      const restore = toast.restore;
+      setToast({ message: toast.message, applyId: null });
+      try {
+        await restore();
+        setToast({ message: t('rule.restored'), applyId: null });
+      } catch (err) {
+        setToast({ message: apiErrorMessage(err, t('rule.undoError')), applyId: null, error: true });
+      }
+      return;
+    }
     const applyId = toast?.applyId;
     if (!applyId) return;
     setToast({ message: toast.message, applyId: null });
@@ -57,10 +79,10 @@ export function useApplyUndo(budgetId: string): { show: (result: RenameRuleApply
       <ActionToast
         message={toast.message}
         leading={toast.error ? null : '✓'}
-        actionLabel={toast.applyId ? t('apply.undo') : undefined}
-        onAction={toast.applyId ? () => void undo() : undefined}
+        actionLabel={toast.applyId || toast.restore ? t('apply.undo') : undefined}
+        onAction={toast.applyId || toast.restore ? () => void undo() : undefined}
       />
     </View>
   ) : null;
-  return { show, node };
+  return { show, showRemoved, node };
 }

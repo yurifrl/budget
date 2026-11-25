@@ -15,7 +15,7 @@ import { styles } from './styles';
 import type { PayeeAdmin } from './usePayeeAdmin';
 import type { RenameRuleApplyResult } from '@/budget/data/api';
 import { RenamingCard } from './RenamingCard';
-import { hasLegacyTransferRule } from './renameRules.logic';
+import { hasLegacyTransferRule, waitingCount } from './renameRules.logic';
 import { LegacyTransferNotice, NeverTransferRow } from './TransferRuleChoice';
 import { TransferPayeeDetail } from './TransferPayeeDetail';
 
@@ -30,7 +30,15 @@ const CATEGORIZATION_LABELS: Record<CategorizationMode, { title: string; sub: st
  * "Never a transfer", renaming rules, hide / merge / delete), the merge prompt
  * while it is open, or the read-only view of an account's transfer payee.
  */
-export function PayeeDetailPane({ admin, onApplied }: { admin: PayeeAdmin; onApplied: (result: RenameRuleApplyResult) => void }) {
+export function PayeeDetailPane({
+  admin,
+  onApplied,
+  onRemoved,
+}: {
+  admin: PayeeAdmin;
+  onApplied: (result: RenameRuleApplyResult) => void;
+  onRemoved: (rule: { condition: string }, restore: () => Promise<void>) => void;
+}) {
   const money = useMoneyFormat();
   // Phone: room under the content for the shell's floating "+ Transaction" button.
   const narrow = useWindowDimensions().width < 700;
@@ -71,6 +79,7 @@ export function PayeeDetailPane({ admin, onApplied }: { admin: PayeeAdmin; onApp
           payee={selected}
           accountClosed={closedIds.has(selected.transfer_account_id)}
           onApplied={onApplied}
+          onRemoved={onRemoved}
         />
       ) : mergeOpen ? (
         <MergePrompt
@@ -165,13 +174,13 @@ export function PayeeDetailPane({ admin, onApplied }: { admin: PayeeAdmin; onApp
 
           <Text style={styles.sectionLabel}>{t('detail.transfer')}</Text>
           {hasLegacyTransferRule(selected) ? (
-            <LegacyTransferNotice key={`legacy-${selected.id}`} budgetId={budgetId} payee={selected} targets={transferTargets} closedIds={closedIds} />
+            <LegacyTransferNotice key={`legacy-${selected.id}`} budgetId={budgetId} payee={selected} targets={transferTargets} waiting={waitingCount(pickerBudget?.transactions ?? [], selected.id)} />
           ) : (
             <NeverTransferRow budgetId={budgetId} payee={selected} />
           )}
 
           <Text style={styles.sectionLabel}>{t('detail.renaming')}</Text>
-          <RenamingCard key={`rules-${selected.id}`} budgetId={budgetId} payee={selected} onApplied={onApplied} />
+          <RenamingCard key={`rules-${selected.id}`} budgetId={budgetId} payee={selected} onApplied={onApplied} onRemoved={onRemoved} />
 
           <View style={styles.footerRow}>
             <Pressable onPress={() => void toggleHidden()} accessibilityRole="button">

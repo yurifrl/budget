@@ -33,7 +33,7 @@ import {
   type UsdDraft,
 } from '@/domain/inlineAdd';
 import { editDirty, newDraftDirty } from '@/domain/rowEdit';
-import { isBudgetTransferTo, transferAccountOfPayee } from '@/domain/transfers';
+import { draftTransferAccount, isBudgetTransferTo, transferAccountOfPayee } from '@/domain/transfers';
 import type { Budget, Cents, RepeatFrequency, Transaction, TransactionSplit } from '@/domain/types';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { t } from './i18n';
@@ -116,10 +116,7 @@ export function useInlineAdd({
   const account = budget.accounts.find((a) => a.id === accountId) ?? budget.accounts[0];
 
   // A picked transfer payee between two on-budget accounts: no category, no split, nothing to edit there.
-  const unchangedPayee = !!transaction && payeeId != null && payeeId === (transaction.payeeId ?? null);
-  const transferAccountId = unchangedPayee
-    ? (transaction.transferAccountId ?? transferAccountOfPayee(payees, payeeId))
-    : transferAccountOfPayee(payees, payeeId);
+  const transferAccountId = draftTransferAccount(transaction, { payee, payeeId }, payees);
   const categoryLocked = !!account && isBudgetTransferTo(budget.accounts, account.id, transferAccountId);
 
   // Latest dirty/commit — the outside-press listener reads through refs so it

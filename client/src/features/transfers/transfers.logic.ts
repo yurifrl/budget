@@ -227,12 +227,13 @@ export function allSelected(rows: readonly ReviewRow[], selected: ReadonlySet<st
 
 /**
  * Toast after linking: "3 linked as transfers", plus what happened to the
- * renaming rule when one was asked for ("rule saved", or why it was not).
+ * renaming rule when one was asked for ("rule saved", or "rule not saved: why").
  */
 export function linkedToast(result: { linked: string[] }, rule?: { saved: boolean; message?: string } | null): string {
   const pairs = Math.round(result.linked.length / 2);
   const linked = t('toast.linked', { count: pairs });
   if (!rule) return linked;
   if (rule.saved) return `${linked} · ${t('toast.ruleSaved')}`;
-  return rule.message ? `${linked} · ${rule.message}` : linked;
+  // The link went through; say plainly that the rule did not, and why.
+  return `${linked} · ${t('toast.ruleNotSaved', { reason: rule.message ?? t('rule.notSaved.invalid') })}`;
 }

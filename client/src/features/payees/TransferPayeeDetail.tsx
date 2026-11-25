@@ -23,11 +23,13 @@ export function TransferPayeeDetail({
   payee,
   accountClosed,
   onApplied,
+  onRemoved,
 }: {
   budgetId: string;
   payee: PayeeAdminRow;
   accountClosed: boolean;
   onApplied: (result: RenameRuleApplyResult) => void;
+  onRemoved: (rule: { condition: string }, restore: () => Promise<void>) => void;
 }) {
   const money = useMoneyFormat();
   const [showTxns, setShowTxns] = useState(false);
@@ -57,7 +59,7 @@ export function TransferPayeeDetail({
       ) : null}
 
       <Text style={styles.sectionLabel}>{t('detail.renaming')}</Text>
-      <RenamingCard key={payee.id} budgetId={budgetId} payee={payee} onApplied={onApplied} />
+      <RenamingCard key={payee.id} budgetId={budgetId} payee={payee} onApplied={onApplied} onRemoved={onRemoved} />
 
       <Text style={[styles.radioSub, styles.transferNote]}>{t('detail.transferNote')}</Text>
     </>

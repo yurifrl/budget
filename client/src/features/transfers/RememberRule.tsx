@@ -23,7 +23,7 @@ const TYPE_LABEL: Record<RuleMatchType, string> = labels(t, {
 
 export function RememberRule({
   bankText,
-  accountName,
+  payeeLabel,
   on,
   onToggle,
   draft,
@@ -31,8 +31,8 @@ export function RememberRule({
 }: {
   /** The text the rule is built from (shown in the checkbox label). */
   bankText: string;
-  /** The account the rule's transfer payee belongs to; null while it is not known yet. */
-  accountName: string | null;
+  /** The transfer payee the rule goes on ("Transfer : <account>"); null while the account is not chosen. */
+  payeeLabel: string | null;
   on: boolean;
   onToggle: () => void;
   draft: RuleDraft;
@@ -44,7 +44,7 @@ export function RememberRule({
         <SelectionCheckbox marginRight={0} checked={on} onToggle={onToggle} label={t('popover.remember', { payee: bankText })} />
         <Pressable style={{ flex: 1 }} onPress={onToggle}>
           <Text style={styles.text}>{t('popover.remember', { payee: bankText })}</Text>
-          <Text style={styles.muted}>{accountName ? t('popover.rememberSub', { account: accountName }) : t('popover.rememberSubAny')}</Text>
+          <Text style={styles.muted}>{payeeLabel ? t('popover.rememberSub', { payee: payeeLabel }) : t('popover.rememberSubAny')}</Text>
         </Pressable>
       </View>
       {on ? (

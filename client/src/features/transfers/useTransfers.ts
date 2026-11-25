@@ -84,8 +84,9 @@ export function useTransfers({ budgetId, accountId }: { budgetId: string | null 
    */
   const saveRule = async (rule: LinkRule): Promise<{ saved: boolean; message?: string }> => {
     const body = ruleToCreate(true, rule.draft);
+    if (!body) return { saved: false, message: t('rule.notSaved.invalid') };
     const target = payees.data?.find((p) => p.transfer_account_id === rule.accountId && !p.deleted);
-    if (!body || !target) return { saved: false };
+    if (!target) return { saved: false, message: t('rule.notSaved.noPayee') };
     try {
       await addRule({ ...scope, payeeId: target.id, rule: body }).unwrap();
       return { saved: true };

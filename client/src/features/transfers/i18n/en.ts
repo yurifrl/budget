@@ -16,7 +16,7 @@ export default {
   'popover.noMatchSub': 'account not in this budget?',
   'popover.pick': 'Pick the other side:',
   'popover.remember': 'Always treat "{payee}" as a transfer',
-  'popover.rememberSub': 'Saved as a renaming rule on the transfer payee “{account}”: future rows like this are offered as a transfer with that account.',
+  'popover.rememberSub': 'Saved as a renaming rule on “{payee}”: future rows like this are offered as a transfer with that account.',
   'popover.rememberSubAny': 'Saved as a renaming rule on the transfer payee of the account you pick.',
   'rule.is': 'Is',
   'rule.startsWith': 'Starts with',
@@ -78,6 +78,9 @@ export default {
 
   'toast.linked': { one: '{count} linked as transfer', other: '{count} linked as transfers' },
   'toast.ruleSaved': 'rule saved',
+  'toast.ruleNotSaved': 'rule not saved: {reason}',
+  'rule.notSaved.invalid': 'the text of the rule is empty or too short',
+  'rule.notSaved.noPayee': 'the account’s transfer payee is not loaded',
   'toast.dismissed': { one: '{count} marked as not a transfer', other: '{count} marked as not transfers' },
   'toast.undo': 'Undo',
   'toast.undone': 'Undone',

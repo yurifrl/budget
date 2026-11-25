@@ -126,7 +126,6 @@ export interface BudgetSource {
 /** Assemble the engine `Budget` aggregate from one budget's rows. */
 export function assembleBudget(src: BudgetSource): Budget {
   const payeeName = new Map(src.payees.map((p) => [p.id, p.name]));
-  const payeeTransferAccount = new Map(src.payees.filter((p) => p.transfer_account_id).map((p) => [p.id, p.transfer_account_id as string]));
 
   const assignedByCat = new Map<string, Record<MonthKey, Cents>>();
   for (const a of src.assignments) {
@@ -195,12 +194,13 @@ export function assembleBudget(src: BudgetSource): Budget {
       ...(t.installment ? { installment: t.installment } : {}),
       importId: t.import_id ?? null,
       matchedTransactionId: t.matched_transaction_id ?? null,
-      // The server's pointer, else the account of the row's transfer payee; only a row with
-      // neither falls back to its payee's name (legacy rows, see legacyTransferAccountByName).
-      transferAccountId:
-        t.transfer_account_id ??
-        (t.payee_id ? payeeTransferAccount.get(t.payee_id) : undefined) ??
-        legacyTransferAccountByName(payee, src.accounts, t.account_id),
+      // The server's pointer; a row without one resolves exactly as main did: its payee's name
+      // ("Transfer : <account>") when that names exactly one other account of the budget
+      // (legacyTransferAccountByName). The payee's link is deliberately not read here: for a pointer-less
+      // row it can answer differently from the name (same-named accounts, "(2)" names, stale names, the
+      // row's own account) and so would move Ready to Assign. The server repair turns those rows into
+      // pointers, and then this line is the server's answer.
+      transferAccountId: t.transfer_account_id ?? legacyTransferAccountByName(payee, src.accounts, t.account_id),
       ...(t.transfer_suggestion
         ? {
             transferSuggestion: {

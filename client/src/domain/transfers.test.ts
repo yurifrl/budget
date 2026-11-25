@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { isBudgetTransfer, legacyTransferAccountByName, patchForRow, transferAccountOfPayee, transferChoices, transferTargets } from './transfers';
+import { draftTransferAccount, isBudgetTransfer, isEngineTransfer, legacyTransferAccountByName, patchForRow, transferAccountOfPayee, transferChoices, transferTargets } from './transfers';
 import type { Account } from './types';
 
 const acct = (id: string, name: string, over: Partial<Account> = {}): Account =>
@@ -37,6 +37,15 @@ describe('isBudgetTransfer: by the pointer, to an on-budget account', () => {
     expect(isBudgetTransfer(accounts, { accountId: 'chk', transferAccountId: 'gone' })).toBe(false);
     expect(isBudgetTransfer(accounts, { accountId: 'chk', transferAccountId: null })).toBe(false);
     expect(isBudgetTransfer(accounts, { accountId: 'chk', transferAccountId: 'chk' })).toBe(false);
+  });
+});
+
+describe('isEngineTransfer: what the engine skips (both accounts on budget)', () => {
+  test('on-budget to on-budget only; a leg in an off-budget account is not one even though the register reads its cell as not needed', () => {
+    expect(isEngineTransfer(accounts, { accountId: 'chk', transferAccountId: 'nub' })).toBe(true);
+    expect(isEngineTransfer(accounts, { accountId: 'house', transferAccountId: 'chk' })).toBe(false);
+    expect(isBudgetTransfer(accounts, { accountId: 'house', transferAccountId: 'chk' })).toBe(true);
+    expect(isEngineTransfer(accounts, { accountId: 'chk', transferAccountId: 'house' })).toBe(false);
   });
 });
 
@@ -108,5 +117,31 @@ describe('legacyTransferAccountByName (legacy fallback until the server repair l
     expect(legacyTransferAccountByName('Transfer : Itau Conta', budget, 'chk')).toBeNull();
     expect(legacyTransferAccountByName('Padaria', budget, 'chk')).toBeNull();
     expect(legacyTransferAccountByName('', budget, 'chk')).toBeNull();
+  });
+});
+
+describe('draftTransferAccount: what locks the category of a row being edited', () => {
+  const payees = [{ id: 'tp-nub', transfer_account_id: 'nub' }, { id: 'p1', transfer_account_id: null }];
+
+  test('an untouched legacy row (no payee id, text only) keeps its transfer pointer: locked', () => {
+    const legacy = { payee: 'Transfer : Nubank', payeeId: null, transferAccountId: 'nub' };
+    expect(draftTransferAccount(legacy, { payee: 'Transfer : Nubank', payeeId: null }, payees)).toBe('nub');
+  });
+
+  test('an untouched row with a payee id keeps its pointer', () => {
+    const row = { payee: 'Transfer : Nubank', payeeId: 'tp-nub', transferAccountId: 'nub' };
+    expect(draftTransferAccount(row, { payee: 'Transfer : Nubank', payeeId: 'tp-nub' }, payees)).toBe('nub');
+  });
+
+  test('a payee changed to an ordinary one, or typed over, unlocks it', () => {
+    const row = { payee: 'Transfer : Nubank', payeeId: 'tp-nub', transferAccountId: 'nub' };
+    expect(draftTransferAccount(row, { payee: 'Padaria', payeeId: 'p1' }, payees)).toBeNull();
+    expect(draftTransferAccount(row, { payee: 'Transfer : Nuban', payeeId: null }, payees)).toBeNull();
+  });
+
+  test('a new row, or a changed payee, is a transfer when the picked payee is an account\'s transfer payee', () => {
+    expect(draftTransferAccount(null, { payee: 'Transfer : Nubank', payeeId: 'tp-nub' }, payees)).toBe('nub');
+    expect(draftTransferAccount(null, { payee: 'Padaria', payeeId: 'p1' }, payees)).toBeNull();
+    expect(draftTransferAccount(null, { payee: '', payeeId: null }, payees)).toBeNull();
   });
 });

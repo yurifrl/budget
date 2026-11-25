@@ -271,12 +271,21 @@ describe('transfer links (spec T1)', () => {
     expect(u.transferSuggestion).toBeUndefined();
   });
 
-  test('a row whose payee is an account\'s transfer payee is a transfer to that account, even with no pointer on the row', () => {
-    const [t] = map([transferTxn({ id: 'x2', payee_id: 'p-tr', transfer_account_id: null })], [
-      { id: 'p-tr', name: 'Transfer : Nubank', transfer_account_id: 'a-nubank', deleted: false },
-    ]);
-    expect(t.transferAccountId).toBe('a-nubank');
-    expect(t.payeeId).toBe('p-tr');
+  test('a pointer-less row whose payee is a linked transfer payee resolves by the payee NAME, exactly as main did (never by the payee link)', () => {
+    const payees = [
+      { id: 'tp-dup1', name: 'Transfer : Itau', transfer_account_id: 'a-itau', deleted: false },
+      { id: 'tp-own', name: 'Transfer : Nubank', transfer_account_id: 'a-nubank', deleted: false },
+      { id: 'tp-stale', name: 'Transfer : Old Name', transfer_account_id: 'a-itau', deleted: false },
+    ];
+    // Own account's payee (main: ignored the own account): not a transfer.
+    const [own] = map([transferTxn({ id: 'b2a', account_id: 'a-nubank', payee_id: 'tp-own', payee_name: 'Transfer : Nubank', transfer_account_id: null })], payees);
+    expect(own.transferAccountId).toBeNull();
+    // A payee whose name names no account (stale): main had no answer, neither do we.
+    const [stale] = map([transferTxn({ id: 'b2b', payee_id: 'tp-stale', payee_name: 'Transfer : Old Name', transfer_account_id: null })], payees);
+    expect(stale.transferAccountId).toBeNull();
+    // A name that names exactly one other account: a transfer to it, as before.
+    const [named] = map([transferTxn({ id: 'b2c', account_id: 'a-nubank', payee_id: 'tp-dup1', payee_name: 'Transfer : Itau', transfer_account_id: null })], payees);
+    expect(named.transferAccountId).toBe('a-itau');
   });
 
   test('legacy fallback: a row with no pointer and no transfer payee whose payee text names one account is a transfer to it (as the client always treated it)', () => {
@@ -294,13 +303,9 @@ describe('transfer links (spec T1)', () => {
     expect(t.transferPending).toBeUndefined();
   });
 
-  test('the fallback never overrides a pointer or a linked transfer payee', () => {
+  test('the fallback never overrides a pointer', () => {
     const [pointer] = map([transferTxn({ id: 'x3c', account_id: 'a-itau', payee_name: 'Transfer : Nubank', transfer_account_id: 'a-itau-other' })]);
     expect(pointer.transferAccountId).toBe('a-itau-other');
-    const [linked] = map([transferTxn({ id: 'x3d', account_id: 'a-itau', payee_id: 'tp', payee_name: 'Transfer : Nubank', transfer_account_id: null })], [
-      { id: 'tp', name: 'Transfer : Nubank', transfer_account_id: 'a-itau-other', deleted: false },
-    ]);
-    expect(linked.transferAccountId).toBe('a-itau-other');
   });
 
   test('the wire column wins over the payee convention', () => {

@@ -75,6 +75,9 @@ export default {
   'rule.empty': 'No renaming rules yet.',
   'rule.add': 'Add a renaming rule',
   'rule.remove': 'Remove this rule',
+  'rule.removed': 'Rule “{text}” removed.',
+  'rule.restored': 'Rule put back.',
+  'rule.undoError': 'Could not put the rule back.',
   'rule.applyLink': 'Apply to past transactions',
 
   'apply.loading': 'Checking past transactions…',
@@ -103,14 +106,26 @@ export default {
   'apply.doneNone': 'Nothing changed.',
   'apply.undo': 'Undo',
   'apply.undone': { one: '{count} transaction put back.', other: '{count} transactions put back.' },
-  'apply.undone.partial': '{count} put back, {left} left as they are.',
+  'apply.undone.partial': {
+    one: '{count} transaction put back, {left} left as they are.',
+    other: '{count} transactions put back, {left} left as they are.',
+  },
   'apply.undone.already': 'That change was already undone.',
   'apply.error.preview': 'Could not check the past transactions.',
   'apply.error.apply': 'Could not apply the rule.',
   'apply.error.undo': 'Could not undo the change.',
 
   'legacy.notice':
-    'This payee was set to be treated as a transfer. Choose the account and it becomes a renaming rule on that account’s transfer payee.',
+    'This payee was set to be treated as a transfer. Choose the account: the rules below are created on that account’s transfer payee and the old setting is switched off. Nothing changes until you press Convert.',
+  'legacy.rulesTitle': 'RULES TO CREATE',
+  'legacy.moved': 'Rules this payee already has are moved to the transfer payee, so bank text that reaches this payee through them keeps counting.',
+  'legacy.removeEntry': 'Do not create this rule',
+  'legacy.waiting': {
+    one: '{count} transaction of this payee is held as a transfer still waiting for its other side. After converting it needs a category or a link.',
+    other: '{count} transactions of this payee are held as transfers still waiting for their other side. After converting they need a category or a link.',
+  },
+  'legacy.tooShort': 'A “contains”, “starts with” or “ends with” rule needs at least {min} characters.',
+  'legacy.noRules': 'Keep at least one rule.',
   'legacy.pick': 'Choose an account…',
   'legacy.accountLabel': 'Account of the transfer payee',
   'legacy.convert': 'Convert',

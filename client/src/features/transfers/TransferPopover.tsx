@@ -11,6 +11,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensio
 import type { TransferSuggestion } from '@/budget/data/api';
 import { milliToCents } from '@/budget/data/mapping';
 import type { Account } from '@/domain/types';
+import { transferPayeeName } from '@shared/domain/transfers';
+import { displaySystemName } from '@/domain/systemNames';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
 import { t } from './i18n';
@@ -96,7 +98,7 @@ export function TransferPopover({
   const remembered = (
     <RememberRule
       bankText={bankText}
-      accountName={mode === 'main' ? (sides.other?.account_name ?? null) : null}
+      payeeLabel={mode === 'main' && sides.other ? displaySystemName(transferPayeeName(sides.other.account_name)) : null}
       on={remember}
       onToggle={() => setRemember(!remember)}
       draft={rule}

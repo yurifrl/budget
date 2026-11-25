@@ -47,11 +47,14 @@ export function useRenameRules({
   budgetId,
   payee,
   onApplied,
+  onRemoved,
 }: {
   budgetId: string;
   payee: PayeeAdminRow;
   /** The apply went through: the screen offers Undo. */
   onApplied: (result: RenameRuleApplyResult) => void;
+  /** A rule was removed: the screen offers Undo, which adds it back through `restore`. */
+  onRemoved: (rule: { condition: string }, restore: () => Promise<void>) => void;
 }) {
   const dispatch = useAppDispatch();
   const [state, send] = useReducer(editorReducer, EMPTY_EDITOR);
@@ -118,9 +121,16 @@ export function useRenameRules({
     if (inflight.current.has(key)) return;
     inflight.current.add(key);
     send({ type: 'saving', key });
+    const removed = rules.find((r) => r.id === key);
     try {
       await removeRule({ budgetId, payeeId: payee.id, ruleId: key }).unwrap();
       patchList((list) => withoutRule(list, payee.id, key));
+      if (removed) {
+        onRemoved(removed, async () => {
+          const row = await addRule({ budgetId, payeeId: payee.id, rule: { match_type: removed.match_type, condition: removed.condition } }).unwrap();
+          patchList((list) => withRule(list, row));
+        });
+      }
       send({ type: 'saved', key });
       setApplyView((v) => (v?.ruleId === key ? null : v));
     } catch (err) {

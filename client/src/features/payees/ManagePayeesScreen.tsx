@@ -82,7 +82,7 @@ export function ManagePayeesBody({
       ) : null}
       <View style={styles.body}>
         {!narrow || !admin.selected ? <PayeeListPane admin={admin} fill={narrow} /> : null}
-        {!narrow || admin.selected ? <PayeeDetailPane admin={admin} onApplied={undo.show} /> : null}
+        {!narrow || admin.selected ? <PayeeDetailPane admin={admin} onApplied={undo.show} onRemoved={undo.showRemoved} /> : null}
       </View>
       {undo.node}
     </View>
