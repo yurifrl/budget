@@ -20,6 +20,8 @@ import type { OneByOne } from './useOneByOne';
 const SHOW_KEYS = Platform.OS === 'web';
 /** Below this window width the rail plus two columns no longer fit: the columns stack. */
 const STACK_BELOW = 1180;
+/** Below this width the key legend would not fit beside the counter. */
+const LEGEND_MIN = 760;
 
 export function OneByOneView({
   budgetId,
@@ -35,7 +37,8 @@ export function OneByOneView({
   loadedRows: number;
 }) {
   const { focused, progress } = flow;
-  const stacked = useWindowDimensions().width < STACK_BELOW;
+  const width = useWindowDimensions().width;
+  const stacked = width < STACK_BELOW;
 
   // A control left focused by the view switch would claim Enter.
   useEffect(() => {
@@ -66,7 +69,7 @@ export function OneByOneView({
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${Math.round(progress.fraction * 100)}%` }]} />
         </View>
-        {SHOW_KEYS ? <Legend /> : null}
+        {SHOW_KEYS && width >= LEGEND_MIN ? <Legend /> : null}
       </View>
       <FocusPane
         row={row}
@@ -111,7 +114,7 @@ const styles = StyleSheet.create({
   queueCol: { width: 330, flexShrink: 0 },
   queueColStacked: { width: '100%' },
   focusCol: { flex: 1, minWidth: 0, gap: 14 },
-  focusColStacked: { flex: 0, width: '100%' },
+  focusColStacked: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', width: '100%' },
   progressRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
   counter: { color: colors.muted, fontSize: 14, fontWeight: '600' },
   track: { flexGrow: 1, flexBasis: 80, maxWidth: 220, height: 6, borderRadius: 3, backgroundColor: colors.border },
