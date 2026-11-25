@@ -4,15 +4,48 @@
  * cache behaviour are the slice's, unchanged by the split.
  */
 import { contractRequest } from '@shared/contract-request';
-import { payeesCreate, payeesDelete, payeesList, payeesMerge, payeesRename, payeesSetCategorization, payeesSetHidden, payeesSetRenameRule, payeesTransactions, payeeSuggestionGet } from '@shared/contracts/budget';
-import type { CategorizationMode, MatchType } from '@shared/domain/payees';
+import {
+  payeesCreate,
+  payeesDelete,
+  payeesList,
+  payeesMerge,
+  payeesRename,
+  payeesRenameRulesAdd,
+  payeesRenameRulesApply,
+  payeesRenameRulesApplyPreview,
+  payeesRenameRulesRemove,
+  payeesRenameRulesRevert,
+  payeesRenameRulesUpdate,
+  payeesSetCategorization,
+  payeesSetHidden,
+  payeesSetRenameRule,
+  payeesTransactions,
+  payeeSuggestionGet,
+} from '@shared/contracts/budget';
+import type { OperationOutput } from '@shared/operation-contract';
+import type { CategorizationMode, MatchType, RuleMatchType } from '@shared/domain/payees';
 import type { PayeeAdminRow, PayeeRow } from '../rows';
 import { type BudgetScope, scopedList } from './base';
 import type { PayeeSuggestionRow, PayeeTxnRow } from './types';
 import { planApi } from './plan';
 
+export type RenameRuleRow = OperationOutput<typeof payeesRenameRulesAdd>;
+export interface RenameRuleBody {
+  match_type: RuleMatchType;
+  condition: string;
+}
+export type RenameRulePreview = OperationOutput<typeof payeesRenameRulesApplyPreview>;
+export type RenameRuleApplyResult = OperationOutput<typeof payeesRenameRulesApply>;
+export type RenameRuleRevertResult = OperationOutput<typeof payeesRenameRulesRevert>;
+
 export const payeesApi = planApi.injectEndpoints({
   endpoints: (b) => ({
+    /** Manage Payees: every payee, the accounts' transfer payees included (`transfer_account_id` set). */
+    getPayeesWithTransfers: b.query<PayeeAdminRow[], BudgetScope>({
+      query: ({ budgetId }) => contractRequest(payeesList, { budget_id: budgetId, include_transfers: 'true' }),
+      providesTags: (_r, _e, { budgetId }) => [{ type: 'Payees', id: budgetId }],
+    }),
+
     getPayees: b.query<PayeeAdminRow[], BudgetScope>({
       query: scopedList(payeesList),
       providesTags: (_r, _e, { budgetId }) => [{ type: 'Payees', id: budgetId }],
@@ -103,6 +136,53 @@ export const payeesApi = planApi.injectEndpoints({
       query: ({ payeeId, budgetId, matchType, condition }) =>
         contractRequest(payeesSetRenameRule, { id: payeeId, budget_id: budgetId, match_type: matchType, condition }),
       invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'Payees', id: budgetId }],
+    }),
+
+    /** Add a renaming rule to a payee (a transfer payee too): applies to rows imported from now on. */
+    addPayeeRenameRule: b.mutation<RenameRuleRow, BudgetScope & { payeeId: string; rule: RenameRuleBody }>({
+      query: ({ payeeId, budgetId, rule }) => contractRequest(payeesRenameRulesAdd, { id: payeeId, budget_id: budgetId, ...rule }),
+      invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'Payees', id: budgetId }],
+    }),
+
+    updatePayeeRenameRule: b.mutation<RenameRuleRow, BudgetScope & { payeeId: string; ruleId: string; rule: RenameRuleBody }>({
+      query: ({ payeeId, ruleId, budgetId, rule }) =>
+        contractRequest(payeesRenameRulesUpdate, { id: payeeId, rule_id: ruleId, budget_id: budgetId, ...rule }),
+      invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'Payees', id: budgetId }],
+    }),
+
+    removePayeeRenameRule: b.mutation<null, BudgetScope & { payeeId: string; ruleId: string }>({
+      query: ({ payeeId, ruleId, budgetId }) =>
+        contractRequest(payeesRenameRulesRemove, { id: payeeId, rule_id: ruleId, budget_id: budgetId }),
+      invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'Payees', id: budgetId }],
+    }),
+
+    /** Dry run of "Apply to past transactions": always asks the server (never a cached answer). */
+    previewRenameRuleApply: b.query<RenameRulePreview, BudgetScope & { payeeId: string; ruleId: string }>({
+      query: ({ payeeId, ruleId, budgetId }) =>
+        contractRequest(payeesRenameRulesApplyPreview, { id: payeeId, rule_id: ruleId, budget_id: budgetId }),
+      keepUnusedDataFor: 0,
+    }),
+
+    applyRenameRule: b.mutation<RenameRuleApplyResult, BudgetScope & { payeeId: string; ruleId: string }>({
+      query: ({ payeeId, ruleId, budgetId }) =>
+        contractRequest(payeesRenameRulesApply, { id: payeeId, rule_id: ruleId, budget_id: budgetId }),
+      // Rows' payees and transfer hints changed: the list, the register and the balances refetch.
+      invalidatesTags: (_r, _e, { budgetId }) => [
+        { type: 'Payees', id: budgetId },
+        { type: 'Transactions', id: budgetId },
+        { type: 'Accounts', id: budgetId },
+      ],
+    }),
+
+    /** Undo of an apply, by its apply_id. */
+    revertRenameRuleApply: b.mutation<RenameRuleRevertResult, BudgetScope & { applyId: string }>({
+      query: ({ applyId, budgetId }) => contractRequest(payeesRenameRulesRevert, { budget_id: budgetId, apply_id: applyId }),
+      // Rows' payees and transfer hints changed: the list, the register and the balances refetch.
+      invalidatesTags: (_r, _e, { budgetId }) => [
+        { type: 'Payees', id: budgetId },
+        { type: 'Transactions', id: budgetId },
+        { type: 'Accounts', id: budgetId },
+      ],
     }),
   }),
 });

@@ -2651,3 +2651,33 @@ row, not from a timestamp.
   0 updated, 0 imported, no payee created; new rows and a changed bank text take the rules; legacy
   rows keep their payee when only the date or amount moves; apply on rows of the earlier form,
   revert, the skips, transfer hints).
+
+## Manage Payees: transfer payees and several renaming rules (budget-p8td, transfers T4)
+
+Client only (`client/src/features/payees/`); plan `.agents/plans/2026-11-24_transfers-refactor.md`.
+
+- **Two groups in the list, both collapsible:** "Payees" and "Transfer Payees (N)", one per
+  account (the list is requested with `include_transfers`). A transfer payee is shown as
+  "Transfer : <the account's current name>"; the payees of CLOSED accounts come last in the
+  group, tagged "Closed" (a closed account keeps its payee, so its rules and rows stay
+  reachable). A search shows its matches in both groups whether collapsed or not.
+- **A transfer payee shows its name (read only), activity, the Renaming card and the note that
+  the app owns it.** No rename, merge, hide, delete or categorization control. The card's hint
+  says what a rule on it really does (rows are offered as a transfer, not renamed), not the
+  YNAB sentence "will be renamed".
+- **The Renaming card is the same for every payee:** all rules of the payee (`rename_rules`),
+  four match types, add / edit / remove through the rule operations (the single-rule
+  endpoint stays only for the import flow). A row saves on blur / Enter or when its match
+  type is picked; an emptied stored rule is not removed by accident (the row goes back), only
+  the remove button removes. Errors (`rename_rule_exists`, `rename_rule_too_short`,
+  `bank_sync_running`) show as the translated server message under the row.
+- **"Apply to past transactions" is per rule:** a preview (count, newest rows, what is left
+  alone and why), Apply, then a toast with Undo (revert by `apply_id`). The toast belongs to
+  the screen, so it survives picking another payee.
+- **"Treat as transfer" and the "Transfer rules" tab are gone from the UI; no data is deleted.**
+  A payee that still has an old "auto" or "account" rule shows a notice with an account picker
+  and Convert: it adds `is <payee name>` on the chosen account's transfer payee, then clears
+  the old rule (transfer-rule mode `off`). A rule that was already added (a conversion that
+  stopped half-way) is not added twice. An "account" rule starts with its account picked.
+  "Never a transfer" stays (owner decision 1), as a checkbox on ordinary payees; it is
+  hidden while an old rule is waiting for its conversion.

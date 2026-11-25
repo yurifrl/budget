@@ -1,22 +1,23 @@
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { apiErrorMessage } from '@/platform/api/baseQuery';
-import { Combobox } from '@/ui/combobox';
-import { categorizationModes, matchTypes, type CategorizationMode, type MatchType } from '@shared/domain/payees';
+import { categorizationModes, type CategorizationMode } from '@shared/domain/payees';
 import { labels } from '@shared/i18n';
 import { tCommon } from '@shared/i18n/common';
 
 import { useMoneyFormat } from '@/ui/moneyFormat';
-import { colors } from '@/ui/theme';
 import { DefaultCategoryPicker } from './DefaultCategoryPicker';
 import { MergePrompt } from './MergePrompt';
 import { t } from './i18n';
-import { activityLine, MATCH_TYPE_LABEL, matchTypeFromLabel } from './payees.logic';
+import { activityLine } from './payees.logic';
 import { PayeeTxnsPane } from './PayeeTxnsPane';
 import { styles } from './styles';
 import type { PayeeAdmin } from './usePayeeAdmin';
-import { displaySystemName } from '@/domain/systemNames';
-import { TransferRuleSection } from '@/features/transfers';
+import type { RenameRuleApplyResult } from '@/budget/data/api';
+import { RenamingCard } from './RenamingCard';
+import { hasLegacyTransferRule } from './renameRules.logic';
+import { LegacyTransferNotice, NeverTransferRow } from './TransferRuleChoice';
+import { TransferPayeeDetail } from './TransferPayeeDetail';
 
 const CATEGORIZATION_LABELS: Record<CategorizationMode, { title: string; sub: string }> = {
   auto: labels(t, { title: 'mode.auto.title', sub: 'mode.auto.sub' }),
@@ -26,10 +27,13 @@ const CATEGORIZATION_LABELS: Record<CategorizationMode, { title: string; sub: st
 
 /**
  * Right pane: the selected payee's details (rename, activity, categorization,
- * renaming rule, hide / merge / delete), or the merge prompt while it is open.
+ * "Never a transfer", renaming rules, hide / merge / delete), the merge prompt
+ * while it is open, or the read-only view of an account's transfer payee.
  */
-export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
+export function PayeeDetailPane({ admin, onApplied }: { admin: PayeeAdmin; onApplied: (result: RenameRuleApplyResult) => void }) {
   const money = useMoneyFormat();
+  // Phone: room under the content for the shell's floating "+ Transaction" button.
+  const narrow = useWindowDimensions().width < 700;
   const {
     budgetId,
     pickerBudget,
@@ -51,18 +55,23 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
     setCategorizationMode,
     setDefaultCategory,
     setError,
-    ruleDraft,
-    setRuleDraft,
-    draftMatchType,
-    saveRule,
+    closedIds,
+    transferTargets,
     toggleHidden,
     openMerge,
     tryDelete,
   } = admin;
   return (
-    <ScrollView style={styles.detailPane} contentContainerStyle={styles.detailContent}>
+    <ScrollView style={styles.detailPane} contentContainerStyle={[styles.detailContent, narrow && styles.phoneBottom]}>
       {!selected ? (
         <Text style={styles.empty}>{t('detail.empty')}</Text>
+      ) : selected.transfer_account_id !== null ? (
+        <TransferPayeeDetail
+          budgetId={budgetId}
+          payee={selected}
+          accountClosed={closedIds.has(selected.transfer_account_id)}
+          onApplied={onApplied}
+        />
       ) : mergeOpen ? (
         <MergePrompt
           payee={selected}
@@ -154,40 +163,15 @@ export function PayeeDetailPane({ admin }: { admin: PayeeAdmin }) {
             </>
           ) : null}
 
-          <TransferRuleSection budgetId={budgetId} payee={selected} accounts={pickerBudget?.accounts ?? []} />
+          <Text style={styles.sectionLabel}>{t('detail.transfer')}</Text>
+          {hasLegacyTransferRule(selected) ? (
+            <LegacyTransferNotice key={`legacy-${selected.id}`} budgetId={budgetId} payee={selected} targets={transferTargets} closedIds={closedIds} />
+          ) : (
+            <NeverTransferRow budgetId={budgetId} payee={selected} />
+          )}
 
           <Text style={styles.sectionLabel}>{t('detail.renaming')}</Text>
-          <Text style={styles.radioSub}>
-            {t('detail.renamingHint', { name: displaySystemName(selected.name) })}
-          </Text>
-          <View style={styles.ruleForm}>
-            <Combobox
-              value={MATCH_TYPE_LABEL[ruleDraft?.matchType ?? selected.rename_match_type ?? 'contains']}
-              onChangeText={(v) => {
-                // Matcher is pick-only: adopt a typed label when it
-                // matches exactly, otherwise snap back to the current one.
-                const mt = matchTypeFromLabel(v);
-                if (mt && mt !== draftMatchType) void saveRule({ matchType: mt });
-              }}
-              options={matchTypes.map((mt) => ({ key: mt, label: MATCH_TYPE_LABEL[mt] }))}
-              onPick={(key) => void saveRule({ matchType: key as MatchType })}
-              chevron
-              style={styles.ruleMatcher}
-              containerStyle={styles.ruleMatcherBox}
-              accessibilityLabel={t('rule.matcherLabel')}
-            />
-            <TextInput
-              value={ruleDraft?.condition ?? selected.rename_condition ?? ''}
-              onChangeText={(v) => setRuleDraft({ matchType: draftMatchType, condition: v })}
-              onEndEditing={() => void saveRule()}
-              onSubmitEditing={() => void saveRule()}
-              onBlur={() => void saveRule()}
-              placeholder={draftMatchType === 'is' ? t('rule.isPlaceholder') : t('rule.containsPlaceholder')}
-              placeholderTextColor={colors.faint}
-              style={[styles.ruleInput, { flex: 1 }]}
-              accessibilityLabel={t('rule.conditionLabel')}
-            />
-          </View>
+          <RenamingCard key={`rules-${selected.id}`} budgetId={budgetId} payee={selected} onApplied={onApplied} />
 
           <View style={styles.footerRow}>
             <Pressable onPress={() => void toggleHidden()} accessibilityRole="button">

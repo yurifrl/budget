@@ -39,6 +39,13 @@ export type {
 } from './api/categorize';
 export type { TransactionDetails } from './api/register';
 export type {
+  RenameRuleApplyResult,
+  RenameRuleBody,
+  RenameRulePreview,
+  RenameRuleRevertResult,
+  RenameRuleRow,
+} from './api/payees';
+export type {
   PayeeTransferRule,
   TransferLinkInput,
   TransferLinkResult,
@@ -77,6 +84,7 @@ export const {
   useGetAssignmentsQuery,
   useGetMonthNotesQuery,
   useGetPayeesQuery,
+  useGetPayeesWithTransfersQuery,
   useGetCategoryTargetsQuery,
   useGetCategoryNotesQuery,
   useSetAssignedMutation,
@@ -111,6 +119,12 @@ export const {
   useGetPayeeSuggestionQuery,
   useLazyGetPayeeSuggestionQuery,
   useSetPayeeRenameRuleMutation,
+  useAddPayeeRenameRuleMutation,
+  useUpdatePayeeRenameRuleMutation,
+  useRemovePayeeRenameRuleMutation,
+  useLazyPreviewRenameRuleApplyQuery,
+  useApplyRenameRuleMutation,
+  useRevertRenameRuleApplyMutation,
   useSetMonthNoteMutation,
   useCreateBudgetMutation,
   useRenameBudgetMutation,

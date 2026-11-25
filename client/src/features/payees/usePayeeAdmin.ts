@@ -1,6 +1,6 @@
 /**
  * State and actions of the Manage Payees screen: the payee list query, the
- * selection with its per-payee drafts (name, renaming rule, merge target),
+ * selection with its per-payee drafts (name, merge target),
  * and every mutation. The panes render from the returned object.
  */
 
@@ -8,24 +8,24 @@ import { useMemo, useRef, useState } from 'react';
 
 import { apiErrorMessage } from '@/platform/api/baseQuery';
 import { useAppSelector } from '@/state/hooks';
-import type { CategorizationMode, MatchType } from '@shared/domain/payees';
+import type { CategorizationMode } from '@shared/domain/payees';
 
 import {
   useAddCategoryMutation,
   useAddPayeeMutation,
   useDeletePayeeMutation,
-  useGetPayeesQuery,
+  useGetPayeesWithTransfersQuery,
   useMergePayeesMutation,
   useRenamePayeeMutation,
   useSetPayeeCategorizationMutation,
   useSetPayeeHiddenMutation,
-  useSetPayeeRenameRuleMutation,
 } from '@/budget/data/api';
 import type { PayeeAdminRow } from '@/budget/data/rows';
 import { useBudgetModel } from '@/state/useBudgetModel';
 import { selectActiveMonth } from '@/state/ui';
 import { t } from './i18n';
-import { filterPayees, mergeCandidatesFor, renameToCommit, ruleToSave, type RuleDraft } from './payees.logic';
+import { mergeCandidatesFor, renameToCommit } from './payees.logic';
+import { closedAccountIds, conversionTargets, groupPayees } from './renameRules.logic';
 
 export type PayeeAdmin = ReturnType<typeof usePayeeAdmin>;
 
@@ -33,7 +33,7 @@ export function usePayeeAdmin() {
   const { budget: modelBudget, budgetId: activeBudgetId } = useBudgetModel();
   const budgetId = activeBudgetId ?? '';
   const scope = { budgetId };
-  const payees = useGetPayeesQuery(scope, { skip: !budgetId });
+  const payees = useGetPayeesWithTransfersQuery(scope, { skip: !budgetId });
 
   const [renamePayee] = useRenamePayeeMutation();
   const [setHidden] = useSetPayeeHiddenMutation();
@@ -41,7 +41,6 @@ export function usePayeeAdmin() {
   const [mergePayees] = useMergePayeesMutation();
   const [deletePayee] = useDeletePayeeMutation();
   const [addPayee] = useAddPayeeMutation();
-  const [setRenameRule] = useSetPayeeRenameRuleMutation();
   const [addCategory] = useAddCategoryMutation();
 
   // pickerBudget: the model is the active budget — same id
@@ -53,9 +52,6 @@ export function usePayeeAdmin() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [showTxns, setShowTxns] = useState(false);
-  // Renaming-rule draft for the selected payee; null until touched, so the
-  // rendered value tracks the payee's saved rule until the user edits it.
-  const [ruleDraft, setRuleDraft] = useState<RuleDraft | null>(null);
   const [newName, setNewName] = useState('');
   const [error, setError] = useState<string | null>(null);
   // Rename conflict (409) shown under the name field, separate from the banner.
@@ -69,7 +65,10 @@ export function usePayeeAdmin() {
   const nameDraftRef = useRef<string | null>(null);
 
   const all = useMemo(() => payees.data ?? [], [payees.data]);
-  const filtered = useMemo(() => filterPayees(all, search), [all, search]);
+  const closedIds = useMemo(() => closedAccountIds(pickerBudget?.accounts ?? []), [pickerBudget]);
+  const groups = useMemo(() => groupPayees(all, search, closedIds), [all, search, closedIds]);
+  /** Transfer payees an old "treat as transfer" rule can be converted onto. */
+  const transferTargets = useMemo(() => conversionTargets(all, closedIds), [all, closedIds]);
 
   const selected = all.find((p) => p.id === selectedId) ?? null;
   const mergeCandidates = mergeCandidatesFor(all, selected);
@@ -81,7 +80,6 @@ export function usePayeeAdmin() {
     setNameDraft(null);
     nameDraftRef.current = null;
     setShowTxns(false);
-    setRuleDraft(null);
     setMergeOpen(false);
     setMergeTargetId(null);
     setError(null);
@@ -112,22 +110,6 @@ export function usePayeeAdmin() {
       const message = apiErrorMessage(err, t('error.rename'));
       if ((err as { status?: unknown } | null)?.status === 409) setNameError(message);
       else setError(message);
-    }
-  };
-
-  /** Commit the selected payee's renaming rule; empty condition clears it. */
-  const saveRule = async (patch?: Partial<RuleDraft>) => {
-    if (!selected) return;
-    const next = ruleToSave(ruleDraft, selected, patch);
-    if (!next) {
-      setRuleDraft(null);
-      return;
-    }
-    try {
-      await setRenameRule({ budgetId, payeeId: selected.id, matchType: next.matchType, condition: next.condition }).unwrap();
-      setRuleDraft(null);
-    } catch (err) {
-      setError(apiErrorMessage(err, t('error.saveRule')));
     }
   };
 
@@ -228,8 +210,6 @@ export function usePayeeAdmin() {
   };
 
   const busy = payees.isLoading;
-  /** Matcher shown when no unsaved draft: the payee's stored rule, else Contains. */
-  const draftMatchType: MatchType = ruleDraft?.matchType ?? selected?.rename_match_type ?? 'contains';
 
   return {
     budgetId,
@@ -245,7 +225,9 @@ export function usePayeeAdmin() {
     newName,
     setNewName,
     addNewPayee,
-    filtered,
+    groups,
+    closedIds,
+    transferTargets,
     selectedId,
     selected,
     select,
@@ -259,10 +241,6 @@ export function usePayeeAdmin() {
     setShowTxns,
     setCategorizationMode,
     setDefaultCategory,
-    ruleDraft,
-    setRuleDraft,
-    draftMatchType,
-    saveRule,
     toggleHidden,
     mergeOpen,
     mergeCandidates,

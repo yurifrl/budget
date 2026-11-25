@@ -3,5 +3,5 @@ import en from './en';
 import ptBR from './pt-BR';
 
 export const t = defineMessages('transfers', en, { 'pt-BR': ptBR }, {
-  sameAsEnglish: ['review.side', 'rules.account'],
+  sameAsEnglish: ['review.side'],
 });

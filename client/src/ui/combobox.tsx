@@ -52,6 +52,7 @@ export function Combobox({
   createLabel,
   placeholder,
   chevron,
+  pickOnly,
   autoFocus,
   inputRef,
   style,
@@ -70,6 +71,8 @@ export function Combobox({
   placeholder?: string;
   /** Select-affordance glyph (⌄) pinned at the right edge — pick-style cells. */
   chevron?: boolean;
+  /** A pick-style cell: every option is listed whatever the text says (the text is the current choice, not a search). */
+  pickOnly?: boolean;
   autoFocus?: boolean;
   /** The text input's ref, for callers that focus it from a shortcut ("/"). */
   inputRef?: Ref<TextInputInstance>;
@@ -118,8 +121,8 @@ export function Combobox({
 
   const query = value.trim().toLowerCase();
   const filtered = useMemo(
-    () => (query ? options.filter((o) => o.label.toLowerCase().includes(query) || o.searchText?.toLowerCase().includes(query)) : options),
-    [options, query],
+    () => (query && !pickOnly ? options.filter((o) => o.label.toLowerCase().includes(query) || o.searchText?.toLowerCase().includes(query)) : options),
+    [options, query, pickOnly],
   );
   const canCreate =
     onCreate != null && query.length > 0 && !options.some((o) => o.label.toLowerCase() === query);

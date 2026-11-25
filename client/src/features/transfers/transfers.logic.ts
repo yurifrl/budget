@@ -6,7 +6,6 @@
  */
 import type { TransferLinkInput, TransferSuggestion } from '@/budget/data/api';
 import { milliToCents } from '@/budget/data/mapping';
-import type { PayeeAdminRow } from '@/budget/data/rows';
 import type { Account, Cents, Transaction } from '@/domain/types';
 import { t } from './i18n';
 
@@ -237,30 +236,4 @@ export function linkedToast(result: { linked: string[]; rules_created: number })
 /** On-budget open accounts a transfer may go to (rule targets, "Other account…"). */
 export function transferTargets(accounts: readonly Account[], exceptId?: string): Account[] {
   return accounts.filter((a) => a.onBudget && a.group !== 'CLOSED' && a.id !== exceptId);
-}
-
-/** "Nubank Conta, Nubank Cartão…" for the rule's automatic option. */
-export function accountsHint(accounts: readonly Account[], max = 2): string {
-  const names = accounts.map((a) => a.name);
-  return names.length > max ? `${names.slice(0, max).join(', ')}…` : names.join(', ');
-}
-
-/** The "Transfer rules" list: linking rules first, then "never", by name. */
-export function transferRules(
-  payees: readonly PayeeAdminRow[],
-  accounts: readonly Pick<Account, 'id' | 'name'>[],
-): { payeeId: string; name: string; never: boolean; target: string }[] {
-  return payees
-    .filter((p) => p.transfer_rule)
-    .map((p) => {
-      const never = p.transfer_rule === 'never';
-      const account = accounts.find((a) => a.id === p.transfer_rule_account_id);
-      const target = never
-        ? t('rules.never')
-        : p.transfer_rule === 'account' && account
-          ? t('rules.account', { account: account.name })
-          : t('rules.auto');
-      return { payeeId: p.id, name: p.name, never, target };
-    })
-    .sort((a, b) => Number(a.never) - Number(b.never) || a.name.localeCompare(b.name));
 }

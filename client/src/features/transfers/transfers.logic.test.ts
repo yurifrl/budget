@@ -1,10 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { TransferSuggestion } from '@/budget/data/api';
-import type { PayeeAdminRow } from '@/budget/data/rows';
 import type { Account, Transaction } from '@/domain/types';
 import {
-  accountsHint,
   allSelected,
   bulkSummary,
   chipCounts,
@@ -17,7 +15,6 @@ import {
   ruleReason,
   selectAllRows,
   scopeSuggestions,
-  transferRules,
   transferTargets,
   whyLine,
 } from './transfers.logic';
@@ -231,19 +228,5 @@ describe('rules and targets', () => {
   ] as unknown as Account[];
   test('targets are open on-budget accounts other than the row\'s', () => {
     expect(transferTargets(accounts, 'itau').map((a) => a.id)).toEqual(['nu', 'card']);
-    expect(accountsHint(transferTargets(accounts))).toBe('Itau Conta, Nubank Conta…');
-  });
-  test('rules list: linking rules first, then never', () => {
-    const p = (id: string, name: string, rule: PayeeAdminRow['transfer_rule'], account: string | null = null) =>
-      ({ id, name, transfer_rule: rule, transfer_rule_account_id: account }) as PayeeAdminRow;
-    const rows = transferRules(
-      [p('1', 'MAY CONFEITARIA', 'never'), p('2', 'Pix enviado', 'auto'), p('3', 'Pagamento de fatura', 'account', 'card'), p('4', 'Shop', null)],
-      accounts,
-    );
-    expect(rows.map((r) => [r.name, r.target])).toEqual([
-      ['Pagamento de fatura', '→ Nubank Cartão'],
-      ['Pix enviado', '→ auto'],
-      ['MAY CONFEITARIA', 'never a transfer'],
-    ]);
   });
 });
