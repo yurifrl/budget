@@ -40,9 +40,10 @@ export function BundleCard({
   onFileRow: (row: CategorizeQueueRow, suggestion: CategorizeSuggestion) => void;
   onPickCategory: (row: CategorizeQueueRow, category: PickedCategory) => void;
 }) {
-  const { formatMoney, formatDate } = useMoneyFormat();
+  const format = useMoneyFormat();
+  const { formatMoney } = format;
   const rows = useBundleRows(budgetId, expanded ? bundle : null);
-  const range = bundleDateRange(bundle, { formatDate });
+  const range = bundleDateRange(bundle, format);
   const total = formatMoney(Math.abs(milliToCents(bundle.total)));
   return (
     <View style={[styles.card, expanded && styles.cardOpen]}>

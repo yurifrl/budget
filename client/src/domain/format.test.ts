@@ -15,6 +15,7 @@ import {
   dayOfMonth,
   parseDateInputWith,
   formatDateWith,
+  formatDateShortWith,
   formatDateLongWith,
   formatMonthLong,
   monthOfDate,
@@ -364,5 +365,16 @@ describe("active-language names", () => {
     expect(formatDateLongWith({ dateFormat: "DD/MM/YYYY" }, "2026-06-05")).toBe("5 de junho de 2026");
     expect(formatDateLongWith({ dateFormat: "MM/DD/YYYY" }, "2026-06-05")).toBe("5 de junho de 2026");
     expect(formatDateLongWith({ dateFormat: "DD/MM/YYYY" }, "2026-13-05")).toBe("2026-13-05");
+  });
+});
+
+describe('formatDateShortWith', () => {
+  it('drops the year and follows the date-format pref', () => {
+    expect(formatDateShortWith({ dateFormat: 'DD/MM/YYYY' }, '2026-11-21')).toBe('21/11');
+    expect(formatDateShortWith({ dateFormat: 'MM/DD/YYYY' }, '2026-11-21')).toBe('11/21');
+  });
+
+  it('returns a malformed value as is', () => {
+    expect(formatDateShortWith({ dateFormat: 'DD/MM/YYYY' }, 'nope')).toBe('nope');
   });
 });

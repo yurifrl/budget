@@ -140,10 +140,17 @@ describe('queueSubtitle', () => {
 });
 
 describe('bundle date range and accept input', () => {
-  const format = { formatDate: (iso: string) => iso.split('-').reverse().join('/') };
+  const format = {
+    formatDate: (iso: string) => iso.split('-').reverse().join('/'),
+    formatDateShort: (iso: string) => iso.split('-').reverse().slice(0, 2).join('/'),
+  };
 
-  test('formats both ends with the active date format', () => {
-    expect(bundleDateRange({ first_date: '2026-10-02', last_date: '2026-11-21' }, format)).toBe('02/10/2026 – 21/11/2026');
+  test('same-year span shows day and month only', () => {
+    expect(bundleDateRange({ first_date: '2026-10-02', last_date: '2026-11-21' }, format)).toBe('02/10 – 21/11');
+  });
+
+  test('a span across years keeps the full dates', () => {
+    expect(bundleDateRange({ first_date: '2025-12-28', last_date: '2026-01-03' }, format)).toBe('28/12/2025 – 03/01/2026');
   });
 
   test('accept sends the bundle key with the count the card shows', () => {

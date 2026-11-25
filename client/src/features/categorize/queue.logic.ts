@@ -74,15 +74,18 @@ export function queueSubtitle(counts: Pick<CategorizeCounts, 'left_to_categorize
   return t('queue.subtitle', { count: counts.left_to_categorize, ready: counts.above_threshold });
 }
 
-/** A bundle's date span, both ends through the active date format. */
+/**
+ * A bundle's date span through the active date format: day and month when both
+ * ends fall in the same year ("02/10 – 21/11", the mock), the full dates when
+ * the span crosses a year so it stays unambiguous.
+ */
 export function bundleDateRange(
   bundle: Pick<CategorizeBundle, 'first_date' | 'last_date'>,
-  format: Pick<MoneyFormat, 'formatDate'>,
+  format: Pick<MoneyFormat, 'formatDate' | 'formatDateShort'>,
 ): string {
-  return t('bundle.dateRange', {
-    first: format.formatDate(bundle.first_date),
-    last: format.formatDate(bundle.last_date),
-  });
+  const sameYear = bundle.first_date.slice(0, 4) === bundle.last_date.slice(0, 4);
+  const show = sameYear ? format.formatDateShort : format.formatDate;
+  return t('bundle.dateRange', { first: show(bundle.first_date), last: show(bundle.last_date) });
 }
 
 /** What an "Accept bundle" press sends: the server resolves rows and the top category. */
