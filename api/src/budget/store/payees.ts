@@ -2,6 +2,7 @@
  * Budget store: payees. SQL only; every function takes a Queryable.
  */
 import type { Queryable } from '../../core/db';
+import { RULE_CREATED_AT } from './rename-rules';
 
 /**
  * Find-or-create a payee by exact name (no trimming, no rename rules): the
@@ -47,7 +48,7 @@ const ruleStats = `
   ) first_rule on true
   left join lateral (
     select json_agg(json_build_object('id', r.id, 'payee_id', r.payee_id, 'match_type', r.match_type,
-                                      'condition', r.condition, 'created_at', r.created_at)
+                                      'condition', r.condition, 'created_at', ${RULE_CREATED_AT})
                     order by r.created_at, r.id) as rules
     from payee_renaming_rules r where r.payee_id = p.id
   ) all_rules on true

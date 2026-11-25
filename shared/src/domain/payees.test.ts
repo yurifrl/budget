@@ -100,11 +100,15 @@ describe("matchRule", () => {
     expect(matchRule(rule("savings", "ends_with", "X"), "PIX SAVINGS 42")).toBe(false);
   });
 
-  it("ignores surrounding and repeated spaces on both sides", () => {
-    expect(matchRule(rule("  pix   savings ", "is", "X"), "PIX SAVINGS")).toBe(true);
-    expect(matchRule(rule("pix savings", "is", "X"), "  PIX \t SAVINGS  ")).toBe(true);
-    expect(matchRule(rule("pix savings", "contains", "X"), "TED  PIX    SAVINGS 42")).toBe(true);
-    expect(normalizeRuleText("  A   b\n C ")).toBe("a b c");
+  it("compares exactly as main did: lower case only, spaces are significant, nothing is trimmed or collapsed", () => {
+    expect(matchRule(rule("pix savings", "is", "X"), "PIX SAVINGS")).toBe(true);
+    expect(matchRule(rule("pix  savings", "is", "X"), "PIX SAVINGS")).toBe(false);
+    expect(matchRule(rule("pix savings", "is", "X"), "PIX  SAVINGS")).toBe(false);
+    expect(matchRule(rule("pix savings", "contains", "X"), "TED  PIX    SAVINGS 42")).toBe(false);
+    expect(matchRule(rule("pix  savings", "contains", "X"), "TED PIX  SAVINGS 42")).toBe(true);
+    expect(matchRule(rule("pix", "is", "X"), " PIX ")).toBe(false);
+    expect(matchRule(rule("pix", "starts_with", "X"), " PIX 1")).toBe(false);
+    expect(normalizeRuleText("  A   b\n C ")).toBe("  a   b\n c ");
   });
 
   it("accents are significant (as before): no folding", () => {
@@ -152,7 +156,8 @@ describe("findRenameRule / applyRules", () => {
     expect(findRenameRule([r("pix", "starts_with", "S"), r("x 42", "ends_with", "E")], "PIX 42")?.replacement).toBe("E");
   });
 
-  it("the result does not depend on how the same rules are spaced or cased", () => {
-    expect(findRenameRule([r("  PIX   Savings ", "contains", "A")], "pix savings 1")?.replacement).toBe("A");
+  it("the result does not depend on the case of a rule or of the text", () => {
+    expect(findRenameRule([r("PIX Savings", "contains", "A")], "pix savings 1")?.replacement).toBe("A");
+    expect(findRenameRule([r("pix savings", "contains", "A")], "PIX SAVINGS 1")?.replacement).toBe("A");
   });
 });

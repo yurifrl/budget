@@ -1,4 +1,4 @@
-/** One-off: records what main (6027e7c) stores for rule-matched imports. Not part of any branch. */
+/** One-off: records what main (f538f3f) stores for rule-matched imports, with the review's data shapes. Not part of any branch. */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { Hono } from 'hono';
@@ -15,7 +15,7 @@ import { syncConnectionTransactions } from './sync';
 import type { AggregatedTransaction, BankAggregator } from './types';
 
 const PROVIDER = 'testprovider-capture';
-const user: IdentityUser = { id: crypto.randomUUID(), email: 'capture@syscd.local', googleSub: null, role: 'user', status: 'active' };
+const user: IdentityUser = { id: crypto.randomUUID(), email: 'capture2@syscd.local', googleSub: null, role: 'user', status: 'active' };
 const app = new Hono();
 app.onError(httpOnError);
 app.use('*', (c, next) => { c.set('user', user); return next(); });
@@ -23,27 +23,24 @@ app.route('/', budget);
 const op = makeOpCaller(app, contracts);
 
 const B = crypto.randomUUID();
-const itau = crypto.randomUUID();
-const nubank = crypto.randomUUID();
-const third = crypto.randomUUID();
-const savings = crypto.randomUUID();
-const EXT_ITEM = `up-item-cap-${user.id}`;
+const ids = { itau: crypto.randomUUID(), nubank: crypto.randomUUID(), third: crypto.randomUUID(), savings: crypto.randomUUID(), cartao: crypto.randomUUID() };
+const NAMES: Record<string, string> = { itau: 'Itau Conta', nubank: 'Nubank Conta', third: 'Third Conta', savings: 'Savings Conta', cartao: 'Cartao Conta' };
 const EXT_ITAU = 'up-acc-cap-itau';
 const date = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
 
 const TEXTS: [string, number][] = [
-  ['PADOCA 42', -10000],
-  ['UBER *TRIP 123', -2000],
-  ['PADDED RAW', -3000],
-  ['NETFLIX.COM', -4000],
-  ['PIX SAV 42', -5000],
-  ['PIX THIRD', -6000],
-  ['Corner Shop', -7000],
-  ['Transfer : Nubank Conta', -8000],
-  ['MERCADO LIVRE SP', -9000],
-  ['pix sav', -11000],
-  ['padoca', -12000],
-  ['  Bakery  ', -13000],
+  ['PADOCA 42', -10000], ['UBER TRIP 123', -2000], ['UBER  TRIP 9', -2100], ['PADDED RAW', -3000], ['NETFLIX.COM', -4000],
+  ['PIX SAV 42', -5000], ['PIX THIRD', -6000], ['Corner Shop', -7000], ['Transfer : Nubank Conta', -8000], ['MERCADO LIVRE SP', -9000],
+  ['pix sav', -11000], ['padoca', -12000], ['  Bakery  ', -13000], ['SHOP END', -14000], ['SHOP  END', -14100],
+  ['LOJA X 1', -15000], ['Loja X 2', -15100], ['CASA  BAHIA 1', -16000], ['CASA BAHIA 2', -16100], ['THE BAR 1', -17000],
+  ['Mercado Livre', -18000], ['Mercado Livre SP', -18100], ['Padaria', -19000], ['Cafe Central 1', -20000],
+];
+// client-style statement rows: import_payee_name = payee, original = the statement text
+const CLIENT: { payee: string; original: string; amount: number }[] = [
+  { payee: 'PADOCA 77', original: 'PADOCA 77', amount: -21000 },
+  { payee: 'Mercado Livre', original: 'Mercado Livre', amount: -21100 },
+  { payee: 'UBER  TRIP 5', original: 'UBER  TRIP 5', amount: -21200 },
+  { payee: 'Uber Trip Plus', original: 'UBER TRIP PLUS 5', amount: -21300 }, // a payee the person chose
 ];
 
 let upstream: AggregatedTransaction[] = [];
@@ -54,41 +51,40 @@ const aggregator = {
 } as unknown as BankAggregator;
 let connId = '';
 const sync = () => syncConnectionTransactions({ userId: user.id, connectionId: connId, aggregator, ignoreWatermark: true });
+const UNTOUCHED = `COALESCE(t.import_id IS NOT NULL AND (t.payee_id IS NULL OR p.name IN (t.import_payee_name, t.import_payee_name_original)), false)`;
 
 describe.skipIf(!dbReady)('capture', () => {
   beforeAll(async () => {
     await pool.query(`INSERT INTO users (id, google_sub, email, role, status) VALUES ($1,$2,$3,'user','active')`, [user.id, user.id, user.email]);
-    await pool.query('INSERT INTO budgets (id, name, owner_user_id) VALUES ($1,$2,$3)', [B, 'capture', user.id]);
+    await pool.query('INSERT INTO budgets (id, name, owner_user_id) VALUES ($1,$2,$3)', [B, 'capture2', user.id]);
     await pool.query('INSERT INTO budget_members (budget_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [B, user.id]);
-    await pool.query(
-      `INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES
-       ($1,$5,'Itau Conta','checking','CASH',true),($2,$5,'Nubank Conta','checking','CASH',true),
-       ($3,$5,'Third Conta','checking','CASH',true),($4,$5,'Savings Conta','checking','CASH',true)`,
-      [itau, nubank, third, savings, B],
-    );
-    for (const [id, name] of [[itau, 'Itau Conta'], [nubank, 'Nubank Conta'], [third, 'Third Conta'], [savings, 'Savings Conta']] as const) {
-      const p = await pool.query<{ id: string }>('INSERT INTO payees (budget_id, name, transfer_account_id) VALUES ($1,$2,$3) RETURNING id', [B, `Transfer : ${name}`, id]);
+    for (const [k, id] of Object.entries(ids)) {
+      await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,$3,'checking','CASH',true)`, [id, B, NAMES[k]]);
+      const p = await pool.query<{ id: string }>('INSERT INTO payees (budget_id, name, transfer_account_id) VALUES ($1,$2,$3) RETURNING id', [B, `Transfer : ${NAMES[k]}`, id]);
       await pool.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [p.rows[0]!.id, id]);
     }
-    // Rules, one per payee (main's schema), created in this order.
     const rule = async (name: string, type: string, cond: string, transferAccount: string | null = null) => {
-      if (transferAccount) {
-        await pool.query('UPDATE payees SET rename_match_type = $2, rename_condition = $3 WHERE budget_id = $1 AND transfer_account_id = $4', [B, type, cond, transferAccount]);
-      } else {
-        await pool.query('INSERT INTO payees (budget_id, name, rename_match_type, rename_condition) VALUES ($1,$2,$3,$4)', [B, name, type, cond]);
-      }
+      if (transferAccount) await pool.query('UPDATE payees SET rename_match_type = $2, rename_condition = $3 WHERE budget_id = $1 AND transfer_account_id = $4', [B, type, cond, transferAccount]);
+      else await pool.query('INSERT INTO payees (budget_id, name, rename_match_type, rename_condition) VALUES ($1,$2,$3,$4)', [B, name, type, cond]);
     };
     await rule('Padaria', 'contains', 'PADOCA');
-    await rule('Uber', 'contains', 'UBER');
+    await rule('Uber', 'contains', 'UBER TRIP');
     await rule(' Padded ', 'is', 'PADDED RAW');
     await rule('Netflix', 'is', 'NETFLIX.COM');
-    await rule('', 'contains', 'PIX SAV', nubank);
-    await rule('', 'is', 'PIX THIRD', third);
+    await rule('', 'contains', 'PIX SAV', ids.nubank);
+    await rule('', 'is', 'PIX THIRD', ids.third);
     await rule('Mercado', 'contains', 'MERC');
     await rule('Mercado Livre', 'contains', 'MERCADO LIVRE');
-    const c = await store.upsertConnection({ userId: user.id, provider: PROVIDER, externalId: EXT_ITEM, clientUserId: `cu-${user.id}`, status: 'connected', environment: 'production' });
+    await rule('Shop', 'is', 'SHOP END');
+    await rule('Loja', 'contains', 'Loja');
+    await rule('Loja Dead', 'contains', 'LOJA');
+    await rule('Casa Old', 'contains', 'CASA  BAHIA');
+    await rule('Casa New', 'contains', 'CASA BAHIA');
+    await rule('Bar', 'contains', ' bar ');
+    await rule('Cafe Central', 'contains', 'cafe central');
+    const c = await store.upsertConnection({ userId: user.id, provider: PROVIDER, externalId: `up-item-cap2-${user.id}`, clientUserId: `cu-${user.id}`, status: 'connected', environment: 'production' });
     connId = c.id;
-    await pool.query('UPDATE accounts SET connection_id = $1, external_account_id = $2, institution = $4 WHERE id = $3', [connId, EXT_ITAU, itau, 'itau']);
+    await pool.query('UPDATE accounts SET connection_id = $1, external_account_id = $2, institution = $4 WHERE id = $3', [connId, EXT_ITAU, ids.itau, 'itau']);
   });
   afterAll(async () => {
     await pool.query('DELETE FROM budgets WHERE id = $1', [B]);
@@ -99,25 +95,36 @@ describe.skipIf(!dbReady)('capture', () => {
   test('capture', async () => {
     upstream = TEXTS.map(([d, amount], i) => ({ externalId: `c${i}`, externalAccountId: EXT_ITAU, description: d, amount, date, currencyCode: null, cleared: true, raw: { id: `c${i}` } }));
     const s1 = await sync();
+    // user edits: c0 (PADOCA 42) gets another payee; c1 (UBER TRIP 123) is edited and edited back to the payee it had
+    const rowOf = async (ext: string) => (await pool.query('SELECT t.id, p.name AS payee FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id WHERE t.import_id = $1', [`${PROVIDER}:${ext}`])).rows[0] as { id: string; payee: string };
+    const c0 = await rowOf('c0');
+    const c1 = await rowOf('c1');
+    const e0 = await op('budget_transactions_update', { id: c0.id, budget_id: B, patch: { payee: 'Edited Payee' } });
+    const e1a = await op('budget_transactions_update', { id: c1.id, budget_id: B, patch: { payee: 'Somewhere Else' } });
+    const e1b = await op('budget_transactions_update', { id: c1.id, budget_id: B, patch: { payee: c1.payee } });
+    expect([e0.status, e1a.status, e1b.status]).toEqual([204, 204, 204]);
     const s2 = await sync();
-    const bulkRows = TEXTS.map(([payee, amount]) => ({ date, payee, memo: '', outflow: -amount, inflow: 0, category_id: null }));
-    const b1 = (await op('budget_transactions_bulk_import', { budget_id: B, account_id: savings, txns: bulkRows })).json;
-    const b2 = (await op('budget_transactions_bulk_import', { budget_id: B, account_id: savings, txns: bulkRows })).json;
+    const plain = TEXTS.map(([payee, amount]) => ({ date, payee, memo: '', outflow: -amount, inflow: 0, category_id: null }));
+    const client = CLIENT.map((r) => ({ date, payee: r.payee, memo: '', outflow: -r.amount, inflow: 0, category_id: null, import_payee_name: r.payee, import_payee_name_original: r.original }));
+    const b1 = (await op('budget_transactions_bulk_import', { budget_id: B, account_id: ids.savings, txns: plain })).json;
+    const b2 = (await op('budget_transactions_bulk_import', { budget_id: B, account_id: ids.savings, txns: plain })).json;
+    const cb1 = (await op('budget_transactions_bulk_import', { budget_id: B, account_id: ids.cartao, txns: client })).json;
+    const cb2 = (await op('budget_transactions_bulk_import', { budget_id: B, account_id: ids.cartao, txns: client })).json;
     const names = new Map((await pool.query('SELECT id, name FROM payees WHERE budget_id = $1', [B])).rows.map((r) => [r.id, r.name]));
-    const accNames = new Map((await pool.query('SELECT id, name FROM accounts WHERE budget_id = $1', [B])).rows.map((r) => [r.id, r.name]));
+    const accNames = new Map(Object.entries(ids).map(([k, id]) => [id, NAMES[k]]));
     const sync_rows = (await pool.query(
-      `SELECT t.import_id, t.amount::int AS amount, p.name AS payee, t.import_payee_name, t.import_payee_name_original, s.last_synced_payload AS shadow, h.account_id AS hint
+      `SELECT t.import_id, t.amount::int AS amount, p.name AS payee, t.import_payee_name, t.import_payee_name_original, s.last_synced_payload AS shadow, s.blocked, h.account_id AS hint, ${UNTOUCHED} AS untouched
        FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id LEFT JOIN connection_transactions s ON s.transaction_id = t.id LEFT JOIN transfer_hints h ON h.transaction_id = t.id
-       WHERE t.account_id = $1 ORDER BY t.import_id`, [itau])).rows.map((r) => ({ ...r, hint: r.hint ? accNames.get(r.hint) : null }));
-    const bulk_rows = (await pool.query(
-      `SELECT t.import_id, t.amount::int AS amount, p.name AS payee, t.import_payee_name, h.account_id AS hint
+       WHERE t.account_id = $1 ORDER BY t.import_id`, [ids.itau])).rows.map((r) => ({ ...r, hint: r.hint ? accNames.get(r.hint) : null }));
+    const bulkRows = async (account: string) => (await pool.query(
+      `SELECT t.import_id, t.amount::int AS amount, p.name AS payee, t.import_payee_name, t.import_payee_name_original, h.account_id AS hint, ${UNTOUCHED} AS untouched
        FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id LEFT JOIN transfer_hints h ON h.transaction_id = t.id
-       WHERE t.account_id = $1 ORDER BY t.import_id`, [savings])).rows.map((r) => {
+       WHERE t.account_id = $1 ORDER BY t.import_id`, [account])).rows.map((r) => {
       const m = /^YNAB:(-?\d+):(\d{4}-\d{2}-\d{2}):(.*):(\d+)$/.exec(r.import_id)!;
-      return { amount: r.amount, payee: r.payee, import_payee_name: r.import_payee_name, hint: r.hint ? accNames.get(r.hint) : null, key_payee: names.get(m[3]!) ?? m[3], occ: Number(m[4]) };
+      return { amount: r.amount, payee: r.payee, import_payee_name: r.import_payee_name, import_payee_name_original: r.import_payee_name_original, hint: r.hint ? accNames.get(r.hint) : null, untouched: r.untouched, key_payee: names.get(m[3]!) ?? m[3], occ: Number(m[4]) };
     });
-    const payees = (await pool.query('SELECT name, transfer_account_id, rename_match_type, rename_condition, created_at FROM payees WHERE budget_id = $1 ORDER BY created_at, name', [B])).rows.map((r) => ({ name: r.name, transfer: r.transfer_account_id ? accNames.get(r.transfer_account_id) : null, type: r.rename_match_type, condition: r.rename_condition }));
-    writeFileSync(process.env.CAPTURE_OUT!, JSON.stringify({ texts: TEXTS, s1, s2, b1, b2, sync_rows, bulk_rows, payees }, null, 2));
+    const payees = (await pool.query('SELECT name, transfer_account_id, rename_match_type, rename_condition FROM payees WHERE budget_id = $1 ORDER BY created_at, name', [B])).rows.map((r) => ({ name: r.name, transfer: r.transfer_account_id ? accNames.get(r.transfer_account_id) : null, type: r.rename_match_type, condition: r.rename_condition }));
+    writeFileSync(process.env.CAPTURE_OUT!, JSON.stringify({ texts: TEXTS, client: CLIENT, s1, s2, b1, b2, cb1, cb2, sync_rows, bulk_rows: await bulkRows(ids.savings), client_rows: await bulkRows(ids.cartao), payees }, null, 2));
     expect(true).toBe(true);
   });
 });

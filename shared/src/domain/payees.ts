@@ -44,13 +44,21 @@ export interface RenameRule {
 }
 
 /**
- * The form a rule's pattern and a text are compared in: surrounding and
- * repeated whitespace collapsed, lower case. Accents are NOT folded ("pão" and
- * "pao" are different texts), as before.
+ * The ONE comparison form of a rule's pattern and of a text, shared by the matcher
+ * and by the frozen earlier matcher (api `domain/legacy-rename.ts`): exactly what
+ * main did, `String.prototype.toLowerCase()` and nothing else. No trimming, no
+ * collapsing of repeated spaces, no accent folding ("pão" and "pao" differ, "Ç" and
+ * "ç" do not). The callers trim the TEXT they hand in (bank sync and statement
+ * import trim the bank text; the contract trims a pattern when it is written), as
+ * they always did; a pattern or a text holding two spaces matches only the same two
+ * spaces.
  */
 export function normalizeRuleText(text: string): string {
-  return text.trim().replace(/\s+/g, ' ').toLowerCase();
+  return text.toLowerCase();
 }
+
+/** Shortest pattern a NEW "contains", "starts with" or "ends with" rule may have (shorter ones swallow nearly every text); stored shorter ones keep working. */
+export const MIN_RULE_PATTERN_LENGTH = 2;
 
 /** How specific a rule is: lower first. `is` < `starts with` = `ends with` < `contains`. */
 function specificity(type: RuleMatchType): number {

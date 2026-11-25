@@ -22,6 +22,7 @@ import { linkTransfers } from '../domain/transfer-links';
 import { assertNotTransferPayee, transferPayeeProtected } from '../domain/transfer-payees';
 import * as transferStore from '../store/transfers';
 import { loadRenameRules, matchingRule } from '../domain/transactions';
+import { MIN_RULE_PATTERN_LENGTH } from '@shared/domain/payees';
 import { budgetRouter } from '../router';
 import { categoryInBudget } from '../store/categories';
 import * as payeesStore from '../store/payees';
@@ -73,9 +74,25 @@ async function requirePayeeIn(db: Queryable, budgetId: string, id: string): Prom
   if (!(await payeesStore.livePayeeExists(db, budgetId, id))) throw new HttpError(404, 'payee not found');
 }
 
-/** 409 when another rule of the budget already says this (match type + text, spaces and case ignored). */
-async function assertRuleFree(db: Queryable, budgetId: string, matchType: string, condition: string, exceptRuleId: string | null, payeeId: string): Promise<void> {
-  const holder = await rulesStore.findRuleHolder(db, budgetId, matchType, condition, exceptRuleId);
+/**
+ * A rule being added or changed: a "contains" / "starts with" / "ends with" pattern is at least
+ * MIN_RULE_PATTERN_LENGTH long (400; stored shorter ones keep working), and no OTHER rule of the budget
+ * already says the same (same match type and pattern, case ignored as matching ignores it: 409
+ * naming the holder). A write that leaves the rule's type and text as they are is not asked.
+ */
+async function assertRuleAllowed(
+  db: Queryable,
+  budgetId: string,
+  matchType: string,
+  condition: string,
+  existing: { id: string; match_type: string; condition: string } | null,
+): Promise<void> {
+  const text = condition.trim();
+  if (existing && existing.match_type === matchType && existing.condition.toLowerCase() === text.toLowerCase()) return;
+  if (matchType !== 'is' && text.length < MIN_RULE_PATTERN_LENGTH) {
+    throw new HttpError(400, `A "${matchType.replace('_', ' ')}" rule needs at least ${MIN_RULE_PATTERN_LENGTH} characters.`);
+  }
+  const holder = await rulesStore.findRuleHolder(db, budgetId, matchType, text, existing?.id ?? null);
   if (!holder) return;
   throw new HttpError(
     409,
@@ -85,21 +102,32 @@ async function assertRuleFree(db: Queryable, budgetId: string, matchType: string
   );
 }
 
+/** A unique violation on the exact rule index (two writers raced past the check): the same 409. */
+async function ruleWrite<T>(db: Queryable, budgetId: string, matchType: string, condition: string, write: () => Promise<T>): Promise<T> {
+  const done = await rulesStore.guardRuleWrite(db, write);
+  if (done.ok) return done.value;
+  const holder = await rulesStore.findRuleHolder(db, budgetId, matchType, condition.trim(), null);
+  throw new HttpError(409, 'Another payee already has that renaming rule.', 'rename_rule_exists', { name: holder?.payee_name ?? '' });
+}
+
 export const operations = [
   // Transfer payees (one per account) are listed only on request: the pickers
   // and Manage Payees show them through the accounts, not as ordinary payees.
-  implement(payeesList, async (_c, { budget_id, hidden, include_transfers }) =>
-    payeesStore.listPayees(pool, budget_id, hidden, include_transfers === 'true'),
-  ),
+  implement(payeesList, async (_c, { budget_id, hidden, include_transfers }) => {
+    // A rule only the old columns hold (written by the other app) becomes a row first, so the list shows what matching uses.
+    await rulesStore.adoptColumnRule(pool, budget_id);
+    return payeesStore.listPayees(pool, budget_id, hidden, include_transfers === 'true');
+  }),
 
   implement(payeesCreate, async (_c, { budget_id, name, default_category_id, hidden, categorization_mode }) => {
     if (default_category_id) {
       if (!(await categoryInBudget(pool, default_category_id, budget_id))) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
     }
-    // Rule-aware create: a name matching a payee's rename condition lands as
-    // that payee's name, mirroring what transaction creation would do.
-    const rules = await loadRenameRules(pool, budget_id);
-    const effectiveName = matchingRule(rules, name)?.replacement ?? name;
+    // Rule-aware create: a name a renaming rule matches lands as that ORDINARY payee, mirroring what
+    // transaction creation does. A rule of a transfer payee never turns this into the transfer payee:
+    // the payee is created (or found) by the name given.
+    const hit = matchingRule(await loadRenameRules(pool, budget_id), name);
+    const effectiveName = hit && !hit.transfer_account_id ? hit.replacement : name;
     return payeesStore.insertPayee(pool, {
       budgetId: budget_id,
       name: effectiveName,
@@ -187,6 +215,9 @@ export const operations = [
         if (row?.transfer_account_id) throw transferPayeeProtected(row.name);
       }
 
+      // A rule only the old columns hold is adopted before the source is deleted, so it moves with the rest.
+      await rulesStore.adoptColumnRule(client, budget_id, id);
+      await rulesStore.adoptColumnRule(client, budget_id, target_id);
       const merged = await payeesStore.movePayeeTransactions(client, id, target_id);
       await payeesStore.markPayeeDeleted(client, id);
       // The merged payee's renaming rules now assign the target (imported text that used to
@@ -203,13 +234,15 @@ export const operations = [
   implement(payeesSetRenameRule, async (_c, { id, budget_id, match_type, condition }) =>
     withTransaction(pool, async (client) => {
       await requirePayeeIn(client, budget_id, id);
+      await rulesStore.adoptColumnRule(client, budget_id, id);
       const first = (await rulesStore.listPayeeRules(client, budget_id, id)).find((r) => r.match_type === 'is' || r.match_type === 'contains');
       if (condition === '') {
         if (first) await rulesStore.deleteRule(client, budget_id, id, first.id);
       } else {
-        await assertRuleFree(client, budget_id, match_type, condition, first?.id ?? null, id);
-        if (first) await rulesStore.updateRule(client, budget_id, id, first.id, match_type, condition);
-        else await rulesStore.insertRule(client, budget_id, id, match_type, condition);
+        await assertRuleAllowed(client, budget_id, match_type, condition, first ?? null);
+        await ruleWrite(client, budget_id, match_type, condition, () =>
+          first ? rulesStore.updateRule(client, budget_id, id, first.id, match_type, condition) : rulesStore.insertRule(client, budget_id, id, match_type, condition),
+        );
       }
       await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
     }),
@@ -219,14 +252,16 @@ export const operations = [
   // ends with> X is renamed to this payee".
   implement(payeesRenameRulesList, async (_c, { id, budget_id }) => {
     await requirePayee(budget_id, id);
+    await rulesStore.adoptColumnRule(pool, budget_id, id);
     return rulesStore.listPayeeRules(pool, budget_id, id);
   }),
 
   implement(payeesRenameRulesAdd, async (_c, { id, budget_id, match_type, condition }) =>
     withTransaction(pool, async (client) => {
       await requirePayeeIn(client, budget_id, id);
-      await assertRuleFree(client, budget_id, match_type, condition, null, id);
-      const rule = await rulesStore.insertRule(client, budget_id, id, match_type, condition);
+      await rulesStore.adoptColumnRule(client, budget_id, id);
+      await assertRuleAllowed(client, budget_id, match_type, condition, null);
+      const rule = await ruleWrite(client, budget_id, match_type, condition, () => rulesStore.insertRule(client, budget_id, id, match_type, condition));
       await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
       return rule;
     }),
@@ -235,9 +270,11 @@ export const operations = [
   implement(payeesRenameRulesUpdate, async (_c, { id, budget_id, rule_id, match_type, condition }) =>
     withTransaction(pool, async (client) => {
       await requirePayeeIn(client, budget_id, id);
-      if (!(await rulesStore.getRule(client, budget_id, id, rule_id))) throw new HttpError(404, 'rule not found');
-      await assertRuleFree(client, budget_id, match_type, condition, rule_id, id);
-      const rule = await rulesStore.updateRule(client, budget_id, id, rule_id, match_type, condition);
+      await rulesStore.adoptColumnRule(client, budget_id, id);
+      const existing = await rulesStore.getRule(client, budget_id, id, rule_id);
+      if (!existing) throw new HttpError(404, 'rule not found');
+      await assertRuleAllowed(client, budget_id, match_type, condition, existing);
+      const rule = await ruleWrite(client, budget_id, match_type, condition, () => rulesStore.updateRule(client, budget_id, id, rule_id, match_type, condition));
       await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
       return rule!;
     }),
@@ -246,6 +283,7 @@ export const operations = [
   implement(payeesRenameRulesRemove, async (_c, { id, budget_id, rule_id }) =>
     withTransaction(pool, async (client) => {
       await requirePayeeIn(client, budget_id, id);
+      await rulesStore.adoptColumnRule(client, budget_id, id);
       if (!(await rulesStore.deleteRule(client, budget_id, id, rule_id))) throw new HttpError(404, 'rule not found');
       await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
     }),

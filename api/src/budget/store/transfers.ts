@@ -45,10 +45,27 @@ const CANDIDATE_SELECT = `
          t.category_id,
          (SELECT count(*) FROM subtransactions s WHERE s.transaction_id = t.id AND NOT s.deleted)::text AS split_count,
          t.transfer_account_id, t.transfer_transaction_id, t.payee_id, p.name AS payee_name,
-         (t.import_id IS NOT NULL
+         COALESCE(t.import_id IS NOT NULL
           AND (t.payee_id IS NULL OR p.name IN (t.import_payee_name, t.import_payee_name_original)
                -- the payee a renaming rule assigned at the last sync is as imported, not edited
-               OR COALESCE(p.name = cs.last_synced_payload->>'payee', false))) AS untouched_ledger,
+               OR COALESCE(p.name = cs.last_synced_payload->>'payee', false)
+               -- a statement row (no sync shadow) whose payee is the one a rule of that payee assigns for the
+               -- imported text. Main counted a rule-hit row untouched exactly when its rule-spliced payee name
+               -- equalled the imported text ('is': the payee's name; 'contains': the text with the pattern
+               -- replaced by the payee's name); that is kept, rule by rule. 'starts with' / 'ends with' never
+               -- existed on main: such a row is as imported.
+               OR EXISTS (
+                 SELECT 1 FROM payee_renaming_rules rr
+                  WHERE rr.payee_id = t.payee_id
+                    AND CASE rr.match_type
+                          WHEN 'contains' THEN
+                            strpos(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), lower(rr.condition)) > 0
+                            AND btrim(replace(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), lower(rr.condition), p.name))
+                                IN (t.import_payee_name, t.import_payee_name_original)
+                          WHEN 'starts_with' THEN starts_with(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), lower(rr.condition))
+                          WHEN 'ends_with' THEN right(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), length(rr.condition)) = lower(rr.condition)
+                          ELSE false
+                        END)), false) AS untouched_ledger,
          m.state AS mark,
          a.connection_id, COALESCE(NULLIF(btrim(a.institution), ''), c.institution) AS institution,
          CASE WHEN ha.id IS NOT NULL AND NOT ha.deleted THEN h.account_id END AS hint_account_id

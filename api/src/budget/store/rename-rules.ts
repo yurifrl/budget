@@ -10,11 +10,8 @@
 import type { Queryable } from '../../core/db';
 import type { RenameRule, RuleMatchType } from '@shared/domain/payees';
 
-/** The unique index of a rule: one (match type, normalised pattern) per budget. */
-export const RENAME_RULE_UNIQUE = 'payee_renaming_rules_pattern_key';
-
-/** The pattern normalised the way the unique index and matching compare it (SQL side). */
-const NORMALISED = (column: string) => `lower(regexp_replace(btrim(${column}), '\\s+', ' ', 'g'))`;
+/** The unique index of a rule: one exact (match type, pattern) per budget (races on add/update map to 409). */
+export const RENAME_RULE_UNIQUE = 'payee_renaming_rules_exact_key';
 
 export interface RenameRuleRow {
   id: string;
@@ -26,34 +23,78 @@ export interface RenameRuleRow {
 
 /** A rule as matching needs it: the rule plus the payee it assigns. */
 export interface LoadedRenameRule extends RenameRule {
+  /** The rule's id; `legacy:<payee id>` for a rule read from the payee's old columns (not adopted yet). */
   id: string;
   payee_id: string;
   /** The payee is an account's transfer payee: that account. */
   transfer_account_id: string | null;
-  /** The payee is a transfer payee of an account that is gone: the rule is kept but never fires. */
+  /**
+   * The payee is the transfer payee of an account that is closed or gone: the rule is kept
+   * but never fires (the row keeps its text as an ordinary payee). The earlier-behaviour
+   * reader (domain/legacy-rename.ts) still sees it, as main did.
+   */
   dead: boolean;
 }
 
-const ROW = `r.id, r.payee_id, r.match_type, r.condition, r.created_at::text AS created_at`;
+/** ISO UTC with milliseconds, the one format of `created_at` in the payee list and the rule operations. */
+const CREATED_AT = (col: string) => `to_char(${col} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+export const RULE_CREATED_AT = CREATED_AT('r.created_at');
+const ROW = `r.id, r.payee_id, r.match_type, r.condition, ${RULE_CREATED_AT} AS created_at`;
+const RETURNING = `id, payee_id, match_type, condition, ${CREATED_AT('created_at')} AS created_at`;
+
+/**
+ * A payee's old columns hold a rule the table does not have, by the matching key
+ * (same payee and same match type and lower-cased pattern; or any payee's identical
+ * match type and pattern, which the exact index would refuse): the other app, or the
+ * released client's old endpoint, wrote it. SQL fragment over `payees p`.
+ */
+const COLUMN_RULE_MISSING = `
+  p.rename_match_type IN ('is', 'contains') AND p.rename_condition IS NOT NULL AND p.rename_condition <> ''
+  AND NOT EXISTS (
+    SELECT 1 FROM payee_renaming_rules r
+     WHERE r.budget_id = p.budget_id AND r.match_type = p.rename_match_type
+       AND ((r.payee_id = p.id AND lower(r.condition) = lower(p.rename_condition)) OR r.condition = p.rename_condition))`;
 
 /**
  * Every rule of the budget's live payees, oldest first (created_at, id): the order
- * `findRenameRule` breaks its last tie with. A rule of a transfer payee whose
- * account is deleted is marked `dead` (it never fires; the earlier behaviour it
- * replaces still needs to see it, see domain/legacy-rename.ts).
+ * `findRenameRule` breaks its last tie with. A rule only the payee's old columns hold
+ * (written by the other app after the copy) is read as a rule of the payee, as old as the
+ * payee; the next rule write of that payee makes it a row (`adoptColumnRule`).
  */
 export async function loadBudgetRules(db: Queryable, budgetId: string): Promise<LoadedRenameRule[]> {
   const res = await db.query<LoadedRenameRule>(
-    `SELECT r.id, r.payee_id, r.match_type, r.condition, p.name AS replacement, p.transfer_account_id,
-            (p.transfer_account_id IS NOT NULL AND (a.id IS NULL OR a.deleted OR a.budget_id <> p.budget_id)) AS dead
-       FROM payee_renaming_rules r
-       JOIN payees p ON p.id = r.payee_id AND p.budget_id = r.budget_id AND p.deleted = false
+    `SELECT x.id, x.payee_id, x.match_type, x.condition, p.name AS replacement, p.transfer_account_id,
+            (p.transfer_account_id IS NOT NULL AND (a.id IS NULL OR a.deleted OR a.closed OR a.budget_id <> p.budget_id)) AS dead
+       FROM (
+         SELECT r.id::text AS id, r.payee_id, r.match_type, r.condition, r.created_at
+           FROM payee_renaming_rules r WHERE r.budget_id = $1
+         UNION ALL
+         SELECT 'legacy:' || p.id::text, p.id, p.rename_match_type, p.rename_condition, p.created_at
+           FROM payees p WHERE p.budget_id = $1 AND p.deleted = false AND ${COLUMN_RULE_MISSING}
+       ) x
+       JOIN payees p ON p.id = x.payee_id AND p.budget_id = $1 AND p.deleted = false
        LEFT JOIN accounts a ON a.id = p.transfer_account_id
-      WHERE r.budget_id = $1
-      ORDER BY r.created_at, r.id`,
+      ORDER BY x.created_at, x.id`,
     [budgetId],
   );
   return res.rows;
+}
+
+/**
+ * Make the payee's column rule a row of the table when the table does not have it
+ * (see COLUMN_RULE_MISSING). Called at the start of every rule write of the payee, so the
+ * mirror that follows never erases a rule written to the columns by someone else. Without
+ * `payeeId`: every payee of the budget (the lists, so what they show is what matching uses).
+ */
+export async function adoptColumnRule(db: Queryable, budgetId: string, payeeId: string | null = null): Promise<void> {
+  await db.query(
+    `INSERT INTO payee_renaming_rules (budget_id, payee_id, match_type, condition, created_at)
+     SELECT p.budget_id, p.id, p.rename_match_type, p.rename_condition, p.created_at
+       FROM payees p WHERE p.budget_id = $1 AND ($2::uuid IS NULL OR p.id = $2::uuid) AND p.deleted = false AND ${COLUMN_RULE_MISSING}
+      ORDER BY p.created_at, p.id
+     ON CONFLICT DO NOTHING`,
+    [budgetId, payeeId],
+  );
 }
 
 export async function listPayeeRules(db: Queryable, budgetId: string, payeeId: string): Promise<RenameRuleRow[]> {
@@ -72,7 +113,11 @@ export async function getRule(db: Queryable, budgetId: string, payeeId: string, 
   return res.rows[0];
 }
 
-/** The rule (and its payee's name) that already holds this match type + pattern in the budget, other than `exceptRuleId`. */
+/**
+ * The rule (and its payee's name) that already says the same thing as a NEW rule in the budget (same match
+ * type, same lower-cased pattern: main treated those as one), other than `exceptRuleId`. Rules that already
+ * collide (the migration keeps both) are not looked at: only a write that adds or changes a rule asks.
+ */
 export async function findRuleHolder(
   db: Queryable,
   budgetId: string,
@@ -83,7 +128,7 @@ export async function findRuleHolder(
   const res = await db.query<{ id: string; payee_id: string; payee_name: string }>(
     `SELECT r.id, r.payee_id, p.name AS payee_name
        FROM payee_renaming_rules r JOIN payees p ON p.id = r.payee_id
-      WHERE r.budget_id = $1 AND r.match_type = $2 AND ${NORMALISED('r.condition')} = ${NORMALISED('$3::text')}
+      WHERE r.budget_id = $1 AND r.match_type = $2 AND lower(r.condition) = lower($3::text)
         AND ($4::uuid IS NULL OR r.id <> $4::uuid)
       LIMIT 1`,
     [budgetId, matchType, condition, exceptRuleId],
@@ -94,7 +139,7 @@ export async function findRuleHolder(
 export async function insertRule(db: Queryable, budgetId: string, payeeId: string, matchType: string, condition: string): Promise<RenameRuleRow> {
   const res = await db.query<RenameRuleRow>(
     `INSERT INTO payee_renaming_rules (budget_id, payee_id, match_type, condition) VALUES ($1, $2, $3, btrim($4))
-     RETURNING id, payee_id, match_type, condition, created_at::text AS created_at`,
+     RETURNING ${RETURNING}`,
     [budgetId, payeeId, matchType, condition],
   );
   return res.rows[0]!;
@@ -104,7 +149,7 @@ export async function updateRule(db: Queryable, budgetId: string, payeeId: strin
   const res = await db.query<RenameRuleRow>(
     `UPDATE payee_renaming_rules SET match_type = $4, condition = btrim($5)
       WHERE budget_id = $1 AND payee_id = $2 AND id = $3
-      RETURNING id, payee_id, match_type, condition, created_at::text AS created_at`,
+      RETURNING ${RETURNING}`,
     [budgetId, payeeId, ruleId, matchType, condition],
   );
   return res.rows[0];
@@ -172,4 +217,23 @@ export async function copyBudgetRules(db: Queryable, fromBudgetId: string, toBud
       WHERE r.budget_id = $1`,
     [fromBudgetId, toBudgetId],
   );
+}
+
+/**
+ * Run a rule write under a savepoint: `{ ok: false }` when it hit the exact-rule unique index (a racing writer got
+ * there first), any other error propagates. The caller's transaction survives either way.
+ */
+export async function guardRuleWrite<T>(db: Queryable, write: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false }> {
+  await db.query('SAVEPOINT rule_write');
+  try {
+    const value = await write();
+    await db.query('RELEASE SAVEPOINT rule_write');
+    return { ok: true, value };
+  } catch (err) {
+    await db.query('ROLLBACK TO SAVEPOINT rule_write');
+    await db.query('RELEASE SAVEPOINT rule_write');
+    const pgErr = err as { code?: string; constraint?: string };
+    if (pgErr.code === '23505' && pgErr.constraint === RENAME_RULE_UNIQUE) return { ok: false };
+    throw err;
+  }
 }

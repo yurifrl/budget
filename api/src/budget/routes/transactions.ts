@@ -234,9 +234,17 @@ export const operations = [
       // half transfer): the row stays ordinary and the account is remembered as a hint for
       // the matcher (see planImportedPayee). Payees are created only for rows that are
       // inserted (resolveStatementPayee).
+      // A row whose `import_payee_name_original` (the statement text as parsed) differs from `payee` carries a
+      // payee the person CHOSE in the import screen (the released client sends the chosen payee's name as `payee`):
+      // rules apply to bank text only, never to a chosen payee. Main did not tell them apart (it ran every `payee`
+      // through the rules); this is the one signal the request has.
+      const isChosen = (t: (typeof txns)[number]) => t.import_payee_name_original !== undefined && t.import_payee_name_original.trim() !== t.payee.trim();
+      const payeeKeyOfText = (t: (typeof txns)[number]) => `${isChosen(t) ? 'chosen' : 'text'}\0${t.payee.trim()}`;
       const payeeByName = new Map<string, StatementPayee>();
-      for (const name of new Set(txns.map((t) => t.payee.trim()).filter(Boolean))) {
-        payeeByName.set(name, await resolveStatementPayee(client, budget_id, name, rules));
+      for (const t of txns) {
+        const name = t.payee.trim();
+        const key = payeeKeyOfText(t);
+        if (name && !payeeByName.has(key)) payeeByName.set(key, await resolveStatementPayee(client, budget_id, name, rules, { chosen: isChosen(t) }));
       }
 
       // Existing occurrence numbers per `YNAB:<milliunits>:<date>:<payee>`
@@ -252,25 +260,23 @@ export const operations = [
       // imported while a `contains` rule still spliced its payee into the text counted
       // under that spliced payee: its keys are looked up too (read only), so those rows
       // are still the same rows. Only the FIRST key is written for a new row.
-      const keysByName = new Map<string, string[]>();
-      const payeeKeysOf = async (txn: (typeof txns)[number]): Promise<string[]> => {
-        const name = txn.payee.trim();
-        let keys = keysByName.get(name);
+      // The ids the stored rows of a text count under (read only: no payee is created to look rows up).
+      const lookupKeysByName = new Map<string, string[]>();
+      const lookupKeysOf = async (txn: (typeof txns)[number]): Promise<string[]> => {
+        const name = payeeKeyOfText(txn);
+        let keys = lookupKeysByName.get(name);
         if (!keys) {
           const p = payeeByName.get(name);
-          const first = (await p?.key()) ?? '-';
-          keys = [...new Set([first, ...((await p?.earlierKeys()) ?? [])])];
-          keysByName.set(name, keys);
+          const current = p ? await p.existingKey() : null;
+          keys = [...new Set([...(current === undefined ? [] : [current ?? '-']), ...((await p?.earlierKeys()) ?? [])])];
+          lookupKeysByName.set(name, keys);
         }
         return keys;
       };
-      const prefixesOf = async (txn: (typeof txns)[number]) => {
-        const milli = txn.inflow - txn.outflow;
-        return (await payeeKeysOf(txn)).map((k) => `YNAB:${milli}:${txn.date}:${k}`);
-      };
+      const prefixOf = (txn: (typeof txns)[number], key: string) => `YNAB:${txn.inflow - txn.outflow}:${txn.date}:${key}`;
       const prefixes: string[] = [];
       for (const t of txns) {
-        if (!t.import_id) for (const prefix of await prefixesOf(t)) if (!prefixes.includes(prefix)) prefixes.push(prefix);
+        if (!t.import_id) for (const key of await lookupKeysOf(t)) if (!prefixes.includes(prefixOf(t, key))) prefixes.push(prefixOf(t, key));
       }
       const existingOccs = new Map<string, number[]>();
       if (prefixes.length > 0) {
@@ -299,16 +305,19 @@ export const operations = [
         const milliunits = txn.inflow - txn.outflow;
         let importId = txn.import_id ?? null;
         if (!importId) {
-          const [prefix, ...earlierPrefixes] = await prefixesOf(txn);
-          const occ = (batchOcc.get(prefix!) ?? 0) + 1;
-          batchOcc.set(prefix!, occ);
-          if ([prefix!, ...earlierPrefixes].some((p) => (existingOccs.get(p) ?? []).some((existing) => existing <= occ))) {
+          // Occurrences count per (amount, date, text): what the id's payee part stands for.
+          const logical = `${milliunits}:${txn.date}:${payeeKeyOfText(txn)}`;
+          const occ = (batchOcc.get(logical) ?? 0) + 1;
+          batchOcc.set(logical, occ);
+          const known = (await lookupKeysOf(txn)).map((k) => prefixOf(txn, k));
+          if (known.some((prefix) => (existingOccs.get(prefix) ?? []).some((existing) => existing <= occ))) {
             duplicates += 1;
             continue;
           }
-          importId = `${prefix}:${occ}`;
+          // A new row: its payee (and so its key) is created now when it does not exist.
+          importId = `${prefixOf(txn, (await payeeByName.get(payeeKeyOfText(txn))?.key()) ?? '-')}:${occ}`;
         }
-        const statementPayee = payeeByName.get(txn.payee.trim());
+        const statementPayee = payeeByName.get(payeeKeyOfText(txn));
         // A payee that does not exist yet is created after the row is in: a duplicate row
         // (an explicit import id already present) creates nothing.
         const payeeId = (await statementPayee?.existingPayeeId()) ?? null;

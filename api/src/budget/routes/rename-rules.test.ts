@@ -95,11 +95,11 @@ describe.skipIf(!dbReady)('renaming rules: several per payee', () => {
     expect(await list(b, p)).toEqual([]);
   });
 
-  test('a rule belongs to one payee: the same type and text (case and spaces ignored) is a 409 naming the holder; another type is fine', async () => {
+  test('a rule belongs to one payee: the same type and text (case ignored) is a 409 naming the holder; another type is fine', async () => {
     const b = await newBudget();
     const one = await payee(b, 'One');
     const two = await payee(b, 'Two');
-    expect((await add(b, one, 'contains', 'Pix   Loja')).status).toBe(201);
+    expect((await add(b, one, 'contains', 'Pix Loja')).status).toBe(201);
     for (const holder of [one, two]) {
       const clash = await add(b, holder, 'contains', ' pix loja ');
       expect(clash.status).toBe(409);
@@ -109,7 +109,7 @@ describe.skipIf(!dbReady)('renaming rules: several per payee', () => {
     // An update that would collide is refused; one that changes nothing about its own text is not.
     const r = (await list(b, two))[0]!;
     expect((await op('budget_payees_rename_rules_update', { id: two, budget_id: b, rule_id: r.id, match_type: 'contains', condition: 'PIX LOJA' })).status).toBe(409);
-    expect((await op('budget_payees_rename_rules_update', { id: two, budget_id: b, rule_id: r.id, match_type: 'starts_with', condition: 'PIX  LOJA' })).status).toBe(200);
+    expect((await op('budget_payees_rename_rules_update', { id: two, budget_id: b, rule_id: r.id, match_type: 'starts_with', condition: 'PIX LOJA' })).status).toBe(200);
     // Another budget may hold the same rule.
     const other = await newBudget();
     expect((await add(other, await payee(other, 'One'), 'contains', 'pix loja')).status).toBe(201);
@@ -281,10 +281,10 @@ describe.skipIf(!dbReady)('renaming rules: payee delete, merge, create and budge
   });
 });
 
-describe.skipIf(!dbReady)('migration 0121: copies the single rules, once', () => {
+describe.skipIf(!dbReady)('migration 0121: copies the single rules as they are, once, dropping none', () => {
   const sql = readFileSync(join(import.meta.dir, '..', '..', '..', 'db', 'migrations', '0121_payee_renaming_rules.sql'), 'utf8');
 
-  test('every live payee\'s old rule is copied; a second run changes nothing and does not bring back a removed rule', async () => {
+  test('every live payee\'s old rule is a row, untrimmed; patterns differing by case or spaces are kept apart; a second run changes nothing and does not bring back a removed rule', async () => {
     const b = await newBudget();
     // Payees as main left them: the rule on the payee row only.
     const mk = async (name: string, type: string | null, cond: string | null, deleted = false) =>
@@ -292,25 +292,160 @@ describe.skipIf(!dbReady)('migration 0121: copies the single rules, once', () =>
         await pool.query<{ id: string }>('INSERT INTO payees (budget_id, name, rename_match_type, rename_condition, deleted) VALUES ($1,$2,$3,$4,$5) RETURNING id', [b, name, type, cond, deleted])
       ).rows[0]!.id;
     const a = await mk('Mig A', 'contains', 'MIG ONE');
-    const c = await mk('Mig C', 'contains', '  mig  one ');   // same type and text as A once normalised: A (older) keeps it
-    const d = await mk('Mig D', 'is', 'MIG TWO');
+    const upper = await mk('Mig Upper', 'contains', 'mig one'); // differs only by case: kept, the older fires first (as on main)
+    const spaced = await mk('Mig Spaced', 'contains', 'MIG  ONE'); // differs only by spacing: a different pattern on main too
+    const padded = await mk('Mig Padded', 'is', ' MIG TWO '); // untrimmed on main, untrimmed here
     const gone = await mk('Mig Deleted', 'is', 'MIG GONE', true);
     const none = await mk('Mig None', null, null);
-    const count = async () => (await pool.query('SELECT payee_id, match_type, condition FROM payee_renaming_rules WHERE budget_id = $1 ORDER BY payee_id', [b])).rows;
+    const count = async () => (await pool.query('SELECT payee_id, match_type, condition FROM payee_renaming_rules WHERE budget_id = $1 ORDER BY created_at, payee_id', [b])).rows;
 
     await pool.query(sql);
     const first = await count();
-    expect(first.map((r) => r.payee_id).sort()).toEqual([a, d].sort());
-    expect(first.find((r) => r.payee_id === a)).toMatchObject({ match_type: 'contains', condition: 'MIG ONE' });
-    expect(first.find((r) => r.payee_id === d)).toMatchObject({ match_type: 'is', condition: 'MIG TWO' });
-    void c; void gone; void none;
-
+    expect(first.map((r) => r.payee_id).sort()).toEqual([a, upper, spaced, padded].sort());
+    expect(first.find((r) => r.payee_id === padded)).toMatchObject({ match_type: 'is', condition: ' MIG TWO ' });
+    expect(first.find((r) => r.payee_id === gone)).toBeUndefined();
+    expect(first.find((r) => r.payee_id === none)).toBeUndefined();
     await pool.query(sql);
     expect(await count()).toEqual(first);
+    // Matching order after the copy: the oldest payee's rule fires first, as on main.
+    const acc = await op('budget_accounts_create', { budget_id: b, name: 'Mig Conta', type: 'checking', on_budget: true, balance: 0 });
+    const made = await op('budget_transaction_add', { budget_id: b, account_id: acc.json.id, amount: -1000, payee: 'Mig One 5' });
+    expect((await pool.query('SELECT payee_id FROM transactions WHERE id = $1', [made.json.id])).rows[0].payee_id).toBe(a);
     // A rule removed through the API clears the payee's column as well, so running the file again does not bring it back.
-    const rules = await list(b, d);
-    expect((await op('budget_payees_rename_rules_remove', { id: d, budget_id: b, rule_id: rules[0]!.id })).status).toBe(204);
+    const rules = await list(b, padded);
+    expect((await op('budget_payees_rename_rules_remove', { id: padded, budget_id: b, rule_id: rules[0]!.id })).status).toBe(204);
     await pool.query(sql);
-    expect((await count()).map((r) => r.payee_id)).toEqual([a]);
+    expect((await count()).map((r) => r.payee_id).sort()).toEqual([a, upper, spaced].sort());
+  });
+});
+
+describe.skipIf(!dbReady)('the payee columns are an input: a rule written only there is adopted, never erased', () => {
+  const writeColumns = (id: string, type: string | null, cond: string | null) =>
+    pool.query('UPDATE payees SET rename_match_type = $2, rename_condition = $3 WHERE id = $1', [id, type, cond]);
+  const asRows = async (b: string, id: string) => (await list(b, id)).map((r) => [r.match_type, r.condition]);
+
+  test('a rule written to the columns after the migration (the other app, the released client) applies at once and survives a later rule add on the same payee', async () => {
+    const b = await newBudget();
+    const p = await payee(b, 'Columns Only');
+    const acc = await op('budget_accounts_create', { budget_id: b, name: 'Columns Conta', type: 'checking', on_budget: true, balance: 0 });
+    await writeColumns(p, 'contains', 'COLUMN SHOP');
+    expect((await pool.query('SELECT count(*)::int AS n FROM payee_renaming_rules WHERE payee_id = $1', [p])).rows[0].n).toBe(0);
+    // Matching reads it (register create here; the sync and /bulk read the same rules).
+    const made = await op('budget_transaction_add', { budget_id: b, account_id: acc.json.id, amount: -1000, payee: 'COLUMN SHOP 7' });
+    expect((await pool.query('SELECT payee_id FROM transactions WHERE id = $1', [made.json.id])).rows[0].payee_id).toBe(p);
+    // Another rule added through the API: the column rule is adopted first, not overwritten by the mirror.
+    expect((await add(b, p, 'starts_with', 'COLUMN')).status).toBe(201);
+    expect(await asRows(b, p)).toEqual([['contains', 'COLUMN SHOP'], ['starts_with', 'COLUMN']]);
+    expect(await columns(p)).toEqual({ t: 'contains', c: 'COLUMN SHOP' });
+    // Removing it through the API really removes it (the mirror follows, nothing re-adopts it).
+    const rule = (await list(b, p))[0]!;
+    expect((await op('budget_payees_rename_rules_remove', { id: p, budget_id: b, rule_id: rule.id })).status).toBe(204);
+    expect(await asRows(b, p)).toEqual([['starts_with', 'COLUMN']]);
+    expect(await columns(p)).toEqual({ t: null, c: null });
+  });
+
+  test('the same through the other writes: list, the single-rule call, merge; a column rule of another payee\'s identical text is not adopted', async () => {
+    const b = await newBudget();
+    const p = await payee(b, 'Columns List');
+    await writeColumns(p, 'is', 'LIST ME');
+    expect((await payeeRow(b, p)).rename_rules).toEqual([expect.objectContaining({ match_type: 'is', condition: 'LIST ME' })]);
+
+    const q = await payee(b, 'Columns Single');
+    await writeColumns(q, 'contains', 'SINGLE ONE');
+    // The released client's call replaces the first is/contains rule: that is the column rule.
+    expect((await op('budget_payees_set_rename_rule', { id: q, budget_id: b, match_type: 'is', condition: 'SINGLE TWO' })).status).toBe(204);
+    expect(await asRows(b, q)).toEqual([['is', 'SINGLE TWO']]);
+
+    const from = await payee(b, 'Columns From');
+    const to = await payee(b, 'Columns To');
+    await writeColumns(from, 'contains', 'FROM COLUMN');
+    expect((await op('budget_payees_merge', { id: from, budget_id: b, target_id: to })).status).toBe(200);
+    expect(await asRows(b, to)).toEqual([['contains', 'FROM COLUMN']]);
+
+    // Another payee already holds this exact rule in the table: the column copy is not a second rule.
+    const owner = await payee(b, 'Columns Owner');
+    await add(b, owner, 'contains', 'FIRST ONE'); // the owner's column mirrors this one, so another payee's column may hold the next
+    await add(b, owner, 'is', 'ONE HOLDER');
+    const twin = await payee(b, 'Columns Twin');
+    await writeColumns(twin, 'is', 'ONE HOLDER');
+    expect(await asRows(b, twin)).toEqual([]);
+    expect(await asRows(b, owner)).toEqual([['contains', 'FIRST ONE'], ['is', 'ONE HOLDER']]);
+  });
+});
+
+describe.skipIf(!dbReady)('renaming rules: patterns, duplicates, accounts that are closed, POST /payees, formats', () => {
+  test('F3: a contains / starts with / ends with pattern needs 2 characters after trimming; is may be one; stored shorter ones keep working', async () => {
+    const b = await newBudget();
+    const p = await payee(b, 'Short');
+    for (const type of ['contains', 'starts_with', 'ends_with']) {
+      expect((await add(b, p, type, ' a ')).status, type).toBe(400);
+      expect((await add(b, p, type, 'ab')).status, type).toBe(201);
+    }
+    expect((await add(b, p, 'is', 'x')).status).toBe(201);
+    expect((await op('budget_payees_set_rename_rule', { id: crypto.randomUUID(), budget_id: b, match_type: 'contains', condition: 'zz' })).status).toBe(404);
+    // A one-character rule that already exists (main allowed it) still matches and can be changed to itself.
+    const old = await payee(b, 'Old Short');
+    await pool.query('UPDATE payees SET rename_match_type = $2, rename_condition = $3 WHERE id = $1', [old, 'contains', 'q']);
+    const acc = await op('budget_accounts_create', { budget_id: b, name: 'Short Conta', type: 'checking', on_budget: true, balance: 0 });
+    const made = await op('budget_transaction_add', { budget_id: b, account_id: acc.json.id, amount: -1000, payee: 'a quiet place' });
+    expect((await pool.query('SELECT payee_id FROM transactions WHERE id = $1', [made.json.id])).rows[0].payee_id).toBe(old);
+    expect((await op('budget_payees_set_rename_rule', { id: old, budget_id: b, match_type: 'contains', condition: 'q' })).status).toBe(204);
+    expect((await op('budget_payees_set_rename_rule', { id: old, budget_id: b, match_type: 'contains', condition: 'w' })).status).toBe(400);
+  });
+
+  test('B2: patterns that collide only by case are both kept by the copy, but the API refuses to add or change into one; an exact duplicate is a 409 too', async () => {
+    const b = await newBudget();
+    const one = await payee(b, 'Case One');
+    const two = await payee(b, 'Case Two');
+    expect((await add(b, one, 'contains', 'Loja Azul')).status).toBe(201);
+    expect((await add(b, two, 'contains', 'LOJA AZUL')).status).toBe(409);
+    expect((await add(b, two, 'contains', 'Loja Azul')).status).toBe(409);
+    expect((await add(b, one, 'contains', 'loja azul')).status).toBe(409); // its own payee too
+    expect((await add(b, two, 'is', 'loja azul')).status).toBe(201);
+    const r = (await list(b, two))[0]!;
+    expect((await op('budget_payees_rename_rules_update', { id: two, budget_id: b, rule_id: r.id, match_type: 'contains', condition: 'LOJA azul' })).status).toBe(409);
+    // The same through the exact index: a raced duplicate surfaces as the same 409, not a 500.
+    await pool.query('INSERT INTO payee_renaming_rules (budget_id, payee_id, match_type, condition) VALUES ($1,$2,$3,$4)', [b, one, 'ends_with', 'EXACT']).catch(() => undefined);
+    await expect(pool.query('INSERT INTO payee_renaming_rules (budget_id, payee_id, match_type, condition) VALUES ($1,$2,$3,$4)', [b, two, 'ends_with', 'EXACT'])).rejects.toThrow();
+  });
+
+  test('F5: a rule of the transfer payee of a CLOSED account does not fire: the row keeps its text as an ordinary payee', async () => {
+    const b = await newBudget();
+    const src = await op('budget_accounts_create', { budget_id: b, name: 'Src Conta', type: 'checking', on_budget: true, balance: 0 });
+    const dst = await op('budget_accounts_create', { budget_id: b, name: 'Dst Conta', type: 'checking', on_budget: true, balance: 0 });
+    const transfer = ((await op('budget_payees_list', { budget_id: b, include_transfers: 'true' })).json as { id: string; transfer_account_id: string | null }[]).find((x) => x.transfer_account_id === dst.json.id)!;
+    expect((await add(b, transfer.id, 'contains', 'PIX DST')).status).toBe(201);
+    const open = await op('budget_transaction_add', { budget_id: b, account_id: src.json.id, amount: -2000, payee: 'PIX DST 1' });
+    expect((await pool.query('SELECT transfer_account_id FROM transactions WHERE id = $1', [open.json.id])).rows[0].transfer_account_id).toBe(dst.json.id);
+    expect((await op('budget_accounts_update', { id: dst.json.id, budget_id: b, closed: true })).status).toBe(200);
+    const closed = await op('budget_transaction_add', { budget_id: b, account_id: src.json.id, amount: -3000, payee: 'PIX DST 2' });
+    expect(closed.status).toBe(201);
+    expect((await pool.query('SELECT p.name, t.transfer_account_id FROM transactions t JOIN payees p ON p.id = t.payee_id WHERE t.id = $1', [closed.json.id])).rows[0]).toEqual({ name: 'PIX DST 2', transfer_account_id: null });
+  });
+
+  test('F6: POST /payees with a name a transfer payee\'s rule matches creates that ordinary payee; an ordinary payee\'s rule still lands on it', async () => {
+    const b = await newBudget();
+    await op('budget_accounts_create', { budget_id: b, name: 'Six Conta', type: 'checking', on_budget: true, balance: 0 });
+    const transfer = ((await op('budget_payees_list', { budget_id: b, include_transfers: 'true' })).json as { id: string; transfer_account_id: string | null }[]).find((x) => x.transfer_account_id)!;
+    await add(b, transfer.id, 'contains', 'PIX SIX');
+    const made = await op('budget_payees_create', { budget_id: b, name: 'PIX SIX 1' });
+    expect(made.status).toBe(201);
+    expect(made.json).toMatchObject({ name: 'PIX SIX 1', transfer_account_id: null });
+    expect(made.json.id).not.toBe(transfer.id);
+    const ordinary = await payee(b, 'Ordinary Six');
+    await add(b, ordinary, 'contains', 'ORD SIX');
+    expect((await op('budget_payees_create', { budget_id: b, name: 'ORD SIX 3' })).json.id).toBe(ordinary);
+  });
+
+  test('F4: created_at has one format in the payee list and in every rule operation', async () => {
+    const b = await newBudget();
+    const p = await payee(b, 'Format');
+    const added = await add(b, p, 'contains', 'FORMAT');
+    const listed = (await list(b, p))[0]!;
+    const inPayeeList = ((await payeeRow(b, p)).rename_rules as { created_at: string }[])[0]!;
+    const updated = await op('budget_payees_rename_rules_update', { id: p, budget_id: b, rule_id: listed.id, match_type: 'contains', condition: 'FORMAT 2' });
+    const iso = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/;
+    for (const at of [added.json.created_at, listed.created_at, inPayeeList.created_at, updated.json.created_at]) expect(at).toMatch(iso);
+    expect(inPayeeList.created_at).toBe(listed.created_at);
   });
 });

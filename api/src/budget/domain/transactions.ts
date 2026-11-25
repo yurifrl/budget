@@ -176,15 +176,18 @@ export async function planImportedPayee(
   budgetId: string,
   rawText: string,
   rules: RenameRules,
-  opts: { verbatim?: boolean } = {},
+  opts: { verbatim?: boolean; /** The text is a payee the person chose, not bank text: no renaming rule applies to it. */ chosen?: boolean } = {},
 ): Promise<ImportedPayeePlan> {
   const raw = rawText.trim();
   if (!raw) {
     return { ordinaryName: null, assignedPayeeId: null, name: '', importName: '', transferAccountId: null, legacyName: null, earlier: null };
   }
-  const hit = matchingRule(rules, raw);
+  const hit = opts.chosen ? null : matchingRule(rules, raw);
   const earlierText = legacyEffectiveText(rules, raw);
-  const earlier = earlierText !== raw ? await planTextPayee(client, budgetId, raw, earlierText, opts) : null;
+  // What the earlier behaviour stored for this text. When it stored the text itself (the pattern was already spelled as the
+  // payee's name: "Cafe Central 1" under a rule "cafe central" -> "Cafe Central"), that still is a form to recognise
+  // as soon as a rule now assigns another payee.
+  const earlier = earlierText !== raw || hit ? await planTextPayee(client, budgetId, raw, earlierText, opts) : null;
   if (!hit) return { ...(await planTextPayee(client, budgetId, rawText, raw, opts)), assignedPayeeId: null, earlier };
   if (!hit.transfer_account_id) {
     return {
@@ -241,7 +244,10 @@ export async function resolveImportedPayee(
  *    import id. It is what the import always used: for text that names an account, the
  *    id it resolved to (the account's own pointer when it has one, else its payee,
  *    created only when the account has none), otherwise the ordinary payee's id (an
- *    assigned payee's own id). Called only for rows without an import id;
+ *    assigned payee's own id). Called only for a row about to be inserted: the payee is
+ *    created now when it does not exist (the row is new);
+ *  - `existingKey()` is that same id read WITHOUT any write (undefined: the payee does not
+ *    exist yet, so no stored row counts under it): the id a re-import looks rows up by;
  *  - `earlierKeys()` are the ids the same text counted under when a `contains` rule
  *    still spliced its payee into the text; read only (nothing is created), so a file
  *    imported back then is still recognised;
@@ -253,13 +259,20 @@ export async function resolveImportedPayee(
 export interface StatementPayee {
   plan: ImportedPayeePlan;
   key(): Promise<string | null>;
+  existingKey(): Promise<string | null | undefined>;
   earlierKeys(): Promise<string[]>;
   existingPayeeId(): Promise<string | null | undefined>;
   createPayee(): Promise<string | null>;
 }
 
-export async function resolveStatementPayee(client: PoolClient, budgetId: string, rawText: string, rules: RenameRules): Promise<StatementPayee> {
-  let plan = await planImportedPayee(client, budgetId, rawText, rules);
+export async function resolveStatementPayee(
+  client: PoolClient,
+  budgetId: string,
+  rawText: string,
+  rules: RenameRules,
+  opts: { chosen?: boolean } = {},
+): Promise<StatementPayee> {
+  let plan = await planImportedPayee(client, budgetId, rawText, rules, opts);
   let accountKey: string | null = null;
   if (plan.transferAccountId) {
     const account = await getAccountRow(client, plan.transferAccountId);
@@ -274,7 +287,7 @@ export async function resolveStatementPayee(client: PoolClient, budgetId: string
       }
     }
     // ensureTransferPayee may have adopted a name-only payee: judge the raw text again.
-    plan = await planImportedPayee(client, budgetId, rawText, rules);
+    plan = await planImportedPayee(client, budgetId, rawText, rules, opts);
   }
   let created: Promise<string | null> | null = null;
   const createPayee = () => {
@@ -298,6 +311,12 @@ export async function resolveStatementPayee(client: PoolClient, budgetId: string
     })();
     return keyed;
   };
+  const existingKey = async (): Promise<string | null | undefined> => {
+    if (plan.transferAccountId) return accountKey;
+    if (plan.assignedPayeeId !== null) return plan.assignedPayeeId;
+    if (plan.ordinaryName === null) return null;
+    return (await findPayeeRowByName(client, budgetId, plan.ordinaryName.trim()))?.id;
+  };
   const existingPayeeId = async (): Promise<string | null | undefined> => {
     if (plan.assignedPayeeId !== null) return plan.assignedPayeeId;
     if (plan.ordinaryName === null) return null;
@@ -315,7 +334,7 @@ export async function resolveStatementPayee(client: PoolClient, budgetId: string
     const holder = await findPayeeRowByName(client, budgetId, earlier.ordinaryName.trim());
     return holder ? [holder.id] : [];
   };
-  return { plan, key, earlierKeys, existingPayeeId, createPayee };
+  return { plan, key, existingKey, earlierKeys, existingPayeeId, createPayee };
 }
 
 export async function resolvePayeeId(

@@ -195,6 +195,9 @@ export interface AbsorbResult {
  * report can name it.
  */
 export async function absorbPayee(db: Queryable, budgetId: string, fromId: string, intoId: string): Promise<AbsorbResult> {
+  // A rule only the old columns hold is a rule of the payee: adopted first, so it moves with the rest.
+  await rulesStore.adoptColumnRule(db, budgetId, fromId);
+  await rulesStore.adoptColumnRule(db, budgetId, intoId);
   const from = await store.getPayeeRow(db, budgetId, fromId);
   const into = await store.getPayeeRow(db, budgetId, intoId);
   const result: AbsorbResult = { transactions: 0, ruleMoved: false, keptReferencedFromOtherBudget: false, dropped: [] };

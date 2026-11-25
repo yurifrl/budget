@@ -750,7 +750,7 @@ describe.skipIf(!dbReady)('transfer integrity (budget-nq2f)', () => {
 
     // text matches its rule (spaces and case differ on purpose); `miss` does not.
     const TYPES = [
-      { type: 'is', condition: 'padaria  x', text: 'PADARIA X', miss: 'PADARIA X 2' },
+      { type: 'is', condition: 'padaria x', text: 'PADARIA X', miss: 'PADARIA X 2' },
       { type: 'contains', condition: 'pix loja', text: 'COMPRA PIX LOJA 42 SP', miss: 'COMPRA PIX LOJ' },
       { type: 'starts_with', condition: 'mercado', text: 'MERCADO CENTRAL 7', miss: 'O MERCADO CENTRAL' },
       { type: 'ends_with', condition: 'assinatura', text: 'APP STORE ASSINATURA', miss: 'ASSINATURA APP STORE' },
@@ -890,7 +890,7 @@ describe.skipIf(!dbReady)('transfer integrity (budget-nq2f)', () => {
           payees[name] = { id, rule: await addRule(id, type, condition) };
         }
         void mk;
-        const text = 'PIX  SAVINGS 42';
+        const text = 'PIX SAVINGS 42';
         expect(await payeeOf(text, 1_001)).toBe('O is');
         const drop = async (name: string) => expect((await op('budget_payees_rename_rules_remove', { id: payees[name]!.id, budget_id: B, rule_id: payees[name]!.rule })).status).toBe(204);
         await drop('O is');
@@ -905,7 +905,7 @@ describe.skipIf(!dbReady)('transfer integrity (budget-nq2f)', () => {
         expect(await payeeOf(text, 1_006)).toBe(text); // no rule: an ordinary payee of the text
       });
 
-      test('equal rank and length: the oldest rule wins, whichever payee holds it; case, spaces count for nothing, accents do', async () => {
+      test('equal rank and length: the oldest rule wins, whichever payee holds it; case counts for nothing, spaces and accents do', async () => {
         await reset();
         const first = await newPayee('Older');
         const second = await newPayee('Newer');
@@ -926,8 +926,9 @@ describe.skipIf(!dbReady)('transfer integrity (budget-nq2f)', () => {
         expect((await row((await create({ payee: 'pix SAVINGS', outflow: 2_003 })).json.id)).payee).toBe('Contains B');
         // Case and spaces.
         const sp = await newPayee('Spaced');
-        await addRule(sp, 'is', '  ola   mundo ');
-        expect((await row((await create({ payee: ' OLA  Mundo', outflow: 2_004 })).json.id)).payee).toBe('Spaced');
+        await addRule(sp, 'is', '  ola mundo ');
+        expect((await row((await create({ payee: 'OLA  Mundo', outflow: 2_004 })).json.id)).payee).toBe('OLA  Mundo'); // main never folded spaces
+        expect((await row((await create({ payee: 'OLA Mundo', outflow: 2_007 })).json.id)).payee).toBe('Spaced');
         // Accents are significant: the text "PAO" is not "pão".
         const acc = await newPayee('Padaria Pão');
         await addRule(acc, 'contains', 'pão');
