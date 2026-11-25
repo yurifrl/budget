@@ -2258,7 +2258,7 @@ is a transfer when its payee is an account's system transfer payee; between two
 on-budget accounts it is ONE linked pair (both `transfer_account_id` and
 `transfer_transaction_id` on both legs, each leg's payee the peer account's
 transfer payee) with no category. Schema (additive): migration 0119 adds the table
-`transfer_hints`, 0120 the nullable column `transfer_links.adopted`.
+`transfer_hints`, 0120 the nullable column `transfer_marks.released`.
 Rule of the review round: a row that is correct as main stores it does not change
 on a sync, an ordinary request or a budget copy.
 
@@ -2272,36 +2272,23 @@ on a sync, an ordinary request or a budget copy.
   its own); an imported row without a record gets the ordinary payee its import
   name stands for; a row without import id (hand-made mirror, or the user's own
   row that was linked) is soft-deleted with its balance reversed, as on main. The
-  bank id stays live, so later syncs neither skip nor duplicate it. Making the
-  leg a transfer again links that released row (same account, amount, 3 days,
-  exactly one) instead of adding a second mirror next to it (no double count);
-  a link record on both legs makes unlink work on it.
-- **A bank row replaces a hand-made mirror it duplicates, through the matcher's
-  gates (R2).** At the start of `linkTransfers` (sync, statement import, rule save)
-  `planAdoptions` pairs a hand-made leg (no import id, no sync shadow, not
-  reconciled, in a mutual pair of two on-budget accounts) with an imported row of
-  the SAME account and signed amount, at most 3 days apart, only when: neither
-  row has a mark (dismissed, outside or manual) nor a payee with a "never"
-  transfer rule; the bank row is untouched (bank text, shadow not blocked), not
-  hinted at another account and has no category/split; a bank category that
-  contradicts a transfer does not veto it (cash to card excepted); the account and
-  bank rules (`pairViolation`) hold; and the match is UNAMBIGUOUS (exactly one
-  hand-made row for the bank row and one bank row for the hand-made row).
-  Everything else is left alone, both rows stay, and the repair report lists it
-  (`half_linked.items` kind `unadopted` with the reason `ambiguous`, `touched`,
-  `against_evidence` or the broken account rule).
-  **Merge rule:** the bank row keeps its import identity, amount and payload and
-  takes the pair's pointers, the peer's transfer payee and no category; from the
-  replaced row it takes the user's date (the pair's dates stay equal), memo, flag
-  and approval where the user set one (else the bank row's own stay), and
-  "cleared" when the user had cleared it and the bank row is not yet. The replaced
-  row is soft-deleted with its balance reversed (a reconciled one is never
-  replaced); the shadow is frozen. A `transfer_links` record is written on BOTH
-  legs, the bank row's carrying `adopted` (the replaced row's id and the bank
-  row's own fields), so `POST /transfers/unlink` restores the state before the
-  adoption: the bank row gets its payee, category and fields back (mark `manual`),
-  the hand-made row comes back as one leg of the user's pair with its balance, and
-  nothing is adopted again. The repair's pair path writes the same two records.
+  bank id stays live, so later syncs neither skip nor duplicate it. The release is
+  recorded in `transfer_marks.released` (which leg released the row, and the row's
+  fields at that moment); any later write of the mark (an unlink, "not a transfer",
+  a link) clears it. When THAT leg's payee is set back to the transfer of the same
+  account, exactly that row is linked again (same account, opposite amount,
+  still unlinked, uncategorized, and unchanged since the release: payee, date,
+  memo, flag, approval, cleared state) instead of adding a second mirror next to it;
+  in every other case a mirror is created as on main, and no mark or payee of a row
+  the user did not choose is touched. A link record on both legs lets unlink work.
+- **A hand-entered transfer plus a later bank import of the other side still
+  yields two rows, as on main (R2 is NOT fixed here).** The matcher ignores rows
+  that already carry pointers, so the hand-made mirror and the bank row both stay
+  and the account counts the money twice until the person deletes one. An
+  automatic replacement was tried and cut: it ignored decisions, adopted unrelated
+  same-amount rows over the whole history and merged the user's fields into a bank
+  row. A suggestion-based fix (offer the pair, let the person confirm, undo-able)
+  is a separate task.
 - **Imports never store a transfer payee without the transfer (item 6).** A NEW
   statement-import or bank-sync row whose payee text (after the renaming rules)
   means "Transfer : <account>" is not given that payee: it would be a payee-only
@@ -2311,7 +2298,8 @@ on a sync, an ordinary request or a budget copy.
   is itself a transfer payee's name; the bank text stays in `import_payee_name`),
   and the account goes to `transfer_hints`. The matcher treats a hinted row as
   STRONG evidence for THAT account (it pairs only with a row of it; the bank rules
-  still refuse the same pairs; alone it is a one-side suggestion). The hint ends
+  still refuse the same pairs; the bank's own contradicting category ("against")
+  stays a veto; alone it is a one-side suggestion). The hint ends
   when the row is linked, gets a category, gets another payee, or is marked "not a
   transfer"/"outside"; a refreshed row keeps or loses it with its text. **Rows an
   earlier sync stored with the transfer payee are not touched:** the sync compares
@@ -2337,13 +2325,19 @@ on a sync, an ordinary request or a budget copy.
   payee-less leg or a category on an on-budget pair is completed; a leg known only
   by its account pointer or only by its transfer payee is paired with the one row
   that is its other side (same day for the account pointer, within 3 days for a
-  payee-only leg), no balance moves, a record on both legs; a leg with no other side
+  payee-only leg), no balance moves, a record on both legs so unlink works; a leg with no other side
   (`needs_mirror`) or several (`ambiguous`) is only reported;
   `--apply --create-mirrors` creates the missing mirrors (it moves the peer
   account's balance: only after reading the report).
 - **No category on a leg of an on-budget pair, on every write path.** Create, edit
   (also Categorize accept), link, restore, flip of an occurrence, repair; a leg to
-  an off-budget account keeps its category.
+  an off-budget account keeps its category. A "leg" is a row with a transfer
+  pointer to an on-budget peer: a payee-only row from main (no pointers) is not
+  touched by an unrelated edit. The server reads a category on such rows only to
+  display it (payee transaction list, backup export, Categorize's read of a row
+  already excluded from its queue) and for the payee's "most used category"
+  suggestion; no budget math, report or MCP output depends on it (the engine is
+  client-side and already ignored it).
 - **Payee lifecycle carry-overs.** The repair's absorb records the folded payee's
   name and former names on the kept payee, and clears the folded payee's "treat as
   transfer" rule after moving it (or listing it in `dropped_rules`). A transfer row
