@@ -23,10 +23,19 @@ export async function skipRepeatRulePast(db: Queryable, ruleId: string, after: s
 
 /** Passed-due upcoming occurrences become entered rows; returns what flipped. */
 export async function flipPassedUpcoming(db: Queryable, budgetId: string, today: string) {
-  const flipped = await db.query<{ account_id: string; amount: string }>(
+  const flipped = await db.query<{
+    id: string;
+    account_id: string;
+    amount: string;
+    date: string;
+    memo: string | null;
+    approved: boolean;
+    payee_id: string | null;
+    transfer_transaction_id: string | null;
+  }>(
     `UPDATE transactions SET upcoming = false
        WHERE budget_id = $1 AND upcoming AND NOT deleted AND date <= $2
-       RETURNING account_id, amount`,
+       RETURNING id, account_id, amount, date::text AS date, memo, approved, payee_id, transfer_transaction_id`,
     [budgetId, today],
   );
   return { rows: flipped.rows, count: flipped.rowCount ?? 0 };

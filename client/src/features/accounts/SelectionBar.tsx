@@ -353,37 +353,7 @@ function Keycaps({ keys }: { keys: readonly string[] }) {
   );
 }
 
-/** Row-level selection checkbox — 17px bordered square, filled when checked. */
-export function SelectionCheckbox({
-  checked,
-  onToggle,
-  label,
-  disabled,
-}: {
-  checked: boolean;
-  onToggle: () => void;
-  label: string;
-  /** Reconciled rows are locked (syscd-app-lqu) — renders but never toggles. */
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={disabled ? undefined : onToggle}
-      disabled={disabled}
-      hitSlop={6}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked, disabled }}
-      accessibilityLabel={label}
-      style={styles.checkCell}>
-      <View style={[styles.checkbox, checked && styles.checkboxOn, disabled && styles.checkboxLocked]}>
-        {checked ? <Ionicons name="checkmark" size={12} color={colors.white} /> : null}
-      </View>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  checkboxLocked: { opacity: 0.35 },
   wrap: {
     position: 'absolute',
     bottom: 14,
@@ -468,21 +438,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   keycapText: { color: colors.text, fontSize: 10, fontWeight: '600' },
-  checkCell: {
-    width: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    marginRight: 4,
-  },
-  checkbox: {
-    width: 17,
-    height: 17,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: colors.faint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxOn: { backgroundColor: colors.indigo, borderColor: colors.indigo },
 });

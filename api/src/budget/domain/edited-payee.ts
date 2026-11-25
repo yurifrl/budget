@@ -14,7 +14,10 @@
  *     account may even hold that name now): unchanged.
  *  4. The row is already a transfer and the text reads "Transfer : ..." but names
  *     no account, or names the row's current peer: unchanged. Only a text that
- *     names a DIFFERENT live account (or an ordinary payee) changes it.
+ *     names a DIFFERENT live account (or an ordinary payee) changes it. A text
+ *     a renaming rule turns into the name of an ORDINARY payee (one nobody
+ *     links, even one called "Transfer : X") is that ordinary payee: the row
+ *     stops being a transfer.
  *  5. Anything else resolves as on create (`resolvePayeeId`).
  * Unchanged means the row keeps its payee id and its mirror is neither created,
  * moved nor deleted.
@@ -61,7 +64,14 @@ export async function resolveEditedPayee(
     const rules = await loadRenameRules(client, budgetId);
     const effective = applyRules(rules.rows, text).trim();
     if (TRANSFER_PAYEE_RE.test(effective)) {
-      const accountId = await resolveTransferAccountFromText(client, budgetId, effective, { fromRule: effective !== text.trim() });
+      const fromRule = effective !== text.trim();
+      // A renaming rule that produces the name of an ORDINARY payee ("Transfer : X"
+      // held by a payee nobody links) means that payee: the row stops being a transfer.
+      if (fromRule) {
+        const holder = await store.findPayeeRowByName(client, budgetId, effective);
+        if (holder && !holder.deleted && holder.transfer_account_id === null) return { unchanged: false, payeeId: holder.id };
+      }
+      const accountId = await resolveTransferAccountFromText(client, budgetId, effective, { fromRule });
       const peer = row.transfer_account_id ?? current?.transfer_account_id ?? null;
       if (accountId === null || accountId === peer) return { unchanged: true };
       return { unchanged: false, payeeId: await ensureTransferPayee(client, budgetId, accountId) };

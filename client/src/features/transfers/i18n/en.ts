@@ -34,6 +34,10 @@ export default {
   'why.rule': 'payee rule',
   'why.ambiguous': { one: '{count} possible match', other: '{count} possible matches' },
   'why.unmatched': 'no matching row in your accounts',
+  'why.refused.cardOutflow': 'a card cannot pay a transfer',
+  'why.refused.cardOtherBank': 'card paid from another bank',
+  'why.refused.cashSameBank': 'same bank, checking to checking',
+  'why.refusedAny': 'the account rules do not link it on their own',
   'why.edited': 'edited after import, so not linked on its own',
 
   'other.title': 'Link to which account?',
@@ -54,14 +58,15 @@ export default {
   'review.loading': 'Looking for transfers…',
   'review.select': 'Select {payee}',
   'review.selectAll': 'Select all',
-  'review.title': 'filter: looks like a transfer',
 
   'match.sure': 'sure',
+  'match.confirm': 'confirm',
   'match.choose': 'choose',
   'match.oneSide': 'one side',
 
   'bulk.selected': { one: '{count} selected', other: '{count} selected' },
   'bulk.totals': '· {out} out · {in} in',
+  'bulk.includesRefused': { one: 'includes {count} pair the account rules do not link on their own', other: 'includes {count} pairs the account rules do not link on their own' },
   'bulk.dismiss': 'Not transfers',
   'bulk.link': { one: 'Link {count} as transfer', other: 'Link {count} as transfers' },
 

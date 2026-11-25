@@ -72,6 +72,7 @@ function toMatchRow(r: store.TransferCandidateSql, hint: ImportHint | undefined)
     mark: r.mark,
     bank: bankKey(r.institution),
     connectionId: r.connection_id,
+    hintAccountId: r.hint_account_id,
   };
 }
 
@@ -136,6 +137,7 @@ async function linkLegs(
   }
   await blockImportShadows(client, [out.id, inn.id]);
   await store.setTransferMarks(client, budgetId, [out.id, inn.id], null);
+  await store.clearTransferHints(client, budgetId, [out.id, inn.id]);
 }
 
 /**
@@ -285,6 +287,7 @@ export async function linkByUser(
         });
         await blockImportShadows(client, [row.id]);
         await store.setTransferMarks(client, budgetId, [row.id], null);
+        await store.clearTransferHints(client, budgetId, [row.id]);
         deltas.push(...mirror.deltas);
         linked.push(row.id, mirror.mirrorId);
         continue;
@@ -393,5 +396,7 @@ export async function markTransfers(
   const unique = [...new Set(ids)];
   const live = await store.liveTransactionIdsInBudget(client, budgetId, unique);
   if (live.size !== unique.length) throw new HttpError(404, 'transaction not found');
+  // "Not a transfer" / "outside" answer the question an import's hint asked.
+  if (state !== null) await store.clearTransferHints(client, budgetId, unique);
   return store.setTransferMarks(client, budgetId, unique, state);
 }

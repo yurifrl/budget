@@ -37,6 +37,10 @@ const m: Translation<typeof en> = {
   'why.rule': 'regra do favorecido',
   'why.ambiguous': { one: '{count} correspondência possível', other: '{count} correspondências possíveis' },
   'why.unmatched': 'nenhuma linha correspondente nas suas contas',
+  'why.refused.cardOutflow': 'um cartão não paga transferência',
+  'why.refused.cardOtherBank': 'cartão pago por outro banco',
+  'why.refused.cashSameBank': 'mesmo banco, conta corrente para conta corrente',
+  'why.refusedAny': 'as regras de conta não vinculam sozinhas',
   'why.edited': 'editada depois da importação, por isso não foi vinculada sozinha',
 
   'other.title': 'Vincular a qual conta?',
@@ -57,14 +61,15 @@ const m: Translation<typeof en> = {
   'review.loading': 'Procurando transferências…',
   'review.select': 'Selecionar {payee}',
   'review.selectAll': 'Selecionar todas',
-  'review.title': 'filtro: parece transferência',
 
   'match.sure': 'certo',
+  'match.confirm': 'confirmar',
   'match.choose': 'escolher',
   'match.oneSide': 'um lado',
 
   'bulk.selected': { one: '{count} selecionada', other: '{count} selecionadas' },
   'bulk.totals': '· {out} saindo · {in} entrando',
+  'bulk.includesRefused': { one: 'inclui {count} par que as regras de conta não vinculam sozinhas', other: 'inclui {count} pares que as regras de conta não vinculam sozinhas' },
   'bulk.dismiss': 'Não são transferências',
   'bulk.link': { one: 'Vincular {count} como transferência', other: 'Vincular {count} como transferências' },
 

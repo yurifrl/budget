@@ -278,6 +278,39 @@ describe.skipIf(!dbReady)('POST /budgets/restore', () => {
     expect(assignments.rows.map((a) => Number(a.budgeted))).toEqual([-1500 * 10, 40000 * 10]);
   });
 
+  test('a restored transfer is complete: both pointers on both legs, no category on either', async () => {
+    const withCategories = payload();
+    // A backup from the old app: the legs of the checking -> savings pair carry categories.
+    withCategories.transactions[1]!.categoryIndex = 0;
+    withCategories.transactions[2]!.categoryIndex = 1;
+    const res = await postRestore(withCategories);
+    expect(res.status).toBe(201);
+    expect((await res.json()) as { uncategorized: number }).toMatchObject({ uncategorized: 0 });
+    const legs = await pool!.query<{
+      id: string;
+      account_id: string;
+      transfer_account_id: string | null;
+      transfer_transaction_id: string | null;
+      category_id: string | null;
+    }>(
+      `SELECT id, account_id, transfer_account_id, transfer_transaction_id, category_id
+       FROM transactions WHERE budget_id = $1 AND (transfer_transaction_id IS NOT NULL OR transfer_account_id IS NOT NULL) ORDER BY date, amount DESC`,
+      [budgetId],
+    );
+    expect(legs.rows).toHaveLength(2);
+    const [inflow, outflow] = legs.rows;
+    expect(inflow!.transfer_transaction_id).toBe(outflow!.id);
+    expect(outflow!.transfer_transaction_id).toBe(inflow!.id);
+    expect(inflow!.transfer_account_id).toBe(outflow!.account_id);
+    expect(outflow!.transfer_account_id).toBe(inflow!.account_id);
+    expect([inflow!.category_id, outflow!.category_id]).toEqual([null, null]);
+    // An ordinary categorized row keeps its category.
+    const grocery = await pool!.query('SELECT category_id FROM transactions WHERE budget_id = $1 AND transfer_transaction_id IS NULL AND category_id IS NOT NULL', [budgetId]);
+    expect(grocery.rows).toHaveLength(1);
+    // Restore back to the plain payload (later tests expect it).
+    expect((await postRestore(payload())).status).toBe(201);
+  });
+
   test('restored accounts carry balances equal to the restored ledger', async () => {
     const withUncleared = payload();
     withUncleared.transactions.push(

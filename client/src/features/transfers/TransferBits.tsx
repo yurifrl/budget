@@ -1,9 +1,8 @@
 /**
  * Small transfer widgets shared by the register, the review list and the
  * payee screen: the ⇄ suggestion icon, the "auto · payee rule" label, the
- * match pill, a checkbox and the toast with Undo.
+ * match pill and the toast with Undo.
  */
-import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius } from '@/ui/theme';
@@ -35,25 +34,10 @@ export function TransferAutoLabel() {
 }
 
 export function MatchPill({ kind }: { kind: MatchKind }) {
-  const style = kind === 'sure' ? styles.pillSure : kind === 'choose' ? styles.pillChoose : styles.pillOne;
-  const label = kind === 'sure' ? t('match.sure') : kind === 'choose' ? t('match.choose') : t('match.oneSide');
+  const style = kind === 'sure' ? styles.pillSure : kind === 'choose' || kind === 'confirm' ? styles.pillChoose : styles.pillOne;
+  const label =
+    kind === 'sure' ? t('match.sure') : kind === 'confirm' ? t('match.confirm') : kind === 'choose' ? t('match.choose') : t('match.oneSide');
   return <Text style={[styles.pill, style]}>{label}</Text>;
-}
-
-export function TransferCheckbox({ checked, onToggle, label }: { checked: boolean; onToggle: () => void; label: string }) {
-  return (
-    <Pressable
-      onPress={onToggle}
-      hitSlop={6}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
-      accessibilityLabel={label}
-      style={styles.checkCell}>
-      <View style={[styles.checkbox, checked && styles.checkboxOn]}>
-        {checked ? <Ionicons name="checkmark" size={12} color={colors.white} /> : null}
-      </View>
-    </Pressable>
-  );
 }
 
 /** Bottom toast; with `undo` it carries an Undo button. */
@@ -91,17 +75,6 @@ export const styles = StyleSheet.create({
   pillSure: { backgroundColor: colors.bluePillBg, color: colors.blue },
   pillChoose: { backgroundColor: colors.yellowPillBg, color: colors.yellowPillFg },
   pillOne: { backgroundColor: colors.grayPillBg, color: colors.grayPillFg },
-  checkCell: { width: 26, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  checkbox: {
-    width: 17,
-    height: 17,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: colors.faint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxOn: { backgroundColor: colors.indigo, borderColor: colors.indigo },
   toast: {
     position: 'absolute',
     bottom: 18,
