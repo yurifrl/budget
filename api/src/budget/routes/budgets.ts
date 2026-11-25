@@ -98,8 +98,10 @@ export const operations = [
       // had none). Duplicates and name-only payees are copied as they were: the
       // fresh start deletes and merges nothing, it only reports them for the
       // repair script.
+      // Only an account with NO pointer gets one: a copied pointer is left as it is
+      // (whatever it names), as before; the report below lists it for the repair.
       for (const account of await transferPayeesStore.listLiveAccounts(client, newId)) {
-        await ensureTransferPayee(client, newId, account.id);
+        if (account.transfer_payee_id === null) await ensureTransferPayee(client, newId, account.id);
       }
       const report = await repairTransferPayees(client, newId, { apply: false });
       if (report.actions.length > 0) {

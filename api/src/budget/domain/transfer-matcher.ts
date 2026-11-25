@@ -41,7 +41,9 @@
  * on structure alone). Anything else that pairs is a suggestion.
  *
  * Bank hints come from the provider's raw transaction (Pluggy `category` and
- * `operationType`); payee text is never read.
+ * `operationType`); payee text is never read. The one exception is a stored
+ * `hintAccountId` (an import whose payee text was resolved to an account's
+ * transfer payee at import time, see `MatchRow`): strong evidence for that account unless the bank's own category contradicts a transfer.
  */
 
 export const MAX_TRANSFER_DAYS_APART = 3;
@@ -90,6 +92,14 @@ export interface MatchRow {
   connectionId: string | null;
   /** A checking account (kind 'cash' also covers savings and cash-in-hand; only checking is judged by rule 3). */
   checking: boolean;
+  /**
+   * The account an import's payee text pointed at (`transfer_hints`: a renaming
+   * rule on that account's transfer payee, or the text "Transfer : <account>").
+   * The row stays an ordinary uncategorized row, but it counts as strong
+   * evidence of a transfer with THAT account: it only pairs with a row of it
+   * (the bank rules still apply), and alone it is a one-side suggestion.
+   */
+  hintAccountId: string | null;
 }
 
 /** What the account rules need to know about one side of a transfer. */
@@ -210,6 +220,17 @@ interface Node {
   rule: TransferRule | null;
 }
 
+/**
+ * The row's evidence. An import hint (the payee text named an account) counts as
+ * strong evidence, but never overrides the bank's own contradicting category
+ * ('against' stays a veto) and never touches the account or bank rules: it only
+ * narrows the candidates to the hinted account (`structurallyFits`).
+ */
+function evidenceWithHint(row: MatchRow): Evidence {
+  const own = evidenceOf(row.hint);
+  return row.hintAccountId && own !== 'against' ? 'strong' : own;
+}
+
 /** The rule covering a row (an active 'auto'/'account' rule set before the row was created). */
 function coveringRule(row: MatchRow, rules: ReadonlyMap<string, TransferRule>): TransferRule | null {
   const rule = row.payeeId ? rules.get(row.payeeId) : undefined;
@@ -241,6 +262,8 @@ function structurallyFits(o: Node, i: Node): boolean {
   if (kinds !== 'cash>cash' && kinds !== 'cash>card' && kinds !== 'card>card') return false;
   if (o.rule?.mode === 'account' && o.rule.accountId !== i.row.accountId) return false;
   if (i.rule?.mode === 'account' && i.rule.accountId !== o.row.accountId) return false;
+  if (o.row.hintAccountId && o.row.hintAccountId !== i.row.accountId) return false;
+  if (i.row.hintAccountId && i.row.hintAccountId !== o.row.accountId) return false;
   return true;
 }
 
@@ -484,7 +507,7 @@ export function planTransfers(
   }
   const nodes: Node[] = rows
     .filter((r) => considered(r, rules))
-    .map((row) => ({ row, evidence: evidenceOf(row.hint), rule: coveringRule(row, rules) }));
+    .map((row) => ({ row, evidence: evidenceWithHint(row), rule: coveringRule(row, rules) }));
   const buckets = new Map<number, Node[]>();
   for (const n of nodes) {
     const k = Math.abs(n.row.amount);

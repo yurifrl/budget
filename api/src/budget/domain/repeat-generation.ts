@@ -6,7 +6,9 @@
  * makes it idempotent — safe on every app load and on a periodic tick.
  */
 import { pool, withTransaction } from '../../core/db';
-import { applyBalanceDeltas } from './transactions';
+import { applyBalanceDeltas, type BalanceDelta } from './transactions';
+import { findTransferPeer, insertMirror } from './transfers';
+import { clearCategoryOfOnBudgetTransfers } from '../store/transfers';
 import { advanceOccurrence } from './repeat-schedule';
 import {
   budgetsWithLiveRules,
@@ -47,6 +49,27 @@ export async function generateDueOccurrences(budgetId: string): Promise<Generati
           uncleared_delta: Number(r.amount),
         })),
       );
+      // An occurrence that is now a real transaction and whose payee is an
+      // account's transfer payee becomes a COMPLETE transfer: both pointers on
+      // both legs, the peer's transfer payee on the mirror, no category between
+      // two on-budget accounts. Pending occurrences have no mirror (the engine
+      // and the balances see them only when they flip). A payee whose account
+      // cannot receive the transfer (own, closed, deleted) is left as it is.
+      const mirrorDeltas: BalanceDelta[] = [];
+      for (const row of flipped.rows) {
+        if (row.transfer_transaction_id) continue;
+        const found = await findTransferPeer(client, budgetId, row.payee_id, row.account_id);
+        if (found.kind !== 'peer') continue;
+        const made = await insertMirror(
+          client,
+          budgetId,
+          { id: row.id, account_id: row.account_id, date: row.date, memo: row.memo, amount: row.amount, cleared: 'uncleared', approved: row.approved },
+          found.peer.accountId,
+        );
+        mirrorDeltas.push(...made.deltas);
+        if (found.peer.internal) await clearCategoryOfOnBudgetTransfers(client, budgetId, [row.id]);
+      }
+      if (mirrorDeltas.length > 0) await applyBalanceDeltas(client, budgetId, mirrorDeltas);
     }
 
     // 2) Materialize upcoming occurrences up to the horizon. Dates in the

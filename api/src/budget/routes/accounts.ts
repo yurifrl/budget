@@ -3,7 +3,7 @@ import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { accountsCreate, accountsDelete, accountsList, accountsReconcile, accountsUpdate } from '@shared/contracts/budget';
 import type { AccountType } from '@shared/contracts/budget/schemas';
-import { ensureTransferPayee, renameTransferPayee } from '../domain/transfer-payees';
+import { ensureTransferPayee, renameTransferPayee, transferPayeeIdsOf } from '../domain/transfer-payees';
 import { toPersonRef } from '../../user';
 import { findUserConnection } from '../../connections';
 import { isBudgetMember } from '../ownership';
@@ -274,7 +274,11 @@ const deleteAccount = implement(accountsDelete, async (_c, { id: accountId, budg
     // deleted account on their next tick. Retire them with it; their (already
     // soft-deleted) occurrences keep the rule reference via the FK, so rules
     // are flagged, never hard-deleted.
-    await accountsStore.retireAccountRepeatRules(client, accountId, acc.transfer_payee_id);
+    // The payees to retire are the ones that point at THIS account (and its own
+    // pointer when that payee is not another account's): with two accounts of one
+    // name, a bad pointer must never retire the other account's payee.
+    const transferPayeeIds = await transferPayeeIdsOf(client, budgetId, accountId, acc.transfer_payee_id);
+    await accountsStore.retireAccountRepeatRules(client, accountId, transferPayeeIds);
 
     await accountsStore.zeroAndDeleteAccount(client, accountId);
 
@@ -283,8 +287,10 @@ const deleteAccount = implement(accountsDelete, async (_c, { id: accountId, budg
     // then retire the transfer payee — nothing live references it anymore and
     // a dangling "Transfer : <name>" would linger in Manage Payees.
     const plain = await findOrCreatePayeeByName(client, budgetId, acc.name);
-    await repointLiveTransactionsPayee(client, acc.transfer_payee_id, plain);
-    await retireTransferPayee(client, acc.transfer_payee_id);
+    for (const payeeId of transferPayeeIds) {
+      await repointLiveTransactionsPayee(client, payeeId, plain);
+      await retireTransferPayee(client, payeeId);
+    }
   });
 });
 

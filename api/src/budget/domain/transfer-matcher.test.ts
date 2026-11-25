@@ -25,6 +25,7 @@ const row = (over: Partial<MatchRow>): MatchRow => ({
   bank: null,
   connectionId: null,
   checking: true,
+  hintAccountId: null,
   ...over,
 });
 const out = (over: Partial<MatchRow> = {}) => row(over);
@@ -625,5 +626,47 @@ describe('planTransfers: account rules (budget-zkts)', () => {
     // ...but a card is still never the outflow side.
     const cardRules = new Map<string, TransferRule>([['p', { mode: 'account', accountId: 'nubank', noMatch: 'review', waitDays: 5, since: null }]]);
     expect(plan([o(nuCard, { payeeId: 'p', date: '2026-11-20' }), i(nuConta, { date: '2026-11-20' })], cardRules).links).toEqual([]);
+  });
+});
+
+describe('import hints (budget-nq2f)', () => {
+  test('a hinted row pairs only with a row of the hinted account (unique there), instead of being ambiguous', () => {
+    const a = out({ hintAccountId: 'nubank' });
+    const right = inn();
+    const other = inn({ accountId: 'bradesco' });
+    expect(plan([out(), inn(), inn({ accountId: 'bradesco' })], noRules).links).toEqual([]); // two candidates: nothing without the hint
+    const p = plan([a, right, other], noRules);
+    expect(p.links).toEqual([{ outflowId: a.id, inflowId: right.id, method: 'auto', basis: 'unique' }]);
+    // The other side hinted at a different account never pairs.
+    const wrong = out({ hintAccountId: 'bradesco' });
+    expect(plan([wrong, inn()], noRules).links).toEqual([]);
+  });
+
+  test('a lone hinted row is a one-side suggestion (strong evidence), a lone plain row is nothing', () => {
+    const hinted = out({ hintAccountId: 'nubank' });
+    expect(plan([hinted], noRules).suggestions).toEqual([{ id: hinted.id, confidence: 'one_side', basis: 'unmatched', candidateIds: [] }]);
+    expect(plan([out()], noRules).suggestions).toEqual([]);
+    // A card purchase is never a transfer, hint or not.
+    expect(plan([card({ amount: -3_000_000, hintAccountId: 'nubank' })], noRules).suggestions).toEqual([]);
+  });
+
+  test('the bank rules still apply to a hinted pair: a refused pair is suggested, never linked', () => {
+    const a = out({ hintAccountId: 'nucard', bank: 'itau' });
+    const b = card({ bank: 'nubank' });
+    const p = plan([a, b], noRules);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions.map((sug) => [sug.id, sug.basis])).toEqual([[a.id, 'refused']]);
+  });
+
+  test('a hint never overrides the bank\'s contradicting category: no auto-link, no one-side suggestion', () => {
+    const a = out({ hintAccountId: 'nubank', hint: SHOP });
+    const b = inn();
+    const p = plan([a, b], noRules);
+    expect(p.links).toEqual([]);
+    expect(p.suggestions.map((sug) => [sug.id, sug.confidence])).toEqual([[a.id, 'sure']]);
+    const lone = out({ hintAccountId: 'nubank', hint: SHOP });
+    expect(plan([lone], noRules).suggestions).toEqual([]);
+    // Without the contradicting category the same pair links, as before.
+    expect(plan([out({ hintAccountId: 'nubank' }), inn()], noRules).links).toHaveLength(1);
   });
 });

@@ -203,6 +203,7 @@ interface ExistingTxnRow {
   memo: string | null;
   cleared: 'cleared' | 'uncleared' | 'reconciled';
   payee_name: string | null;
+  payee_id: string | null;
   shadow_blocked: boolean | null;
   shadow_payload: OwnedPayload | null;
 }
@@ -595,7 +596,7 @@ async function syncOnce(
           const existing = (
             await pg.query<ExistingTxnRow>(
               `SELECT t.id, t.date::text AS date, t.amount, t.memo, t.cleared,
-                      p.name AS payee_name,
+                      p.name AS payee_name, t.payee_id,
                       s.blocked AS shadow_blocked, s.last_synced_payload AS shadow_payload
                FROM public.transactions t
                LEFT JOIN public.connection_transactions s ON s.transaction_id = t.id
@@ -634,9 +635,15 @@ async function syncOnce(
               amount: milli,
               payeeId: payee.id,
               importId,
-              importPayeeName: payee.name || null,
+              importPayeeName: payee.importName || null,
               cleared,
             });
+            // The text said "Transfer : <account>": the row stays an ordinary uncategorized
+            // one (no payee-only half transfer, no mirror: the other side may arrive from the
+            // other bank) and the matcher is told which account it is probably with.
+            if (payee.transferAccountId && payee.transferAccountId !== acc.id) {
+              await ledger.setTransferHint(pg, acc.budget_id, insertedId, payee.transferAccountId);
+            }
             await pg.query(
               `INSERT INTO connection_transactions
                  (transaction_id, budget_id, provider, external_transaction_id, last_synced_payload, blocked,
@@ -686,33 +693,56 @@ async function syncOnce(
             continue;
           }
 
-          const upstreamPayee = await resolver.resolve(txn.description);
+          // What the text means, read only: a row that stays as it is must not create payees.
+          const upstreamPayee = await resolver.peek(txn.description);
           // The ledger's read-back form is date-only (`t.date::text`); compare
-          // like with like so unchanged upstream rows stay duplicates.
-          const upstreamPayload: OwnedPayload = {
+          // like with like so unchanged upstream rows stay duplicates. The payee is
+          // compared in BOTH forms the same bank text has been stored in: what a new
+          // row gets now (ordinary payee, no transfer payee) and what an earlier sync
+          // stored (the account's transfer payee). Either one is "unchanged".
+          const upstreamPayload = (payee: string): OwnedPayload => ({
             date: txn.date.slice(0, 10),
             amount: milli,
             memo: '',
-            payee: upstreamPayee.name,
-          };
-          if (samePayload(current, upstreamPayload)) {
+            payee,
+          });
+          const legacyForm = upstreamPayee.legacyName !== null && current.payee === upstreamPayee.legacyName;
+          if (samePayload(current, upstreamPayload(upstreamPayee.name)) || (legacyForm && samePayload(current, upstreamPayload(current.payee)))) {
             result.duplicates += 1;
             continue;
           }
 
           // Upstream changed a row the user left untouched → refresh the owned
-          // fields; cleared/approved state is preserved.
+          // fields; cleared/approved state is preserved. A row an earlier sync stored
+          // with the transfer payee keeps it (the engine never rewrites a payee only
+          // because transfer text is resolved differently now).
+          const keep = legacyForm;
+          // The row is being changed: ONE resolve() decides payee, shadow name, import name
+          // and hint, so the row and its shadow always agree (a peek made before the
+          // resolve could adopt a name-only payee would disagree with the stored row,
+          // and the next sync would freeze it).
+          const resolved = keep ? null : await resolver.resolve(txn.description);
+          const payeeId = resolved ? resolved.id : existing.payee_id;
+          const storedName = resolved ? resolved.name : current.payee;
           await ledger.refreshImportedTransaction(pg, existing.id, {
             date: txn.date.slice(0, 10),
             amount: milli,
-            payeeId: upstreamPayee.id,
-            importPayeeName: upstreamPayee.name || null,
+            payeeId,
+            importPayeeName: (resolved ? resolved.importName : current.payee) || null,
           });
+          // The hint follows the row: a refreshed row of transfer text keeps or gets it, any other text drops it.
+          if (resolved) {
+            if (resolved.transferAccountId && resolved.transferAccountId !== acc.id) {
+              await ledger.setTransferHint(pg, acc.budget_id, existing.id, resolved.transferAccountId);
+            } else {
+              await ledger.clearTransferHints(pg, acc.budget_id, [existing.id]);
+            }
+          }
           await pg.query(
             `UPDATE connection_transactions
              SET last_synced_payload = $2, updated_at = now()
              WHERE transaction_id = $1`,
-            [existing.id, JSON.stringify(upstreamPayload)],
+            [existing.id, JSON.stringify(upstreamPayload(storedName))],
           );
           result.updated += 1;
           const bucket = existing.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';
