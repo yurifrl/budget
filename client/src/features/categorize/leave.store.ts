@@ -84,7 +84,16 @@ export function createLeaveStore() {
   };
 }
 
-export const leaveStore = createLeaveStore();
+/**
+ * ONE store per app, not per module evaluation: the web bundler can evaluate
+ * a route's modules again when the route is left and re-entered, and a plain
+ * module-level singleton was seen to be duplicated that way (the page published
+ * to one copy, the shell asked another). The app-wide global keeps them the same.
+ */
+const GLOBAL_KEY = '__budgetCategorizeLeaveStore';
+type Holder = { [GLOBAL_KEY]?: ReturnType<typeof createLeaveStore> };
+const holder = globalThis as Holder;
+export const leaveStore = (holder[GLOBAL_KEY] ??= createLeaveStore());
 
 /** True while the route is the Categorize page (or something below it). */
 export function onCategorizeRoute(pathname: string): boolean {
