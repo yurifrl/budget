@@ -108,4 +108,29 @@ describe('planTransferPayeeRepair', () => {
     expect(report.actions.find((a) => a.account_id === 'a2')).toMatchObject({ canonical_payee_id: null });
     expect(report.accounts_without_payee).toBe(1);
   });
+
+  test('a numbered name is normalised once the plain name is free, and kept while another payee holds it', () => {
+    const free = plan([account('a1', 'Solo', 'p2')], [payee('p2', 'Transfer : Solo (2)', 'a1')]);
+    expect(free.actions[0]).toMatchObject({ rename: true });
+
+    const held = plan(
+      [account('a1', 'Twin', 'p1'), account('a2', 'Twin', 'p2')],
+      [payee('p1', 'Transfer : Twin', 'a1'), payee('p2', 'Transfer : Twin (2)', 'a2')],
+    );
+    expect(held.actions).toEqual([]);
+  });
+
+  test('every dropped rule is listed with its payee and the payee that kept its own', () => {
+    const report = plan(
+      [account('a1', 'One', 'keep')],
+      [
+        payee('keep', 'Transfer : One', 'a1', { rename_match_type: 'is', rename_condition: 'A', transfer_rule: 'auto' }),
+        payee('lost', 'Transfer : One Old', 'a1', { rename_match_type: 'contains', rename_condition: 'B', transfer_rule: 'never' }),
+      ],
+    );
+    expect(report.dropped_rules.map((r) => [r.kind, r.payee_id, r.detail, r.kept_payee_id])).toEqual([
+      ['rename_rule', 'lost', 'contains "B"', 'keep'],
+      ['transfer_rule', 'lost', 'never', 'keep'],
+    ]);
+  });
 });

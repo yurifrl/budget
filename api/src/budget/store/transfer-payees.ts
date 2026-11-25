@@ -112,7 +112,13 @@ export async function insertTransferPayee(
   return res.rows[0]?.id ?? null;
 }
 
-/** Make the payee the account's transfer payee: linked, live and visible. */
+/** Ordinary requests: point a payee nobody links to at the account. Never un-hides or un-deletes. */
+export async function adoptPayee(db: Queryable, payeeId: string, accountId: string): Promise<boolean> {
+  const res = await db.query('UPDATE payees SET transfer_account_id = $2 WHERE id = $1 AND transfer_account_id IS NULL', [payeeId, accountId]);
+  return (res.rowCount ?? 0) > 0;
+}
+
+/** Repair only: make the payee the account's transfer payee: linked, live and visible. */
 export async function linkPayeeToAccount(db: Queryable, payeeId: string, accountId: string): Promise<void> {
   await db.query('UPDATE payees SET transfer_account_id = $2, deleted = false, hidden = false WHERE id = $1', [payeeId, accountId]);
 }
@@ -121,8 +127,23 @@ export async function setAccountTransferPayee(db: Queryable, accountId: string, 
   await db.query('UPDATE accounts SET transfer_payee_id = $2 WHERE id = $1', [accountId, payeeId]);
 }
 
-export async function setPayeeName(db: Queryable, payeeId: string, name: string): Promise<void> {
-  await db.query('UPDATE payees SET name = $2 WHERE id = $1', [payeeId, name]);
+/**
+ * Rename a payee; false when the name was taken in the meantime (a concurrent
+ * insert). A savepoint keeps the caller's transaction alive after the unique
+ * violation, so it must run inside one.
+ */
+export async function trySetPayeeName(db: Queryable, payeeId: string, name: string): Promise<boolean> {
+  await db.query('SAVEPOINT transfer_payee_rename');
+  try {
+    await db.query('UPDATE payees SET name = $2 WHERE id = $1', [payeeId, name]);
+    await db.query('RELEASE SAVEPOINT transfer_payee_rename');
+    return true;
+  } catch (err) {
+    if ((err as { code?: string }).code !== '23505') throw err;
+    await db.query('ROLLBACK TO SAVEPOINT transfer_payee_rename');
+    await db.query('RELEASE SAVEPOINT transfer_payee_rename');
+    return false;
+  }
 }
 
 /** Every column that references payees(id), as [table, column]. `transfer_links.prev_payee_id` has no FK but is a payee id. */
@@ -136,17 +157,17 @@ const PAYEE_REFERENCES = [
 ] as const;
 
 /**
- * Re-point every reference to payee `fromId` at `toId` (live and deleted rows
- * alike); returns how many `transactions` rows moved. The accounts' own
- * pointer is handled by the caller.
+ * Re-point every reference to payee `fromId` at `toId` within ONE budget
+ * (live and deleted rows alike, every statement scoped by budget_id); returns
+ * how many `transactions` rows moved, including the account pointers.
  */
-export async function repointPayeeReferences(db: Queryable, fromId: string, toId: string): Promise<number> {
+export async function repointPayeeReferences(db: Queryable, budgetId: string, fromId: string, toId: string): Promise<number> {
   let moved = 0;
   for (const [table, column] of PAYEE_REFERENCES) {
-    const res = await db.query(`UPDATE ${table} SET ${column} = $2 WHERE ${column} = $1`, [fromId, toId]);
+    const res = await db.query(`UPDATE ${table} SET ${column} = $2 WHERE ${column} = $1 AND budget_id = $3`, [fromId, toId, budgetId]);
     if (table === 'transactions') moved = res.rowCount ?? 0;
   }
-  await db.query('UPDATE accounts SET transfer_payee_id = $2 WHERE transfer_payee_id = $1', [fromId, toId]);
+  await db.query('UPDATE accounts SET transfer_payee_id = $2 WHERE transfer_payee_id = $1 AND budget_id = $3', [fromId, toId, budgetId]);
   return moved;
 }
 
@@ -180,7 +201,7 @@ export async function copyTransferRule(db: Queryable, fromId: string, toId: stri
   );
 }
 
-/** Hard-delete a payee nothing references any more (its name becomes free). */
-export async function deletePayeeRow(db: Queryable, payeeId: string): Promise<void> {
-  await db.query('DELETE FROM payees WHERE id = $1', [payeeId]);
+/** Repair only: hard-delete a payee nothing references any more (its name becomes free). */
+export async function deletePayeeRow(db: Queryable, budgetId: string, payeeId: string): Promise<void> {
+  await db.query('DELETE FROM payees WHERE id = $1 AND budget_id = $2', [payeeId, budgetId]);
 }

@@ -24,9 +24,17 @@ export async function repointLiveTransactionsPayee(db: Queryable, fromPayeeId: s
   await db.query('UPDATE transactions SET payee_id = $2 WHERE payee_id = $1 AND deleted = false', [fromPayeeId, toPayeeId]);
 }
 
-/** Retire a transfer payee (drop its account link, soft-delete). */
+/**
+ * Retire a transfer payee (drop its account link, soft-delete). Its name gets
+ * a "(deleted <id>)" tail so a new account with the same name can have its own
+ * "Transfer : <name>" payee (names are unique per budget, deleted rows included).
+ */
 export async function retireTransferPayee(db: Queryable, payeeId: string | null): Promise<void> {
-  await db.query('UPDATE payees SET transfer_account_id = NULL, deleted = true WHERE id = $1 AND deleted = false', [payeeId]);
+  await db.query(
+    `UPDATE payees SET transfer_account_id = NULL, deleted = true, name = name || ' (deleted ' || left(id::text, 8) || ')'
+      WHERE id = $1 AND deleted = false`,
+    [payeeId],
+  );
 }
 
 // Transaction counts + last-used date per payee, one scan over live txns.

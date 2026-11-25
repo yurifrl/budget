@@ -4,7 +4,7 @@
  * through this module only (exported from the budget barrel); it is built on
  * the same functions budget's own routes use:
  *
- * - payees: `loadRenameRules` + `applyRules` + `upsertPayee`
+ * - payees: `loadRenameRules` + `applyRules` + `upsertPayeeResolvingTransfers`
  *   (domain/transactions.ts), the /bulk import and transaction-create path;
  * - balances: `applyBalanceDeltas` (domain/transactions.ts);
  * - transfers between own accounts: `linkTransfers` (domain/transfer-links.ts;
@@ -22,7 +22,7 @@
 import type { PoolClient } from 'pg';
 
 import { applyRules, type RenameRule } from '@shared/domain/payees';
-import { loadRenameRules, upsertPayee } from './domain/transactions';
+import { loadRenameRules, upsertPayeeResolvingTransfers } from './domain/transactions';
 
 export { applyBalanceDeltas, type BalanceDelta } from './domain/transactions';
 export { linkTransfers, linkTransfers as linkCardPayments } from './domain/transfer-links';
@@ -61,7 +61,7 @@ export function createImportPayeeResolver(client: PoolClient, budgetId: string):
       if (!cache.has(name)) {
         if (!rules) rules = (await loadRenameRules(client, budgetId)).rows;
         const effective = applyRules(rules, name);
-        const id = await upsertPayee(client, budgetId, effective, { verbatim: true });
+        const id = await upsertPayeeResolvingTransfers(client, budgetId, effective, { verbatim: true, fromRule: effective !== name });
         cache.set(name, id === null ? { id: null, name: '' } : { id, name: effective });
       }
       return cache.get(name)!;

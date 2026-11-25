@@ -18,9 +18,10 @@ DATABASE_URL=postgres://... bun api/scripts/repair-transfer-payees.ts --budget <
 Runs inside a READ ONLY transaction and prints JSON: how many accounts have no
 payee or several, how many name-only payees would be adopted, how many payees
 would be removed, how many transactions would be re-pointed, how many renaming
-rules would move and how many would be dropped (`rename_rules_dropped`: the kept
-payee already had a different rule; a payee holds one), plus `actions` with the
-account and payee ids. `ambiguous_name_only_payees` (two accounts share the
+rules would move and which would be dropped: `dropped_rules` lists each one (payee,
+rule, and the payee that keeps its own different rule; a payee holds one renaming
+rule and one "treat as transfer" rule), plus `actions` with the account and payee
+ids. Read `dropped_rules` before `--apply`. `ambiguous_name_only_payees` (two accounts share the
 name) and `orphan_transfer_payees` are listed and never touched.
 
 ## 2. Apply

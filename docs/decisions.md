@@ -2110,52 +2110,75 @@ app. The two now ship independently.
 
 Plan: `.agents/plans/2026-11-24_transfers-refactor.md` (T2). Code:
 `api/src/budget/domain/transfer-payees.ts` (lifecycle, protection, text
-resolution), `transfer-payee-repair.ts` (plan, report, repair),
-`store/transfer-payees.ts` (SQL), `scripts/repair-transfer-payees.ts`.
+resolution), `edited-payee.ts` (the payee of an edit), `transfer-payee-repair.ts`
+(plan, report, repair), `store/transfer-payees.ts` (SQL),
+`scripts/repair-transfer-payees.ts`.
 
 - Every account has exactly one system payee "Transfer : <account>", found by
   id: `payees.transfer_account_id` and `accounts.transfer_payee_id` are set
-  together by `ensureTransferPayee`, which also heals a disagreeing pointer, a
-  retired or hidden payee, and picks one canonical payee when duplicates exist
-  (the account's own pointer, else the oldest live).
+  together when the payee is created.
 - Created with the account in every path that makes accounts: `POST /accounts`,
-  restore (a transfer leg takes the PEER account's payee by account id, not by
-  name), budget copy (the copy is repaired after it is written). Renamed in the
-  same transaction as the account (`renameTransferPayee`: same payee id, new
-  name). Kept when the account is closed; retired only when it is deleted
-  (unchanged).
+  restore (a transfer leg takes the PEER account's payee by account id), budget
+  copy (an account the copy left without one gets one). Renamed in the same
+  transaction as the account (`renameTransferPayee`: same payee id, new name).
+  Kept when the account is closed. Retired when the account is deleted; the
+  retired payee's name gets a "(deleted <id>)" tail so a new account of that name
+  can have its own.
 - Names are unique per budget, so a second account with the same name gets
-  "Transfer : X (2)", the third "(3)". A stale or name-only payee holding the
-  name an account is renamed to is folded into the account's payee (its
-  transactions, splits, scheduled rows, repeat rules and `transfer_links`
-  records move, its renaming and "treat as transfer" rules move when the kept
-  payee has none; a payee holds one renaming rule, so a different second one is
-  dropped and counted in the report).
+  "Transfer : X (2)", the third "(3)". Whether two accounts may share a name is
+  an open owner question; the numbering stays until it is answered.
+- **Ordinary requests never repair.** `ensureTransferPayee` uses what exists
+  without writing (the account's pointer, else the payee that points at the
+  account). It writes only to CREATE a payee when there is none (and set the
+  account's pointer), or to adopt a LIVE payee nobody links to whose name is
+  exactly the account's (set its `transfer_account_id`, and the pointer). It does
+  not un-hide, un-delete, re-point, merge or insert a numbered payee to work
+  around bad data. Renaming an account renames its own payee and nothing else:
+  a name held by any other payee (another account's, an ordinary one, a
+  leftover) is skipped, the payee takes the next numbered name, and the
+  collision is logged (`[transfer-payee] account ...`) for the repair; a
+  concurrent insert of the wanted name is retried with the next name
+  (savepoint). Fresh start copies duplicates as they are and logs the report
+  (`[transfer-payee] fresh start ...`); it deletes and merges nothing.
+- **Only the repair merges and deletes.** `repairTransferPayees` and
+  `scripts/repair-transfer-payees.ts` (report first, `--apply` in one
+  transaction, idempotent, every statement scoped by budget_id). Folding a
+  duplicate moves its transactions, splits, scheduled rows, repeat rules and
+  `transfer_links.prev_payee_id`; its renaming and "treat as transfer" rules move
+  when the kept payee has none, otherwise they are lost and the report lists
+  each one (`dropped_rules`: payee, rule, kept payee). A numbered name is
+  normalised to the plain one once nothing else holds it.
 - Uniqueness is kept by code, not by an index: the shared database's other app
-  also writes `payees`, and a unique index would turn its writes into errors on
-  data that has duplicates today. Migration 0117 only adds a plain partial
-  index on `payees(transfer_account_id)` and changes no data.
-- Repair is a script, not a migration, so nothing runs when a release boots:
-  `bun api/scripts/repair-transfer-payees.ts --budget <uuid>` prints a READ ONLY
-  report (one READ ONLY transaction); `--apply` runs the same plan in one
-  transaction; a second run reports no actions. Runbook:
-  `docs/runbooks/transfer-payee-repair.md`.
+  also writes `payees`. Migration 0117 only adds a plain partial index on
+  `payees(transfer_account_id)`. It is not built CONCURRENTLY: the migration
+  runner runs every file inside a transaction, where that is not allowed; the
+  build briefly blocks writes to `payees`, which is small.
 - The payee endpoints refuse to rename, merge (source or target), delete or
-  hide a transfer payee: 409 `transfer_payee_protected` with `params.name`
-  (en and pt-BR in `shared/src/i18n/errors`). Showing a hidden one, renaming
-  rules, categorization and the "treat as transfer" rule stay allowed: a
-  renaming rule on a transfer payee is how "imported payees that contain X are
-  renamed to this payee" works.
-- `GET /payees` lists transfer payees only with `include_transfers=true`
-  (additive input), each with `transfer_account_id` and the additive output
-  field `transfer_account_name` (the account's current name; null otherwise).
-  Default off because every current client caller (Manage Payees, the register
-  payee dropdown, the add sheet, the import flow, the budget model) would show
-  them as ordinary payees, and the register already lists them from accounts.
-- Payee TEXT is still accepted by the register paths (`resolvePayeeId`): a text
-  that is exactly an account payee's name resolves to that account's canonical
-  payee; a "Transfer : <name>" text that is no payee's name resolves to the one
-  live account of that name; two or more accounts with that name is refused
-  (409 `transfer_payee_ambiguous`, nothing written); no account means an
-  ordinary payee, as before. `resolveTransferPeer` no longer parses names: it
-  reads `payees.transfer_account_id` only.
+  hide a transfer payee: 409 `transfer_payee_protected` with `params.name`.
+  Showing a hidden one, renaming rules, categorization and the "treat as
+  transfer" rule stay allowed.
+- `GET /payees` lists transfer payees only with `include_transfers=true`, each
+  with `transfer_account_id` and the additive `transfer_account_name`. Default
+  off because every current client caller would show them as ordinary payees.
+- **Payee text is still accepted, and one resolver reads it everywhere** (register
+  create/edit, repeat rules, statement import, bank sync):
+  a "Transfer : <name>" text means the live account called <name>; with several
+  of that name, the NEWEST (what the released client got on main, where the last
+  account created took the one shared payee); a text that is exactly an account
+  payee's name (numbered names, a renaming rule's target) means that payee's
+  account; no match is an ordinary payee. Rule-produced text tries the exact
+  payee first. The older of two same-named accounts is reached by `payee_id`.
+- **`payee_id` (additive, optional) on transaction create and update** wins over
+  the text (null = no payee); a payee outside the budget is 400
+  `payee_not_in_budget`. New clients send it.
+- **Edits never read stale text as a change** (the released client re-sends the
+  payee text on every edit, duplicate and make-repeat): text equal to the name of
+  the row's current "Transfer : ..." payee is unchanged; on a row that is
+  already a transfer, a "Transfer : ..." text naming no account, or the row's
+  current peer, is unchanged; only text naming a different live account, or an
+  ordinary payee, changes it. Previous account names are not recorded: the row's
+  own pointers decide. Known limit: if a new account takes the old name of the
+  peer, the old text names that new account and moves the transfer; `payee_id`
+  avoids it. A duplicate or make-repeat sent with a stale text creates an
+  ordinary row (no mirror). A non-transfer row whose stored payee is a legacy
+  "Transfer : X" cannot be turned into a transfer by re-picking that same text.

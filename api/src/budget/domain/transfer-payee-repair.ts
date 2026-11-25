@@ -19,6 +19,9 @@
  *  - a payee whose name is not the account's current name, or a pointer that
  *    disagrees with the payee: renamed / re-pointed.
  *
+ * This is the ONLY place that merges or deletes payees; ordinary requests
+ * (account rename, transfers, imports) never do.
+ *
  * `planTransferPayeeRepair` is pure and is the single source of the report;
  * `repairTransferPayees` with `apply: false` only reads (use it in a READ ONLY
  * transaction); with `apply: true` it runs the plan through the same
@@ -26,10 +29,21 @@
  * do. Run it inside one database transaction.
  */
 import type { Queryable } from '../../core/db';
-import { TRANSFER_PAYEE_RE } from '@shared/domain/transfers';
+import { TRANSFER_PAYEE_RE, transferPayeeName } from '@shared/domain/transfers';
 import * as store from '../store/transfer-payees';
 import type { AccountPayeeRow, PayeeFullRow } from '../store/transfer-payees';
-import { absorbPayee, ensureTransferPayee, isTransferPayeeNameFor, pickCanonical, renameTransferPayee } from './transfer-payees';
+import { absorbPayee, createTransferPayee, isTransferPayeeNameFor, pickCanonical, renameTransferPayee } from './transfer-payees';
+
+export interface DroppedRule {
+  kind: 'rename_rule' | 'transfer_rule';
+  account_id: string;
+  /** The payee being folded away and what its rule said. */
+  payee_id: string;
+  payee_name: string;
+  detail: string;
+  /** The payee that keeps its own, different rule. */
+  kept_payee_id: string;
+}
 
 export interface AccountRepairAction {
   account_id: string;
@@ -66,6 +80,8 @@ export interface TransferPayeeRepairReport {
   transactions_repointed: number;
   rename_rules_moved: number;
   rename_rules_dropped: number;
+  /** Every rule that cannot move to the kept payee and is lost (a payee holds one of each). */
+  dropped_rules: DroppedRule[];
   actions: AccountRepairAction[];
 }
 
@@ -121,6 +137,7 @@ export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepair
     transactions_repointed: 0,
     rename_rules_moved: 0,
     rename_rules_dropped: 0,
+    dropped_rules: [],
     actions: [],
   };
 
@@ -135,7 +152,14 @@ export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepair
     }
     const extras = [...linked, ...nameOnly].filter((p) => p.id !== canonical?.id);
     const create = canonical === undefined;
-    const rename = canonical !== undefined && !isTransferPayeeNameFor(canonical.name, account.name);
+    const extraIds = new Set(extras.map((e) => e.id));
+    // A numbered name ("Transfer : X (2)") is right while another payee that stays holds "Transfer : X".
+    const baseName = transferPayeeName(account.name);
+    const baseHolder = payees.find((p) => p.name === baseName && p.id !== canonical?.id && !extraIds.has(p.id));
+    const rename =
+      canonical !== undefined &&
+      canonical.name !== baseName &&
+      !(isTransferPayeeNameFor(canonical.name, account.name) && baseHolder !== undefined);
     const fixPointer = canonical !== undefined && account.transfer_payee_id !== canonical.id;
     const revive = canonical !== undefined && (canonical.deleted || canonical.hidden);
     if (!create && !adopt && !rename && !fixPointer && !revive && extras.length === 0) continue;
@@ -146,15 +170,39 @@ export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepair
     if (rename) report.payees_renamed++;
     if (fixPointer) report.pointers_fixed++;
     report.payees_removed += extras.length;
-    let heldRule = canonical?.rename_condition ?? null;
+    let heldRule = canonical ? { type: canonical.rename_match_type, condition: canonical.rename_condition } : null;
+    let heldTransferRule = canonical?.transfer_rule ?? null;
+    const keptId = canonical?.id ?? '';
     for (const extra of extras) {
       report.transactions_repointed += input.transactionCounts.get(extra.id) ?? 0;
-      if (extra.rename_condition === null) continue;
-      if (heldRule === null) {
-        heldRule = extra.rename_condition;
-        report.rename_rules_moved++;
-      } else if (heldRule !== extra.rename_condition) {
-        report.rename_rules_dropped++;
+      if (extra.rename_condition !== null && extra.rename_match_type !== null) {
+        if (heldRule === null || heldRule.condition === null) {
+          heldRule = { type: extra.rename_match_type, condition: extra.rename_condition };
+          report.rename_rules_moved++;
+        } else if (heldRule.condition !== extra.rename_condition || heldRule.type !== extra.rename_match_type) {
+          report.rename_rules_dropped++;
+          report.dropped_rules.push({
+            kind: 'rename_rule',
+            account_id: account.id,
+            payee_id: extra.id,
+            payee_name: extra.name,
+            detail: `${extra.rename_match_type} "${extra.rename_condition}"`,
+            kept_payee_id: keptId,
+          });
+        }
+      }
+      if (extra.transfer_rule !== null) {
+        if (heldTransferRule === null) heldTransferRule = extra.transfer_rule;
+        else if (heldTransferRule !== extra.transfer_rule) {
+          report.dropped_rules.push({
+            kind: 'transfer_rule',
+            account_id: account.id,
+            payee_id: extra.id,
+            payee_name: extra.name,
+            detail: extra.transfer_rule,
+            kept_payee_id: keptId,
+          });
+        }
       }
     }
     report.actions.push({
@@ -191,7 +239,8 @@ export async function repairTransferPayees(
   if (!opts.apply) return report;
   for (const action of report.actions) {
     if (action.canonical_payee_id === null) {
-      await ensureTransferPayee(db, budgetId, action.account_id);
+      const account = (await store.getAccountRow(db, action.account_id))!;
+      await createTransferPayee(db, account);
     } else {
       await store.linkPayeeToAccount(db, action.canonical_payee_id, action.account_id);
       await store.setAccountTransferPayee(db, action.account_id, action.canonical_payee_id);

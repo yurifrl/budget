@@ -51,6 +51,12 @@ export const txnSchema = z.object({
   account_id: uuidSchema,
   date: isoDateSchema,
   payee: z.string(),
+  /**
+   * The payee by id (additive). When present it wins over the `payee` text
+   * (null = no payee); the text stays supported for older clients. A transfer
+   * payee id makes the row a transfer to that payee's account.
+   */
+  payee_id: uuidSchema.nullable().optional(),
   category_id: uuidSchema.nullable(),
   memo: z.string().nullable(),
   /** Milliunits; inflow XOR outflow. */
