@@ -364,7 +364,10 @@ under `src/` and on a non-pure domain import.
   keys (`keys.logic.ts`, one document listener in `useCategorizeKeys.ts`) never
   fire while a field has focus. Nothing is ever applied without a click or key:
   the page only files what the person picked. Skip is the server's budget-wide
-  skip decision (the row leaves every queue and is never re-classified).
+  skip decision (the row leaves every queue and is never re-classified); it is
+  never sent on a timer: rows wait in a "Leaving uncategorized" strip (Undo per
+  row, Z in key-press order) until Done, or until the leave prompt (Send and leave /
+  Keep them and leave / Stay) when the page goes away. Closing the tab sends nothing.
 - **Engine.** `domain/zeroSum.ts` (`computeBudgetMonth`) is the canonical
   engine (`docs/budget-engine-spec.md`); `domain/engine.ts` holds helpers
   around it (balances, assigned lookups, target funding, Cost to Be Me, the

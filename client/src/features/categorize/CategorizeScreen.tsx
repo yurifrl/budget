@@ -30,8 +30,9 @@ import { useCategorizePage, type CategorizeViewMode } from './useCategorizePage'
 
 /**
  * Keyed by the active budget: switching budget in place (Settings, Open budget)
- * remounts the page, so its queue focus, filed lines, undo stack, pending skips
- * (cancelled, never sent, by the unmount) and toasts all belong to ONE budget.
+ * remounts the page, so its queue focus, filed lines, undo stack, strip and
+ * toasts all belong to ONE budget. Rows still in the strip are handed to the
+ * leave prompt (Send and leave / Keep them and leave / Stay) by the unmount.
  */
 export function CategorizeScreen() {
   const budgetId = useAppSelector(selectActiveBudgetId);
@@ -99,9 +100,12 @@ function CategorizePage() {
           <NoKeyBanner reason={page.aiReason} onAddKey={() => router.push('/ai-keys')} />
         ) : null}
 
-        {page.view === 'bundles' ? (
-          <PendingSkipsStrip skips={pendingSkips(page.accept.state)} onCancel={page.cancelSkip} />
-        ) : null}
+        <PendingSkipsStrip
+          skips={pendingSkips(page.accept.state)}
+          onCancel={page.cancelSkip}
+          onDone={() => void page.accept.sendSkips()}
+          busy={!page.accept.idle}
+        />
 
         {page.reloading ? <Text style={styles.note}>{t('queue.updating')}</Text> : null}
         <View pointerEvents={page.reloading ? 'none' : 'auto'} style={page.reloading ? styles.reloading : undefined}>
@@ -114,6 +118,7 @@ function CategorizePage() {
             manualCount={page.viewModel.manualCount}
             threshold={page.threshold}
             idle={page.accept.idle && !page.reloading}
+            hiddenIds={page.hiddenIds}
             goneBundleKeys={page.accept.goneBundleKeys}
             bundleChangeTick={page.accept.bundleChangeTick}
             onAcceptBundle={(bundle, rows) => void page.accept.acceptBundle(bundle, rows)}

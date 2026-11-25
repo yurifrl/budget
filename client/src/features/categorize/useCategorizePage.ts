@@ -22,10 +22,10 @@ import { useAppDispatch, useAppSelector } from '@/state/hooks';
 import { selectActiveBudgetId } from '@/state/ui';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 
-import { hiddenIdSet, visibleRows } from './accept.logic';
+import { hiddenIdSet, pendingSkips, visibleRows } from './accept.logic';
 import { t } from './i18n';
 import { aiReasonMessage, runHeaderView, thresholdReloading, type RunHeaderView } from './page.logic';
-import { bundleView, queueSubtitle, type BundleView } from './queue.logic';
+import { bundleView, countsWithoutLeaving, queueSubtitle, type BundleView } from './queue.logic';
 import { useCategorizeAccept } from './useCategorizeAccept';
 import { useOneByOne } from './useOneByOne';
 
@@ -125,7 +125,14 @@ export function useCategorizePage(rootRef: { current: unknown }) {
     }
   };
 
-  const viewModel: BundleView | null = useMemo(() => (queue.data ? bundleView(queue.data) : null), [queue.data]);
+  // The rows waiting in the "Leaving uncategorized" strip are still in the queue
+  // as far as the server knows; every count the page shows leaves them out.
+  const stack = accept.state.stack;
+  const leaving = useMemo(() => pendingSkips({ stack }).map((entry) => entry.meta), [stack]);
+  const viewModel: BundleView | null = useMemo(
+    () => (queue.data ? bundleView(queue.data, leaving) : null),
+    [queue.data, leaving],
+  );
   const hidden = useMemo(() => hiddenIdSet(accept.state), [accept.state]);
   const manualRows = useMemo(
     () => (viewModel ? visibleRows(viewModel.manualRows, hidden) : []),
@@ -137,6 +144,7 @@ export function useCategorizePage(rootRef: { current: unknown }) {
   );
 
   const counts = queue.data?.counts;
+  const shownCounts = counts ? countsWithoutLeaving(counts, leaving) : undefined;
   // The old bundles and rows were cut at the old threshold: until the read that
   // follows the change lands they are shown as updating and cannot be acted on.
   const reloading = thresholdReloading({
@@ -177,11 +185,12 @@ export function useCategorizePage(rootRef: { current: unknown }) {
       data: queue.data,
       isLoading: queue.isLoading,
       isError: queue.isError,
-      subtitle: counts ? queueSubtitle(counts) : null,
-      counts,
+      subtitle: shownCounts ? queueSubtitle(shownCounts) : null,
+      counts: shownCounts,
     },
     viewModel,
     manualRows,
+    hiddenIds: hidden,
     visibleQueueRows,
     oneByOne,
     threshold,

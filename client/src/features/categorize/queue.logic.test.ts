@@ -10,6 +10,8 @@ import type {
 
 import {
   bundleAcceptInput,
+  bundlesWithoutLeaving,
+  countsWithoutLeaving,
   bundleDateRange,
   bundleView,
   BUNDLE_CARD_LIMIT,
@@ -212,5 +214,44 @@ describe('merchantFacts', () => {
 
   test('no merchant block means no panel', () => {
     expect(merchantFacts(null)).toEqual([]);
+  });
+});
+
+describe('counts without the rows in the strip', () => {
+  const leaving = (payeeId: string | null, topCategoryId: string | null, amount = -1000) => ({ payeeId, topCategoryId, amount });
+
+  test('a bundle loses the leaving rows of its payee and top suggestion, count and total', () => {
+    const bundles = [bundle('b1', 'Uber', 3), bundle('b2', 'Netflix', 2)];
+    const shown = bundlesWithoutLeaving(bundles, [leaving('payee-b1', 'cat-Transport', -2000)]);
+    expect(shown.map((b) => [b.payee, b.count, b.total, b.serverCount])).toEqual([
+      ['Uber', 2, -3000 + 2000, 3],
+      ['Netflix', 2, -2000, 2],
+    ]);
+  });
+
+  test('a row with another suggestion or payee does not touch the bundle', () => {
+    const shown = bundlesWithoutLeaving([bundle('b1', 'Uber', 3)], [leaving('payee-b1', 'cat-Other'), leaving('other', 'cat-Transport')]);
+    expect(shown[0]!.count).toBe(3);
+  });
+
+  test('a bundle with nothing left is dropped', () => {
+    const shown = bundlesWithoutLeaving([bundle('b1', 'Uber', 2)], [leaving('payee-b1', 'cat-Transport'), leaving('payee-b1', 'cat-Transport')]);
+    expect(shown).toEqual([]);
+  });
+
+  test('header counts drop leaving rows, and those with a suggestion drop "ready" too', () => {
+    const counts = { left_to_categorize: 57, above_threshold: 52 };
+    expect(countsWithoutLeaving(counts, [leaving('p', 'c'), leaving('p', null)])).toEqual({
+      left_to_categorize: 55,
+      above_threshold: 51,
+    });
+    expect(countsWithoutLeaving(counts, [])).toEqual(counts);
+  });
+
+  test('the view counts what Accept all would file, and the manual group', () => {
+    const q = queue([], [bundle('b1', 'Uber', 3)], { left_to_categorize: 10, above_threshold: 3 });
+    const view = bundleView(q, [leaving('payee-b1', 'cat-Transport'), leaving(null, null)]);
+    expect(view.acceptAllCount).toBe(2);
+    expect(view.manualCount).toBe(8 - 2);
   });
 });

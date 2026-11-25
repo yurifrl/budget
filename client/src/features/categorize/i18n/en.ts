@@ -148,11 +148,26 @@ export default {
   'one.searchFirst': 'Search a category…',
   'one.confirm': 'Confirm {category}',
   'one.filedTo': 'filed to {category}',
-  'one.filedLeft': 'left uncategorized',
-  'one.leavingIn': 'leaving uncategorized in {seconds}s',
-  'one.queueLeaving': '{count} leaving',
+  'one.filedLeft': 'in “Leaving uncategorized”',
   'strip.title': 'LEAVING UNCATEGORIZED',
-  'strip.line': '{subject} · in {seconds}s',
+  'strip.hint':
+    'Nothing is sent until you press Done or leave the page. Close or reload the tab and they are not sent: they come back next visit.',
+  'strip.done': {
+    one: 'Done · remove {count} from the list for everyone in the budget',
+    other: 'Done · remove {count} from the list for everyone in the budget',
+  },
+  'leave.title': 'Rows in “Leaving uncategorized”',
+  'leave.body': {
+    one: '{count} transaction is waiting to leave the list for everyone in the budget. Send it now?',
+    other: '{count} transactions are waiting to leave the list for everyone in the budget. Send them now?',
+  },
+  'leave.send': 'Send and leave',
+  'leave.keep': 'Keep them and leave',
+  'leave.stay': 'Stay',
+  'leave.sendFailed': {
+    one: '{count} could not be sent. Try again, or keep it and leave: it comes back next visit.',
+    other: '{count} could not be sent. Try again, or keep them and leave: they come back next visit.',
+  },
   'one.skip': 'Leave uncategorized',
   'one.skipHint': 'Takes it off this list for everyone in the budget. You can still categorize it in the register.',
   'one.undoLast': 'Undo last',
@@ -170,7 +185,7 @@ export default {
   'error.threshold': 'Could not save the confidence threshold.',
   'toast.filed': '{subject} → {category}',
   'toast.skipped':
-    'Leaving {subject} uncategorized. It will not come back to this list, for anyone in the budget.',
+    '{subject} moved to “Leaving uncategorized”. Nothing is sent until you press Done.',
   // Undo outcomes
   'undo.done': { one: 'Undid {count} transaction.', other: 'Undid {count} transactions.' },
   'undo.restored': {

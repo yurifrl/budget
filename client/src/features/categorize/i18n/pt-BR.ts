@@ -141,11 +141,26 @@ const m: Translation<typeof en> = {
   'one.searchFirst': 'Buscar uma categoria…',
   'one.confirm': 'Confirmar {category}',
   'one.filedTo': 'em {category}',
-  'one.filedLeft': 'deixada sem categoria',
-  'one.leavingIn': 'deixada sem categoria em {seconds}s',
-  'one.queueLeaving': '{count} saindo',
+  'one.filedLeft': 'em “Saindo sem categoria”',
   'strip.title': 'SAINDO SEM CATEGORIA',
-  'strip.line': '{subject} · em {seconds}s',
+  'strip.hint':
+    'Nada é enviado até você tocar em Concluir ou sair da página. Se fechar ou recarregar a aba, não são enviadas: voltam na próxima visita.',
+  'strip.done': {
+    one: 'Concluir · tirar {count} da lista para todos do orçamento',
+    other: 'Concluir · tirar {count} da lista para todos do orçamento',
+  },
+  'leave.title': 'Linhas em “Saindo sem categoria”',
+  'leave.body': {
+    one: '{count} transação espera para sair da lista para todos do orçamento. Enviar agora?',
+    other: '{count} transações esperam para sair da lista para todos do orçamento. Enviar agora?',
+  },
+  'leave.send': 'Enviar e sair',
+  'leave.keep': 'Manter e sair',
+  'leave.stay': 'Ficar',
+  'leave.sendFailed': {
+    one: '{count} não pôde ser enviada. Tente de novo, ou mantenha e saia: volta na próxima visita.',
+    other: '{count} não puderam ser enviadas. Tente de novo, ou mantenha e saia: voltam na próxima visita.',
+  },
   'one.skip': 'Deixar sem categoria',
   'one.skipHint': 'Tira da lista para todos do orçamento. Você ainda pode categorizar no registro.',
   'one.undoLast': 'Desfazer a última',
@@ -162,7 +177,7 @@ const m: Translation<typeof en> = {
   'error.threshold': 'Não foi possível salvar o limite de confiança.',
   'toast.filed': '{subject} → {category}',
   'toast.skipped':
-    'Deixando {subject} sem categoria. Não voltará a esta lista, para ninguém do orçamento.',
+    '{subject} foi para “Saindo sem categoria”. Nada é enviado até você tocar em Concluir.',
   'undo.done': { one: 'Desfeita {count} transação.', other: 'Desfeitas {count} transações.' },
   'undo.restored': {
     one: 'Desfeitas {count} de {requested} transações.',

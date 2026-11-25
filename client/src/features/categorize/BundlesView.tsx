@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { CategorizeBundle, CategorizeQueueRow, CategorizeSuggestion } from '@/budget/data/api';
+import type { CategorizeQueueRow, CategorizeSuggestion } from '@/budget/data/api';
 import { GhostButton, IndigoButton } from '@/ui/bits';
 import { colors, radius } from '@/ui/theme';
 
@@ -15,7 +15,7 @@ import { BundleCard } from './BundleCard';
 import { t } from './i18n';
 import { thresholdPercent, type PickedCategory } from './page.logic';
 import { QueueRowView } from './QueueRowView';
-import type { BundleView } from './queue.logic';
+import type { BundleView, ShownBundle } from './queue.logic';
 
 export function BundlesView({
   budgetId,
@@ -24,6 +24,7 @@ export function BundlesView({
   manualCount,
   threshold,
   idle,
+  hiddenIds,
   goneBundleKeys,
   bundleChangeTick,
   onAcceptBundle,
@@ -37,9 +38,10 @@ export function BundlesView({
   manualCount: number;
   threshold: number;
   idle: boolean;
+  hiddenIds: ReadonlySet<string>;
   goneBundleKeys: ReadonlySet<string>;
   bundleChangeTick: number;
-  onAcceptBundle: (bundle: CategorizeBundle, rows: readonly CategorizeQueueRow[]) => void;
+  onAcceptBundle: (bundle: ShownBundle, rows: readonly CategorizeQueueRow[]) => void;
   onAcceptAll: () => void;
   onFileRow: (row: CategorizeQueueRow, suggestion: CategorizeSuggestion) => void;
   onPickCategory: (row: CategorizeQueueRow, category: PickedCategory) => void;
@@ -103,6 +105,7 @@ export function BundlesView({
             expanded={expanded === bundle.bundle_key}
             onToggle={() => setExpanded(expanded === bundle.bundle_key ? null : bundle.bundle_key)}
             disabled={!idle}
+            hiddenIds={hiddenIds}
             onAccept={onAcceptBundle}
             onFileRow={onFileRow}
             onPickCategory={onPickCategory}

@@ -5,10 +5,11 @@
  *
  * Undo is a STACK of the visit's actions in key-press order. Undo and Z pop
  * the top: an accept is undone through the API, a pending skip is cancelled and
- * its row comes back. A skip is permanent and budget-wide, so it is only SENT
- * when ITS OWN timer runs out; no other action ever sends it. A sent skip
+ * its row comes back. A skip is permanent and budget-wide, so it is NEVER sent
+ * on a timer: it waits in the "Leaving uncategorized" strip until the person
+ * presses Done (or answers "Send and leave" when leaving the page). A sent skip
  * leaves the stack (it cannot be undone), so Z goes to the action before it.
- * The hook owns the requests and timers; this reducer owns what the person sees.
+ * The hook owns the requests; this reducer owns what the person sees.
  */
 
 import { t } from './i18n';
@@ -21,6 +22,17 @@ export interface FiledItem {
   /** "Uber · –R$ 18,90" (payee and amount already formatted). */
   subject: string;
 }
+
+/** What a row in the strip is, for the counts that must not include it. */
+export interface LeavingMeta {
+  payeeId: string | null;
+  /** The category of the row's top suggestion: with the payee, which bundle it belongs to. */
+  topCategoryId: string | null;
+  /** Integer milliunits. */
+  amount: number;
+}
+
+export type SkipEntry = Extract<UndoEntry, { kind: 'skip' }>;
 
 export type UndoEntry =
   | {
@@ -36,8 +48,7 @@ export type UndoEntry =
       kind: 'skip';
       label: string;
       item: FiledItem;
-      /** When the skip is sent unless it is cancelled first (epoch ms). */
-      sendAt: number;
+      meta: LeavingMeta;
     };
 
 export interface ToastState {
@@ -94,8 +105,12 @@ export type AcceptAction =
   | { type: 'skipStarted'; entry: Extract<UndoEntry, { kind: 'skip' }> }
   /** Undone (or cancelled) inside its window: the row comes back. */
   | { type: 'skipCancelled'; transactionId: string }
-  /** Its own timer ended: the request goes out and the skip leaves the stack. */
+  /** Done was pressed: the request goes out and the skip leaves the stack. */
   | { type: 'skipSending'; seq: number }
+  /** "Stay" after leaving with rows in the strip: they are put back, in the order they were taken. */
+  | { type: 'skipsRestored'; entries: SkipEntry[] }
+  /** An accept that turned out to hold no rows (all were leaving or gone): no undo entry, no toast. */
+  | { type: 'acceptEmpty'; seq: number; requestIds: string[] }
   | { type: 'skipDone'; requestId: string }
   | { type: 'skipFailed'; requestId: string; error: string }
   /** The row left the queue some other way (categorized elsewhere, taken by a bulk accept): the pending skip is dropped, not sent. */
@@ -219,6 +234,23 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
         toast: toastFor(action.entry),
         error: null,
       };
+    case 'skipsRestored':
+      return {
+        ...state,
+        hiddenIds: union(state.hiddenIds, action.entries.map((e) => e.item.transactionId)),
+        stack: [...action.entries, ...state.stack],
+      };
+    case 'acceptEmpty': {
+      const stack = state.stack.filter((entry) => entry.seq !== action.seq);
+      return {
+        ...state,
+        hiddenIds: without(state.hiddenIds, action.requestIds),
+        pending: settle(state.pending, action.requestIds),
+        busy: less(state.busy),
+        stack,
+        toast: toastAfterRemoval(state, stack, action.seq),
+      };
+    }
     case 'skipCancelled': {
       const gone = state.stack.find((e) => e.kind === 'skip' && e.item.transactionId === action.transactionId);
       const stack = state.stack.filter((e) => e !== gone);
@@ -330,9 +362,9 @@ export function toastActionable(state: Pick<AcceptState, 'toast' | 'stack'>): bo
   return state.toast !== null && top !== undefined && top.seq === state.toast.seq;
 }
 
-/** The skips still waiting for their timer, oldest first. */
-export function pendingSkips(state: Pick<AcceptState, 'stack'>): Extract<UndoEntry, { kind: 'skip' }>[] {
-  return state.stack.filter((entry): entry is Extract<UndoEntry, { kind: 'skip' }> => entry.kind === 'skip');
+/** The skips waiting in the strip for Done, oldest first. */
+export function pendingSkips(state: Pick<AcceptState, 'stack'>): SkipEntry[] {
+  return state.stack.filter((entry): entry is SkipEntry => entry.kind === 'skip');
 }
 
 /** "Uber · –R$ 18,90 → Transport" for a single filed row. */
@@ -340,7 +372,7 @@ export function filedLabel(item: Pick<FiledItem, 'subject' | 'categoryName'>): s
   return t('toast.filed', { subject: item.subject, category: item.categoryName });
 }
 
-/** The toast while a skip is still pending: says it is permanent and for everyone. */
+/** The toast for a row moved to the strip: nothing is sent until Done. */
 export function skippedLabel(item: Pick<FiledItem, 'subject'>): string {
   return t('toast.skipped', { subject: item.subject });
 }
