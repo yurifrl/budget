@@ -22,8 +22,7 @@ const payee = (id: string, name: string, accountId: string | null = null, over: 
   hidden: false,
   transfer_account_id: accountId,
   created_at: '2026-01-01',
-  rename_match_type: null,
-  rename_condition: null,
+  rename_rule_count: 0,
   transfer_rule: null,
   ...over,
 });
@@ -67,12 +66,12 @@ describe('planTransferPayeeRepair', () => {
     expect(report.payees_removed).toBe(0);
   });
 
-  test('duplicates keep the pointed payee, count the rows and rules that move, and rename it', () => {
+  test('duplicates keep the pointed payee, count the rows and renaming rules that move (all of them), and rename it', () => {
     const report = plan(
       [account('a1', 'New', 'old')],
       [
         payee('old', 'Transfer : Old', 'a1'),
-        payee('new', 'Transfer : New', 'a1', { rename_match_type: 'contains', rename_condition: 'X' }),
+        payee('new', 'Transfer : New', 'a1', { rename_rule_count: 2 }),
       ],
       [['new', 4]],
     );
@@ -80,7 +79,7 @@ describe('planTransferPayeeRepair', () => {
       accounts_with_duplicates: 1,
       payees_removed: 1,
       transactions_repointed: 4,
-      rename_rules_moved: 1,
+      rename_rules_moved: 2,
       rename_rules_dropped: 0,
       payees_renamed: 1,
     });
@@ -120,16 +119,15 @@ describe('planTransferPayeeRepair', () => {
     expect(held.actions).toEqual([]);
   });
 
-  test('every dropped rule is listed with its payee and the payee that kept its own', () => {
+  test('every dropped "treat as transfer" rule is listed with its payee and the payee that kept its own (renaming rules all move)', () => {
     const report = plan(
       [account('a1', 'One', 'keep')],
       [
-        payee('keep', 'Transfer : One', 'a1', { rename_match_type: 'is', rename_condition: 'A', transfer_rule: 'auto' }),
-        payee('lost', 'Transfer : One Old', 'a1', { rename_match_type: 'contains', rename_condition: 'B', transfer_rule: 'never' }),
+        payee('keep', 'Transfer : One', 'a1', { rename_rule_count: 1, transfer_rule: 'auto' }),
+        payee('lost', 'Transfer : One Old', 'a1', { rename_rule_count: 1, transfer_rule: 'never' }),
       ],
     );
     expect(report.dropped_rules.map((r) => [r.kind, r.payee_id, r.detail, r.kept_payee_id])).toEqual([
-      ['rename_rule', 'lost', 'contains "B"', 'keep'],
       ['transfer_rule', 'lost', 'never', 'keep'],
     ]);
   });

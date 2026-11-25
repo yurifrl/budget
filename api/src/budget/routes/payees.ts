@@ -1,13 +1,16 @@
-import { pool, withTransaction } from '../../core/db';
+import { pool, withTransaction, type Queryable } from '../../core/db';
 import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
-import { applyRules } from '@shared/domain/payees';
 import {
   payeesCreate,
   payeesDelete,
   payeesList,
   payeesMerge,
   payeesRename,
+  payeesRenameRulesAdd,
+  payeesRenameRulesList,
+  payeesRenameRulesRemove,
+  payeesRenameRulesUpdate,
   payeesSetCategorization,
   payeesSetHidden,
   payeesSetRenameRule,
@@ -18,10 +21,11 @@ import {
 import { linkTransfers } from '../domain/transfer-links';
 import { assertNotTransferPayee, transferPayeeProtected } from '../domain/transfer-payees';
 import * as transferStore from '../store/transfers';
-import { loadRenameRules } from '../domain/transactions';
+import { MIN_RULE_PATTERN_LENGTH } from '@shared/domain/payees';
 import { budgetRouter } from '../router';
 import { categoryInBudget } from '../store/categories';
 import * as payeesStore from '../store/payees';
+import * as rulesStore from '../store/rename-rules';
 import type { PayeeNameHolder } from '../store/payees';
 
 const PAYEE_NAME_UNIQUE = 'payees_budget_id_name_key';
@@ -65,24 +69,64 @@ async function requirePayee(budgetId: string, id: string): Promise<void> {
   if (!(await payeesStore.livePayeeExists(pool, budgetId, id))) throw new HttpError(404, 'payee not found');
 }
 
+async function requirePayeeIn(db: Queryable, budgetId: string, id: string): Promise<void> {
+  if (!(await payeesStore.livePayeeExists(db, budgetId, id))) throw new HttpError(404, 'payee not found');
+}
+
+/**
+ * A rule being added or changed: a "contains" / "starts with" / "ends with" pattern is at least
+ * MIN_RULE_PATTERN_LENGTH long (400; stored shorter ones keep working), and no OTHER rule of the budget
+ * already says the same (same match type and pattern, case ignored as matching ignores it: 409
+ * naming the holder). A write that leaves the rule's type and text as they are is not asked.
+ */
+async function assertRuleAllowed(
+  db: Queryable,
+  budgetId: string,
+  matchType: string,
+  condition: string,
+  existing: { id: string; match_type: string; condition: string } | null,
+  /** The 2-character minimum belongs to the new operations; the released client's single-rule call may still send 1 character. */
+  opts: { enforceMinLength: boolean } = { enforceMinLength: true },
+): Promise<void> {
+  const text = condition.trim();
+  if (existing && existing.match_type === matchType && existing.condition.toLowerCase() === text.toLowerCase()) return;
+  if (opts.enforceMinLength && matchType !== 'is' && text.length < MIN_RULE_PATTERN_LENGTH) {
+    throw new HttpError(400, `A "${matchType.replace('_', ' ')}" rule needs at least ${MIN_RULE_PATTERN_LENGTH} characters.`, 'rename_rule_too_short', { min: MIN_RULE_PATTERN_LENGTH });
+  }
+  const holder = await rulesStore.findRuleHolder(db, budgetId, matchType, text, existing?.id ?? null);
+  if (!holder) return;
+  throw new HttpError(
+    409,
+    `The payee "${holder.payee_name}" already has that renaming rule. A rule belongs to one payee.`,
+    'rename_rule_exists',
+    { name: holder.payee_name },
+  );
+}
+
+/** A unique violation on the exact rule index (two writers raced past the check): the same 409. */
+async function ruleWrite<T>(db: Queryable, budgetId: string, matchType: string, condition: string, write: () => Promise<T>): Promise<T> {
+  const done = await rulesStore.guardRuleWrite(db, write);
+  if (done.ok) return done.value;
+  const holder = await rulesStore.findRuleHolder(db, budgetId, matchType, condition.trim(), null);
+  throw new HttpError(409, 'Another payee already has that renaming rule.', 'rename_rule_exists', { name: holder?.payee_name ?? '' });
+}
+
 export const operations = [
   // Transfer payees (one per account) are listed only on request: the pickers
   // and Manage Payees show them through the accounts, not as ordinary payees.
-  implement(payeesList, async (_c, { budget_id, hidden, include_transfers }) =>
-    payeesStore.listPayees(pool, budget_id, hidden, include_transfers === 'true'),
-  ),
+  implement(payeesList, async (_c, { budget_id, hidden, include_transfers }) => {
+    // A rule only the old columns hold (written by the other app) is part of what the list returns, computed at read time.
+    return payeesStore.listPayees(pool, budget_id, hidden, include_transfers === 'true');
+  }),
 
   implement(payeesCreate, async (_c, { budget_id, name, default_category_id, hidden, categorization_mode }) => {
     if (default_category_id) {
       if (!(await categoryInBudget(pool, default_category_id, budget_id))) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
     }
-    // Rule-aware create: a name matching a payee's rename condition lands as
-    // that payee's name, mirroring what transaction creation would do.
-    const rules = await loadRenameRules(pool, budget_id);
-    const effectiveName = applyRules(rules.rows, name);
+    // Creating a payee by name is not an import: no renaming rule applies, the payee is created (or found) by the name given.
     return payeesStore.insertPayee(pool, {
       budgetId: budget_id,
-      name: effectiveName,
+      name,
       defaultCategoryId: default_category_id ?? null,
       hidden: hidden ?? false,
       categorizationMode: categorization_mode ?? 'auto',
@@ -141,7 +185,12 @@ export const operations = [
   // orphan them — the UI offers merge instead.
   implement(payeesDelete, async (_c, { id, budget_id }) => {
     await assertNotTransferPayee(pool, budget_id, id);
-    if (!(await payeesStore.softDeletePayee(pool, id, budget_id))) throw new HttpError(404, 'payee not found');
+    await withTransaction(pool, async (client) => {
+      if (!(await payeesStore.softDeletePayee(client, id, budget_id))) throw new HttpError(404, 'payee not found');
+      // A deleted payee takes no imported text any more: its rules go with it.
+      await rulesStore.deletePayeeRules(client, budget_id, id);
+      await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
+    });
   }),
 
   /**
@@ -162,24 +211,78 @@ export const operations = [
         if (row?.transfer_account_id) throw transferPayeeProtected(row.name);
       }
 
+      // A rule only the old columns hold is adopted before the source is deleted, so it moves with the rest.
+      await rulesStore.adoptColumnRule(client, budget_id, id);
+      await rulesStore.adoptColumnRule(client, budget_id, target_id);
       const merged = await payeesStore.movePayeeTransactions(client, id, target_id);
       await payeesStore.markPayeeDeleted(client, id);
+      // The merged payee's renaming rules now assign the target (imported text that used to
+      // become the merged payee keeps resolving to the same rows' payee).
+      await rulesStore.moveRules(client, budget_id, id, target_id);
+      await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
+      await rulesStore.syncLegacyRuleColumns(client, budget_id, target_id);
       return { merged_transactions: merged, source_deleted: true };
     });
   }),
 
-  // per-payee renaming rule (the payee's own name is the rename target)
-  implement(payeesSetRenameRule, async (_c, { id, budget_id, match_type, condition }) => {
-    // Empty condition clears the rule (one rule per payee; deleting = clearing).
-    const updated = await payeesStore.setPayeeRenameRule(
-      pool,
-      id,
-      budget_id,
-      condition === '' ? null : match_type,
-      condition === '' ? null : condition,
-    );
-    if (!updated) throw new HttpError(404, 'payee not found');
+  // The single-rule form the released clients use: the payee's FIRST "is" / "contains" rule.
+  // Other rules of the payee (and "starts with" / "ends with" rules) are never touched.
+  implement(payeesSetRenameRule, async (_c, { id, budget_id, match_type, condition }) =>
+    withTransaction(pool, async (client) => {
+      await requirePayeeIn(client, budget_id, id);
+      await rulesStore.adoptColumnRule(client, budget_id, id);
+      const first = (await rulesStore.listPayeeRules(client, budget_id, id)).find((r) => r.match_type === 'is' || r.match_type === 'contains');
+      if (condition === '') {
+        if (first) await rulesStore.deleteRule(client, budget_id, id, first.id);
+      } else {
+        await assertRuleAllowed(client, budget_id, match_type, condition, first ?? null, { enforceMinLength: false });
+        await ruleWrite(client, budget_id, match_type, condition, () =>
+          first ? rulesStore.updateRule(client, budget_id, id, first.id, match_type, condition) : rulesStore.insertRule(client, budget_id, id, match_type, condition),
+        );
+      }
+      await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
+    }),
+  ),
+
+  // Renaming rules of a payee, any number: "imported text that <is | contains | starts with |
+  // ends with> X is renamed to this payee".
+  implement(payeesRenameRulesList, async (_c, { id, budget_id }) => {
+    await requirePayee(budget_id, id);
+    return rulesStore.listPayeeRules(pool, budget_id, id);
   }),
+
+  implement(payeesRenameRulesAdd, async (_c, { id, budget_id, match_type, condition }) =>
+    withTransaction(pool, async (client) => {
+      await requirePayeeIn(client, budget_id, id);
+      await rulesStore.adoptColumnRule(client, budget_id, id);
+      await assertRuleAllowed(client, budget_id, match_type, condition, null);
+      const rule = await ruleWrite(client, budget_id, match_type, condition, () => rulesStore.insertRule(client, budget_id, id, match_type, condition));
+      await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
+      return rule;
+    }),
+  ),
+
+  implement(payeesRenameRulesUpdate, async (_c, { id, budget_id, rule_id, match_type, condition }) =>
+    withTransaction(pool, async (client) => {
+      await requirePayeeIn(client, budget_id, id);
+      await rulesStore.adoptColumnRule(client, budget_id, id);
+      const existing = await rulesStore.getRule(client, budget_id, id, rule_id);
+      if (!existing) throw new HttpError(404, 'rule not found');
+      await assertRuleAllowed(client, budget_id, match_type, condition, existing);
+      const rule = await ruleWrite(client, budget_id, match_type, condition, () => rulesStore.updateRule(client, budget_id, id, rule_id, match_type, condition));
+      await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
+      return rule!;
+    }),
+  ),
+
+  implement(payeesRenameRulesRemove, async (_c, { id, budget_id, rule_id }) =>
+    withTransaction(pool, async (client) => {
+      await requirePayeeIn(client, budget_id, id);
+      await rulesStore.adoptColumnRule(client, budget_id, id);
+      if (!(await rulesStore.deleteRule(client, budget_id, id, rule_id))) throw new HttpError(404, 'rule not found');
+      await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
+    }),
+  ),
 
   // "Treat as transfer" rule (budget-mit6).
   implement(payeesTransferRuleGet, async (_c, { id, budget_id }) => {

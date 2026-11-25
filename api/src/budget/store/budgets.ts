@@ -6,6 +6,7 @@
 import type { Queryable } from '../../core/db';
 import { personRefSql, type PersonRefRow } from '../../user';
 import { accessibleBudgetSql, ownerSql } from '../ownership';
+import { copyBudgetRules } from './rename-rules';
 
 export interface BudgetRow {
   id: string;
@@ -135,6 +136,8 @@ export async function copyBudgetForFreshStart(client: Queryable, oldId: string, 
    INSERT INTO pay_map SELECT old_id, new_id FROM src`,
     [oldId, newId],
   );
+  // The payees' renaming rules (0121) follow their payees.
+  await copyBudgetRules(client, oldId, newId);
 
   // ---- accounts (YNAB: "All your accounts"). Linked accounts keep today's
   // balance — the materialized cleared/uncleared pair, the same value the

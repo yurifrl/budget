@@ -1,0 +1,732 @@
+/**
+ * Rows imported under the earlier renaming behaviour (budget-mkrt, transfers T3b).
+ *
+ * Until a matching rule ASSIGNED its payee, a `contains` rule rewrote only the
+ * matching part of the text ("PIX SAV 42" -> "Transfer : Nubank Conta 42", "PADOCA 42"
+ * -> "Padaria 42") and that rewritten text was stored as an ordinary payee. Those rows
+ * are in the database, next to texts with double spaces, rules whose patterns differ only
+ * by case or by spacing, overlapping rules, and rows the person edited. This file proves
+ * they stay as they are, with the rules read from the payee columns (as main left them),
+ * both through migration 0121 and straight from the columns:
+ *  - a bank sync and a statement re-import of the same data (as main stored it) change,
+ *    duplicate and skip nothing and create no payee; import keys and dedupe stay;
+ *  - the new behaviour applies to rows INSERTED from now on and to rows the bank actually
+ *    changes, and only to those.
+ *
+ * The expected state is NOT computed by this branch's code: testdata/main-rename-capture.json
+ * was recorded by running main (f538f3f) on the same data (script: testdata/capture-main-rename.ts.txt)
+ * and the rows below are written literally from it before this branch's code runs.
+ */
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { Hono } from 'hono';
+
+import { contracts } from '../catalog';
+import { pool } from '../core/db';
+import { dbReady } from '../core/test-gate';
+import { makeOpCaller } from '../core/test-op';
+import { httpOnError } from '../core/validate';
+import type { IdentityUser } from '../user';
+import budget from '../budget';
+import * as store from './store';
+import { syncConnectionTransactions } from './sync';
+import type { AggregatedTransaction, BankAggregator } from './types';
+
+interface Capture {
+  texts: [string, number][];
+  client: { payee: string; original: string; amount: number }[];
+  main_results: Record<string, Record<string, number>>;
+  payees: { name: string; transfer: string | null; type: string | null; condition: string | null }[];
+  sync_rows: {
+    external_id: string;
+    amount: number;
+    payee: string | null;
+    import_payee_name: string | null;
+    import_payee_name_original: string | null;
+    shadow_payee: string;
+    blocked: boolean;
+    hint_account: string | null;
+    untouched: boolean;
+  }[];
+  bulk_rows: BulkCaptured[];
+  client_rows: BulkCaptured[];
+}
+interface BulkCaptured {
+  amount: number;
+  payee: string | null;
+  import_payee_name: string;
+  import_payee_name_original: string;
+  hint: string | null;
+  untouched: boolean;
+  key_payee: string;
+  occ: number;
+}
+const fx = JSON.parse(readFileSync(join(import.meta.dir, 'testdata', 'main-rename-capture.json'), 'utf8')) as Capture;
+const MIGRATION = readFileSync(join(import.meta.dir, '..', '..', 'db', 'migrations', '0121_payee_renaming_rules.sql'), 'utf8');
+
+const PROVIDER = 'testprovider-capture';
+const user: IdentityUser = { id: crypto.randomUUID(), email: 'rules-legacy@syscd.local', googleSub: null, role: 'user', status: 'active' };
+const app = new Hono();
+app.onError(httpOnError);
+app.use('*', (c, next) => {
+  c.set('user', user);
+  return next();
+});
+app.route('/', budget);
+const op = makeOpCaller(app, contracts);
+
+const EXT_ITAU = 'up-acc-legacy-itau';
+const date = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+const ACCOUNT_NAMES = ['Itau Conta', 'Nubank Conta', 'Third Conta', 'Savings Conta', 'Cartao Conta'];
+
+let upstream: AggregatedTransaction[] = [];
+let activeUser = user.id;
+const aggregator = {
+  environment: 'production',
+  listTransactions: async () => ({ transactions: upstream.map((t) => ({ ...t })), hasMore: false }),
+  fetchInstitution: async () => null,
+} as unknown as BankAggregator;
+const up = (externalId: string, description: string, amount: number): AggregatedTransaction => ({
+  externalId,
+  externalAccountId: EXT_ITAU,
+  description,
+  amount,
+  date,
+  currencyCode: null,
+  cleared: true,
+  raw: { id: externalId },
+});
+const mainUpstream = () => fx.texts.map(([text, amount], i) => up(`c${i}`, text, amount));
+const plainRows = (texts = fx.texts) => texts.map(([payee, amount]) => ({ date, payee, memo: '', outflow: -amount, inflow: 0, category_id: null }));
+const clientRows = (rows = fx.client) =>
+  rows.map((r) => ({ date, payee: r.payee, memo: '', outflow: -r.amount, inflow: 0, category_id: null, import_payee_name: r.payee, import_payee_name_original: r.original }));
+
+interface Ctx {
+  B: string;
+  accounts: Record<string, string>;
+  payees: Map<string, string>;
+  connId: string;
+  sync(): ReturnType<typeof syncConnectionTransactions>;
+  bulk(account: string, rows: object[]): Promise<{ imported: number; duplicates: number }>;
+  idOf(name: string): string;
+  snapshot(): Promise<unknown>;
+}
+
+/** The budget as main left it: the rules in the payee columns, the rows main stored, written literally. `migrate`: run 0121 (else the columns alone carry the rules). */
+async function build(label: string, migrate: boolean): Promise<Ctx> {
+  const B = crypto.randomUUID();
+  const accounts: Record<string, string> = Object.fromEntries(ACCOUNT_NAMES.map((n) => [n, crypto.randomUUID()]));
+  const itau = accounts['Itau Conta']!;
+  const payees = new Map<string, string>();
+  const idOf = (name: string) => payees.get(name) ?? (() => { throw new Error(`no payee ${name}`); })();
+  await pool.query('INSERT INTO budgets (id, name, owner_user_id) VALUES ($1,$2,$3)', [B, `rules-legacy-${label}`, user.id]);
+  await pool.query('INSERT INTO budget_members (budget_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [B, user.id]);
+  for (const [name, id] of Object.entries(accounts)) {
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,$3,'checking','CASH',true)`, [id, B, name]);
+  }
+  const conn = await store.upsertConnection({ userId: user.id, provider: PROVIDER, externalId: `up-item-legacy-${label}-${user.id}`, clientUserId: `cu-${user.id}-${label}`, status: 'connected', environment: 'production' });
+  await pool.query('UPDATE accounts SET connection_id = $1, external_account_id = $2, institution = $4 WHERE id = $3', [conn.id, EXT_ITAU, itau, 'itau']);
+
+  // Payees in main's creation order, each with its one rule in the COLUMNS.
+  for (const p of fx.payees) {
+    const accountId = p.transfer ? accounts[p.transfer]! : null;
+    const r = await pool.query<{ id: string }>(
+      'INSERT INTO payees (budget_id, name, transfer_account_id, rename_match_type, rename_condition) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [B, p.name, accountId, p.type, p.condition],
+    );
+    payees.set(p.name, r.rows[0]!.id);
+    if (accountId) await pool.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [r.rows[0]!.id, accountId]);
+  }
+  // Rows main stored.
+  const insert = async (accountId: string, o: { amount: number; payee: string | null; importId: string; importName: string | null; importOriginal: string | null }) =>
+    (
+      await pool.query<{ id: string }>(
+        `INSERT INTO transactions (budget_id, account_id, date, amount, payee_id, cleared, approved, repeat, deleted, import_id, import_payee_name, import_payee_name_original)
+         VALUES ($1,$2,$3,$4,$5,$6,false,'never',false,$7,$8,$9) RETURNING id`,
+        [B, accountId, date, o.amount, o.payee === null ? null : idOf(o.payee), accountId === itau ? 'cleared' : 'uncleared', o.importId, o.importName, o.importOriginal],
+      )
+    ).rows[0]!.id;
+  for (const r of fx.sync_rows) {
+    const id = await insert(itau, { amount: r.amount, payee: r.payee, importId: `${PROVIDER}:${r.external_id}`, importName: r.import_payee_name, importOriginal: r.import_payee_name_original });
+    await pool.query(
+      `INSERT INTO connection_transactions (transaction_id, budget_id, provider, external_transaction_id, last_synced_payload, blocked, raw_payload, raw_received_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,now())`,
+      [id, B, PROVIDER, r.external_id, JSON.stringify({ date, amount: r.amount, memo: '', payee: r.shadow_payee }), r.blocked, JSON.stringify({ id: r.external_id })],
+    );
+    if (r.hint_account) await pool.query('INSERT INTO transfer_hints (transaction_id, budget_id, account_id) VALUES ($1,$2,$3)', [id, B, accounts[r.hint_account]]);
+  }
+  for (const [account, rows] of [['Savings Conta', fx.bulk_rows], ['Cartao Conta', fx.client_rows]] as const) {
+    for (const r of rows) {
+      const id = await insert(accounts[account]!, {
+        amount: r.amount,
+        payee: r.payee,
+        importId: `YNAB:${r.amount}:${date}:${idOf(r.key_payee)}:${r.occ}`,
+        importName: r.import_payee_name,
+        importOriginal: r.import_payee_name_original,
+      });
+      if (r.hint) await pool.query('INSERT INTO transfer_hints (transaction_id, budget_id, account_id) VALUES ($1,$2,$3)', [id, B, accounts[r.hint]]);
+    }
+  }
+  for (const [accountId, col] of [[itau, 'cleared_balance'], [accounts['Savings Conta']!, 'uncleared_balance'], [accounts['Cartao Conta']!, 'uncleared_balance']] as const) {
+    await pool.query(`UPDATE accounts SET ${col} = (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE account_id = $1) WHERE id = $1`, [accountId]);
+  }
+  if (migrate) await pool.query(MIGRATION);
+
+  return {
+    B,
+    accounts,
+    payees,
+    connId: conn.id,
+    sync: () => syncConnectionTransactions({ userId: user.id, connectionId: conn.id, aggregator, ignoreWatermark: true }),
+    bulk: async (account, rows) =>
+      (await op('budget_transactions_bulk_import', { budget_id: B, account_id: accounts[account], txns: rows })).json as { imported: number; duplicates: number },
+    idOf,
+    snapshot: async () => ({
+      transactions: (
+        await pool.query(
+          `SELECT t.id, t.account_id, t.date::text AS date, t.amount::text AS amount, t.payee_id, t.import_id, t.import_payee_name,
+                  t.import_payee_name_original, t.cleared, t.approved, t.deleted, t.category_id, t.memo
+             FROM transactions t WHERE t.budget_id = $1 ORDER BY t.import_id, t.id`,
+          [B],
+        )
+      ).rows,
+      payees: (await pool.query('SELECT id, name, deleted, transfer_account_id FROM payees WHERE budget_id = $1 ORDER BY id', [B])).rows,
+      shadows: (await pool.query('SELECT transaction_id, last_synced_payload, blocked, updated_at::text AS updated_at FROM connection_transactions WHERE budget_id = $1 ORDER BY transaction_id', [B])).rows,
+      hints: (await pool.query('SELECT transaction_id, account_id FROM transfer_hints WHERE budget_id = $1 ORDER BY transaction_id', [B])).rows,
+      balances: (await pool.query('SELECT id, cleared_balance::text AS c, uncleared_balance::text AS u FROM accounts WHERE budget_id = $1 ORDER BY id', [B])).rows,
+    }),
+  };
+}
+
+const budgets: string[] = [];
+const count = async (account: string) => (await pool.query('SELECT count(*)::int AS n FROM transactions WHERE account_id = $1 AND NOT deleted', [account])).rows[0].n as number;
+
+beforeAll(async () => {
+  if (!dbReady) return;
+  await pool.query(`INSERT INTO users (id, google_sub, email, role, status) VALUES ($1,$2,$3,'user','active')`, [user.id, user.id, user.email]);
+});
+afterAll(async () => {
+  if (!dbReady) return;
+  await pool.query('DELETE FROM budgets WHERE id = ANY($1)', [budgets]);
+  await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
+  await pool.query('DELETE FROM connections WHERE provider = $1', [PROVIDER]);
+  void activeUser;
+});
+
+describe.skipIf(!dbReady)('the capture is what main did', () => {
+  test('main had every row duplicate on its second pass, kept the edited row blocked, and spliced the payees', () => {
+    expect(fx.main_results.sync2).toMatchObject({ added: 0, updated: 0, duplicates: 23, blocked: 1 });
+    expect(fx.main_results.bulk2).toEqual({ imported: 0, duplicates: 24 });
+    expect(fx.main_results.client2).toEqual({ imported: 0, duplicates: 4 });
+    const payees = fx.sync_rows.map((r) => r.payee);
+    for (const spliced of ['Transfer : Nubank Conta 42', 'Casa Old 1', 'Casa New 2', 'UBER  TRIP 9', 'Mercadoado livre sp', 'Uber 123']) expect(payees).toContain(spliced);
+    expect(fx.sync_rows.find((r) => r.external_id === 'c0')).toMatchObject({ payee: 'Edited Payee', blocked: true });
+  });
+});
+
+for (const migrate of [true, false]) {
+  describe.skipIf(!dbReady)(`rows main stored stay as they are (${migrate ? 'rules copied by migration 0121' : 'rules read from the payee columns'})`, () => {
+    let c: Ctx;
+    beforeAll(async () => {
+      c = await build(migrate ? 'm' : 'c', migrate);
+      budgets.push(c.B);
+    });
+
+    test('a bank sync of data main stored changes, creates and skips nothing, twice', async () => {
+      upstream = mainUpstream();
+      const before = await c.snapshot();
+      const first = await c.sync();
+      const second = await c.sync();
+      expect(first).toMatchObject({ added: 0, updated: 0, deleted: 0, blocked: 1, failed: 0, duplicates: 23 });
+      expect(second).toMatchObject({ added: 0, updated: 0, deleted: 0, blocked: 1, failed: 0, duplicates: 23 });
+      // Rows, shadows, hints, payees and balances are identical (only the raw payload refresh is outside the snapshot).
+      expect(await c.snapshot()).toEqual(before);
+    });
+
+    test('a statement re-import of data main stored duplicates and creates nothing: same keys, same dedupe, bank text and client-style rows alike', async () => {
+      const before = await c.snapshot();
+      expect(await c.bulk('Savings Conta', plainRows())).toEqual({ imported: 0, duplicates: 24 });
+      expect(await c.bulk('Savings Conta', plainRows())).toEqual({ imported: 0, duplicates: 24 });
+      expect(await c.bulk('Cartao Conta', clientRows())).toEqual({ imported: 0, duplicates: 4 });
+      expect(await c.snapshot()).toEqual(before);
+    });
+
+    test('a file with main\'s rows plus new ones imports only the new ones, whatever order, and the new rows follow the new behaviour', async () => {
+      const before = (await c.snapshot()) as { transactions: { id: string; account_id: string; payee_id: string | null; import_payee_name: string }[]; payees: { name: string }[]; hints: { transaction_id: string; account_id: string }[] };
+      const fresh: [string, number][] = [['PADOCA 99', -24000], ['PIX SAV 99', -25000], ['PADDED RAW', -26000], ['UBER  TRIP 99', -27000]];
+      const mixed = [fx.texts[4]!, fresh[0]!, fx.texts[0]!, fresh[1]!, fx.texts[2]!, fresh[2]!, fx.texts[15]!, fresh[3]!];
+      expect(await c.bulk('Savings Conta', plainRows(mixed))).toEqual({ imported: 4, duplicates: 4 });
+      const after = (await c.snapshot()) as typeof before;
+      const byId = new Map(before.transactions.map((t) => [t.id, t]));
+      expect(after.transactions.filter((t) => byId.has(t.id))).toEqual(before.transactions);
+      const find = (text: string) => after.transactions.find((t) => t.import_payee_name === text)!;
+      // The rule's payee, the text kept as the import name, no payee made of the spliced text.
+      expect(find('PADOCA 99').payee_id).toBe(c.idOf('Padaria'));
+      expect(find('PADDED RAW').payee_id).toBe(c.idOf(' Padded ')); // main trimmed it into a second "Padded" payee
+      expect(find('UBER  TRIP 99').payee_id).not.toBe(c.idOf('Uber')); // main never matched the double space: still an ordinary payee of the text
+      const names = after.payees.map((p) => p.name);
+      for (const junk of ['Padaria 99', 'Transfer : Nubank Conta 99', 'Uber 99']) expect(names).not.toContain(junk);
+      // The transfer text stays an ordinary row with a hint for Nubank: no mirror, no half transfer.
+      const pix = find('PIX SAV 99');
+      expect(after.hints.find((h) => h.transaction_id === pix.id)?.account_id).toBe(c.accounts['Nubank Conta']);
+      expect(after.transactions.filter((t) => t.account_id === c.accounts['Nubank Conta'])).toHaveLength(0);
+      // Idempotent from now on.
+      expect(await c.bulk('Savings Conta', plainRows([...fresh, fx.texts[0]!]))).toEqual({ imported: 0, duplicates: 5 });
+      expect((await c.snapshot() as typeof before).payees).toEqual(after.payees);
+    });
+
+    test('a row the bank changes, or a new bank row, takes the new behaviour; the rows next to it do not move', async () => {
+      const before = (await c.snapshot()) as { transactions: { id: string; account_id: string; import_id: string }[]; hints: { transaction_id: string; account_id: string }[]; balances: { id: string; c: string }[]; payees: { id: string; name: string }[]; shadows: { transaction_id: string; last_synced_payload: Record<string, unknown> }[] };
+      // c5 "PIX SAV 42" (a transfer payee's rule) and c9 "MERCADO LIVRE SP" (overlapping rules) change amount; two new texts arrive.
+      upstream = mainUpstream().map((t) => (t.externalId === 'c5' ? { ...t, amount: -5500 } : t.externalId === 'c9' ? { ...t, amount: -9500 } : t));
+      upstream.push(up('new1', 'UBER TRIP 999', -1500), up('new2', 'PIX SAV 7', -2500));
+      const result = await c.sync();
+      expect(result).toMatchObject({ added: 2, updated: 2, blocked: 1, failed: 0, duplicates: 21 });
+      const after = (await c.snapshot()) as typeof before & { payees: { id: string; name: string }[]; shadows: { transaction_id: string; last_synced_payload: Record<string, unknown> }[] };
+      const ext = (snap: { transactions: { id: string; import_id: string }[] }, e: string) => snap.transactions.find((t) => t.import_id === `${PROVIDER}:${e}`) as never as Record<string, unknown> & { id: string };
+      // Unchanged rows are byte-identical.
+      for (const t of before.transactions.filter((x) => x.account_id === c.accounts['Itau Conta'] && !['c5', 'c9'].some((e) => x.import_id === `${PROVIDER}:${e}`))) {
+        expect(after.transactions.find((x) => x.id === t.id)).toEqual(t);
+      }
+      const c9 = ext(after, 'c9');
+      expect(c9).toMatchObject({ payee_id: c.idOf('Mercado Livre'), import_payee_name: 'MERCADO LIVRE SP', amount: '-9500' });
+      expect(after.shadows.find((s) => s.transaction_id === c9.id)!.last_synced_payload).toMatchObject({ payee: 'Mercado Livre', amount: -9500 });
+      const c5 = ext(after, 'c5');
+      expect(c5.import_payee_name).toBe('PIX SAV 42');
+      expect(c5.payee_id).toBe(after.payees.find((p) => p.name === 'PIX SAV 42')?.id ?? 'missing');
+      expect(after.hints.find((h) => h.transaction_id === c5.id)?.account_id).toBe(c.accounts['Nubank Conta']);
+      expect(ext(after, 'new1')).toMatchObject({ payee_id: c.idOf('Uber'), import_payee_name: 'UBER TRIP 999' });
+      expect(after.payees.map((p) => p.name)).not.toContain('Uber 999');
+      expect(after.hints.find((h) => h.transaction_id === ext(after, 'new2').id)?.account_id).toBe(c.accounts['Nubank Conta']);
+      const bal = (snap: typeof after) => Number(snap.balances.find((b) => b.id === c.accounts['Itau Conta'])!.c);
+      expect(bal(after) - bal(before)).toBe(-500 - 500 - 1500 - 2500);
+      // A second pass is quiet.
+      expect(await c.sync()).toMatchObject({ added: 0, updated: 0, blocked: 1, failed: 0, duplicates: 25 });
+      expect(((await c.snapshot()) as typeof after).transactions).toEqual(after.transactions);
+    });
+  });
+}
+
+describe.skipIf(!dbReady)('migration 0121 never drops a rule and keeps main\'s comparison', () => {
+  test('every live payee\'s rule is a row, as written; patterns differing only by case or by spaces stay separate rules', async () => {
+    const c = await build('mig', true);
+    budgets.push(c.B);
+    const rows = (await pool.query<{ payee: string; match_type: string; condition: string }>(
+      `SELECT p.name AS payee, r.match_type, r.condition FROM payee_renaming_rules r JOIN payees p ON p.id = r.payee_id WHERE r.budget_id = $1 ORDER BY r.created_at, r.id`,
+      [c.B],
+    )).rows;
+    const expected = fx.payees.filter((p) => p.type && p.condition).map((p) => ({ payee: p.name, match_type: p.type as string, condition: p.condition as string }));
+    expect(rows).toEqual(expected);
+    for (const name of ['Loja', 'Loja Dead', 'Casa Old', 'Casa New']) expect(rows.map((r) => r.payee)).toContain(name);
+    // A second run changes nothing.
+    await pool.query(MIGRATION);
+    expect((await pool.query('SELECT count(*)::int AS n FROM payee_renaming_rules WHERE budget_id = $1', [c.B])).rows[0].n).toBe(expected.length);
+  });
+});
+
+describe.skipIf(!dbReady)('rows imported from now on: what the matcher and the person see', () => {
+  test('F1: a statement row assigned by a rule is untouched for the matcher wherever main counted its row untouched', async () => {
+    const c = await build('f1', true);
+    budgets.push(c.B);
+    // Same texts into a new account, assigned by the rules of the table.
+    // The matcher's own candidate loader is the thing under test (a test may reach into a feature's internals).
+    // eslint-disable-next-line import/no-restricted-paths
+    const { listTransferCandidates } = await import('../budget/store/transfers');
+    const fresh = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [fresh, c.B]);
+    c.accounts['Fresh Conta'] = fresh;
+    expect(await c.bulk('Fresh Conta', plainRows())).toMatchObject({ imported: 24 });
+    expect(await c.bulk('Fresh Conta', clientRows(fx.client.filter((r) => r.payee === r.original)))).toMatchObject({ imported: 3 });
+    const candidates = await listTransferCandidates(pool, c.B);
+    const untouchedNow = new Map(candidates.filter((x) => x.account_id === fresh).map((x) => [`${x.amount}`, x.untouched_ledger]));
+    expect(untouchedNow.size).toBeGreaterThan(20);
+    let mainTrue = 0;
+    for (const r of [...fx.bulk_rows, ...fx.client_rows.filter((x) => x.import_payee_name === x.import_payee_name_original)]) {
+      if (!r.untouched) continue;
+      mainTrue += 1;
+      expect(untouchedNow.get(`${r.amount}`), `main counted ${r.import_payee_name_original} untouched`).toBe(true);
+    }
+    expect(mainTrue).toBeGreaterThan(5);
+    // A text a rule of an ordinary payee matched whose spliced payee name equalled it: main counted it untouched.
+    expect(fx.bulk_rows.find((r) => r.import_payee_name_original === 'Cafe Central 1')).toMatchObject({ payee: 'Cafe Central 1', untouched: true });
+    // Rows main called touched stay touched (no more auto-links than main on a rule-assigned statement row), the one exception
+    // being rows where the overlapping rules now pick another winner than main's first-created.
+    const overlap = new Set([-9000, -18000, -18100, -21100]);
+    for (const r of [...fx.bulk_rows, ...fx.client_rows.filter((x) => x.import_payee_name === x.import_payee_name_original)]) {
+      if (overlap.has(r.amount)) continue;
+      // A text a rule of a transfer payee matches keeps the ordinary payee of its text and a hint (T3): as imported, so untouched.
+      const hinted = r.hint !== null || r.payee?.startsWith('Transfer : ');
+      expect(untouchedNow.get(`${r.amount}`), `main said ${r.untouched} for ${r.import_payee_name_original}`).toBe(hinted ? true : r.untouched);
+    }
+    // A row the person gave another payee is touched.
+    await pool.query('UPDATE transactions SET payee_id = $2 WHERE account_id = $1 AND amount = -10000', [fresh, c.idOf('Corner Shop')]);
+    expect((await listTransferCandidates(pool, c.B)).find((x) => x.account_id === fresh && `${x.amount}` === '-10000')?.untouched_ledger).toBe(false);
+  });
+
+  test('F2: a payee the person chose in the import screen is not re-assigned by a rule; the statement text still is', async () => {
+    const c = await build('f2', true);
+    budgets.push(c.B);
+    const fresh = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [fresh, c.B]);
+    c.accounts['Fresh Conta'] = fresh;
+    // "Uber Trip Plus" contains the pattern of Uber's rule; the person picked it in the screen.
+    const chosen = { date, payee: 'Uber Trip Plus', memo: '', outflow: 21_300, inflow: 0, category_id: null, import_payee_name: 'Uber Trip Plus', import_payee_name_original: 'UBER TRIP PLUS 5' };
+    const text = { date, payee: 'UBER TRIP PLUS 6', memo: '', outflow: 21_400, inflow: 0, category_id: null, import_payee_name: 'UBER TRIP PLUS 6', import_payee_name_original: 'UBER TRIP PLUS 6' };
+    expect(await c.bulk('Fresh Conta', [chosen, text])).toEqual({ imported: 2, duplicates: 0 });
+    const rows = (await pool.query<{ amount: string; payee: string }>('SELECT t.amount::text, p.name AS payee FROM transactions t JOIN payees p ON p.id = t.payee_id WHERE t.account_id = $1', [fresh])).rows;
+    expect(rows.find((r) => r.amount === '-21300')!.payee).toBe('Uber Trip Plus');
+    expect(rows.find((r) => r.amount === '-21400')!.payee).toBe('Uber');
+    expect(await c.bulk('Fresh Conta', [chosen, text])).toEqual({ imported: 0, duplicates: 2 });
+  });
+});
+
+describe.skipIf(!dbReady)('the payee columns stay an input after the migration', () => {
+  test('B3: a rule written only to the columns (the other app) applies on the next sync and survives a later rule add on the same payee', async () => {
+    const c = await build('b3', true);
+    budgets.push(c.B);
+    const shop = c.idOf('Corner Shop');
+    await pool.query("UPDATE payees SET rename_match_type = 'contains', rename_condition = 'CORNER BAKERY' WHERE id = $1", [shop]);
+    upstream = [...mainUpstream(), up('b3-new', 'CORNER BAKERY 12', -3300)];
+    expect(await c.sync()).toMatchObject({ added: 1, updated: 0, blocked: 1, duplicates: 23 });
+    const row = (await pool.query('SELECT payee_id, import_payee_name FROM transactions WHERE import_id = $1', [`${PROVIDER}:b3-new`])).rows[0];
+    expect(row).toEqual({ payee_id: shop, import_payee_name: 'CORNER BAKERY 12' });
+    // A rule added later through the API on the same payee: the column rule is adopted, not erased by the mirror.
+    const added = await op('budget_payees_rename_rules_add', { id: shop, budget_id: c.B, match_type: 'starts_with', condition: 'CORNER' });
+    expect(added.status).toBe(201);
+    const rules = (await op('budget_payees_rename_rules_list', { id: shop, budget_id: c.B })).json as { match_type: string; condition: string }[];
+    expect(rules.map((r) => [r.match_type, r.condition])).toEqual([['contains', 'CORNER BAKERY'], ['starts_with', 'CORNER']]);
+    expect((await pool.query('SELECT rename_match_type AS t, rename_condition AS c FROM payees WHERE id = $1', [shop])).rows[0]).toEqual({ t: 'contains', c: 'CORNER BAKERY' });
+    upstream = [...upstream, up('b3-two', 'CORNER BAKERY 13', -3400)];
+    expect(await c.sync()).toMatchObject({ added: 1, updated: 0, failed: 0 });
+    expect((await pool.query('SELECT payee_id FROM transactions WHERE import_id = $1', [`${PROVIDER}:b3-two`])).rows[0].payee_id).toBe(shop);
+  });
+});
+
+describe.skipIf(!dbReady)('review round 3: /bulk keeps every real row, and a user-edited synced row is never "untouched"', () => {
+  async function fresh(label: string) {
+    const c = await build(label, true);
+    budgets.push(c.B);
+    const id = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [id, c.B]);
+    c.accounts['Fresh Conta'] = id;
+    return { c, id };
+  }
+  const row = (payee: string, outflow: number, extra: Record<string, unknown> = {}) => ({ date, payee, memo: '', outflow, inflow: 0, category_id: null, ...extra });
+  const rowsOf = async (account: string) =>
+    (await pool.query<{ import_payee_name: string; payee: string | null; import_id: string }>('SELECT t.import_payee_name, p.name AS payee, t.import_id FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id WHERE t.account_id = $1 ORDER BY t.import_id', [account])).rows;
+
+  test('N2: two texts one rule sends to one payee, same day and amount, are both imported; the same text twice too; a re-import imports none', async () => {
+    const { c, id } = await fresh('n2');
+    const file = [
+      row('UBER TRIP 1001', 9_000), row('UBER TRIP 1002', 9_000), // contains rule -> Uber
+      row('NETFLIX.COM', 4_000), row('netflix.com', 4_000), // is rule -> Netflix
+      row('Padoca Dup', 5_000), row('Padoca Dup', 5_000), // the same new text twice
+      // a chosen "Netflix" (client-style: parsed text differs) plus a text row that the rule sends to Netflix
+      row('Netflix', 4_000, { import_payee_name: 'Netflix', import_payee_name_original: 'NFLX 99' }),
+      row('NETFLIX.COM', 4_000),
+    ];
+    expect(await c.bulk('Fresh Conta', file)).toEqual({ imported: 8, duplicates: 0 });
+    expect((await rowsOf(id)).filter((r) => r.payee === 'Uber')).toHaveLength(2);
+    expect((await rowsOf(id)).filter((r) => r.payee === 'Netflix')).toHaveLength(4);
+    const before = await c.snapshot();
+    expect(await c.bulk('Fresh Conta', file)).toEqual({ imported: 0, duplicates: 8 });
+    expect(await c.bulk('Fresh Conta', file)).toEqual({ imported: 0, duplicates: 8 });
+    expect(await c.snapshot()).toEqual(before);
+    // A later, overlapping file: the rows it already has are re-imports, a text the key has not seen (a third ride) is new (M1).
+    expect(await c.bulk('Fresh Conta', [row('UBER TRIP 1003', 9_000), ...file, row('Cafe Nova', 1_234)])).toEqual({ imported: 2, duplicates: 8 });
+  });
+
+  test('N2: texts a rule newly sends to a payee do not hide the rows main stored under the old keys', async () => {
+    // main's own rows (Padaria 42 ...) plus a new text of the same rule on the same day and amount: only the new one is imported
+    const { c } = await fresh('n2b');
+    expect(await c.bulk('Savings Conta', plainRows())).toEqual({ imported: 0, duplicates: 24 });
+    expect(await c.bulk('Savings Conta', [...plainRows([fx.texts[0]!]), row('PADOCA 43', -fx.texts[0]![1]), row('PADOCA 44', -fx.texts[0]![1])])).toEqual({ imported: 2, duplicates: 1 });
+  });
+
+  test('F-a: a synced row the person gave the rule\'s own payee is touched, whatever a rule says about its text', async () => {
+    const { c } = await fresh('fa');
+    // eslint-disable-next-line import/no-restricted-paths
+    const { listTransferCandidates } = await import('../budget/store/transfers');
+    // c23 is the synced "Cafe Central 1" row (payee "Cafe Central 1", the splice main stored); the person edits it onto the payee "Cafe Central",
+    // whose own rule "cafe central" matches the row's import text: it must NOT count as "as imported" for the matcher
+    upstream = mainUpstream();
+    await c.sync();
+    const cafe = (await pool.query<{ id: string }>('SELECT id FROM transactions WHERE import_id = $1 AND budget_id = $2', [`${PROVIDER}:c23`, c.B])).rows[0]!.id;
+    const edited = await op('budget_transactions_update', { id: cafe, budget_id: c.B, patch: { payee: 'Cafe Central' } });
+    expect(edited.status).toBe(204);
+    const verdict = async () => (await listTransferCandidates(pool, c.B)).find((x) => x.id === cafe)!.untouched_ledger;
+    expect(await verdict()).toBe(false);
+  });
+});
+
+describe.skipIf(!dbReady)('review round 4: a statement row main would import is imported; an edit does not move a legacy row', () => {
+  async function fresh(label: string) {
+    const c = await build(label, true);
+    budgets.push(c.B);
+    const id = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [id, c.B]);
+    c.accounts['Fresh Conta'] = id;
+    return { c, id };
+  }
+  const row = (payee: string, outflow: number, extra: Record<string, unknown> = {}) => ({ date, payee, memo: '', outflow, inflow: 0, category_id: null, ...extra });
+
+  test('M1: [UBER TRIP 1001] then [1001, 1002] imports 1 then 1 (main: 1 then 1); TAXI 1 / TAXI 2 the same', async () => {
+    const { c, id } = await fresh('m1a');
+    expect(await c.bulk('Fresh Conta', [row('UBER TRIP 1001', 9_000)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [row('UBER TRIP 1001', 9_000), row('UBER TRIP 1002', 9_000)])).toEqual({ imported: 1, duplicates: 1 });
+    expect(await c.bulk('Fresh Conta', [row('UBER TRIP 1001', 9_000), row('UBER TRIP 1002', 9_000)])).toEqual({ imported: 0, duplicates: 2 });
+    expect(await c.bulk('Fresh Conta', [row('TAXI 1', 7_000)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [row('TAXI 1', 7_000), row('TAXI 2', 7_000)])).toEqual({ imported: 1, duplicates: 1 });
+    expect(await count(id)).toBe(4);
+    // Keys are unique and counted per prefix: the two rides hold 1 and 2.
+    const ids = (await pool.query<{ import_id: string }>("SELECT import_id FROM transactions WHERE account_id = $1 AND import_id LIKE 'YNAB:-9000:%' ORDER BY import_id", [id])).rows.map((r) => r.import_id.split(':').pop());
+    expect(ids).toEqual(['1', '2']);
+  });
+
+  test('M1: the same text twice in a file and again in the next file is all duplicates; main\'s cases (same text, more copies) stay as on main; reordered files', async () => {
+    const { c } = await fresh('m1b');
+    expect(await c.bulk('Fresh Conta', [row('PADOCA 1', 5_000), row('PADOCA 1', 5_000)])).toEqual({ imported: 2, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [row('PADOCA 1', 5_000), row('PADOCA 1', 5_000)])).toEqual({ imported: 0, duplicates: 2 });
+    // main: an existing row under the key makes more copies of the SAME text re-imports
+    expect(await c.bulk('Fresh Conta', [row('PADOCA 1', 5_000), row('PADOCA 1', 5_000), row('PADOCA 1', 5_000)])).toEqual({ imported: 0, duplicates: 3 });
+    // case ignored, as the splice that made the key lower-cased it
+    expect(await c.bulk('Fresh Conta', [row('padoca 1', 5_000)])).toEqual({ imported: 0, duplicates: 1 });
+    // reordered, with a new text in the middle
+    expect(await c.bulk('Fresh Conta', [row('NETFLIX.COM', 4_000), row('netflix.com', 4_000)])).toEqual({ imported: 2, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [row('netflix.com', 4_000), row('PADOCA 2', 5_000), row('NETFLIX.COM', 4_000)])).toEqual({ imported: 1, duplicates: 2 });
+  });
+
+  test('M1: a chosen payee row and a text row on one key are two rows, and a later file imports only what is new', async () => {
+    const { c } = await fresh('m1c');
+    const chosen = row('Netflix', 4_000, { import_payee_name: 'Netflix', import_payee_name_original: 'NFLX 99' });
+    expect(await c.bulk('Fresh Conta', [chosen])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [chosen, row('NETFLIX.COM', 4_000)])).toEqual({ imported: 1, duplicates: 1 });
+    expect(await c.bulk('Fresh Conta', [row('NETFLIX.COM', 4_000), chosen])).toEqual({ imported: 0, duplicates: 2 });
+  });
+
+  test('M1-b: an alternative splice that names another payee holding a row does not hide a new text', async () => {
+    const { c, id } = await fresh('m1d');
+    // rules POSTO (older) and POSTO SHELL exist (the capture); a payee named "Shell 3" holds a row for the day and amount from another text
+    await c.bulk('Fresh Conta', [row('SHELL 3', 2_000)]);
+    await pool.query("INSERT INTO payees (budget_id, name) VALUES ($1, 'Shell 3') ON CONFLICT DO NOTHING", [c.B]);
+    expect(await c.bulk('Fresh Conta', [row('POSTO SHELL 3', 2_000)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await count(id)).toBe(2);
+  });
+
+  test('M2: a sheet edit that resends the displayed payee text leaves a legacy row\'s payee alone (synced, statement and hand-entered rows)', async () => {
+    const { c } = await fresh('m2');
+    const update = (rowId: string, patch: Record<string, unknown>) => op('budget_transactions_update', { id: rowId, budget_id: c.B, patch });
+    const payeeOf = async (rowId: string) => (await pool.query('SELECT p.name FROM transactions t JOIN payees p ON p.id = t.payee_id WHERE t.id = $1', [rowId])).rows[0]?.name as string;
+    upstream = [...mainUpstream(), up('m2-taxi', 'TAXI 9', -5_000)];
+    // a payee "Taxi" with the rule contains TAXI, and the legacy payee "Taxi 9" main stored
+    const taxi = (await pool.query<{ id: string }>("INSERT INTO payees (budget_id, name, rename_match_type, rename_condition) VALUES ($1,'Taxi','contains','TAXI') RETURNING id", [c.B])).rows[0]!.id;
+    await pool.query(MIGRATION);
+    const taxi9 = (await pool.query<{ id: string }>("INSERT INTO payees (budget_id, name) VALUES ($1,'Taxi 9') RETURNING id", [c.B])).rows[0]!.id;
+    void taxi;
+    // synced row, stored as main did
+    const synced = (await pool.query<{ id: string }>(
+      `INSERT INTO transactions (budget_id, account_id, date, amount, payee_id, cleared, approved, repeat, deleted, import_id, import_payee_name, import_payee_name_original) VALUES ($1,$2,$3,-5000,$4,'cleared',false,'never',false,$5,'Taxi 9','Taxi 9') RETURNING id`,
+      [c.B, c.accounts['Itau Conta'], date, taxi9, `${PROVIDER}:m2-taxi`],
+    )).rows[0]!.id;
+    // statement row and hand-entered row, stored as main did
+    const stmt = (await pool.query<{ id: string }>(
+      `INSERT INTO transactions (budget_id, account_id, date, amount, payee_id, cleared, approved, repeat, deleted, import_id, import_payee_name, import_payee_name_original) VALUES ($1,$2,$3,-6000,$4,'uncleared',false,'never',false,'YNAB:-6000:x:1','TAXI 9','TAXI 9') RETURNING id`,
+      [c.B, c.accounts['Savings Conta'], date, taxi9],
+    )).rows[0]!.id;
+    const hand = (await pool.query<{ id: string }>(
+      `INSERT INTO transactions (budget_id, account_id, date, amount, payee_id, cleared, approved, repeat, deleted) VALUES ($1,$2,$3,-7000,$4,'uncleared',true,'never',false) RETURNING id`,
+      [c.B, c.accounts['Third Conta'], date, taxi9],
+    )).rows[0]!.id;
+    for (const rowId of [synced, stmt, hand]) {
+      expect((await update(rowId, { memo: 'a note', payee: 'Taxi 9' })).status).toBe(204);
+      expect(await payeeOf(rowId)).toBe('Taxi 9');
+      expect((await update(rowId, { memo: 'another', payee: ' Taxi 9 ' })).status).toBe(204);
+      expect(await payeeOf(rowId)).toBe('Taxi 9');
+    }
+    // A text that is NOT the row's payee still resolves through the rules (a real payee change), by assignment.
+    expect((await update(hand, { payee: 'TAXI 10' })).status).toBe(204);
+    expect(await payeeOf(hand)).toBe('Taxi');
+    // Create resends text too and applies the rules (as on main, now by assignment): a duplicate of the row becomes "Taxi".
+    const dup = await op('budget_transactions_create', {
+      budget_id: c.B,
+      txn: { account_id: c.accounts['Third Conta'], date, payee: 'Taxi 9', category_id: null, memo: 'dup', outflow: 7_000, inflow: 0, cleared: 'uncleared', approved: true, flag: null, repeat: 'never' },
+    });
+    expect(dup.status).toBe(201);
+    expect(await payeeOf(dup.json.id)).toBe('Taxi');
+    // Make repeating from the register attaches the row: the rule takes the row's payee id and the resent text is not resolved.
+    const repeat = await op('budget_repeat_rules_create', {
+      budget_id: c.B,
+      account_id: c.accounts['Third Conta'],
+      payee: 'Taxi 9',
+      category_id: null,
+      memo: '',
+      outflow: 7_000,
+      inflow: 0,
+      frequency: 'monthly',
+      month_last_day: false,
+      attach_transaction_id: stmt,
+    });
+    expect(repeat.status, JSON.stringify(repeat.json)).toBe(201);
+    expect((await pool.query('SELECT payee_id FROM txn_repeat_rules WHERE id = $1', [repeat.json.id])).rows[0].payee_id).toBe(taxi9);
+    expect(await payeeOf(stmt)).toBe('Taxi 9');
+  });
+});
+
+describe.skipIf(!dbReady)('review round 4: the matcher\'s "untouched" sees every rule, and carried rows keep main\'s answer', () => {
+  test('F2: a statement row assigned by a rule only the payee columns hold is untouched, like one assigned by a table rule', async () => {
+    const c = await build('f2c', true);
+    budgets.push(c.B);
+    // eslint-disable-next-line import/no-restricted-paths
+    const { listTransferCandidates } = await import('../budget/store/transfers');
+    const fresh = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [fresh, c.B]);
+    c.accounts['Fresh Conta'] = fresh;
+    // A rule only the columns hold, whose splice reproduces the text (the pattern is the payee's name): main counted such a row untouched.
+    const lone = (await pool.query<{ id: string }>("INSERT INTO payees (budget_id, name) VALUES ($1,'Columns Only') RETURNING id", [c.B])).rows[0]!.id;
+    await pool.query("UPDATE payees SET rename_match_type = 'contains', rename_condition = 'columns only' WHERE id = $1", [lone]);
+    expect(await c.bulk('Fresh Conta', [{ date, payee: 'Columns Only 5', memo: '', outflow: 1_500, inflow: 0, category_id: null }])).toEqual({ imported: 1, duplicates: 0 });
+    const cand = (await listTransferCandidates(pool, c.B)).find((x) => x.account_id === fresh && `${x.amount}` === '-1500')!;
+    expect(cand.payee_id ?? (await pool.query('SELECT payee_id FROM transactions WHERE id = $1', [cand.id])).rows[0].payee_id).toBe(lone);
+    expect(cand.untouched_ledger).toBe(true);
+  });
+
+  test('F1: a carried bank row (no shadow after a fresh start) the person edited is touched, as on main; a carried statement row follows its rule', async () => {
+    const c = await build('f1c', true);
+    budgets.push(c.B);
+    // eslint-disable-next-line import/no-restricted-paths
+    const { listTransferCandidates } = await import('../budget/store/transfers');
+    // c23 "Cafe Central 1" (a bank row stored by main) edited onto the payee "Cafe Central" whose rule matches its import text; its shadow is gone (as in a copy)
+    const row = (await pool.query<{ id: string }>('SELECT id FROM transactions WHERE import_id = $1 AND budget_id = $2', [`${PROVIDER}:c23`, c.B])).rows[0]!.id;
+    const cafe = c.idOf('Cafe Central');
+    await pool.query('UPDATE transactions SET payee_id = $2 WHERE id = $1', [row, cafe]);
+    await pool.query('DELETE FROM connection_transactions WHERE transaction_id = $1', [row]);
+    const verdict = async () => (await listTransferCandidates(pool, c.B)).find((x) => x.id === row)!.untouched_ledger;
+    expect(await verdict()).toBe(false);
+  });
+
+  test('F3: a development database that ran an earlier draft of 0121 (no seq column) is healed by the file', async () => {
+    const { MIGRATION_SIGNATURES } = await import('../core/migrate');
+    const sig = (MIGRATION_SIGNATURES as Record<string, string | readonly string[]>)['0121_payee_renaming_rules.sql'];
+    expect(sig).toContain('column:public.payee_renaming_rules.seq');
+    const probe = `${MIGRATION}`;
+    // Simulate the earlier draft in a scratch schema-free way: drop the column, run the file, the column is back and rules still load.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('ALTER TABLE public.payee_renaming_rules DROP COLUMN seq');
+      await client.query(probe);
+      expect((await client.query("SELECT 1 FROM information_schema.columns WHERE table_name = 'payee_renaming_rules' AND column_name = 'seq'")).rowCount).toBe(1);
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+  });
+});
+
+describe.skipIf(!dbReady)('review round 5: chosen payees and stored YNAB rows dedupe on the payee field, as main keyed them', () => {
+  async function fresh(label: string) {
+    const c = await build(label, true);
+    budgets.push(c.B);
+    const id = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [id, c.B]);
+    c.accounts['Fresh Conta'] = id;
+    return { c, id };
+  }
+  const plain = (payee: string, outflow: number) => ({ date, payee, memo: '', outflow, inflow: 0, category_id: null });
+  /** A client row: `payee` is the chosen / associated name, `original` the statement text. */
+  const chosen = (payee: string, original: string, outflow: number) => ({ ...plain(payee, outflow), import_payee_name: payee, import_payee_name_original: original });
+  const payeeId = async (c: Ctx, name: string) =>
+    (await pool.query<{ id: string }>('INSERT INTO payees (budget_id, name) VALUES ($1,$2) ON CONFLICT (budget_id, name) DO UPDATE SET name = $2 RETURNING id', [c.B, name])).rows[0]!.id;
+
+  test('N5 / N5b: the same transaction whose bank text changed (pending, posted) with the same chosen payee is imported once; N10: a plain row then a chosen one', async () => {
+    const { c } = await fresh('b1a');
+    expect(await c.bulk('Fresh Conta', [chosen('Netflix', 'NETFLIX.COM PEND', 4_000)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [chosen('Netflix', 'NETFLIX.COM', 4_000)])).toEqual({ imported: 0, duplicates: 1 });
+    await payeeId(c, 'Mercadinho');
+    expect(await c.bulk('Fresh Conta', [chosen('Mercadinho', 'MERCADINHO SP*1234', 3_000)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [chosen('Mercadinho', 'MERCADINHO SP 1234', 3_000)])).toEqual({ imported: 0, duplicates: 1 });
+    expect(await c.bulk('Fresh Conta', [plain('Uber', 9_100)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 7', 9_100)])).toEqual({ imported: 0, duplicates: 1 });
+  });
+
+  test('N4 / D5: two chosen rows of one payee on one key are main\'s rows: a later file adds none, and a deleted second one is not re-created', async () => {
+    const { c, id } = await fresh('b1b');
+    expect(await c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 1001', 9_200)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 1001', 9_200), chosen('Uber', 'UBER TRIP 1002', 9_200)])).toEqual({ imported: 0, duplicates: 2 });
+    const two = await fresh('b1c');
+    expect(await two.c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 1', 9_300), chosen('Uber', 'UBER TRIP 2', 9_300)])).toEqual({ imported: 2, duplicates: 0 });
+    const second = (await pool.query<{ id: string }>('SELECT id FROM transactions WHERE account_id = $1 ORDER BY import_id DESC LIMIT 1', [two.id])).rows[0]!.id;
+    await pool.query('UPDATE transactions SET deleted = true WHERE id = $1', [second]);
+    expect(await two.c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 1', 9_300), chosen('Uber', 'UBER TRIP 2', 9_300)])).toEqual({ imported: 0, duplicates: 2 });
+    void id;
+  });
+
+  test('Y1 / Y4 / Y5: stored YNAB-export rows whose raw text differs from the file dedupe as on main (their name is the payee)', async () => {
+    const { c, id } = await fresh('b1d');
+    const stored = async (name: string, original: string | null, amount: number) => {
+      const pid = await payeeId(c, name);
+      await pool.query(
+        `INSERT INTO transactions (budget_id, account_id, date, amount, payee_id, cleared, approved, repeat, deleted, import_id, import_payee_name, import_payee_name_original) VALUES ($1,$2,$3,$4,$5,'uncleared',false,'never',false,$6,$7,$8)`,
+        [c.B, id, date, amount, pid, `YNAB:${amount}:${date}:${pid}:1`, name, original],
+      );
+    };
+    await stored('Padaria Real', 'PADARIA REAL LTDA', -1_100);
+    await stored('Uber', 'UBER *TRIP HELP.UBER.COM', -1_200);
+    await stored('Mercadinho', 'MERCADINHO SP', -1_300);
+    await stored('Padaria Real', null, -1_400);
+    expect(await c.bulk('Fresh Conta', [plain('Padaria Real', 1_100)])).toEqual({ imported: 0, duplicates: 1 }); // Y1
+    expect(await c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 55', 1_200)])).toEqual({ imported: 0, duplicates: 1 }); // Y4
+    expect(await c.bulk('Fresh Conta', [chosen('Mercadinho', 'MERCADINHO SP 77', 1_300)])).toEqual({ imported: 0, duplicates: 1 }); // Y5
+    expect(await c.bulk('Fresh Conta', [plain('Padaria Real', 1_400)])).toEqual({ imported: 0, duplicates: 1 }); // Y2
+    expect(await count(id)).toBe(4);
+  });
+
+  test('three growing files and reordered files import exactly one new row each time, and the same files again import none', async () => {
+    const { c } = await fresh('b1e');
+    const a = plain('UBER TRIP 2001', 8_000);
+    const b = plain('UBER TRIP 2002', 8_000);
+    const d = plain('UBER TRIP 2003', 8_000);
+    expect(await c.bulk('Fresh Conta', [a])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [a, b])).toEqual({ imported: 1, duplicates: 1 });
+    expect(await c.bulk('Fresh Conta', [a, b, d])).toEqual({ imported: 1, duplicates: 2 });
+    expect(await c.bulk('Fresh Conta', [d, a, b])).toEqual({ imported: 0, duplicates: 3 });
+    expect(await c.bulk('Fresh Conta', [b, d, a, plain('UBER TRIP 2004', 8_000)])).toEqual({ imported: 1, duplicates: 3 });
+  });
+
+  test('D1: deleting the only row of a text means the next import re-creates it (as on main)', async () => {
+    const { c, id } = await fresh('b1f');
+    expect(await c.bulk('Fresh Conta', [plain('Corner Cafe', 1_500)])).toEqual({ imported: 1, duplicates: 0 });
+    await pool.query('UPDATE transactions SET deleted = true WHERE account_id = $1', [id]);
+    expect(await c.bulk('Fresh Conta', [plain('Corner Cafe', 1_500)])).toEqual({ imported: 1, duplicates: 0 });
+  });
+});
+
+describe.skipIf(!dbReady)('review round 5: "untouched" for statement rows with a file id, and a retyped payee name', () => {
+  test('F3: a statement row with its own id (nubank:...) assigned by a rule whose splice reproduces the text is untouched; a carried bank row (provider id) edited onto it is touched', async () => {
+    const c = await build('b5f3', true);
+    budgets.push(c.B);
+    // eslint-disable-next-line import/no-restricted-paths
+    const { listTransferCandidates } = await import('../budget/store/transfers');
+    const id = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [id, c.B]);
+    c.accounts['Fresh Conta'] = id;
+    expect(await c.bulk('Fresh Conta', [{ date, payee: 'Cafe Central 7', memo: '', outflow: 1_700, inflow: 0, category_id: null, import_id: 'nubank:abc-123' }])).toEqual({ imported: 1, duplicates: 0 });
+    const row = (await pool.query<{ id: string }>("SELECT id FROM transactions WHERE import_id = 'nubank:abc-123' AND budget_id = $1", [c.B])).rows[0]!.id;
+    expect((await listTransferCandidates(pool, c.B)).find((x) => x.id === row)!.untouched_ledger).toBe(true);
+  });
+
+  test('F2: a retyped payee name in another case is the same payee: unchanged', async () => {
+    const c = await build('b5f2', true);
+    budgets.push(c.B);
+    const taxi9 = (await pool.query<{ id: string }>("INSERT INTO payees (budget_id, name) VALUES ($1,'Taxi 9') RETURNING id", [c.B])).rows[0]!.id;
+    await pool.query("INSERT INTO payees (budget_id, name, rename_match_type, rename_condition) VALUES ($1,'Taxi','contains','TAXI')", [c.B]);
+    await pool.query(MIGRATION);
+    const rowId = (await pool.query<{ id: string }>(
+      `INSERT INTO transactions (budget_id, account_id, date, amount, payee_id, cleared, approved, repeat, deleted) VALUES ($1,$2,$3,-7000,$4,'uncleared',true,'never',false) RETURNING id`,
+      [c.B, c.accounts['Third Conta'], date, taxi9],
+    )).rows[0]!.id;
+    expect((await op('budget_transactions_update', { id: rowId, budget_id: c.B, patch: { memo: 'x', payee: 'taxi 9' } })).status).toBe(204);
+    expect((await pool.query('SELECT payee_id FROM transactions WHERE id = $1', [rowId])).rows[0].payee_id).toBe(taxi9);
+  });
+});

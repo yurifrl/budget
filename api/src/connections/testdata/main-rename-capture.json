@@ -1,0 +1,953 @@
+{
+ "_comment": "Recorded by running main (f538f3f) with rules in the payee columns (one per payee, created in the order of `payees`): 24 bank texts synced into one account (two rows then edited by the person), imported as a statement into another account, and 4 client-style statement rows into a third; then everything again. Not edited by hand; regenerate by running main's code (testdata/capture-main-rename.ts.txt), never this branch's.",
+ "texts": [
+  [
+   "PADOCA 42",
+   -10000
+  ],
+  [
+   "UBER TRIP 123",
+   -2000
+  ],
+  [
+   "UBER  TRIP 9",
+   -2100
+  ],
+  [
+   "PADDED RAW",
+   -3000
+  ],
+  [
+   "NETFLIX.COM",
+   -4000
+  ],
+  [
+   "PIX SAV 42",
+   -5000
+  ],
+  [
+   "PIX THIRD",
+   -6000
+  ],
+  [
+   "Corner Shop",
+   -7000
+  ],
+  [
+   "Transfer : Nubank Conta",
+   -8000
+  ],
+  [
+   "MERCADO LIVRE SP",
+   -9000
+  ],
+  [
+   "pix sav",
+   -11000
+  ],
+  [
+   "padoca",
+   -12000
+  ],
+  [
+   "  Bakery  ",
+   -13000
+  ],
+  [
+   "SHOP END",
+   -14000
+  ],
+  [
+   "SHOP  END",
+   -14100
+  ],
+  [
+   "LOJA X 1",
+   -15000
+  ],
+  [
+   "Loja X 2",
+   -15100
+  ],
+  [
+   "CASA  BAHIA 1",
+   -16000
+  ],
+  [
+   "CASA BAHIA 2",
+   -16100
+  ],
+  [
+   "THE BAR 1",
+   -17000
+  ],
+  [
+   "Mercado Livre",
+   -18000
+  ],
+  [
+   "Mercado Livre SP",
+   -18100
+  ],
+  [
+   "Padaria",
+   -19000
+  ],
+  [
+   "Cafe Central 1",
+   -20000
+  ]
+ ],
+ "client": [
+  {
+   "payee": "PADOCA 77",
+   "original": "PADOCA 77",
+   "amount": -21000
+  },
+  {
+   "payee": "Mercado Livre",
+   "original": "Mercado Livre",
+   "amount": -21100
+  },
+  {
+   "payee": "UBER  TRIP 5",
+   "original": "UBER  TRIP 5",
+   "amount": -21200
+  },
+  {
+   "payee": "Uber Trip Plus",
+   "original": "UBER TRIP PLUS 5",
+   "amount": -21300
+  }
+ ],
+ "main_results": {
+  "sync1": {
+   "added": 24,
+   "updated": 0,
+   "duplicates": 0,
+   "blocked": 0,
+   "failed": 0
+  },
+  "sync2": {
+   "added": 0,
+   "updated": 0,
+   "duplicates": 23,
+   "blocked": 1,
+   "failed": 0
+  },
+  "bulk1": {
+   "imported": 24,
+   "duplicates": 0
+  },
+  "bulk2": {
+   "imported": 0,
+   "duplicates": 24
+  },
+  "client1": {
+   "imported": 4,
+   "duplicates": 0
+  },
+  "client2": {
+   "imported": 0,
+   "duplicates": 4
+  }
+ },
+ "payees": [
+  {
+   "name": "Transfer : Itau Conta",
+   "transfer": "Itau Conta",
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Transfer : Nubank Conta",
+   "transfer": "Nubank Conta",
+   "type": "contains",
+   "condition": "PIX SAV"
+  },
+  {
+   "name": "Transfer : Third Conta",
+   "transfer": "Third Conta",
+   "type": "is",
+   "condition": "PIX THIRD"
+  },
+  {
+   "name": "Transfer : Savings Conta",
+   "transfer": "Savings Conta",
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Transfer : Cartao Conta",
+   "transfer": "Cartao Conta",
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Padaria",
+   "transfer": null,
+   "type": "contains",
+   "condition": "PADOCA"
+  },
+  {
+   "name": "Uber",
+   "transfer": null,
+   "type": "contains",
+   "condition": "UBER TRIP"
+  },
+  {
+   "name": " Padded ",
+   "transfer": null,
+   "type": "is",
+   "condition": "PADDED RAW"
+  },
+  {
+   "name": "Netflix",
+   "transfer": null,
+   "type": "is",
+   "condition": "NETFLIX.COM"
+  },
+  {
+   "name": "Mercado",
+   "transfer": null,
+   "type": "contains",
+   "condition": "MERC"
+  },
+  {
+   "name": "Mercado Livre",
+   "transfer": null,
+   "type": "contains",
+   "condition": "MERCADO LIVRE"
+  },
+  {
+   "name": "Shop",
+   "transfer": null,
+   "type": "is",
+   "condition": "SHOP END"
+  },
+  {
+   "name": "Loja",
+   "transfer": null,
+   "type": "contains",
+   "condition": "Loja"
+  },
+  {
+   "name": "Loja Dead",
+   "transfer": null,
+   "type": "contains",
+   "condition": "LOJA"
+  },
+  {
+   "name": "Casa Old",
+   "transfer": null,
+   "type": "contains",
+   "condition": "CASA  BAHIA"
+  },
+  {
+   "name": "Casa New",
+   "transfer": null,
+   "type": "contains",
+   "condition": "CASA BAHIA"
+  },
+  {
+   "name": "Bar",
+   "transfer": null,
+   "type": "contains",
+   "condition": " bar "
+  },
+  {
+   "name": "Cafe Central",
+   "transfer": null,
+   "type": "contains",
+   "condition": "cafe central"
+  },
+  {
+   "name": "Bakery",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Cafe Central 1",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Casa New 2",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Casa Old 1",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Corner Shop",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Loja x 1",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Loja x 2",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Mercadoado livre",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Mercadoado livre sp",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Padaria 42",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "pix sav",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "PIX THIRD",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "SHOP  END",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "theBar1",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Transfer : Nubank Conta 42",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Uber 123",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "UBER  TRIP 9",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Edited Payee",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Somewhere Else",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Padded",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Padaria 77",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Uber plus",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "UBER  TRIP 5",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  }
+ ],
+ "sync_rows": [
+  {
+   "external_id": "c0",
+   "amount": -10000,
+   "payee": "Edited Payee",
+   "import_payee_name": "Padaria 42",
+   "import_payee_name_original": "Padaria 42",
+   "shadow_payee": "Padaria 42",
+   "blocked": true,
+   "hint_account": null,
+   "untouched": false
+  },
+  {
+   "external_id": "c1",
+   "amount": -2000,
+   "payee": "Uber 123",
+   "import_payee_name": "Uber 123",
+   "import_payee_name_original": "Uber 123",
+   "shadow_payee": "Uber 123",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c10",
+   "amount": -11000,
+   "payee": "pix sav",
+   "import_payee_name": "pix sav",
+   "import_payee_name_original": "pix sav",
+   "shadow_payee": "pix sav",
+   "blocked": false,
+   "hint_account": "Nubank Conta",
+   "untouched": true
+  },
+  {
+   "external_id": "c11",
+   "amount": -12000,
+   "payee": "Padaria",
+   "import_payee_name": "Padaria",
+   "import_payee_name_original": "Padaria",
+   "shadow_payee": "Padaria",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c12",
+   "amount": -13000,
+   "payee": "Bakery",
+   "import_payee_name": "Bakery",
+   "import_payee_name_original": "Bakery",
+   "shadow_payee": "Bakery",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c13",
+   "amount": -14000,
+   "payee": "Shop",
+   "import_payee_name": "Shop",
+   "import_payee_name_original": "Shop",
+   "shadow_payee": "Shop",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c14",
+   "amount": -14100,
+   "payee": "SHOP  END",
+   "import_payee_name": "SHOP  END",
+   "import_payee_name_original": "SHOP  END",
+   "shadow_payee": "SHOP  END",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c15",
+   "amount": -15000,
+   "payee": "Loja x 1",
+   "import_payee_name": "Loja x 1",
+   "import_payee_name_original": "Loja x 1",
+   "shadow_payee": "Loja x 1",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c16",
+   "amount": -15100,
+   "payee": "Loja x 2",
+   "import_payee_name": "Loja x 2",
+   "import_payee_name_original": "Loja x 2",
+   "shadow_payee": "Loja x 2",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c17",
+   "amount": -16000,
+   "payee": "Casa Old 1",
+   "import_payee_name": "Casa Old 1",
+   "import_payee_name_original": "Casa Old 1",
+   "shadow_payee": "Casa Old 1",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c18",
+   "amount": -16100,
+   "payee": "Casa New 2",
+   "import_payee_name": "Casa New 2",
+   "import_payee_name_original": "Casa New 2",
+   "shadow_payee": "Casa New 2",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c19",
+   "amount": -17000,
+   "payee": "theBar1",
+   "import_payee_name": "theBar1",
+   "import_payee_name_original": "theBar1",
+   "shadow_payee": "theBar1",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c2",
+   "amount": -2100,
+   "payee": "UBER  TRIP 9",
+   "import_payee_name": "UBER  TRIP 9",
+   "import_payee_name_original": "UBER  TRIP 9",
+   "shadow_payee": "UBER  TRIP 9",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c20",
+   "amount": -18000,
+   "payee": "Mercadoado livre",
+   "import_payee_name": "Mercadoado livre",
+   "import_payee_name_original": "Mercadoado livre",
+   "shadow_payee": "Mercadoado livre",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c21",
+   "amount": -18100,
+   "payee": "Mercadoado livre sp",
+   "import_payee_name": "Mercadoado livre sp",
+   "import_payee_name_original": "Mercadoado livre sp",
+   "shadow_payee": "Mercadoado livre sp",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c22",
+   "amount": -19000,
+   "payee": "Padaria",
+   "import_payee_name": "Padaria",
+   "import_payee_name_original": "Padaria",
+   "shadow_payee": "Padaria",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c23",
+   "amount": -20000,
+   "payee": "Cafe Central 1",
+   "import_payee_name": "Cafe Central 1",
+   "import_payee_name_original": "Cafe Central 1",
+   "shadow_payee": "Cafe Central 1",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c3",
+   "amount": -3000,
+   "payee": " Padded ",
+   "import_payee_name": " Padded ",
+   "import_payee_name_original": " Padded ",
+   "shadow_payee": " Padded ",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c4",
+   "amount": -4000,
+   "payee": "Netflix",
+   "import_payee_name": "Netflix",
+   "import_payee_name_original": "Netflix",
+   "shadow_payee": "Netflix",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c5",
+   "amount": -5000,
+   "payee": "Transfer : Nubank Conta 42",
+   "import_payee_name": "Transfer : Nubank Conta 42",
+   "import_payee_name_original": "Transfer : Nubank Conta 42",
+   "shadow_payee": "Transfer : Nubank Conta 42",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c6",
+   "amount": -6000,
+   "payee": "PIX THIRD",
+   "import_payee_name": "PIX THIRD",
+   "import_payee_name_original": "PIX THIRD",
+   "shadow_payee": "PIX THIRD",
+   "blocked": false,
+   "hint_account": "Third Conta",
+   "untouched": true
+  },
+  {
+   "external_id": "c7",
+   "amount": -7000,
+   "payee": "Corner Shop",
+   "import_payee_name": "Corner Shop",
+   "import_payee_name_original": "Corner Shop",
+   "shadow_payee": "Corner Shop",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  },
+  {
+   "external_id": "c8",
+   "amount": -8000,
+   "payee": null,
+   "import_payee_name": "Transfer : Nubank Conta",
+   "import_payee_name_original": "Transfer : Nubank Conta",
+   "shadow_payee": "",
+   "blocked": false,
+   "hint_account": "Nubank Conta",
+   "untouched": true
+  },
+  {
+   "external_id": "c9",
+   "amount": -9000,
+   "payee": "Mercadoado livre sp",
+   "import_payee_name": "Mercadoado livre sp",
+   "import_payee_name_original": "Mercadoado livre sp",
+   "shadow_payee": "Mercadoado livre sp",
+   "blocked": false,
+   "hint_account": null,
+   "untouched": true
+  }
+ ],
+ "bulk_rows": [
+  {
+   "amount": -10000,
+   "payee": "Padaria 42",
+   "import_payee_name": "PADOCA 42",
+   "import_payee_name_original": "PADOCA 42",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Padaria 42",
+   "occ": 1
+  },
+  {
+   "amount": -11000,
+   "payee": "pix sav",
+   "import_payee_name": "pix sav",
+   "import_payee_name_original": "pix sav",
+   "hint": "Nubank Conta",
+   "untouched": true,
+   "key_payee": "Transfer : Nubank Conta",
+   "occ": 1
+  },
+  {
+   "amount": -12000,
+   "payee": "Padaria",
+   "import_payee_name": "padoca",
+   "import_payee_name_original": "padoca",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Padaria",
+   "occ": 1
+  },
+  {
+   "amount": -13000,
+   "payee": "Bakery",
+   "import_payee_name": "  Bakery  ",
+   "import_payee_name_original": "  Bakery  ",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Bakery",
+   "occ": 1
+  },
+  {
+   "amount": -14000,
+   "payee": "Shop",
+   "import_payee_name": "SHOP END",
+   "import_payee_name_original": "SHOP END",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Shop",
+   "occ": 1
+  },
+  {
+   "amount": -14100,
+   "payee": "SHOP  END",
+   "import_payee_name": "SHOP  END",
+   "import_payee_name_original": "SHOP  END",
+   "hint": null,
+   "untouched": true,
+   "key_payee": "SHOP  END",
+   "occ": 1
+  },
+  {
+   "amount": -15000,
+   "payee": "Loja x 1",
+   "import_payee_name": "LOJA X 1",
+   "import_payee_name_original": "LOJA X 1",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Loja x 1",
+   "occ": 1
+  },
+  {
+   "amount": -15100,
+   "payee": "Loja x 2",
+   "import_payee_name": "Loja X 2",
+   "import_payee_name_original": "Loja X 2",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Loja x 2",
+   "occ": 1
+  },
+  {
+   "amount": -16000,
+   "payee": "Casa Old 1",
+   "import_payee_name": "CASA  BAHIA 1",
+   "import_payee_name_original": "CASA  BAHIA 1",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Casa Old 1",
+   "occ": 1
+  },
+  {
+   "amount": -16100,
+   "payee": "Casa New 2",
+   "import_payee_name": "CASA BAHIA 2",
+   "import_payee_name_original": "CASA BAHIA 2",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Casa New 2",
+   "occ": 1
+  },
+  {
+   "amount": -17000,
+   "payee": "theBar1",
+   "import_payee_name": "THE BAR 1",
+   "import_payee_name_original": "THE BAR 1",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "theBar1",
+   "occ": 1
+  },
+  {
+   "amount": -18000,
+   "payee": "Mercadoado livre",
+   "import_payee_name": "Mercado Livre",
+   "import_payee_name_original": "Mercado Livre",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Mercadoado livre",
+   "occ": 1
+  },
+  {
+   "amount": -18100,
+   "payee": "Mercadoado livre sp",
+   "import_payee_name": "Mercado Livre SP",
+   "import_payee_name_original": "Mercado Livre SP",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Mercadoado livre sp",
+   "occ": 1
+  },
+  {
+   "amount": -19000,
+   "payee": "Padaria",
+   "import_payee_name": "Padaria",
+   "import_payee_name_original": "Padaria",
+   "hint": null,
+   "untouched": true,
+   "key_payee": "Padaria",
+   "occ": 1
+  },
+  {
+   "amount": -20000,
+   "payee": "Cafe Central 1",
+   "import_payee_name": "Cafe Central 1",
+   "import_payee_name_original": "Cafe Central 1",
+   "hint": null,
+   "untouched": true,
+   "key_payee": "Cafe Central 1",
+   "occ": 1
+  },
+  {
+   "amount": -2000,
+   "payee": "Uber 123",
+   "import_payee_name": "UBER TRIP 123",
+   "import_payee_name_original": "UBER TRIP 123",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Uber 123",
+   "occ": 1
+  },
+  {
+   "amount": -2100,
+   "payee": "UBER  TRIP 9",
+   "import_payee_name": "UBER  TRIP 9",
+   "import_payee_name_original": "UBER  TRIP 9",
+   "hint": null,
+   "untouched": true,
+   "key_payee": "UBER  TRIP 9",
+   "occ": 1
+  },
+  {
+   "amount": -3000,
+   "payee": "Padded",
+   "import_payee_name": "PADDED RAW",
+   "import_payee_name_original": "PADDED RAW",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Padded",
+   "occ": 1
+  },
+  {
+   "amount": -4000,
+   "payee": "Netflix",
+   "import_payee_name": "NETFLIX.COM",
+   "import_payee_name_original": "NETFLIX.COM",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Netflix",
+   "occ": 1
+  },
+  {
+   "amount": -5000,
+   "payee": "Transfer : Nubank Conta 42",
+   "import_payee_name": "PIX SAV 42",
+   "import_payee_name_original": "PIX SAV 42",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Transfer : Nubank Conta 42",
+   "occ": 1
+  },
+  {
+   "amount": -6000,
+   "payee": "PIX THIRD",
+   "import_payee_name": "PIX THIRD",
+   "import_payee_name_original": "PIX THIRD",
+   "hint": "Third Conta",
+   "untouched": true,
+   "key_payee": "Transfer : Third Conta",
+   "occ": 1
+  },
+  {
+   "amount": -7000,
+   "payee": "Corner Shop",
+   "import_payee_name": "Corner Shop",
+   "import_payee_name_original": "Corner Shop",
+   "hint": null,
+   "untouched": true,
+   "key_payee": "Corner Shop",
+   "occ": 1
+  },
+  {
+   "amount": -8000,
+   "payee": null,
+   "import_payee_name": "Transfer : Nubank Conta",
+   "import_payee_name_original": "Transfer : Nubank Conta",
+   "hint": "Nubank Conta",
+   "untouched": true,
+   "key_payee": "Transfer : Nubank Conta",
+   "occ": 1
+  },
+  {
+   "amount": -9000,
+   "payee": "Mercadoado livre sp",
+   "import_payee_name": "MERCADO LIVRE SP",
+   "import_payee_name_original": "MERCADO LIVRE SP",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Mercadoado livre sp",
+   "occ": 1
+  }
+ ],
+ "client_rows": [
+  {
+   "amount": -21000,
+   "payee": "Padaria 77",
+   "import_payee_name": "PADOCA 77",
+   "import_payee_name_original": "PADOCA 77",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Padaria 77",
+   "occ": 1
+  },
+  {
+   "amount": -21100,
+   "payee": "Mercadoado livre",
+   "import_payee_name": "Mercado Livre",
+   "import_payee_name_original": "Mercado Livre",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Mercadoado livre",
+   "occ": 1
+  },
+  {
+   "amount": -21200,
+   "payee": "UBER  TRIP 5",
+   "import_payee_name": "UBER  TRIP 5",
+   "import_payee_name_original": "UBER  TRIP 5",
+   "hint": null,
+   "untouched": true,
+   "key_payee": "UBER  TRIP 5",
+   "occ": 1
+  },
+  {
+   "amount": -21300,
+   "payee": "Uber plus",
+   "import_payee_name": "Uber Trip Plus",
+   "import_payee_name_original": "UBER TRIP PLUS 5",
+   "hint": null,
+   "untouched": false,
+   "key_payee": "Uber plus",
+   "occ": 1
+  }
+ ]
+}

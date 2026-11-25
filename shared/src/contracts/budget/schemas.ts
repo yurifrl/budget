@@ -5,7 +5,7 @@
  */
 import { z } from '../../zod';
 
-import { categorizationModes, matchTypes } from '../../domain/payees';
+import { categorizationModes, matchTypes, ruleMatchTypes } from '../../domain/payees';
 import {
   clearedSchema,
   currencyCodeSchema,
@@ -178,6 +178,8 @@ export const autoAssignRowSchema = z.object({
 export { categorizationModes, matchTypes };
 export const categorizationModeSchema = z.enum(categorizationModes);
 export const matchTypeSchema = z.enum(matchTypes);
+/** Every match type of a renaming rule (the single-rule endpoint keeps `matchTypeSchema`). */
+export const ruleMatchTypeSchema = z.enum(ruleMatchTypes);
 
 // ---- repeat rules -------------------------------------------------------------
 

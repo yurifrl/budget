@@ -1,0 +1,379 @@
+{
+ "_comment": "Recorded by running main (f538f3f) with overlapping is/contains rules whose payees ALL share one created_at (what a fresh-start copy leaves), 12 times with different creation orders of the payees (gen, spec and 10 shuffles). Main stored the same form every time (it read the rules in condition order, shorter pattern first); the planner may choose another order, so the test also accepts the other form (see rename-rules-tied.test.ts). Script: testdata/capture-main-tied.ts.txt.",
+ "same_in_all_runs": true,
+ "runs": [
+  "gen",
+  "spec",
+  "shuf0",
+  "shuf1",
+  "shuf2",
+  "shuf3",
+  "shuf4",
+  "shuf5",
+  "shuf6",
+  "shuf7",
+  "shuf8",
+  "shuf9"
+ ],
+ "texts": [
+  [
+   "POSTO SHELL 3",
+   -1000
+  ],
+  [
+   "POSTO 4",
+   -1100
+  ],
+  [
+   "AMAZON PRIME BR",
+   -1200
+  ],
+  [
+   "AMAZON X",
+   -1300
+  ],
+  [
+   "IFOOD CLUB 1",
+   -1400
+  ],
+  [
+   "IFOOD 2",
+   -1500
+  ],
+  [
+   "MERCADO LIVRE 1",
+   -1600
+  ],
+  [
+   "MERC 2",
+   -1700
+  ],
+  [
+   "LOJA X 1",
+   -1800
+  ],
+  [
+   "loja y 2",
+   -1900
+  ],
+  [
+   "POSTO SHELL IS",
+   -2000
+  ]
+ ],
+ "main": {
+  "results": {
+   "s1": {
+    "added": 11,
+    "updated": 0
+   },
+   "s2": {
+    "added": 0,
+    "updated": 0,
+    "duplicates": 11
+   },
+   "b1": {
+    "imported": 11,
+    "duplicates": 0
+   },
+   "b2": {
+    "imported": 0,
+    "duplicates": 11
+   }
+  },
+  "sync_rows": [
+   {
+    "external_id": "t0",
+    "amount": -1000,
+    "payee": "Posto shell 3",
+    "import_payee_name": "Posto shell 3",
+    "import_payee_name_original": "Posto shell 3",
+    "shadow_payee": "Posto shell 3"
+   },
+   {
+    "external_id": "t1",
+    "amount": -1100,
+    "payee": "Posto 4",
+    "import_payee_name": "Posto 4",
+    "import_payee_name_original": "Posto 4",
+    "shadow_payee": "Posto 4"
+   },
+   {
+    "external_id": "t10",
+    "amount": -2000,
+    "payee": "Posto shell is",
+    "import_payee_name": "Posto shell is",
+    "import_payee_name_original": "Posto shell is",
+    "shadow_payee": "Posto shell is"
+   },
+   {
+    "external_id": "t2",
+    "amount": -1200,
+    "payee": "Amazon prime br",
+    "import_payee_name": "Amazon prime br",
+    "import_payee_name_original": "Amazon prime br",
+    "shadow_payee": "Amazon prime br"
+   },
+   {
+    "external_id": "t3",
+    "amount": -1300,
+    "payee": "Amazon x",
+    "import_payee_name": "Amazon x",
+    "import_payee_name_original": "Amazon x",
+    "shadow_payee": "Amazon x"
+   },
+   {
+    "external_id": "t4",
+    "amount": -1400,
+    "payee": "Ifood club 1",
+    "import_payee_name": "Ifood club 1",
+    "import_payee_name_original": "Ifood club 1",
+    "shadow_payee": "Ifood club 1"
+   },
+   {
+    "external_id": "t5",
+    "amount": -1500,
+    "payee": "Ifood 2",
+    "import_payee_name": "Ifood 2",
+    "import_payee_name_original": "Ifood 2",
+    "shadow_payee": "Ifood 2"
+   },
+   {
+    "external_id": "t6",
+    "amount": -1600,
+    "payee": "Mercadoado livre 1",
+    "import_payee_name": "Mercadoado livre 1",
+    "import_payee_name_original": "Mercadoado livre 1",
+    "shadow_payee": "Mercadoado livre 1"
+   },
+   {
+    "external_id": "t7",
+    "amount": -1700,
+    "payee": "Mercado 2",
+    "import_payee_name": "Mercado 2",
+    "import_payee_name_original": "Mercado 2",
+    "shadow_payee": "Mercado 2"
+   },
+   {
+    "external_id": "t8",
+    "amount": -1800,
+    "payee": "Loja x 1",
+    "import_payee_name": "Loja x 1",
+    "import_payee_name_original": "Loja x 1",
+    "shadow_payee": "Loja x 1"
+   },
+   {
+    "external_id": "t9",
+    "amount": -1900,
+    "payee": "Loja y 2",
+    "import_payee_name": "Loja y 2",
+    "import_payee_name_original": "Loja y 2",
+    "shadow_payee": "Loja y 2"
+   }
+  ],
+  "bulk_rows": [
+   {
+    "amount": -1000,
+    "payee": "Posto shell 3",
+    "import_payee_name": "POSTO SHELL 3",
+    "import_payee_name_original": "POSTO SHELL 3",
+    "key_payee": "Posto shell 3",
+    "occ": 1
+   },
+   {
+    "amount": -1100,
+    "payee": "Posto 4",
+    "import_payee_name": "POSTO 4",
+    "import_payee_name_original": "POSTO 4",
+    "key_payee": "Posto 4",
+    "occ": 1
+   },
+   {
+    "amount": -1200,
+    "payee": "Amazon prime br",
+    "import_payee_name": "AMAZON PRIME BR",
+    "import_payee_name_original": "AMAZON PRIME BR",
+    "key_payee": "Amazon prime br",
+    "occ": 1
+   },
+   {
+    "amount": -1300,
+    "payee": "Amazon x",
+    "import_payee_name": "AMAZON X",
+    "import_payee_name_original": "AMAZON X",
+    "key_payee": "Amazon x",
+    "occ": 1
+   },
+   {
+    "amount": -1400,
+    "payee": "Ifood club 1",
+    "import_payee_name": "IFOOD CLUB 1",
+    "import_payee_name_original": "IFOOD CLUB 1",
+    "key_payee": "Ifood club 1",
+    "occ": 1
+   },
+   {
+    "amount": -1500,
+    "payee": "Ifood 2",
+    "import_payee_name": "IFOOD 2",
+    "import_payee_name_original": "IFOOD 2",
+    "key_payee": "Ifood 2",
+    "occ": 1
+   },
+   {
+    "amount": -1600,
+    "payee": "Mercadoado livre 1",
+    "import_payee_name": "MERCADO LIVRE 1",
+    "import_payee_name_original": "MERCADO LIVRE 1",
+    "key_payee": "Mercadoado livre 1",
+    "occ": 1
+   },
+   {
+    "amount": -1700,
+    "payee": "Mercado 2",
+    "import_payee_name": "MERC 2",
+    "import_payee_name_original": "MERC 2",
+    "key_payee": "Mercado 2",
+    "occ": 1
+   },
+   {
+    "amount": -1800,
+    "payee": "Loja x 1",
+    "import_payee_name": "LOJA X 1",
+    "import_payee_name_original": "LOJA X 1",
+    "key_payee": "Loja x 1",
+    "occ": 1
+   },
+   {
+    "amount": -1900,
+    "payee": "Loja y 2",
+    "import_payee_name": "loja y 2",
+    "import_payee_name_original": "loja y 2",
+    "key_payee": "Loja y 2",
+    "occ": 1
+   },
+   {
+    "amount": -2000,
+    "payee": "Posto shell is",
+    "import_payee_name": "POSTO SHELL IS",
+    "import_payee_name_original": "POSTO SHELL IS",
+    "key_payee": "Posto shell is",
+    "occ": 1
+   }
+  ]
+ },
+ "payees_gen": [
+  [
+   "Posto",
+   "contains",
+   "POSTO"
+  ],
+  [
+   "Shell",
+   "contains",
+   "POSTO SHELL"
+  ],
+  [
+   "Amazon",
+   "contains",
+   "AMAZON"
+  ],
+  [
+   "Prime",
+   "contains",
+   "AMAZON PRIME"
+  ],
+  [
+   "Ifood",
+   "contains",
+   "IFOOD"
+  ],
+  [
+   "Ifood Club",
+   "contains",
+   "IFOOD CLUB"
+  ],
+  [
+   "Mercado",
+   "contains",
+   "MERC"
+  ],
+  [
+   "Mercado Livre",
+   "contains",
+   "MERCADO LIVRE"
+  ],
+  [
+   "Loja",
+   "contains",
+   "Loja"
+  ],
+  [
+   "Loja Dead",
+   "contains",
+   "LOJA"
+  ],
+  [
+   "Shell Is",
+   "is",
+   "POSTO SHELL IS"
+  ]
+ ],
+ "payees_spec": [
+  [
+   "Shell",
+   "contains",
+   "POSTO SHELL"
+  ],
+  [
+   "Posto",
+   "contains",
+   "POSTO"
+  ],
+  [
+   "Prime",
+   "contains",
+   "AMAZON PRIME"
+  ],
+  [
+   "Amazon",
+   "contains",
+   "AMAZON"
+  ],
+  [
+   "Ifood Club",
+   "contains",
+   "IFOOD CLUB"
+  ],
+  [
+   "Ifood",
+   "contains",
+   "IFOOD"
+  ],
+  [
+   "Mercado Livre",
+   "contains",
+   "MERCADO LIVRE"
+  ],
+  [
+   "Mercado",
+   "contains",
+   "MERC"
+  ],
+  [
+   "Loja Dead",
+   "contains",
+   "LOJA"
+  ],
+  [
+   "Loja",
+   "contains",
+   "Loja"
+  ],
+  [
+   "Shell Is",
+   "is",
+   "POSTO SHELL IS"
+  ]
+ ]
+}

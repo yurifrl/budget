@@ -4,10 +4,10 @@
  * through this module only (exported from the budget barrel); it is built on
  * the same functions budget's own routes use:
  *
- * - payees: `loadRenameRules` + `applyRules` + `resolveImportedPayee`
- *   (domain/transactions.ts), the /bulk import path: a text that names an account's
- *   transfer payee leaves the row ordinary and returns the account as a hint
- *   (`setTransferHint`), never a payee-only half transfer;
+ * - payees: `loadRenameRules` + `resolveImportedPayee` (domain/transactions.ts), the
+ *   /bulk import path: a matching renaming rule assigns its payee; a payee that is an
+ *   account's transfer payee (by a rule or by the text) leaves the row ordinary and
+ *   returns the account as a hint (`setTransferHint`), never a payee-only half transfer;
  * - balances: `applyBalanceDeltas` (domain/transactions.ts);
  * - transfers between own accounts: `linkTransfers` (domain/transfer-links.ts;
  *   `linkCardPayments` is its former name, kept for callers);
@@ -23,8 +23,7 @@
  */
 import type { PoolClient } from 'pg';
 
-import { applyRules, type RenameRule } from '@shared/domain/payees';
-import { loadRenameRules, planImportedPayee, resolveImportedPayee } from './domain/transactions';
+import { loadRenameRules, planImportedPayee, resolveImportedPayee, type RenameRules } from './domain/transactions';
 
 export { applyBalanceDeltas, type BalanceDelta } from './domain/transactions';
 export { linkTransfers, linkTransfers as linkCardPayments } from './domain/transfer-links';
@@ -51,6 +50,12 @@ export interface ResolvedPayee {
   transferAccountId: string | null;
   /** The name an earlier sync stored for the same text (the transfer payee); see `ImportedPayeePlan.legacyName`. */
   legacyName: string | null;
+  /**
+   * The payee names stored for the same text before a matching rule assigned its payee
+   * (a `contains` rule spliced it into the text: "Padaria 42"); see `ImportedPayeePlan.earlier`.
+   * A row that has one of them is unchanged, never rewritten for that alone.
+   */
+  earlierNames: string[];
 }
 
 /** What a text means, without any write (no payee is created): for rows that already exist. */
@@ -65,31 +70,39 @@ export interface ImportPayeeResolver {
 
 /**
  * Rule-rewritten payee resolution for one budget inside the caller's
- * transaction, cached per raw (trimmed) name; the budget's rename rules are
+ * transaction, cached per raw (trimmed) name; the budget's renaming rules are
  * read once, on the first non-blank name. Create-or-find by the rewritten
  * name, kept verbatim; blank names (raw or rewritten) resolve to
  * `{ id: null, name: '' }`.
  */
 export function createImportPayeeResolver(client: PoolClient, budgetId: string): ImportPayeeResolver {
   const cache = new Map<string, ResolvedPayee>();
-  let rules: RenameRule[] | null = null;
-  const blank: ResolvedPayee = { id: null, name: '', importName: '', transferAccountId: null, legacyName: null };
+  let rules: RenameRules | null = null;
+  const blank: ResolvedPayee = { id: null, name: '', importName: '', transferAccountId: null, legacyName: null, earlierNames: [] };
+  const earlierNamesOf = (earlier: { name: string; legacyName: string | null }[]): string[] =>
+    earlier.flatMap((e) => [e.name, ...(e.legacyName ? [e.legacyName] : [])]);
   return {
     async peek(rawName: string): Promise<PeekedPayee> {
       const name = rawName.trim();
       if (!name) return blank;
-      if (!rules) rules = (await loadRenameRules(client, budgetId)).rows;
-      const plan = await planImportedPayee(client, budgetId, name, applyRules(rules, name), { verbatim: true });
-      return { name: plan.name, importName: plan.importName, transferAccountId: plan.transferAccountId, legacyName: plan.legacyName };
+      rules ??= await loadRenameRules(client, budgetId);
+      const plan = await planImportedPayee(client, budgetId, name, rules, { verbatim: true });
+      return { name: plan.name, importName: plan.importName, transferAccountId: plan.transferAccountId, legacyName: plan.legacyName, earlierNames: earlierNamesOf(plan.earlier) };
     },
     async resolve(rawName: string): Promise<ResolvedPayee> {
       const name = rawName.trim();
       if (!name) return blank;
       if (!cache.has(name)) {
-        if (!rules) rules = (await loadRenameRules(client, budgetId)).rows;
-        const effective = applyRules(rules, name);
-        const payee = await resolveImportedPayee(client, budgetId, name, effective, { verbatim: true });
-        cache.set(name, { id: payee.id, name: payee.name, importName: payee.importName, transferAccountId: payee.transferAccountId, legacyName: payee.legacyName });
+        rules ??= await loadRenameRules(client, budgetId);
+        const payee = await resolveImportedPayee(client, budgetId, name, rules, { verbatim: true });
+        cache.set(name, {
+          id: payee.id,
+          name: payee.name,
+          importName: payee.importName,
+          transferAccountId: payee.transferAccountId,
+          legacyName: payee.legacyName,
+          earlierNames: earlierNamesOf(payee.earlier),
+        });
       }
       return cache.get(name)!;
     },

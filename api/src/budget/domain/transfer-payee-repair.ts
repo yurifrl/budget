@@ -90,7 +90,7 @@ export interface TransferPayeeRepairReport {
   transactions_repointed: number;
   rename_rules_moved: number;
   rename_rules_dropped: number;
-  /** Every rule that cannot move to the kept payee and is lost (a payee holds one of each). */
+  /** Every rule that cannot move to the kept payee and is lost (a payee holds one "treat as transfer" rule). */
   dropped_rules: DroppedRule[];
   /**
    * Payees the repair does not delete because rows of ANOTHER budget reference
@@ -208,27 +208,12 @@ export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepair
       }
     }
     report.payees_removed += extras.filter((e) => !foreign.has(e.id)).length;
-    let heldRule = canonical ? { type: canonical.rename_match_type, condition: canonical.rename_condition } : null;
     let heldTransferRule = canonical?.transfer_rule ?? null;
     const keptId = canonical?.id ?? '';
     for (const extra of extras) {
       report.transactions_repointed += input.transactionCounts.get(extra.id) ?? 0;
-      if (extra.rename_condition !== null && extra.rename_match_type !== null) {
-        if (heldRule === null || heldRule.condition === null) {
-          heldRule = { type: extra.rename_match_type, condition: extra.rename_condition };
-          report.rename_rules_moved++;
-        } else if (heldRule.condition !== extra.rename_condition || heldRule.type !== extra.rename_match_type) {
-          report.rename_rules_dropped++;
-          report.dropped_rules.push({
-            kind: 'rename_rule',
-            account_id: account.id,
-            payee_id: extra.id,
-            payee_name: extra.name,
-            detail: `${extra.rename_match_type} "${extra.rename_condition}"`,
-            kept_payee_id: keptId,
-          });
-        }
-      }
+      // Renaming rules all move to the kept payee (one rule belongs to one payee per budget: none collide).
+      report.rename_rules_moved += extra.rename_rule_count;
       if (extra.transfer_rule !== null) {
         if (heldTransferRule === null) heldTransferRule = extra.transfer_rule;
         else if (heldTransferRule !== extra.transfer_rule) {
