@@ -9,8 +9,8 @@ const scoped = z.object({ id: uuidSchema, budget_id: budgetId });
 export const payeesList = defineOperation({
   name: 'budget_payees_list',
   description:
-    'List payees with transaction counts, last-used date and inferred category. hidden=false lists visible payees only, true hidden only.',
-  input: z.object({ budget_id: budgetId, hidden: z.string().optional() }),
+    'List payees with transaction counts, last-used date and inferred category. hidden=false lists visible payees only, true hidden only. Each account has one system payee "Transfer : <account>" (transfer_account_id set, transfer_account_name = the account\'s current name): it is listed only with include_transfers=true, and it cannot be renamed, merged, hidden or deleted.',
+  input: z.object({ budget_id: budgetId, hidden: z.string().optional(), include_transfers: z.string().optional() }),
   output: z.array(payeeAdminRowSchema),
   method: 'GET',
   path: '/payees',

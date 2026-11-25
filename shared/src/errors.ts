@@ -122,6 +122,8 @@ export const SPECIFIC_ERROR_CODES = [
   'member_not_in_budget',
   // Budget: payees, bundles, people, backup.
   'payee_name_reserved',
+  'transfer_payee_protected',
+  'transfer_payee_ambiguous',
   'payee_name_deleted_exists',
   'payee_name_exists',
   'cannot_merge_into_itself',

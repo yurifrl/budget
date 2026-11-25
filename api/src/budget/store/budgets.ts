@@ -183,22 +183,8 @@ export async function copyBudgetForFreshStart(client: Queryable, oldId: string, 
       AND acc.old = a_old.id AND a_old.transfer_payee_id = pay.old`,
     [newId],
   );
-  // Belt-and-braces: an account without a transfer payee gets a fresh one
-  // (mirrors the account-create convention).
-  await client.query(
-    `INSERT INTO payees (budget_id, name, transfer_account_id, hidden, deleted)
-   SELECT $1, 'Transfer : ' || a.name, a.id, false, false
-     FROM accounts a
-    WHERE a.budget_id = $1 AND a.transfer_payee_id IS NULL
-   ON CONFLICT DO NOTHING`,
-    [newId],
-  );
-  await client.query(
-    `UPDATE accounts a SET transfer_payee_id = p.id
-     FROM payees p WHERE a.budget_id = $1 AND p.budget_id = $1
-       AND p.transfer_account_id = a.id AND a.transfer_payee_id IS NULL`,
-    [newId],
-  );
+  // Accounts left without a transfer payee (and duplicates) are repaired by the
+  // caller once the copy is done (domain/transfer-payee-repair.ts).
 
   // ---- plan structure maps (YNAB: groups + categories carry; assignments
   // reset — the plan starts empty). Built before the transaction copy:

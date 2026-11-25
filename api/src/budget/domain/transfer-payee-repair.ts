@@ -1,0 +1,206 @@
+/**
+ * Repair of a budget's transfer payees: exactly one per account, linked both
+ * ways, named after the account, with nothing left on duplicates.
+ *
+ * What it finds, per live account of one budget:
+ *  - zero transfer payees (the account never got one, or it was retired):
+ *    adopts a name-only "Transfer : <account>" payee when the account's name is
+ *    unambiguous, else creates one;
+ *  - several transfer payees (an account rename left the old name behind and
+ *    the new name was picked later, R3): keeps one (the account's own pointer,
+ *    else the oldest live), moves every transaction, split, scheduled row,
+ *    repeat rule and link record of the others onto it, moves their renaming /
+ *    "treat as transfer" rules when the kept one has none (a payee holds one
+ *    renaming rule: a different second one is dropped and counted), and
+ *    deletes the others;
+ *  - name-only "Transfer : <account>" payees (no link, as old imports, restores
+ *    and the other app write them): folded into the account's payee when its
+ *    name is unambiguous; left alone and counted when two accounts share it;
+ *  - a payee whose name is not the account's current name, or a pointer that
+ *    disagrees with the payee: renamed / re-pointed.
+ *
+ * `planTransferPayeeRepair` is pure and is the single source of the report;
+ * `repairTransferPayees` with `apply: false` only reads (use it in a READ ONLY
+ * transaction); with `apply: true` it runs the plan through the same
+ * primitives the account lifecycle uses, and a second run reports nothing to
+ * do. Run it inside one database transaction.
+ */
+import type { Queryable } from '../../core/db';
+import { TRANSFER_PAYEE_RE } from '@shared/domain/transfers';
+import * as store from '../store/transfer-payees';
+import type { AccountPayeeRow, PayeeFullRow } from '../store/transfer-payees';
+import { absorbPayee, ensureTransferPayee, isTransferPayeeNameFor, pickCanonical, renameTransferPayee } from './transfer-payees';
+
+export interface AccountRepairAction {
+  account_id: string;
+  account_name: string;
+  /** The payee kept; null = none exists, one is created. */
+  canonical_payee_id: string | null;
+  /** The kept payee is a name-only payee that gets linked to the account. */
+  adopt: boolean;
+  /** Payees folded into the kept one and deleted. */
+  extra_payee_ids: string[];
+  rename: boolean;
+  fix_pointer: boolean;
+  /** The kept payee is retired or hidden and gets revived. */
+  revive: boolean;
+}
+
+export interface TransferPayeeRepairReport {
+  budget_id: string;
+  applied: boolean;
+  accounts_checked: number;
+  /** Accounts with no transfer payee at all: one is created or adopted. */
+  accounts_without_payee: number;
+  /** Accounts with several transfer payees. */
+  accounts_with_duplicates: number;
+  /** Unlinked "Transfer : <account>" payees folded into / adopted by their account's payee. */
+  name_only_payees: number;
+  /** Unlinked payees named after a name two or more accounts share: left alone. */
+  ambiguous_name_only_payees: number;
+  /** Live payees linked to an account that is gone and matching no live account: left alone. */
+  orphan_transfer_payees: number;
+  payees_renamed: number;
+  pointers_fixed: number;
+  payees_removed: number;
+  transactions_repointed: number;
+  rename_rules_moved: number;
+  rename_rules_dropped: number;
+  actions: AccountRepairAction[];
+}
+
+export interface RepairInput {
+  budgetId: string;
+  accounts: readonly AccountPayeeRow[];
+  payees: readonly PayeeFullRow[];
+  /** Transactions per payee id. */
+  transactionCounts: ReadonlyMap<string, number>;
+}
+
+const peerNameOf = (name: string): string | undefined => TRANSFER_PAYEE_RE.exec(name)?.[1]?.trim();
+
+/** The repair plan and its counts, from loaded rows; no I/O. */
+export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepairReport {
+  const { accounts, payees } = input;
+  const liveIds = new Set(accounts.map((a) => a.id));
+  const accountsByName = new Map<string, AccountPayeeRow[]>();
+  for (const a of accounts) accountsByName.set(a.name, [...(accountsByName.get(a.name) ?? []), a]);
+  const linkedTo = (p: PayeeFullRow): string | null =>
+    p.transfer_account_id !== null && liveIds.has(p.transfer_account_id) ? p.transfer_account_id : null;
+
+  // Unlinked live payees that read "Transfer : <name>" with one live account of that name.
+  const nameOnlyByAccount = new Map<string, PayeeFullRow[]>();
+  let ambiguous = 0;
+  let orphans = 0;
+  for (const p of payees) {
+    if (p.deleted || linkedTo(p) !== null) continue;
+    const peer = peerNameOf(p.name);
+    const matches = peer === undefined ? [] : (accountsByName.get(peer) ?? []);
+    if (matches.length === 1) {
+      const id = matches[0]!.id;
+      nameOnlyByAccount.set(id, [...(nameOnlyByAccount.get(id) ?? []), p]);
+    } else if (matches.length > 1 && p.transfer_account_id === null) {
+      ambiguous++;
+    } else if (p.transfer_account_id !== null) {
+      orphans++;
+    }
+  }
+
+  const report: TransferPayeeRepairReport = {
+    budget_id: input.budgetId,
+    applied: false,
+    accounts_checked: accounts.length,
+    accounts_without_payee: 0,
+    accounts_with_duplicates: 0,
+    name_only_payees: 0,
+    ambiguous_name_only_payees: ambiguous,
+    orphan_transfer_payees: orphans,
+    payees_renamed: 0,
+    pointers_fixed: 0,
+    payees_removed: 0,
+    transactions_repointed: 0,
+    rename_rules_moved: 0,
+    rename_rules_dropped: 0,
+    actions: [],
+  };
+
+  for (const account of accounts) {
+    const linked = payees.filter((p) => linkedTo(p) === account.id);
+    const nameOnly = nameOnlyByAccount.get(account.id) ?? [];
+    let canonical = pickCanonical(account.transfer_payee_id, linked);
+    let adopt = false;
+    if ((!canonical || canonical.deleted) && nameOnly.length > 0) {
+      canonical = nameOnly[0];
+      adopt = true;
+    }
+    const extras = [...linked, ...nameOnly].filter((p) => p.id !== canonical?.id);
+    const create = canonical === undefined;
+    const rename = canonical !== undefined && !isTransferPayeeNameFor(canonical.name, account.name);
+    const fixPointer = canonical !== undefined && account.transfer_payee_id !== canonical.id;
+    const revive = canonical !== undefined && (canonical.deleted || canonical.hidden);
+    if (!create && !adopt && !rename && !fixPointer && !revive && extras.length === 0) continue;
+
+    if (linked.length === 0) report.accounts_without_payee++;
+    if (linked.length > 1) report.accounts_with_duplicates++;
+    report.name_only_payees += nameOnly.length;
+    if (rename) report.payees_renamed++;
+    if (fixPointer) report.pointers_fixed++;
+    report.payees_removed += extras.length;
+    let heldRule = canonical?.rename_condition ?? null;
+    for (const extra of extras) {
+      report.transactions_repointed += input.transactionCounts.get(extra.id) ?? 0;
+      if (extra.rename_condition === null) continue;
+      if (heldRule === null) {
+        heldRule = extra.rename_condition;
+        report.rename_rules_moved++;
+      } else if (heldRule !== extra.rename_condition) {
+        report.rename_rules_dropped++;
+      }
+    }
+    report.actions.push({
+      account_id: account.id,
+      account_name: account.name,
+      canonical_payee_id: canonical?.id ?? null,
+      adopt,
+      extra_payee_ids: extras.map((e) => e.id),
+      rename,
+      fix_pointer: fixPointer,
+      revive,
+    });
+  }
+  return report;
+}
+
+async function loadInput(db: Queryable, budgetId: string): Promise<RepairInput> {
+  const [accounts, payees] = await Promise.all([store.listLiveAccounts(db, budgetId), store.listBudgetPayees(db, budgetId)]);
+  const candidates = payees.filter((p) => p.transfer_account_id !== null || TRANSFER_PAYEE_RE.test(p.name)).map((p) => p.id);
+  return { budgetId, accounts, payees, transactionCounts: await store.countTransactionsByPayee(db, candidates) };
+}
+
+/**
+ * Report (`apply: false`, reads only) or perform (`apply: true`) the repair of
+ * one budget. The report of an apply is the plan it executed; run again it is
+ * empty.
+ */
+export async function repairTransferPayees(
+  db: Queryable,
+  budgetId: string,
+  opts: { apply: boolean },
+): Promise<TransferPayeeRepairReport> {
+  const report = planTransferPayeeRepair(await loadInput(db, budgetId));
+  if (!opts.apply) return report;
+  for (const action of report.actions) {
+    if (action.canonical_payee_id === null) {
+      await ensureTransferPayee(db, budgetId, action.account_id);
+    } else {
+      await store.linkPayeeToAccount(db, action.canonical_payee_id, action.account_id);
+      await store.setAccountTransferPayee(db, action.account_id, action.canonical_payee_id);
+      for (const extraId of action.extra_payee_ids) {
+        await absorbPayee(db, budgetId, extraId, action.canonical_payee_id);
+      }
+    }
+    // Names last: the folded payees may have held the account's current name.
+    if (action.rename) await renameTransferPayee(db, budgetId, action.account_id);
+  }
+  return { ...report, applied: true };
+}

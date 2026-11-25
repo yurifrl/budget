@@ -189,6 +189,8 @@ export const payeeAdminRowSchema = payeeRowSchema.extend({
   /** "Treat as transfer" rule (budget-mit6); null = off. */
   transfer_rule: z.enum(['auto', 'account', 'never']).nullable(),
   transfer_rule_account_id: id.nullable(),
+  /** The account of a transfer payee (`transfer_account_id` set): its current name; null for ordinary payees. */
+  transfer_account_name: nullableString.optional(),
 });
 
 export const payeeSuggestionSchema = z.object({

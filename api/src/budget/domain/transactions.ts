@@ -3,6 +3,7 @@ import type { Queryable } from '../../core/db';
 import type { z } from '@shared/zod';
 import { applyRules, type RenameRule } from '@shared/domain/payees';
 import { HttpError } from '../../core/validate';
+import { resolveTransferPayeeText } from './transfer-payees';
 import { ONE_WAY_ERROR, bothPositive, type subTxnListSchema } from '@shared/contracts/budget/schemas';
 
 /**
@@ -77,7 +78,11 @@ export async function resolvePayeeId(
   // Rename rules fire at transaction create/import: the stored name is the
   // rule-rewritten one, so the renamed payee is what gets created/upserted.
   const rules = await loadRenameRules(client, budgetId);
-  return upsertPayee(client, budgetId, applyRules(rules.rows, name));
+  const effective = applyRules(rules.rows, name);
+  // A "Transfer : <account>" text means that account's one transfer payee,
+  // found by id through the account, never by guessing from the name.
+  const transferPayee = effective.trim() ? await resolveTransferPayeeText(client, budgetId, effective.trim()) : null;
+  return transferPayee ?? upsertPayee(client, budgetId, effective);
 }
 
 export async function applyBalanceDeltas(

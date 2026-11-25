@@ -2105,3 +2105,57 @@ app. The two now ship independently.
   active run. Provider calls run on the `<queue>-ai` task queue (1 activity
   start/s across pods, one activity at a time per worker), separate from
   ledger and bank work.
+
+## Transfer payee lifecycle (budget-upgg, transfers T2)
+
+Plan: `.agents/plans/2026-11-24_transfers-refactor.md` (T2). Code:
+`api/src/budget/domain/transfer-payees.ts` (lifecycle, protection, text
+resolution), `transfer-payee-repair.ts` (plan, report, repair),
+`store/transfer-payees.ts` (SQL), `scripts/repair-transfer-payees.ts`.
+
+- Every account has exactly one system payee "Transfer : <account>", found by
+  id: `payees.transfer_account_id` and `accounts.transfer_payee_id` are set
+  together by `ensureTransferPayee`, which also heals a disagreeing pointer, a
+  retired or hidden payee, and picks one canonical payee when duplicates exist
+  (the account's own pointer, else the oldest live).
+- Created with the account in every path that makes accounts: `POST /accounts`,
+  restore (a transfer leg takes the PEER account's payee by account id, not by
+  name), budget copy (the copy is repaired after it is written). Renamed in the
+  same transaction as the account (`renameTransferPayee`: same payee id, new
+  name). Kept when the account is closed; retired only when it is deleted
+  (unchanged).
+- Names are unique per budget, so a second account with the same name gets
+  "Transfer : X (2)", the third "(3)". A stale or name-only payee holding the
+  name an account is renamed to is folded into the account's payee (its
+  transactions, splits, scheduled rows, repeat rules and `transfer_links`
+  records move, its renaming and "treat as transfer" rules move when the kept
+  payee has none; a payee holds one renaming rule, so a different second one is
+  dropped and counted in the report).
+- Uniqueness is kept by code, not by an index: the shared database's other app
+  also writes `payees`, and a unique index would turn its writes into errors on
+  data that has duplicates today. Migration 0117 only adds a plain partial
+  index on `payees(transfer_account_id)` and changes no data.
+- Repair is a script, not a migration, so nothing runs when a release boots:
+  `bun api/scripts/repair-transfer-payees.ts --budget <uuid>` prints a READ ONLY
+  report (one READ ONLY transaction); `--apply` runs the same plan in one
+  transaction; a second run reports no actions. Runbook:
+  `docs/runbooks/transfer-payee-repair.md`.
+- The payee endpoints refuse to rename, merge (source or target), delete or
+  hide a transfer payee: 409 `transfer_payee_protected` with `params.name`
+  (en and pt-BR in `shared/src/i18n/errors`). Showing a hidden one, renaming
+  rules, categorization and the "treat as transfer" rule stay allowed: a
+  renaming rule on a transfer payee is how "imported payees that contain X are
+  renamed to this payee" works.
+- `GET /payees` lists transfer payees only with `include_transfers=true`
+  (additive input), each with `transfer_account_id` and the additive output
+  field `transfer_account_name` (the account's current name; null otherwise).
+  Default off because every current client caller (Manage Payees, the register
+  payee dropdown, the add sheet, the import flow, the budget model) would show
+  them as ordinary payees, and the register already lists them from accounts.
+- Payee TEXT is still accepted by the register paths (`resolvePayeeId`): a text
+  that is exactly an account payee's name resolves to that account's canonical
+  payee; a "Transfer : <name>" text that is no payee's name resolves to the one
+  live account of that name; two or more accounts with that name is refused
+  (409 `transfer_payee_ambiguous`, nothing written); no account means an
+  ordinary payee, as before. `resolveTransferPeer` no longer parses names: it
+  reads `payees.transfer_account_id` only.

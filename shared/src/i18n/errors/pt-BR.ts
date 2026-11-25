@@ -96,6 +96,8 @@ const m: Translation<typeof en> = {
   account_must_be_closed_first: 'Encerre esta conta antes de excluí-la.',
   member_not_in_budget: 'Essa pessoa não é membro deste orçamento.',
   payee_name_reserved: 'O nome "{name}" é reservado para um favorecido de transferência. Escolha outro nome.',
+  transfer_payee_protected: '"{name}" é o favorecido de transferência de uma conta. Ele acompanha o nome da conta e não pode ser renomeado, mesclado, ocultado nem excluído.',
+  transfer_payee_ambiguous: 'Mais de uma conta se chama "{name}", então esta transferência poderia ir para qualquer uma. Escolha a conta na lista.',
   payee_name_deleted_exists: 'Um favorecido excluído já se chama "{name}". Escolha outro nome.',
   payee_name_exists: 'Já existe um favorecido chamado "{name}". Escolha outro nome ou use Mesclar para combiná-los.',
   cannot_merge_into_itself: 'Um favorecido não pode ser mesclado com ele mesmo. Escolha outro favorecido.',

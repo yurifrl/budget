@@ -12,6 +12,7 @@ import {
 } from '@shared/contracts/budget';
 import { claimUnownedBudgets } from '../ownership';
 import { budgetRouter } from '../router';
+import { repairTransferPayees } from '../domain/transfer-payee-repair';
 import * as budgetsStore from '../store/budgets';
 import { authDisabled, DEV_EMAIL, toPersonRef, type IdentityUser } from '../../user';
 
@@ -91,6 +92,9 @@ export const operations = [
       const newId = created.id;
 
       await budgetsStore.copyBudgetForFreshStart(client, oldId, newId);
+      // The copy keeps one transfer payee per account, even when the old
+      // budget had duplicates or accounts without one.
+      await repairTransferPayees(client, newId, { apply: true });
 
       return c.json({ archived, created });
     });
