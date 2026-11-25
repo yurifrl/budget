@@ -2409,8 +2409,14 @@ on a sync, an ordinary request or a budget copy.
   single-rule call, merge, repair), so the mirror never erases it. Every rule write then
   mirrors the payee's first "is" / "contains" rule into the columns (null without one;
   left empty rather than failing when another payee's column already holds the same
-  text). A column cleared by the other app while the table keeps the rule cannot be told
-  from "not written": the table wins and the next write restores the column. Released
+  text). The columns are an input ONLY while the payee has no is/contains rule in the
+  table: once this app holds one for the payee, the table is the truth and the columns
+  follow it. So a rule the other app writes for a payee without one applies; a replace
+  or a clear done there afterwards does not take effect (the table keeps its rule, and
+  the next rule write here restores the column). There is no two-way sync: rules are
+  edited here. Reads (the payee list, the rule list, matching) include a column-only rule
+  computed at read time and write nothing; its id is the one it gets when it becomes a
+  row (the next rule write of that payee). Released
   clients keep working: `budget_payees_set_rename_rule` (PUT /payees/:id/rename-rule,
   same input and output) sets, changes or, with an empty condition, removes that first
   rule and leaves the others; the payee list keeps `rename_match_type` /
@@ -2423,6 +2429,11 @@ on a sync, an ordinary request or a budget copy.
   moves them all (`rename_rules_dropped` stays 0, `dropped_rules` lists only "treat as
   transfer" rules); a fresh-start copy copies them. A rule of the transfer payee of a
   closed or deleted account never fires.
+- **POST /payees is not an import.** A payee created by name is created (or found) by
+  exactly that name: no renaming rule applies (main spliced the rule's payee into the
+  name; that was dropped, as it produced names like "Padaria 5"). The 2-character
+  minimum applies only to the new rule operations (400 `rename_rule_too_short`); the
+  released client's single-rule call still accepts 1 character, as on main.
 - **Matching is main's comparison, nothing more.** Both the pattern and the text are
   compared after `toLowerCase()` and nothing else (`normalizeRuleText`, the one function
   the matcher and the frozen earlier matcher share): no trimming, no collapsing of
@@ -2431,7 +2442,13 @@ on a sync, an ordinary request or a budget copy.
   before; a text with two spaces matches only a pattern with the same two spaces. When
   several rules match one text (of one payee or of several): the most specific first
   (`is`, then `starts with` = `ends with`, then `contains`), then the longest pattern, then
-  the oldest rule (created_at, id). A blank pattern never matches.
+  the oldest rule: the rule's own `created_at`, then its creation sequence `seq` (the
+  copy numbers rules by payee age, then physical order; a pending column rule comes
+  last), then id. That is deterministic for NEW rows whatever the payees' `created_at`
+  (a fresh-start copy gives every payee one). A blank pattern never matches. The
+  recognition of rows main stored does NOT depend on this order: main took the first rule
+  among equals in whatever order Postgres returned them, so a stored row is recognised if
+  it holds the splice (name, and import key) of ANY matching is/contains rule.
 - **Rows already imported keep their payee, import key and dedupe.** Main's behaviour
   is kept, frozen, in `domain/legacy-rename.ts` and used only to READ what earlier
   imports stored. Bank sync: a row whose payee is what the earlier behaviour stored for
@@ -2454,7 +2471,10 @@ on a sync, an ordinary request or a budget copy.
   `import_payee_name_original`. Main ran every `payee` through the rules and could not
   tell them apart; /bulk now treats a row whose `import_payee_name_original` differs from
   `payee` as a chosen payee: no rule applies to it (it is found or created by name), while
-  the statement text still is assigned.
+  the statement text still is assigned. A /bulk row counts its occurrences per key prefix
+  (amount, date, payee id) as main did, so two texts a rule sends to one payee on one day
+  for one amount are two rows; as on main, a later file whose row lands on a key that
+  already holds rows is a re-import of them.
 - **The matcher sees an assigned row as untouched.** `untouched_ledger` (candidate
   loader) also accepts a payee equal to the sync shadow's last payee, and a statement row
   (no shadow) whose payee is one a rule of that payee assigns for the imported text, by
@@ -2476,5 +2496,4 @@ on a sync, an ordinary request or a budget copy.
   duplicate row with its own import id creates none. F-c: re-linking a leg whose
   previous payee was a transfer payee records the ordinary payee its import text
   stands for, so unlinking does not leave it without one. F-d: a hint naming a
-  soft-deleted account is ignored by the matcher. POST /payees with a name a transfer
-  payee's rule matches creates that ordinary payee, never returns the transfer payee.
+  soft-deleted account is ignored by the matcher.

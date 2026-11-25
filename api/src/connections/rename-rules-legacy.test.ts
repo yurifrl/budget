@@ -446,6 +446,7 @@ describe.skipIf(!dbReady)('review round 3: /bulk keeps every real row, and a use
 
   test('F-a: a synced row the person gave the rule\'s own payee is touched, whatever a rule says about its text', async () => {
     const { c } = await fresh('fa');
+    // eslint-disable-next-line import/no-restricted-paths
     const { listTransferCandidates } = await import('../budget/store/transfers');
     // c23 is the synced "Cafe Central 1" row (payee "Cafe Central 1", the splice main stored); the person edits it onto the payee "Cafe Central",
     // whose own rule "cafe central" matches the row's import text: it must NOT count as "as imported" for the matcher
