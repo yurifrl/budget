@@ -74,7 +74,7 @@ const m: Translation<typeof en> = {
   categorize_ai_unavailable: 'As sugestões de categoria não estão disponíveis: o dono do orçamento não tem uma chave de IA utilizável.',
   categorize_already_categorized: 'Uma dessas transações já tem uma categoria. Recarregue a página e tente de novo.',
   categorize_not_needing_category: 'Uma dessas transações não precisa mais de categoria. Recarregue a página e tente de novo.',
-  categorize_bundle_empty: 'Esse grupo não tem mais transações para categorizar. Recarregue a página e tente de novo.',
+  categorize_bundle_changed: 'Esse grupo mudou de {expected} para {actual} transações. Recarregue a página e tente de novo.',
   categorize_bundle_too_large: 'Esse grupo tem mais de 1000 transações. Busque as linhas e aceite em lotes menores.',
   category_not_assignable: 'Essa categoria não pode ser usada aqui. Escolha uma categoria comum, não uma de pagamento de cartão ou interna.',
   cannot_transfer_to_same_account: 'Escolha outra conta: uma transferência não pode ir para a mesma conta.',

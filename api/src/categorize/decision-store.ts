@@ -16,7 +16,7 @@ import { categoryAssignability, updateTransactionInClient } from '../budget';
 import { withTransaction, type Queryable } from '../core/db';
 import { HttpError } from '../core/validate';
 import { bundleTransactionIds, type BundleKey } from './queue-store';
-import { NEEDS_CATEGORY_FROM, NEEDS_CATEGORY_WHERE, pendingTransferIds } from './store';
+import { NEEDS_CATEGORY_FROM, NEEDS_CATEGORY_WHERE, NEEDS_CATEGORY_WHERE_IGNORING_CATEGORY, pendingTransferIds } from './store';
 
 export type DecisionItem = { transaction_id: string; category_id: string };
 export type UndoSkipReason = 'no_decision' | 'category_changed' | 'upcoming' | 'skipped' | 'not_found';
@@ -89,9 +89,11 @@ async function stillNeedsCategory(
   budgetId: string,
   transactionId: string,
   pending: readonly string[],
+  ignoreCategory = false,
 ): Promise<boolean> {
+  const where = ignoreCategory ? NEEDS_CATEGORY_WHERE_IGNORING_CATEGORY : NEEDS_CATEGORY_WHERE;
   const { rowCount } = await client.query(
-    `select 1 ${NEEDS_CATEGORY_FROM} ${NEEDS_CATEGORY_WHERE} and t.id = $3`,
+    `select 1 ${NEEDS_CATEGORY_FROM} ${where} and t.id = $3`,
     [budgetId, pending, transactionId],
   );
   return (rowCount ?? 0) > 0;
@@ -226,13 +228,19 @@ export async function acceptBundle(
   pool: Pool,
   budgetId: string,
   key: BundleKey,
+  expectedCount: number,
   userId: string | null,
 ): Promise<{ accepted: number; items: DecisionItem[] }> {
   return withTransaction(pool, async (client) => {
     const pending = await pendingTransferIds(client, budgetId);
     const transactionIds = await bundleTransactionIds(client, budgetId, key, pending);
-    if (transactionIds.length === 0) {
-      throw new HttpError(409, 'bundle no longer has transactions', 'categorize_bundle_empty');
+    if (transactionIds.length !== expectedCount) {
+      throw new HttpError(
+        409,
+        `bundle changed from ${expectedCount} to ${transactionIds.length} transactions`,
+        'categorize_bundle_changed',
+        { expected: expectedCount, actual: transactionIds.length },
+      );
     }
     if (transactionIds.length > 1000) {
       throw new HttpError(400, 'bundle is above the 1000 transaction cap', 'categorize_bundle_too_large');
@@ -264,6 +272,7 @@ export async function undoAccept(
   skipped: { transaction_id: string; reason: UndoSkipReason }[];
 }> {
   return withTransaction(pool, async (client) => {
+    const pending = await pendingTransferIds(client, budgetId);
     const locked = await lockLiveTransactions(client, budgetId, transactionIds);
     const decisions = await lockDecisions(client, budgetId, transactionIds);
     const restored: string[] = [];
@@ -293,6 +302,12 @@ export async function undoAccept(
       }
       // A hand-set or later-changed category is not accept's to undo.
       if (row.category_id !== decided.category_id) {
+        skipped.push({ transaction_id: transactionId, reason: 'category_changed' });
+        continue;
+      }
+      // The row must still need a category apart from the one accept set: an
+      // inflow, transfer or split since accept is not ours to clear.
+      if (!(await stillNeedsCategory(client, budgetId, transactionId, pending, true))) {
         skipped.push({ transaction_id: transactionId, reason: 'category_changed' });
         continue;
       }

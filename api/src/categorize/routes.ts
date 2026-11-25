@@ -144,16 +144,22 @@ export const operations = [
     };
   }),
 
-  implement(categorizeAccept, (c, { budget_id: budgetId, items, bundle_key: bundleKey }) => {
+  implement(categorizeAccept, (c, { budget_id: budgetId, items, bundle_key: bundleKey, expected_count: expectedCount }) => {
     const user = c.get('user');
     if (!user) throw new HttpError(401, 'unauthorized');
     if ((items === undefined) === (bundleKey === undefined)) {
       throw new HttpError(400, 'send exactly one of items or bundle_key', 'invalid_input');
     }
     if (bundleKey !== undefined) {
+      if (expectedCount === undefined) {
+        throw new HttpError(400, 'expected_count is required with bundle_key', 'invalid_input');
+      }
       const key = decodeBundleKey(bundleKey);
       if (!key) throw new HttpError(400, 'invalid bundle key', 'invalid_input');
-      return acceptBundle(pool, budgetId, key, user.id);
+      return acceptBundle(pool, budgetId, key, expectedCount, user.id);
+    }
+    if (expectedCount !== undefined) {
+      throw new HttpError(400, 'expected_count is only valid with bundle_key', 'invalid_input');
     }
     if (items === undefined) throw new HttpError(400, 'items are required', 'invalid_input');
     return acceptCategories(pool, budgetId, items, user.id);

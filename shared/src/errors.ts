@@ -98,7 +98,7 @@ export const SPECIFIC_ERROR_CODES = [
   'categorize_ai_unavailable',
   'categorize_already_categorized',
   'categorize_not_needing_category',
-  'categorize_bundle_empty',
+  'categorize_bundle_changed',
   'categorize_bundle_too_large',
   'category_not_assignable',
   // Budget: accounts, transactions, transfers, repeats.

@@ -133,6 +133,8 @@ describe('Categorize contracts', () => {
     expect(categorizeAccept.input.safeParse({ budget_id: b, items: [{ transaction_id: 'nope', category_id: c }] }).success).toBe(false);
     expect(categorizeAccept.input.safeParse({ budget_id: b, items: [...items, ...items] }).success).toBe(false);
     expect(categorizeAccept.input.safeParse({ budget_id: b, bundle_key: 'key' }).success).toBe(true);
+    expect(categorizeAccept.input.safeParse({ budget_id: b, bundle_key: 'key', expected_count: 3 }).success).toBe(true);
+    expect(categorizeAccept.input.safeParse({ budget_id: b, bundle_key: 'key', expected_count: 0 }).success).toBe(false);
     expect(categorizeAccept.output!.safeParse({ accepted: 1, items }).success).toBe(true);
     expect(categorizeUndo.input.safeParse({ budget_id: b, transaction_ids: [t] }).success).toBe(true);
     expect(categorizeUndo.input.safeParse({ budget_id: b, transaction_ids: [t, t] }).success).toBe(false);

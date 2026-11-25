@@ -13,6 +13,7 @@ import { dbReady } from '../core/test-gate';
 import { httpOnError } from '../core/validate';
 import type { IdentityUser } from '../user';
 import router from './router';
+import { candidateWindow, replaceSuggestions } from './store';
 import { cleanupFixtures, newAccount, newBudget, newCategory, newGroup, newTransaction, newUser, type BudgetFixture } from './testing';
 
 let acting: IdentityUser;
@@ -48,8 +49,8 @@ const queue = (who: IdentityUser, extra = '') =>
 const status = (who: IdentityUser, budgetId = a.budgetId) => call(who, 'GET', `/categorize/run?budget_id=${budgetId}`);
 const accept = (who: IdentityUser, items: unknown[], budgetId = a.budgetId) =>
   call(who, 'POST', '/categorize/accept', { budget_id: budgetId, items });
-const acceptBundle = (who: IdentityUser, bundleKey: string, budgetId = a.budgetId) =>
-  call(who, 'POST', '/categorize/accept', { budget_id: budgetId, bundle_key: bundleKey });
+const acceptBundle = (who: IdentityUser, bundleKey: string, expectedCount: number, budgetId = a.budgetId) =>
+  call(who, 'POST', '/categorize/accept', { budget_id: budgetId, bundle_key: bundleKey, expected_count: expectedCount });
 const undo = (who: IdentityUser, transactionIds: string[], budgetId = a.budgetId) =>
   call(who, 'POST', '/categorize/undo', { budget_id: budgetId, transaction_ids: transactionIds });
 const skip = (who: IdentityUser, transactionId: string, budgetId = a.budgetId) =>
@@ -190,7 +191,7 @@ describe.skipIf(!dbReady)('queue', () => {
     expect(next.rows.map((row: any) => row.transaction_id)).toEqual([ids[0]]);
     expect(filtered.counts.left_to_categorize).toBe(4);
 
-    const accepted = await acceptBundle(ownerUser(), bundle.bundle_key);
+    const accepted = await acceptBundle(ownerUser(), bundle.bundle_key, 3);
     expect(accepted.status).toBe(200);
     expect((await accepted.json()).accepted).toBe(3);
     expect((await pool.query('select category_id from public.transactions where id = any($1)', [ids])).rows.map((r) => r.category_id))
@@ -237,7 +238,7 @@ describe.skipIf(!dbReady)('queue', () => {
     const page = await queueJson(ownerUser());
     expect(page.bundles).toHaveLength(1);
     expect(page.bundles[0]).toMatchObject({ count: 1001 });
-    const res = await acceptBundle(ownerUser(), page.bundles[0].bundle_key);
+    const res = await acceptBundle(ownerUser(), page.bundles[0].bundle_key, 1001);
     expect(res.status).toBe(400);
     expect((await res.json()).code).toBe('categorize_bundle_too_large');
     expect((await pool.query('select count(*)::int as n from public.transactions where payee_id = $1 and category_id is not null', [payee])).rows[0].n).toBe(0);
@@ -249,12 +250,80 @@ describe.skipIf(!dbReady)('queue', () => {
     const page = await queueJson(ownerUser());
     const key = page.bundles[0].bundle_key;
     await pool.query(`delete from public.category_suggestions where transaction_id = $1`, [t]);
-    const gone = await acceptBundle(ownerUser(), key);
+    const gone = await acceptBundle(ownerUser(), key, 1);
     expect(gone.status).toBe(409);
-    expect((await gone.json()).code).toBe('categorize_bundle_empty');
+    expect(await gone.json()).toMatchObject({ code: 'categorize_bundle_changed', params: { expected: 1, actual: 0 } });
     const bad = await call(ownerUser(), 'POST', '/categorize/accept', { budget_id: a.budgetId, bundle_key: 'not-a-key' });
     expect(bad.status).toBe(400);
     expect((await bad.json()).code).toBe('invalid_input');
+  });
+
+  test('bundle totals are bigint-safe above int4', async () => {
+    const payee = await newPayee('Large bundle');
+    const first = await txn({ payeeId: payee, date: '2026-11-01', amount: -2_000_000_000 });
+    const second = await txn({ payeeId: payee, date: '2026-11-02', amount: -2_000_000_000 });
+    await suggest(first, a.food);
+    await suggest(second, a.food);
+    const page = await queueJson(ownerUser());
+    expect(page.bundles).toHaveLength(1);
+    expect(page.bundles[0]).toMatchObject({ count: 2, total: -4_000_000_000 });
+    const accepted = await acceptBundle(ownerUser(), page.bundles[0].bundle_key, 2);
+    expect(accepted.status).toBe(200);
+    expect((await accepted.json()).accepted).toBe(2);
+  });
+
+  test('a bundle key round-trips a long non-ASCII unlinked payee name', async () => {
+    const name = `Loja ${'ação 🚀 '.repeat(120)}`;
+    const t = await txn({ importPayeeName: name });
+    await suggest(t, a.food);
+    const page = await queueJson(ownerUser());
+    expect(page.bundles).toHaveLength(1);
+    expect(page.bundles[0]).toMatchObject({ payee: name, count: 1 });
+    expect(page.bundles[0].bundle_key.length).toBeLessThan(300);
+
+    const filtered = await (await call(
+      ownerUser(),
+      'GET',
+      `/categorize/queue?budget_id=${a.budgetId}&bundle=${encodeURIComponent(page.bundles[0].bundle_key)}`,
+    )).json();
+    expect(filtered.rows.map((row: any) => row.transaction_id)).toEqual([t]);
+
+    const accepted = await acceptBundle(ownerUser(), page.bundles[0].bundle_key, 1);
+    expect(accepted.status).toBe(200);
+    expect((await accepted.json()).accepted).toBe(1);
+    expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBe(a.food);
+  });
+
+  test('accept by bundle refuses a stale expected_count and applies nothing', async () => {
+    const payee = await newPayee('Grew bundle');
+    const first = await txn({ payeeId: payee });
+    await suggest(first, a.food);
+    const page = await queueJson(ownerUser());
+    const bundle = page.bundles[0];
+    expect(bundle).toMatchObject({ count: 1 });
+
+    const late = await txn({ payeeId: payee });
+    await suggest(late, a.food);
+    const stale = await acceptBundle(ownerUser(), bundle.bundle_key, bundle.count);
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      code: 'categorize_bundle_changed',
+      params: { expected: 1, actual: 2 },
+    });
+    const rows = (await pool.query('select category_id from public.transactions where id = any($1)', [[first, late]])).rows;
+    expect(rows.every((row) => row.category_id === null)).toBe(true);
+
+    // A bundle always carries the page's count; items do not take one.
+    const missing = await call(ownerUser(), 'POST', '/categorize/accept', { budget_id: a.budgetId, bundle_key: bundle.bundle_key });
+    expect(missing.status).toBe(400);
+    expect((await missing.json()).code).toBe('invalid_input');
+    const onItems = await call(ownerUser(), 'POST', '/categorize/accept', {
+      budget_id: a.budgetId,
+      items: [{ transaction_id: first, category_id: a.food }],
+      expected_count: 1,
+    });
+    expect(onItems.status).toBe(400);
+    expect((await onItems.json()).code).toBe('invalid_input');
   });
 
   test('returns the owner\'s own text and bank facts unmasked and untruncated', async () => {
@@ -544,6 +613,66 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     expect(await undoSkip.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: none, reason: 'skipped' }] });
     expect((await pool.query('select kind from public.categorize_decisions where transaction_id = $1', [none])).rows[0].kind).toBe('skip');
     expect((await queueJson(ownerUser())).rows).toEqual([]);
+  });
+
+  test('a skipped row is frozen for the engine: not a candidate and no suggestion write', async () => {
+    const t = await txn({ payeeId: await newPayee('Frozen') });
+    expect((await candidateWindow(pool, a.budgetId, true)).count).toBe(1);
+    await skip(ownerUser(), t);
+    expect((await candidateWindow(pool, a.budgetId, true)).count).toBe(0);
+    expect(
+      await replaceSuggestions(pool, a.budgetId, t, [
+        { categoryId: a.food, confidence: 0.9, reason: 'late', source: 'ai', provider: null, model: null },
+      ]),
+    ).toBe(false);
+    expect((await pool.query('select count(*)::int as n from public.category_suggestions where transaction_id = $1', [t])).rows[0].n).toBe(0);
+  });
+
+  test('a job suggestion write does not bump the revision; skip, accept and undo do', async () => {
+    const revision = async () =>
+      (await pool.query('select revision from public.budgets where id = $1', [a.budgetId])).rows[0].revision as number;
+
+    const skipped = await txn({ payeeId: await newPayee('Revision skip') });
+    const rev0 = await revision();
+    await suggest(skipped, a.food);
+    expect(await revision()).toBe(rev0);
+    await skip(ownerUser(), skipped);
+    const rev1 = await revision();
+    expect(rev1).toBeGreaterThan(rev0);
+
+    const accepted = await txn({ payeeId: await newPayee('Revision accept') });
+    await accept(ownerUser(), [{ transaction_id: accepted, category_id: a.food }]);
+    const rev2 = await revision();
+    expect(rev2).toBeGreaterThan(rev1);
+
+    expect((await undo(ownerUser(), [accepted])).status).toBe(200);
+    expect(await revision()).toBeGreaterThan(rev2);
+  });
+
+  test('undo leaves a row that became an inflow or a transfer after accept', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const inflow = await txn({ payeeId: await newPayee('Became inflow') });
+    await suggest(inflow, a.food);
+    await accept(ownerUser(), [{ transaction_id: inflow, category_id: a.food }]);
+    await pool.query('update public.transactions set amount = 5000 where id = $1', [inflow]);
+
+    const transfer = await txn({ payeeId: await newPayee('Became transfer') });
+    await suggest(transfer, a.food);
+    await accept(ownerUser(), [{ transaction_id: transfer, category_id: a.food }]);
+    await pool.query('update public.transactions set transfer_account_id = $2 where id = $1', [transfer, savings]);
+
+    const res = await undo(ownerUser(), [inflow, transfer]);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      restored: 0,
+      transaction_ids: [],
+      skipped: [
+        { transaction_id: inflow, reason: 'category_changed' },
+        { transaction_id: transfer, reason: 'category_changed' },
+      ],
+    });
+    const rows = (await pool.query('select category_id from public.transactions where id = any($1) order by id', [[inflow, transfer]])).rows;
+    expect(rows.map((row) => row.category_id)).toEqual([a.food, a.food]);
   });
 
   test('duplicate transaction ids in one batch are invalid input', async () => {

@@ -8,6 +8,7 @@
  * "needs a category" rule with the run (NEEDS_CATEGORY_FROM/WHERE in store.ts,
  * plus the transfer-plan ids) — the queue does not re-state that rule.
  */
+import { createHash } from 'crypto';
 import type { Queryable } from '../core/db';
 import { merchantPanel, NEEDS_CATEGORY_FROM, NEEDS_CATEGORY_WHERE, pendingTransferIds, type SuggestionSource } from './store';
 import type { MerchantPanel } from './store';
@@ -53,8 +54,13 @@ export type QueueBundle = {
   suggestion: QueueSuggestion;
 };
 
-/** The decoded bundle key. The category is the bundle's top suggestion. */
-export type BundleKey = { payee_id: string | null; payee: string; category_id: string };
+/**
+ * The decoded bundle key. The category is the bundle's top suggestion. A
+ * payee row is identified by its id; an unlinked payee has no id, so its name
+ * is represented by a hash (the key never carries the name itself, which has
+ * no length or charset bound).
+ */
+export type BundleKey = { payee_id: string | null; payee_hash: string | null; category_id: string };
 
 export type QueueCounts = {
   left_to_categorize: number;
@@ -76,6 +82,11 @@ const ASSIGNABLE = `
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Hex md5 of a payee name (the bundle identity when the payee row is absent). */
+function payeeHash(name: string): string {
+  return createHash('md5').update(name, 'utf8').digest('hex');
+}
+
 /** A deterministic, URL-safe key for one bundle (payee + top suggestion). */
 export function encodeBundleKey(key: BundleKey): string {
   return Buffer.from(JSON.stringify(key), 'utf8').toString('base64url');
@@ -87,13 +98,27 @@ export function decodeBundleKey(value: string): BundleKey | null {
     const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Partial<BundleKey> | null;
     if (parsed === null || typeof parsed !== 'object') return null;
     if (parsed.payee_id !== null && (typeof parsed.payee_id !== 'string' || !UUID_RE.test(parsed.payee_id))) return null;
-    if (typeof parsed.payee !== 'string' || parsed.payee.length === 0 || parsed.payee.length > 500) return null;
+    if (parsed.payee_id === null) {
+      if (typeof parsed.payee_hash !== 'string' || !/^[0-9a-f]{32}$/.test(parsed.payee_hash)) return null;
+    } else if (parsed.payee_hash !== null && parsed.payee_hash !== undefined) {
+      return null;
+    }
     if (typeof parsed.category_id !== 'string' || !UUID_RE.test(parsed.category_id)) return null;
-    return { payee_id: parsed.payee_id, payee: parsed.payee, category_id: parsed.category_id };
+    return {
+      payee_id: parsed.payee_id,
+      payee_hash: parsed.payee_id === null ? (parsed.payee_hash as string) : null,
+      category_id: parsed.category_id,
+    };
   } catch {
     return null;
   }
 }
+
+/** The payee half of a bundle match. Args: $4 payee id, $5 payee-name hash. */
+const bundlePayeeMatch = (alias: string): string => `(
+  ${alias}.payee_id is not distinct from $4
+  and ($4::uuid is not null or md5(${alias}.payee) = $5)
+)`;
 
 /**
  * The queue: live transactions of this budget that the shared rule says need a
@@ -258,8 +283,7 @@ export async function listQueue(
     ? `, filtered as (
          select q.* from q
           where q.payee is not null
-            and q.payee_id is not distinct from $4
-            and q.payee = $5
+            and ${bundlePayeeMatch('q')}
             and (
               select s.category_id
                 from public.category_suggestions s
@@ -273,7 +297,7 @@ export async function listQueue(
        )`
     : '';
   const source = bundle ? 'filtered' : 'q';
-  const pageParams = bundle ? [...scope, bundle.payee_id, bundle.payee, bundle.category_id] : scope;
+  const pageParams = bundle ? [...scope, bundle.payee_id, bundle.payee_hash, bundle.category_id] : scope;
 
   const { rows } = await db.query<RawQueueRow>(
     `${QUEUE_CTE}${bundleFilter}
@@ -312,7 +336,7 @@ export async function listQueue(
     reason: string | null;
     source: SuggestionSource;
     count: number;
-    total: number;
+    total: string;
     first_date: string;
     last_date: string;
   }>(
@@ -322,7 +346,7 @@ export async function listQueue(
             (array_agg(reason order by confidence desc, date desc, transaction_id))[1] as reason,
             (array_agg(source order by confidence desc, date desc, transaction_id))[1] as source,
             count(*)::int as count,
-            sum(amount)::int as total,
+            sum(amount)::bigint as total,
             min(date)::text as first_date,
             max(date)::text as last_date
        from top
@@ -346,13 +370,13 @@ export async function listQueue(
     bundles: bundles.rows.map((bundleRow) => ({
       bundle_key: encodeBundleKey({
         payee_id: bundleRow.payee_id,
-        payee: bundleRow.payee,
+        payee_hash: bundleRow.payee_id === null ? payeeHash(bundleRow.payee) : null,
         category_id: bundleRow.category_id,
       }),
       payee_id: bundleRow.payee_id,
       payee: bundleRow.payee,
       count: bundleRow.count,
-      total: bundleRow.total,
+      total: Number(bundleRow.total),
       first_date: bundleRow.first_date,
       last_date: bundleRow.last_date,
       suggestion: {
@@ -380,12 +404,11 @@ export async function bundleTransactionIds(
   const { rows } = await db.query<{ transaction_id: string }>(
     `${TOP_CTE}
      select transaction_id from top
-      where payee_id is not distinct from $4
-        and payee = $5
-        and category_id = $6
+      where ${bundlePayeeMatch('top')}
+        and top.category_id = $6
       order by date desc, transaction_id desc
       limit 1001`,
-    [budgetId, pending, threshold, key.payee_id, key.payee, key.category_id],
+    [budgetId, pending, threshold, key.payee_id, key.payee_hash, key.category_id],
   );
   return rows.map((row) => row.transaction_id);
 }

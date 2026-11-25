@@ -268,10 +268,8 @@ export const NEEDS_CATEGORY_FROM = `
   join public.accounts a on a.id = t.account_id and a.budget_id = t.budget_id
   left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id`;
 
-export const NEEDS_CATEGORY_WHERE = `
-  where t.budget_id = $1
+const NEEDS_CATEGORY_BODY = `
     and t.deleted = false
-    and t.category_id is null
     and t.upcoming = false
     and t.amount <= 0
     and t.transfer_transaction_id is null
@@ -302,6 +300,14 @@ export const NEEDS_CATEGORY_WHERE = `
     and not exists (select 1 from public.subtransactions s where s.transaction_id = t.id and s.deleted = false)
     and not (t.id = any($2::uuid[]))`;
 
+export const NEEDS_CATEGORY_WHERE = `where t.budget_id = $1 and t.category_id is null ${NEEDS_CATEGORY_BODY}`;
+
+/**
+ * The same rule without the "still uncategorized" term. Undo re-checks it so a
+ * row that became an inflow, transfer or split since accept is left alone.
+ */
+export const NEEDS_CATEGORY_WHERE_IGNORING_CATEGORY = `where t.budget_id = $1 ${NEEDS_CATEGORY_BODY}`;
+
 /**
  * The run adds: skip rows with any suggestion, and rows whose attempt says
  * no-suggestion (same payee/memo fingerprint) or failed (still backing off /
@@ -309,6 +315,10 @@ export const NEEDS_CATEGORY_WHERE = `
  */
 const CANDIDATE_FROM = NEEDS_CATEGORY_FROM;
 const CANDIDATE_WHERE = `${NEEDS_CATEGORY_WHERE}
+    and not exists (
+      select 1 from public.categorize_decisions cd
+       where cd.transaction_id = t.id and cd.budget_id = t.budget_id
+    )
     and (
       $3::boolean
       or not exists (select 1 from public.category_suggestions cs where cs.transaction_id = t.id)
@@ -677,6 +687,12 @@ export async function replaceSuggestions(
       [transactionId, budgetId],
     );
     if (locked.rowCount === 0) return false;
+    const decided = await client.query(
+      `select 1 from public.categorize_decisions
+        where transaction_id = $1 and budget_id = $2 limit 1`,
+      [transactionId, budgetId],
+    );
+    if ((decided.rowCount ?? 0) > 0) return false;
     const existing = await client.query<{ status: string }>(
       'select status from public.category_suggestions where transaction_id = $1 and budget_id = $2',
       [transactionId, budgetId],
