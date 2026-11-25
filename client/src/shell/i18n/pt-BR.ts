@@ -14,6 +14,7 @@ const m: Translation<typeof en> = {
   'rail.plan': 'Plano',
   'rail.reflect': 'Relatórios',
   'rail.allAccounts': 'Todas as contas',
+  'rail.categorize': 'Categorizar',
   'rail.expand': 'Expandir barra lateral',
   'rail.collapse': 'Recolher barra lateral',
   'rail.openAccount': 'Abrir conta {name}',

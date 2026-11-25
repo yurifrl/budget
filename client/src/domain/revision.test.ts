@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { decideRevision } from './revision';
+import { BUDGET_DATA_TAGS, decideRevision } from './revision';
 
 describe('decideRevision', () => {
   it('first value only sets the baseline', () => {
@@ -11,5 +11,12 @@ describe('decideRevision', () => {
   });
   it('changed invalidates and advances', () => {
     expect(decideRevision(7, 9)).toEqual({ last: 9, invalidate: true });
+  });
+});
+
+describe('BUDGET_DATA_TAGS', () => {
+  it('refreshes the Categorize queue and run on a revision change', () => {
+    expect(BUDGET_DATA_TAGS).toContain('Categorize');
+    expect(BUDGET_DATA_TAGS).toContain('CategorizeRun');
   });
 });

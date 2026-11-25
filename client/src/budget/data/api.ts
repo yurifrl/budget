@@ -2,8 +2,9 @@
  * budgetApi — the Budget app's RTK Query api, assembled from per-area slices
  * under `./api/` (phase 5c, G9): `base` creates the api (reducer path
  * `budgetApi`, base query, tags, refetch policy) and `budgets`, `members`,
- * `plan`, `payees`, `register`, `connections`, `transfers` and `ai` inject their endpoints, in
- * that order. This file is the only import path the app uses: the api, every
+ * `plan`, `payees`, `register`, `connections`, `transfers`, `ai` and
+ * `categorize` inject their endpoints, in that order. This file is the only
+ * import path the app uses: the api, every
  * hook and the endpoint types are re-exported here under their original
  * names, so splitting the slice changed no import outside `data/`.
  *
@@ -11,10 +12,31 @@
  * amount on the wire is milliunits, and the app-facing inputs stay in cents
  * (see `./api/base.ts`).
  */
-import { aiApi } from './api/ai';
+import { categorizeApi } from './api/categorize';
+
+export { CATEGORIZE_COUNT_LIMIT, CATEGORIZE_QUEUE_TAGS, queueProvidedTags } from './api/categorize';
 
 export type { AiCredentialStatus, AiModel } from './api/ai';
 export type { BudgetScope } from './api/base';
+export type {
+  CategorizeActiveRun,
+  CategorizeAiStatus,
+  CategorizeAcceptResult,
+  CategorizeBundle,
+  CategorizeCounts,
+  CategorizeDecisionItem,
+  CategorizeFinishedRun,
+  CategorizeMerchantPanel,
+  CategorizeQueue,
+  CategorizeQueueRow,
+  CategorizeQueueState,
+  CategorizeRunStartResult,
+  CategorizeRunStatus,
+  CategorizeSettings,
+  CategorizeSkipResult,
+  CategorizeSuggestion,
+  CategorizeUndoResult,
+} from './api/categorize';
 export type { TransactionDetails } from './api/register';
 export type {
   PayeeTransferRule,
@@ -35,7 +57,7 @@ export {
 } from './api/types';
 
 /** The fully injected api: every endpoint of every area slice. */
-export const budgetApi = aiApi;
+export const budgetApi = categorizeApi;
 
 export const {
   useGetBudgetsQuery,
@@ -138,4 +160,13 @@ export const {
   useMarkTransfersMutation,
   useGetPayeeTransferRuleQuery,
   useSetPayeeTransferRuleMutation,
+  useGetCategorizeQueueQuery,
+  useAcceptCategorizeMutation,
+  useUndoCategorizeMutation,
+  useSkipCategorizeMutation,
+  useStartCategorizeRunMutation,
+  useGetCategorizeRunStatusQuery,
+  useLazyGetCategorizeRunStatusQuery,
+  useGetCategorizeSettingsQuery,
+  useSetCategorizeSettingsMutation,
 } = budgetApi;

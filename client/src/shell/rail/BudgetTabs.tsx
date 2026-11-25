@@ -122,6 +122,14 @@ export function BudgetTabs({ isPhone }: { isPhone: boolean }) {
           tabBarItemStyle: { display: 'none' },
         }}
       />
+      {/* Categorize page: reached from the rail, never a tab. */}
+      <Tabs.Screen
+        name="categorize"
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
       {/* Transaction page: pushed with ?id=<transaction id> (row menu Details), never a tab. */}
       <Tabs.Screen
         name="transaction"

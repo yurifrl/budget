@@ -30,6 +30,8 @@ export const BUDGET_DATA_TAGS = [
   'Targets',
   'CategoryNotes',
   'Members',
+  'Categorize',
+  'CategorizeRun',
 ] as const;
 
 /** Poll cadence while the app is in the foreground (ms). */
