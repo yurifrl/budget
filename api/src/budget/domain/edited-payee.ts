@@ -63,7 +63,7 @@ export async function resolveEditedPayee(
   // The text the released clients resend on every edit is the payee the row ALREADY has: unchanged, before any renaming rule runs
   // (a rule must not re-point "Taxi 9", stored by an earlier import, to "Taxi" because someone changed its memo). This holds for
   // ordinary payees as it always did for transfer payees.
-  if (current && text.trim() !== '' && text.trim() === current.name.trim()) return { unchanged: true };
+  if (current && text.trim() !== '' && text.trim().toLowerCase() === current.name.trim().toLowerCase()) return { unchanged: true };
 
   const isTransferRow = row.transfer_transaction_id !== null || row.transfer_account_id !== null;
   if (isTransferRow && row.payee_id && (await store.isFormerName(client, budgetId, row.payee_id, text.trim()))) return { unchanged: true };

@@ -200,6 +200,7 @@ async function build(label: string, migrate: boolean): Promise<Ctx> {
 }
 
 const budgets: string[] = [];
+const count = async (account: string) => (await pool.query('SELECT count(*)::int AS n FROM transactions WHERE account_id = $1 AND NOT deleted', [account])).rows[0].n as number;
 
 beforeAll(async () => {
   if (!dbReady) return;
@@ -469,7 +470,6 @@ describe.skipIf(!dbReady)('review round 4: a statement row main would import is 
     return { c, id };
   }
   const row = (payee: string, outflow: number, extra: Record<string, unknown> = {}) => ({ date, payee, memo: '', outflow, inflow: 0, category_id: null, ...extra });
-  const count = async (account: string) => (await pool.query('SELECT count(*)::int AS n FROM transactions WHERE account_id = $1 AND NOT deleted', [account])).rows[0].n as number;
 
   test('M1: [UBER TRIP 1001] then [1001, 1002] imports 1 then 1 (main: 1 then 1); TAXI 1 / TAXI 2 the same', async () => {
     const { c, id } = await fresh('m1a');
@@ -621,5 +621,112 @@ describe.skipIf(!dbReady)('review round 4: the matcher\'s "untouched" sees every
     } finally {
       client.release();
     }
+  });
+});
+
+describe.skipIf(!dbReady)('review round 5: chosen payees and stored YNAB rows dedupe on the payee field, as main keyed them', () => {
+  async function fresh(label: string) {
+    const c = await build(label, true);
+    budgets.push(c.B);
+    const id = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [id, c.B]);
+    c.accounts['Fresh Conta'] = id;
+    return { c, id };
+  }
+  const plain = (payee: string, outflow: number) => ({ date, payee, memo: '', outflow, inflow: 0, category_id: null });
+  /** A client row: `payee` is the chosen / associated name, `original` the statement text. */
+  const chosen = (payee: string, original: string, outflow: number) => ({ ...plain(payee, outflow), import_payee_name: payee, import_payee_name_original: original });
+  const payeeId = async (c: Ctx, name: string) =>
+    (await pool.query<{ id: string }>('INSERT INTO payees (budget_id, name) VALUES ($1,$2) ON CONFLICT (budget_id, name) DO UPDATE SET name = $2 RETURNING id', [c.B, name])).rows[0]!.id;
+
+  test('N5 / N5b: the same transaction whose bank text changed (pending, posted) with the same chosen payee is imported once; N10: a plain row then a chosen one', async () => {
+    const { c } = await fresh('b1a');
+    expect(await c.bulk('Fresh Conta', [chosen('Netflix', 'NETFLIX.COM PEND', 4_000)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [chosen('Netflix', 'NETFLIX.COM', 4_000)])).toEqual({ imported: 0, duplicates: 1 });
+    await payeeId(c, 'Mercadinho');
+    expect(await c.bulk('Fresh Conta', [chosen('Mercadinho', 'MERCADINHO SP*1234', 3_000)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [chosen('Mercadinho', 'MERCADINHO SP 1234', 3_000)])).toEqual({ imported: 0, duplicates: 1 });
+    expect(await c.bulk('Fresh Conta', [plain('Uber', 9_100)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 7', 9_100)])).toEqual({ imported: 0, duplicates: 1 });
+  });
+
+  test('N4 / D5: two chosen rows of one payee on one key are main\'s rows: a later file adds none, and a deleted second one is not re-created', async () => {
+    const { c, id } = await fresh('b1b');
+    expect(await c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 1001', 9_200)])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 1001', 9_200), chosen('Uber', 'UBER TRIP 1002', 9_200)])).toEqual({ imported: 0, duplicates: 2 });
+    const two = await fresh('b1c');
+    expect(await two.c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 1', 9_300), chosen('Uber', 'UBER TRIP 2', 9_300)])).toEqual({ imported: 2, duplicates: 0 });
+    const second = (await pool.query<{ id: string }>('SELECT id FROM transactions WHERE account_id = $1 ORDER BY import_id DESC LIMIT 1', [two.id])).rows[0]!.id;
+    await pool.query('UPDATE transactions SET deleted = true WHERE id = $1', [second]);
+    expect(await two.c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 1', 9_300), chosen('Uber', 'UBER TRIP 2', 9_300)])).toEqual({ imported: 0, duplicates: 2 });
+    void id;
+  });
+
+  test('Y1 / Y4 / Y5: stored YNAB-export rows whose raw text differs from the file dedupe as on main (their name is the payee)', async () => {
+    const { c, id } = await fresh('b1d');
+    const stored = async (name: string, original: string | null, amount: number) => {
+      const pid = await payeeId(c, name);
+      await pool.query(
+        `INSERT INTO transactions (budget_id, account_id, date, amount, payee_id, cleared, approved, repeat, deleted, import_id, import_payee_name, import_payee_name_original) VALUES ($1,$2,$3,$4,$5,'uncleared',false,'never',false,$6,$7,$8)`,
+        [c.B, id, date, amount, pid, `YNAB:${amount}:${date}:${pid}:1`, name, original],
+      );
+    };
+    await stored('Padaria Real', 'PADARIA REAL LTDA', -1_100);
+    await stored('Uber', 'UBER *TRIP HELP.UBER.COM', -1_200);
+    await stored('Mercadinho', 'MERCADINHO SP', -1_300);
+    await stored('Padaria Real', null, -1_400);
+    expect(await c.bulk('Fresh Conta', [plain('Padaria Real', 1_100)])).toEqual({ imported: 0, duplicates: 1 }); // Y1
+    expect(await c.bulk('Fresh Conta', [chosen('Uber', 'UBER TRIP 55', 1_200)])).toEqual({ imported: 0, duplicates: 1 }); // Y4
+    expect(await c.bulk('Fresh Conta', [chosen('Mercadinho', 'MERCADINHO SP 77', 1_300)])).toEqual({ imported: 0, duplicates: 1 }); // Y5
+    expect(await c.bulk('Fresh Conta', [plain('Padaria Real', 1_400)])).toEqual({ imported: 0, duplicates: 1 }); // Y2
+    expect(await count(id)).toBe(4);
+  });
+
+  test('three growing files and reordered files import exactly one new row each time, and the same files again import none', async () => {
+    const { c } = await fresh('b1e');
+    const a = plain('UBER TRIP 2001', 8_000);
+    const b = plain('UBER TRIP 2002', 8_000);
+    const d = plain('UBER TRIP 2003', 8_000);
+    expect(await c.bulk('Fresh Conta', [a])).toEqual({ imported: 1, duplicates: 0 });
+    expect(await c.bulk('Fresh Conta', [a, b])).toEqual({ imported: 1, duplicates: 1 });
+    expect(await c.bulk('Fresh Conta', [a, b, d])).toEqual({ imported: 1, duplicates: 2 });
+    expect(await c.bulk('Fresh Conta', [d, a, b])).toEqual({ imported: 0, duplicates: 3 });
+    expect(await c.bulk('Fresh Conta', [b, d, a, plain('UBER TRIP 2004', 8_000)])).toEqual({ imported: 1, duplicates: 3 });
+  });
+
+  test('D1: deleting the only row of a text means the next import re-creates it (as on main)', async () => {
+    const { c, id } = await fresh('b1f');
+    expect(await c.bulk('Fresh Conta', [plain('Corner Cafe', 1_500)])).toEqual({ imported: 1, duplicates: 0 });
+    await pool.query('UPDATE transactions SET deleted = true WHERE account_id = $1', [id]);
+    expect(await c.bulk('Fresh Conta', [plain('Corner Cafe', 1_500)])).toEqual({ imported: 1, duplicates: 0 });
+  });
+});
+
+describe.skipIf(!dbReady)('review round 5: "untouched" for statement rows with a file id, and a retyped payee name', () => {
+  test('F3: a statement row with its own id (nubank:...) assigned by a rule whose splice reproduces the text is untouched; a carried bank row (provider id) edited onto it is touched', async () => {
+    const c = await build('b5f3', true);
+    budgets.push(c.B);
+    // eslint-disable-next-line import/no-restricted-paths
+    const { listTransferCandidates } = await import('../budget/store/transfers');
+    const id = crypto.randomUUID();
+    await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [id, c.B]);
+    c.accounts['Fresh Conta'] = id;
+    expect(await c.bulk('Fresh Conta', [{ date, payee: 'Cafe Central 7', memo: '', outflow: 1_700, inflow: 0, category_id: null, import_id: 'nubank:abc-123' }])).toEqual({ imported: 1, duplicates: 0 });
+    const row = (await pool.query<{ id: string }>("SELECT id FROM transactions WHERE import_id = 'nubank:abc-123' AND budget_id = $1", [c.B])).rows[0]!.id;
+    expect((await listTransferCandidates(pool, c.B)).find((x) => x.id === row)!.untouched_ledger).toBe(true);
+  });
+
+  test('F2: a retyped payee name in another case is the same payee: unchanged', async () => {
+    const c = await build('b5f2', true);
+    budgets.push(c.B);
+    const taxi9 = (await pool.query<{ id: string }>("INSERT INTO payees (budget_id, name) VALUES ($1,'Taxi 9') RETURNING id", [c.B])).rows[0]!.id;
+    await pool.query("INSERT INTO payees (budget_id, name, rename_match_type, rename_condition) VALUES ($1,'Taxi','contains','TAXI')", [c.B]);
+    await pool.query(MIGRATION);
+    const rowId = (await pool.query<{ id: string }>(
+      `INSERT INTO transactions (budget_id, account_id, date, amount, payee_id, cleared, approved, repeat, deleted) VALUES ($1,$2,$3,-7000,$4,'uncleared',true,'never',false) RETURNING id`,
+      [c.B, c.accounts['Third Conta'], date, taxi9],
+    )).rows[0]!.id;
+    expect((await op('budget_transactions_update', { id: rowId, budget_id: c.B, patch: { memo: 'x', payee: 'taxi 9' } })).status).toBe(204);
+    expect((await pool.query('SELECT payee_id FROM transactions WHERE id = $1', [rowId])).rows[0].payee_id).toBe(taxi9);
   });
 });

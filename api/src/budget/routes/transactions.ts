@@ -293,7 +293,8 @@ export const operations = [
       // it); a text the prefix has not seen is a NEW row and takes the next free occurrence number (two rides, two coffees; the
       // second ride arriving in a later, overlapping file). Inside one (prefix, text) the rule is main's: `existing <= occurrence`.
       const textOf = (t: string | null | undefined) => (t == null ? null : t.trim().toLowerCase());
-      const incomingText = (txn: (typeof txns)[number]) => textOf(txn.import_payee_name_original ?? txn.payee)!;
+      // What main keyed on: the payee field of the file row (the text for a plain row, the chosen or associated payee's name for a client row).
+      const incomingText = (txn: (typeof txns)[number]) => textOf(txn.import_payee_name ?? txn.payee)!;
       const existingByPrefix = new Map<string, { occ: number; text: string | null }[]>();
       if (prefixes.length > 0) {
         const found = await txnStore.findImportRowsLike(

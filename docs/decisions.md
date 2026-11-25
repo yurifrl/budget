@@ -2474,18 +2474,23 @@ on a sync, an ordinary request or a budget copy.
   the statement text still is assigned. A /bulk row counts its occurrences per key prefix
   (amount, date, payee id) as main did, so two texts a rule sends to one payee on one day
   for one amount are two rows. Inside a key, a stored row is a re-import of an incoming one
-  only when the statement text it was imported from (`import_payee_name_original`, case
-  ignored: the splice that made main's key lower-cased it) is the incoming text, and a text
-  the key has not seen is NEW and takes the next free occurrence number of the key: the
-  second ride arriving in a later, overlapping file is imported, as on main (where its text
-  made its own key). Within one text main's rule is kept (`existing <= occurrence`: any
-  stored row of the text makes every copy a duplicate), so more copies of the same text in a
-  later file are still not imported. One difference, after the person deleted a row: the stored
-  rows of a text are numbered by their place among that text's rows, so deleting the first of
-  two identical rows no longer makes the next import re-create it. A stored row with no
-  statement text on record counts for any text, by its number, as before.
+  only when the PAYEE FIELD it was imported under is the incoming one, case ignored (the
+  field main keyed on: `import_payee_name`, falling back to `import_payee_name_original`
+  for old rows). For a plain statement row that is the bank text, so two rides (two texts)
+  are two rows; for a client row it is the chosen or associated payee's name, so the same
+  transaction whose bank text changed (pending, posted) with the same chosen payee is one
+  row, and a stored YNAB-export row whose raw text differs from the file's still dedupes,
+  both as on main. A text the key has not seen is NEW and takes the next free occurrence
+  number of the key: the second ride arriving in a later, overlapping file is imported, as
+  on main (where its text made its own key). Within one text main's rule is kept
+  (`existing <= occurrence`: any stored row of the text makes every copy a duplicate), so
+  more copies of the same text in a later file are still not imported. Deleting: deleting
+  the ONLY row of a text means the next re-import re-creates it (as on main); deleting one
+  of several identical rows does not re-create it (main re-created it or not depending on
+  which copy was deleted: an intended improvement). A stored row with no payee field on
+  record counts for any text, by its number, as before.
 - **Editing a row never moves its payee by rule.** The released clients resend the displayed
-  payee text on every edit; a text equal to the row's current payee name (ordinary or
+  payee text on every edit; a text equal to the row's current payee name, case ignored (ordinary or
   transfer payee) means the payee is unchanged, before any rule runs, so a memo or category
   edit of "Taxi 9" (stored by an earlier import, rule contains TAXI -> "Taxi") keeps "Taxi 9".
   CREATE applies the rules to the text, as on main, now by assignment: a typed or duplicated
@@ -2498,8 +2503,9 @@ on a sync, an ordinary request or a budget copy.
   main's own test: a `contains` rule counts when the text with the pattern replaced by the
   payee's name equals the text (main's spliced name), an `is` rule when the name equals it,
   a `starts with` / `ends with` rule always (they never existed on main). The rules read
-  are the same source as matching, column-only rules included. Only statement rows (a
-  `YNAB:` import key) get this: a carried bank row without its shadow (a fresh-start copy
+  are the same source as matching, column-only rules included. Only statement rows get this
+  (no sync shadow, and an import key that is not a bank provider's `<provider>:<id>`, so a
+  statement file's own ids such as `nubank:...` count): a carried bank row without its shadow (a fresh-start copy
   does not carry `connection_transactions`) keeps main's answer, so a carried row the person
   edited stays touched. A rule-assigned row is therefore untouched exactly where main's was,
   and the hinted text rows of T3 stay untouched.

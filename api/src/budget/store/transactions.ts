@@ -77,11 +77,12 @@ export async function findImportIdsLike(db: Queryable, accountId: string, patter
 
 /**
  * Live rows on the account whose import id matches any LIKE pattern, with the statement text they were imported from
- * (`import_payee_name_original`, else `import_payee_name`; null when the row has neither).
+ * as /bulk keyed it: the payee field of the file row (`import_payee_name`: the text for a plain row, the chosen payee's name for a
+ * client row), else `import_payee_name_original`; null when the row has neither.
  */
 export async function findImportRowsLike(db: Queryable, accountId: string, patterns: string[]): Promise<{ import_id: string; text: string | null }[]> {
   const found = await db.query<{ import_id: string; text: string | null }>(
-    `SELECT import_id, COALESCE(import_payee_name_original, import_payee_name) AS text
+    `SELECT import_id, COALESCE(import_payee_name, import_payee_name_original) AS text
        FROM transactions WHERE account_id = $1 AND NOT deleted AND import_id LIKE ANY($2::text[])`,
     [accountId, patterns],
   );

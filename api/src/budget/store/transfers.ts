@@ -50,13 +50,13 @@ const CANDIDATE_SELECT = `
           AND (t.payee_id IS NULL OR p.name IN (t.import_payee_name, t.import_payee_name_original)
                -- the payee a renaming rule assigned at the last sync is as imported, not edited
                OR COALESCE(p.name = cs.last_synced_payload->>'payee', false)
-               -- a STATEMENT row (a 'YNAB:' import key: a carried bank row without its shadow, as after a fresh start, keeps main's
-               -- answer) whose payee is the one a rule of that payee assigns for the
+               -- a STATEMENT row (no sync shadow, and an import key that is not a bank provider's '<provider>:<id>': a carried bank
+               -- row without its shadow, as after a fresh start, keeps main's answer; a statement file's own ids such as 'nubank:...' count) whose payee is the one a rule of that payee assigns for the
                -- imported text. Main counted a rule-hit row untouched exactly when its rule-spliced payee name
                -- equalled the imported text ('is': the payee's name; 'contains': the text with the pattern
                -- replaced by the payee's name); that is kept, rule by rule. 'starts with' / 'ends with' never
                -- existed on main: such a row is as imported.
-               OR (cs.transaction_id IS NULL AND t.import_id LIKE 'YNAB:%' AND EXISTS (
+               OR (cs.transaction_id IS NULL AND NOT EXISTS (SELECT 1 FROM connections cn WHERE starts_with(t.import_id, cn.provider || ':')) AND EXISTS (
                  SELECT 1 FROM ${allRulesSql('t.budget_id', 't.payee_id')} rr
                   WHERE CASE rr.match_type
                           WHEN 'contains' THEN
