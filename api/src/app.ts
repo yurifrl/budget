@@ -15,6 +15,8 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
 import budget from './budget';
+import categorize from './categorize/router';
+import ai from './ai';
 import connections, { webhook as connectionsWebhook } from './connections';
 import { featuresRoutes } from './features';
 import { contracts } from './catalog';
@@ -124,6 +126,12 @@ export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssu
 
   // Budget routes
   app.route('/', budget);
+
+  // Categorize page routes (/categorize/..., behind budgetAccess)
+  app.route('/categorize', categorize);
+
+  // AI key routes (/ai/credentials, /ai/provider-detect, /ai/models)
+  app.route('/ai', ai);
 
   // Rates routes
   app.route('/rates', rates);

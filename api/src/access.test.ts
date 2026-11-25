@@ -39,6 +39,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Hono } from 'hono';
 
 import { contracts as budgetContracts } from '@shared/contracts/budget';
+import { contracts as categorizeContracts } from '@shared/contracts/categorize';
 import { contracts as connectionsContracts } from '@shared/contracts/connections';
 import { contracts as featuresContracts } from '@shared/contracts/features';
 import { contracts as jobsContracts } from '@shared/contracts/jobs';
@@ -47,6 +48,7 @@ import { inputLocations, type OperationContract } from '@shared/operation-contra
 import { UUID_RE } from '@shared/validation';
 import { z } from '@shared/zod';
 import budget from './budget';
+import categorize from './categorize/router';
 import { contracts as catalog } from './catalog';
 import connections from './connections';
 import { featuresRoutes } from './features';
@@ -108,6 +110,7 @@ app.use('*', (c, next) => {
   return next();
 });
 app.route('/', budget);
+app.route('/categorize', categorize);
 app.route('/connections', connections);
 app.route('/jobs', jobs);
 app.route('/', grantsRoutes);
@@ -394,7 +397,7 @@ function idFields(contract: OperationContract): string[] {
   return [...new Set(out)].filter((p) => p !== 'budget_id' && !pathParams.includes(p));
 }
 
-const scopedContracts = [...budgetContracts, ...connectionsContracts].filter((c) => c.expose.api);
+const scopedContracts = [...budgetContracts, ...categorizeContracts, ...connectionsContracts].filter((c) => c.expose.api);
 const bodyIdFields = scopedContracts.flatMap((c) => idFields(c).map((field) => ({ op: c.name, field })));
 
 /**
@@ -550,6 +553,14 @@ const bodyCases: BodyCase[] = [
     input: { budget_id: A.budget, transaction_ids: [A.txn, V.txn] } },
   { op: 'budget_transfers_mark', fields: ['transaction_ids[]'], outcome: 'reject', status: 404,
     input: { budget_id: A.budget, transaction_ids: [A.txn, V.txn], state: 'dismissed' } },
+  { op: 'categorize_accept', fields: ['items[].transaction_id'], outcome: 'reject', status: 404,
+    input: { budget_id: A.budget, items: [{ transaction_id: V.txn, category_id: A.category }] } },
+  { op: 'categorize_accept', fields: ['items[].category_id'], outcome: 'reject', status: 400,
+    input: { budget_id: A.budget, items: [{ transaction_id: A.txn, category_id: V.category }] } },
+  { op: 'categorize_undo', fields: ['transaction_ids[]'], outcome: 'ignored',
+    input: { budget_id: A.budget, transaction_ids: [V.txn] } },
+  { op: 'categorize_skip', fields: ['transaction_id'], outcome: 'reject', status: 404,
+    input: { budget_id: A.budget, transaction_id: V.txn } },
   { op: 'budget_payees_set_transfer_rule', fields: ['account_id'], outcome: 'reject', status: 400,
     input: { id: A.payee, budget_id: A.budget, mode: 'account', account_id: V.account } },
   // connections (the attacker's own connection, the victim's account)
@@ -641,7 +652,9 @@ describe.skipIf(!dbReady)('controls: the same operations still work with the att
 
 // ---- D. two people, the whole catalog ----------------------------------------
 
-const byBudgetId = budgetContracts.filter((c) => c.expose.api && hasBudgetId(c));
+const budgetScopedContracts = [...budgetContracts, ...categorizeContracts];
+const budgetScopedNames = new Set(budgetScopedContracts.map((c) => c.name));
+const byBudgetId = budgetScopedContracts.filter((c) => c.expose.api && hasBudgetId(c));
 
 /**
  * Operations that carry neither a `budget_id` nor a budget/connection path id,
@@ -650,6 +663,12 @@ const byBudgetId = budgetContracts.filter((c) => c.expose.api && hasBudgetId(c))
  * passes.
  */
 const notBudgetAddressed: Record<string, string> = {
+  ai_credentials_delete: "deletes the caller's own AI key: keyed by the session user, no id to pass",
+  ai_credentials_get: "status of the caller's own AI key; never the secret",
+  ai_credentials_save: "saves the caller's own AI key: keyed by the session user, no id to pass",
+  ai_credentials_test: "checks the caller's own AI key (or the shared one), no budget data",
+  ai_models_list: "lists models for the caller's own/shared AI key; no budget data",
+  ai_provider_detect: 'shape-only provider guess; reads no stored data',
   budget_list: "lists only budgets the caller owns or is a member of (asserted below)",
   budget_create: 'creates a new budget owned by the caller',
   connections_connect_token: "mints a widget token bound to the caller's own user id",
@@ -725,6 +744,14 @@ const onVictimBudget: Record<string, Record<string, unknown>> = {
   budget_month_notes_set: { month: MONTH, note: 'pwned' },
   budget_payees_create: { name: 'pwned' },
   budget_payees_list: {},
+  categorize_accept: { items: [{ transaction_id: V.txn, category_id: V.category }] },
+  categorize_queue_list: { limit: 10 },
+  categorize_run_start: {},
+  categorize_run_status: {},
+  categorize_settings_get: {},
+  categorize_settings_set: { confidence_threshold: 0.8 },
+  categorize_skip: { transaction_id: V.txn },
+  categorize_undo: { transaction_ids: [V.txn] },
   budget_payees_merge: { id: V.payee, target_id: V.payee },
   budget_plan_auto_assign: { month: MONTH, rows: [{ category_id: V.category, assigned: 1000 }] },
   budget_repeat_rules_create: ruleBase({ account_id: V.account }),
@@ -751,11 +778,11 @@ describe('access catalog coverage (every operation, two people)', () => {
     const pathScoped = new Set(pathOps.map((c) => c.name));
     const unclassified = catalog
       .filter((c) => c.expose.api)
-      .filter((c) => !(c.name.startsWith('budget_') && hasBudgetId(c)) && !pathScoped.has(c.name) && !(c.name in notBudgetAddressed))
+      .filter((c) => !(budgetScopedNames.has(c.name) && hasBudgetId(c)) && !pathScoped.has(c.name) && !(c.name in notBudgetAddressed))
       .map((c) => c.name);
     expect(unclassified).toEqual([]);
-    // Only budget operations may rely on `budget_id` + budgetAccess.
-    expect(catalog.filter((c) => hasBudgetId(c) && !c.name.startsWith('budget_')).map((c) => c.name)).toEqual([]);
+    // Only operations in a budget-data feature barrel may rely on `budget_id` + budgetAccess.
+    expect(catalog.filter((c) => hasBudgetId(c) && !budgetScopedNames.has(c.name)).map((c) => c.name)).toEqual([]);
   });
 
   test('every budget_id operation has a request on the victim budget that parses against its contract', () => {
@@ -934,9 +961,9 @@ describe.skipIf(!dbReady)('D: two people, every budget operation', () => {
       acting = attacker;
       const mine = await send('features_mine', {});
       expect(mine.status).toBe(200);
-      expect(await mine.json()).toEqual({ features: { [key]: false } });
+      expect(await mine.json()).toEqual({ features: { [key]: false, 'shared-ai-key': false } });
       acting = victim;
-      expect(await (await send('features_mine', {})).json()).toEqual({ features: { [key]: true } });
+      expect(await (await send('features_mine', {})).json()).toEqual({ features: { [key]: true, 'shared-ai-key': false } });
     } finally {
       await pool.query('DELETE FROM public.feature_overrides WHERE feature_key = $1', [key]);
       configureAuth(before);

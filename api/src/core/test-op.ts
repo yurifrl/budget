@@ -10,6 +10,7 @@ import { inputLocations, type OperationContract } from '@shared/operation-contra
 
 export interface OpResult {
   status: number;
+  headers: Headers;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   json: any;
 }
@@ -35,6 +36,6 @@ export function makeOpCaller(app: Hono, contracts: readonly OperationContract[])
       body: body === undefined || c.method === 'GET' ? undefined : JSON.stringify(body),
     });
     const text = await res.text();
-    return { status: res.status, json: text ? JSON.parse(text) : null };
+    return { status: res.status, headers: res.headers, json: text ? JSON.parse(text) : null };
   };
 }

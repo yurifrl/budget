@@ -3,11 +3,12 @@
  * register): category cell text, row filtering and search.
  */
 
+import { categoryNeed } from '@shared/domain/category-needs';
 import { isInternalTransferPayee } from '@shared/domain/transfers';
 
 import { computeRunningBalances, workingBalance } from './engine';
 import { t as tr } from './i18n';
-import { isReconciliationAdjustmentPayee, matchesSystemName } from './systemNames';
+import { matchesSystemName } from './systemNames';
 import type { Account, Budget, Cents, Transaction } from './types';
 
 /**
@@ -22,18 +23,36 @@ export function registerCategoryCell(
   t: Pick<Transaction, 'payee' | 'categoryId' | 'splits' | 'inflow' | 'transferPending'>,
   { transfers = true }: { transfers?: boolean } = {},
 ): { text: string; warn: boolean } {
-  if (isReconciliationAdjustmentPayee(t.payee) || t.payee === 'Balance Adjustment') {
-    return { text: tr('register.readyToAssign'), warn: false };
+  // The rule itself lives in @shared/domain/category-needs; the API's
+  // categorizer is tested against the same function.
+  const need = categoryNeed({
+    payee: t.payee,
+    categoryId: t.categoryId,
+    splitCount: t.splits?.length ?? 0,
+    amount: t.inflow,
+    transferPending: t.transferPending ?? null,
+    transferPayee: transfers && isInternalTransferPayee(t.payee, budget.accounts),
+  });
+  switch (need) {
+    case 'reconciliation':
+      return { text: tr('register.readyToAssign'), warn: false };
+    case 'categorized': {
+      const cat = budget.categories.find((c) => c.id === t.categoryId);
+      return { text: cat?.name ?? '?', warn: false };
+    }
+    case 'split':
+      return { text: tr('register.split', { count: t.splits?.length ?? 0 }), warn: false };
+    case 'transfer_waiting':
+      return { text: tr('register.transferWaiting'), warn: false };
+    case 'transfer_outside':
+      return { text: tr('register.transferOutside'), warn: false };
+    case 'transfer':
+      return { text: tr('register.transfer'), warn: false };
+    case 'inflow':
+      return { text: tr('register.readyToAssign'), warn: false };
+    case 'needs_category':
+      return { text: tr('register.needsCategory'), warn: true };
   }
-  if (!t.categoryId) {
-    if (t.splits?.length) return { text: tr('register.split', { count: t.splits.length }), warn: false };
-    if (t.transferPending === 'waiting') return { text: tr('register.transferWaiting'), warn: false };
-    if (t.transferPending === 'outside') return { text: tr('register.transferOutside'), warn: false };
-    if (transfers && isInternalTransferPayee(t.payee, budget.accounts)) return { text: tr('register.transfer'), warn: false };
-    return t.inflow > 0 ? { text: tr('register.readyToAssign'), warn: false } : { text: tr('register.needsCategory'), warn: true };
-  }
-  const cat = budget.categories.find((c) => c.id === t.categoryId);
-  return { text: cat?.name ?? '?', warn: false };
 }
 
 /**

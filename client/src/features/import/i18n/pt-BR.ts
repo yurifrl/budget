@@ -4,7 +4,7 @@ import type en from './en';
 const m: Translation<typeof en> = {
   'screen.needBudget': 'Ative um orçamento para importar transações.',
   'screen.title': 'Importar transações',
-  'screen.subtitle': 'Extratos bancários — CSV do Nubank, extrato do Itaú, CSV genérico',
+  'screen.subtitle': 'Extratos bancários — CSV do Nubank, CSV do Contabilizei, extrato do Itaú, CSV genérico',
   'account.label': 'Conta',
   'account.placeholder': 'Escolha a conta…',
   'account.groupCash': 'Dinheiro',
@@ -14,7 +14,7 @@ const m: Translation<typeof en> = {
   'file.choose': 'Escolher arquivo…',
   'file.none': 'Nenhum arquivo selecionado',
   'file.managePayees': 'Gerenciar favorecidos',
-  'file.hint': 'Aceita CSV do Nubank, extrato do Itaú em TXT/XLS e CSV genérico.',
+  'file.hint': 'Aceita CSV do Nubank, CSV do Contabilizei, extrato do Itaú em TXT/XLS e CSV genérico.',
 
   'mapping.title': 'Mapeamento de colunas',
   'mapping.delimiter': 'Delimitador',

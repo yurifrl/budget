@@ -65,6 +65,21 @@ export { default as accountsRouter } from './routes/accounts';
 /** "May this user reach this budget" as SQL, for features that read budget rows by another key (connections). */
 export { accessibleBudgetSql } from './ownership';
 
+/** Mount a budget-data route file behind budgetAccess (the categorize feature's router uses it). */
+export { budgetRouter } from './router';
+
+/** The assignable-category rule (live, visible, not internal/card-payment), for categorize accept. */
+export { categoryAssignability, type CategoryAssignability } from './store/categories';
+
+/** The transaction PATCH path, for categorize accept/undo (one write path, one budget revision). */
+export { updateTransactionInClient } from './domain/transaction-update';
+
+/** The existing payee categorization rule (fixed/auto/history), for features that answer it before the model (categorize). */
+export { suggestedCategoryForPayee } from './domain/categorization';
+
+/** The register's transfer plan (pending rows / suggestions), for features that read the same rows (categorize). */
+export { transferOverview } from './domain/transfer-links';
+
 /** Ledger write API for the connections sync engine (imported rows, payees, balances, card payments). */
 export * as ledger from './ledger';
 

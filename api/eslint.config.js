@@ -30,9 +30,27 @@ const features = fs
  *   shared plumbing `jobs/workflows/tracked.ts`.
  */
 function allowedFrom(feature, other) {
-  if (feature === 'jobs' && other === 'connections') return ['index.ts', 'workflows.ts'];
-  if (feature === 'connections' && other === 'jobs') return ['index.ts', 'workflows/tracked.ts'];
+  if (feature === 'jobs' && (other === 'connections' || other === 'categorize')) return ['index.ts', 'workflows.ts'];
+  if (other === 'jobs' && (feature === 'connections' || feature === 'categorize')) return ['index.ts', 'workflows/tracked.ts'];
   return ['index.ts'];
+}
+
+/**
+ * Cross-feature zones: `feature` may import `other` through its barrel plus the
+ * documented seams. Tests and testing helpers add ONE exception on top: the
+ * ai/providers registry seam (deliberate deep import for setProviders).
+ */
+function crossFeatureZones({ providersSeam }) {
+  return features.flatMap((feature) =>
+    features
+      .filter((other) => other !== feature)
+      .map((other) => ({
+        target: `./src/${feature}`,
+        from: `./src/${other}`,
+        except: [...allowedFrom(feature, other), ...(providersSeam && other === 'ai' ? ['providers', 'providers/**'] : [])],
+        message: 'Features may only import another feature via its public barrel (src/<name>/index.ts), never its internals.',
+      })),
+  );
 }
 
 export default defineConfig([
@@ -76,26 +94,42 @@ export default defineConfig([
       ],
     },
   },
+  // Production modules never import a feature's ./testing helpers. The zod ban
+  // is repeated because no-restricted-imports options replace, not merge.
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/**/*.test.ts', 'src/*/testing/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: noDirectZod['no-restricted-imports'][1].paths,
+          patterns: [
+            ...noDirectZod['no-restricted-imports'][1].patterns,
+            {
+              group: ['*/testing/*', './testing/*', '../testing/*'],
+              message: 'Test helpers live in src/<feature>/testing and are imported by *.test.ts only.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // A feature imports core/*, its own internals, and another feature's public
   // barrel only. Entrypoints (src/*.ts, the composition root app.ts) are exempt.
   {
     files: features.map((f) => `src/${f}/**/*.ts`),
     rules: {
-      'import/no-restricted-paths': [
-        'error',
-        {
-          zones: features.flatMap((feature) =>
-            features
-              .filter((other) => other !== feature)
-              .map((other) => ({
-                target: `./src/${feature}`,
-                from: `./src/${other}`,
-                except: allowedFrom(feature, other),
-                message: 'Features may only import another feature via its public barrel (src/<name>/index.ts), never its internals.',
-              })),
-          ),
-        },
-      ],
+      'import/no-restricted-paths': ['error', { zones: crossFeatureZones({ providersSeam: false }) }],
     },
+  },
+  // Tests and the helpers themselves may deep-import ONE dependency internal:
+  // the AI registry seam (src/ai/providers, deliberately off the barrel for
+  // setProviders). Every other cross-feature internal import stays banned —
+  // the rule is re-enabled with the same zones plus that one exception.
+  // This block comes last: import/no-restricted-paths is re-enabled above it.
+  {
+    files: ['src/**/*.test.ts', 'src/*/testing/**/*.ts'],
+    rules: { 'import/no-restricted-paths': ['error', { zones: crossFeatureZones({ providersSeam: true }) }] },
   },
 ]);

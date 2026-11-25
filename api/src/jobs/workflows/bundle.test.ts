@@ -12,7 +12,7 @@ test('bundleWorkflowCode builds the real workflow bundle', async () => {
     logger: { trace() {}, debug() {}, info() {}, warn() {}, error() {}, log() {} } as never,
   });
   expect(code.length).toBeGreaterThan(1000);
-  for (const name of ['jobsNoop', 'jobsRetention', 'connectionsSync', 'connectionsSweep']) {
+  for (const name of ['jobsNoop', 'jobsRetention', 'connectionsSync', 'connectionsSweep', 'categorizeRun']) {
     expect(code).toContain(name);
   }
 }, 120_000);

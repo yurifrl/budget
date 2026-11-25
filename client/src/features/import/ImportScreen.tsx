@@ -2,8 +2,8 @@
  * Import-transactions page — bank/YNAB statement import.
  *
  * Flow: pick account → pick a file (web file input / native document picker)
- * → parse (`parseStatementFile`: Nubank CSV, Itaú extrato TXT/XLS,
- * generic CSV) → an unrecognized CSV layout opens a column mapper whose
+ * → parse (`parseStatementFile`: Contabilizei CSV, Nubank CSV, Itaú extrato
+ * TXT/XLS, generic CSV) → an unrecognized CSV layout opens a column mapper whose
  * mapping is persisted per account via {@link ImportMappingStoreToken} →
  * review parsed rows in a paginated, editable table (exclude rows, edit
  * date/payee/memo/amounts, associate statement payees with budget payees) →

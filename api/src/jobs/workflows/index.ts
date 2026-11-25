@@ -12,6 +12,7 @@ import { ledger, runTracked, type JobArgs } from './tracked';
 
 export { runTracked } from './tracked';
 export { connectionsSync, connectionsSweep } from '../../connections/workflows';
+export { categorizeRun } from '../../categorize/workflows';
 
 const work = proxyActivities<LedgerActivities>({
   startToCloseTimeout: '5 minutes',

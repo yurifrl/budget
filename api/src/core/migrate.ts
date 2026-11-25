@@ -68,6 +68,14 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0106_connection_transactions_per_budget.sql': ['column:public.connection_transactions.budget_id', 'index:public.connection_transactions_budget_key'],
   '0107_connection_account_backfill.sql': 'table:public.connection_account_backfill',
   '0108_transfer_suggestions.sql': ['column:public.payees.transfer_rule', 'table:public.transfer_marks', 'table:public.transfer_links'],
+  '0109_ai_credentials.sql': 'table:public.ai_credentials',
+  '0110_category_suggestions.sql': 'table:public.category_suggestions',
+  '0111_category_suggestions_category_idx.sql': 'index:public.category_suggestions_category_idx',
+  '0112_categorize_attempts.sql': 'table:public.categorize_attempts',
+  '0113_categorize_settings.sql': 'table:public.categorize_settings',
+  '0114_categorize_run_progress.sql': 'table:public.categorize_run_progress',
+  '0115_categorize_decisions.sql': 'table:public.categorize_decisions',
+  '0116_categorize_decision_kind.sql': ['column:public.categorize_decisions.kind', 'column:public.categorize_decisions.category_id'],
 };
 
 /**

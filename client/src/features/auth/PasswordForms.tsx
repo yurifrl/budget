@@ -11,7 +11,7 @@ import { colors, radius, spacing } from '@/ui/theme';
 import { t } from './i18n';
 import { checkLogin, checkNewPassword, FIELD_HINTS, newPasswordHint } from './password.logic';
 import { FormWrap } from './FormWrap';
-import { PasswordField, type InputRef } from './PasswordField';
+import { PasswordField, type InputRef } from '@/ui/PasswordField';
 import type { PasswordSignIn } from './usePasswordSignIn';
 
 export function PasswordSignInForm({ flow, primary }: { flow: PasswordSignIn; primary: boolean }) {

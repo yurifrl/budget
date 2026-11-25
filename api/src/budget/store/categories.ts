@@ -9,6 +9,48 @@ export async function categoryInBudget(db: Queryable, categoryId: string, budget
   return catCheck.rowCount !== 0;
 }
 
+/** Why a category may not be named by a categorization: missing, or not assignable. */
+export type CategoryAssignability = 'ok' | 'not_in_budget' | 'not_assignable';
+
+/**
+ * May a categorization name this category? `not_in_budget` covers a missing,
+ * deleted or foreign-budget row; `not_assignable` covers a live row that is
+ * hidden/internal or in a hidden/internal/credit-card-payment group (the card
+ * setup writes those). This is the same rule the categorize engine offers its
+ * model (listCategoryChoices) and the one accept enforces; categoryInBudget
+ * above is deliberately more permissive because the register may keep old
+ * values.
+ */
+export async function categoryAssignability(
+  db: Queryable,
+  categoryId: string,
+  budgetId: string,
+): Promise<CategoryAssignability> {
+  const { rows } = await db.query<{
+    deleted: boolean;
+    hidden: boolean;
+    internal: boolean;
+    group_deleted: boolean;
+    group_hidden: boolean;
+    group_credit_card: boolean;
+    group_internal: boolean;
+  }>(
+    `select c.deleted, c.hidden, c.internal,
+            g.deleted as group_deleted, g.hidden as group_hidden,
+            g.is_credit_card_payments as group_credit_card, g.internal as group_internal
+       from public.categories c
+       join public.category_groups g on g.id = c.group_id and g.budget_id = c.budget_id
+      where c.id = $1 and c.budget_id = $2`,
+    [categoryId, budgetId],
+  );
+  const row = rows[0];
+  if (!row || row.deleted) return 'not_in_budget';
+  if (row.hidden || row.internal || row.group_deleted || row.group_hidden || row.group_credit_card || row.group_internal) {
+    return 'not_assignable';
+  }
+  return 'ok';
+}
+
 export async function listLiveCategories(db: Queryable, budgetId: string) {
   const result = await db.query('SELECT * FROM categories WHERE budget_id = $1 AND deleted = false ORDER BY sort_order', [budgetId]);
   return result.rows;

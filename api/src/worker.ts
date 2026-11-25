@@ -24,6 +24,9 @@ import {
 import { createLedgerActivities } from './jobs/activities';
 import { configureJobs, createTemporalClient, startRelay } from './jobs';
 import { startWorkerHost } from './jobs/worker-host';
+import { configureAiEnv } from './ai';
+import { AI_ACTIVITIES_PER_SECOND, AI_QUEUE_SUFFIX } from './categorize';
+import { createCategorizeActivities } from './categorize/activities';
 
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled rejection:', reason);
@@ -38,6 +41,7 @@ const instanceId = process.env.JOBS_INSTANCE_ID || 'budget-local';
 const workerId = `${hostname()}:${process.pid}`;
 
 configurePluggyEnv(process.env);
+configureAiEnv(process.env);
 // Same master key as the API: the sync activities decrypt users' own provider secrets.
 configureSecretsFromEnv(process.env);
 await runMigrations();
@@ -46,9 +50,13 @@ configureJobs({ instanceId, taskQueue });
 const temporal = createTemporalClient({ address, namespace, taskQueue });
 
 // trackedAttempt is stripped from the Temporal-visible bag; features that
-// write attempts (connections) receive it by injection instead.
+// write attempts (connections, categorize) receive it by injection instead.
 const { trackedAttempt, ...ledgerActivities } = createLedgerActivities(pool, workerId);
-const activities = { ...ledgerActivities, ...createConnectionsActivities(pool, trackedAttempt) };
+const activities = {
+  ...ledgerActivities,
+  ...createConnectionsActivities(pool, trackedAttempt),
+  ...createCategorizeActivities(pool, trackedAttempt),
+};
 
 const worker = startWorkerHost({
   address,
@@ -57,7 +65,17 @@ const worker = startWorkerHost({
   activities,
   // Provider-calling activities run on their own queue so the ~1/s limit
   // (shared across pods, enforced server-side) never throttles ledger writes.
-  activityQueues: [{ taskQueue: `${taskQueue}${PLUGGY_QUEUE_SUFFIX}`, maxTaskQueueActivitiesPerSecond: PLUGGY_ACTIVITIES_PER_SECOND }],
+  activityQueues: [
+    { taskQueue: `${taskQueue}${PLUGGY_QUEUE_SUFFIX}`, maxTaskQueueActivitiesPerSecond: PLUGGY_ACTIVITIES_PER_SECOND },
+    {
+      taskQueue: `${taskQueue}${AI_QUEUE_SUFFIX}`,
+      maxTaskQueueActivitiesPerSecond: AI_ACTIVITIES_PER_SECOND,
+      // One chunk at a time per worker: model calls are serialized per key
+      // (categorize/key-lock.ts), so a second concurrent chunk would only
+      // wait on the lock while holding an activity slot and its deadline.
+      maxConcurrentActivityTaskExecutions: 1,
+    },
+  ],
   onConnected: async () => {
     await temporal.ensureRetentionSchedule();
     await temporal.ensureSchedule({ scheduleId: CONNECTIONS_SWEEP_SCHEDULE_ID, workflowType: 'connectionsSweep', cron: CONNECTIONS_SWEEP_CRON });

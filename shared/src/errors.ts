@@ -84,6 +84,23 @@ export const SPECIFIC_ERROR_CODES = [
   'connection_already_registered',
   'connection_disconnected',
   'connection_still_linked',
+  // AI keys (category suggestions).
+  'own_ai_key_required',
+  'ai_key_rejected',
+  'ai_provider_unknown',
+  'ai_provider_mismatch',
+  'ai_model_unknown',
+  'ai_key_encryption_missing',
+  'ai_key_unreadable',
+  'ai_shared_key_missing',
+  'ai_shared_model_missing',
+  // Categorize page (queue, accept/undo/skip, threshold).
+  'categorize_ai_unavailable',
+  'categorize_already_categorized',
+  'categorize_not_needing_category',
+  'categorize_bundle_changed',
+  'categorize_bundle_too_large',
+  'category_not_assignable',
   // Budget: accounts, transactions, transfers, repeats.
   'cannot_transfer_to_same_account',
   'transfer_account_not_in_budget',
@@ -114,6 +131,7 @@ export const SPECIFIC_ERROR_CODES = [
   'person_edits_own_name',
   'owner_cannot_be_removed',
   'invalid_backup',
+  'invalid_transaction_id',
 ] as const;
 
 /**
