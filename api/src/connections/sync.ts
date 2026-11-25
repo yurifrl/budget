@@ -707,7 +707,12 @@ async function syncOnce(
             payee,
           });
           const legacyForm = upstreamPayee.legacyName !== null && current.payee === upstreamPayee.legacyName;
-          if (samePayload(current, upstreamPayload(upstreamPayee.name)) || (legacyForm && samePayload(current, upstreamPayload(current.payee)))) {
+          // A row an earlier import stored with the payee a `contains` rule used to splice
+          // into the text ("Padaria 42") is unchanged too: a matching rule assigns its payee
+          // from now on, for the rows inserted and the rows the bank changes, not for rows
+          // that are as the bank sent them.
+          const earlierForm = upstreamPayee.earlierNames.includes(current.payee);
+          if (samePayload(current, upstreamPayload(upstreamPayee.name)) || ((legacyForm || earlierForm) && samePayload(current, upstreamPayload(current.payee)))) {
             result.duplicates += 1;
             continue;
           }

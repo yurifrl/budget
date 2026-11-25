@@ -289,8 +289,10 @@ async function relinkReleasedBankRow(
     peer_transaction_id: found.id,
     method: 'user',
     // What the leg was before the person made it a transfer, so unlink restores it
-    // (never a transfer payee: that would leave a payee-only half transfer).
-    prev_payee_id: await usablePayee(client, budgetId, prev.payeeId),
+    // (never a transfer payee: that would leave a payee-only half transfer). A leg whose
+    // previous payee was a transfer payee (moved to another account and back) falls back to
+    // the ordinary payee its import text stands for, as an unlink without a record does.
+    prev_payee_id: (await usablePayee(client, budgetId, prev.payeeId)) ?? (await ordinaryPayeeOfImport(client, budgetId, (await store.getMirrorFacts(client, budgetId, row.id))?.import_payee_name ?? null)),
     prev_category_id: prev.categoryId,
     prev_blocked: null,
     created_mirror: false,

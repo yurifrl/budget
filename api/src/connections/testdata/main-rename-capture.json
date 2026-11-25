@@ -1,0 +1,401 @@
+{
+ "_comment": "Captured by running main (6027e7c) with rules stored on the payee rows (one per payee, created in the order of `payees`): 12 bank texts synced into one account and imported as a statement into another, then both again. Not edited by hand; regenerate by running main's code, never this branch's.",
+ "texts": [
+  [
+   "PADOCA 42",
+   -10000
+  ],
+  [
+   "UBER *TRIP 123",
+   -2000
+  ],
+  [
+   "PADDED RAW",
+   -3000
+  ],
+  [
+   "NETFLIX.COM",
+   -4000
+  ],
+  [
+   "PIX SAV 42",
+   -5000
+  ],
+  [
+   "PIX THIRD",
+   -6000
+  ],
+  [
+   "Corner Shop",
+   -7000
+  ],
+  [
+   "Transfer : Nubank Conta",
+   -8000
+  ],
+  [
+   "MERCADO LIVRE SP",
+   -9000
+  ],
+  [
+   "pix sav",
+   -11000
+  ],
+  [
+   "padoca",
+   -12000
+  ],
+  [
+   "  Bakery  ",
+   -13000
+  ]
+ ],
+ "main_results": {
+  "sync1": {
+   "added": 12,
+   "updated": 0,
+   "duplicates": 0,
+   "blocked": 0,
+   "failed": 0
+  },
+  "sync2": {
+   "added": 0,
+   "updated": 0,
+   "duplicates": 12,
+   "blocked": 0,
+   "failed": 0
+  },
+  "bulk1": {
+   "imported": 12,
+   "duplicates": 0
+  },
+  "bulk2": {
+   "imported": 0,
+   "duplicates": 12
+  }
+ },
+ "payees": [
+  {
+   "name": "Transfer : Itau Conta",
+   "transfer": "Itau Conta",
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Transfer : Nubank Conta",
+   "transfer": "Nubank Conta",
+   "type": "contains",
+   "condition": "PIX SAV"
+  },
+  {
+   "name": "Transfer : Third Conta",
+   "transfer": "Third Conta",
+   "type": "is",
+   "condition": "PIX THIRD"
+  },
+  {
+   "name": "Transfer : Savings Conta",
+   "transfer": "Savings Conta",
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Padaria",
+   "transfer": null,
+   "type": "contains",
+   "condition": "PADOCA"
+  },
+  {
+   "name": "Uber",
+   "transfer": null,
+   "type": "contains",
+   "condition": "UBER"
+  },
+  {
+   "name": " Padded ",
+   "transfer": null,
+   "type": "is",
+   "condition": "PADDED RAW"
+  },
+  {
+   "name": "Netflix",
+   "transfer": null,
+   "type": "is",
+   "condition": "NETFLIX.COM"
+  },
+  {
+   "name": "Mercado",
+   "transfer": null,
+   "type": "contains",
+   "condition": "MERC"
+  },
+  {
+   "name": "Mercado Livre",
+   "transfer": null,
+   "type": "contains",
+   "condition": "MERCADO LIVRE"
+  },
+  {
+   "name": "Bakery",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Corner Shop",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Mercadoado livre sp",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Padaria 42",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "pix sav",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "PIX THIRD",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Transfer : Nubank Conta 42",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Uber *trip 123",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  },
+  {
+   "name": "Padded",
+   "transfer": null,
+   "type": null,
+   "condition": null
+  }
+ ],
+ "sync_rows": [
+  {
+   "external_id": "c0",
+   "amount": -10000,
+   "payee": "Padaria 42",
+   "import_payee_name": "Padaria 42",
+   "import_payee_name_original": "Padaria 42",
+   "shadow_payee": "Padaria 42",
+   "hint_account": null
+  },
+  {
+   "external_id": "c1",
+   "amount": -2000,
+   "payee": "Uber *trip 123",
+   "import_payee_name": "Uber *trip 123",
+   "import_payee_name_original": "Uber *trip 123",
+   "shadow_payee": "Uber *trip 123",
+   "hint_account": null
+  },
+  {
+   "external_id": "c10",
+   "amount": -12000,
+   "payee": "Padaria",
+   "import_payee_name": "Padaria",
+   "import_payee_name_original": "Padaria",
+   "shadow_payee": "Padaria",
+   "hint_account": null
+  },
+  {
+   "external_id": "c11",
+   "amount": -13000,
+   "payee": "Bakery",
+   "import_payee_name": "Bakery",
+   "import_payee_name_original": "Bakery",
+   "shadow_payee": "Bakery",
+   "hint_account": null
+  },
+  {
+   "external_id": "c2",
+   "amount": -3000,
+   "payee": " Padded ",
+   "import_payee_name": " Padded ",
+   "import_payee_name_original": " Padded ",
+   "shadow_payee": " Padded ",
+   "hint_account": null
+  },
+  {
+   "external_id": "c3",
+   "amount": -4000,
+   "payee": "Netflix",
+   "import_payee_name": "Netflix",
+   "import_payee_name_original": "Netflix",
+   "shadow_payee": "Netflix",
+   "hint_account": null
+  },
+  {
+   "external_id": "c4",
+   "amount": -5000,
+   "payee": "Transfer : Nubank Conta 42",
+   "import_payee_name": "Transfer : Nubank Conta 42",
+   "import_payee_name_original": "Transfer : Nubank Conta 42",
+   "shadow_payee": "Transfer : Nubank Conta 42",
+   "hint_account": null
+  },
+  {
+   "external_id": "c5",
+   "amount": -6000,
+   "payee": "PIX THIRD",
+   "import_payee_name": "PIX THIRD",
+   "import_payee_name_original": "PIX THIRD",
+   "shadow_payee": "PIX THIRD",
+   "hint_account": "Third Conta"
+  },
+  {
+   "external_id": "c6",
+   "amount": -7000,
+   "payee": "Corner Shop",
+   "import_payee_name": "Corner Shop",
+   "import_payee_name_original": "Corner Shop",
+   "shadow_payee": "Corner Shop",
+   "hint_account": null
+  },
+  {
+   "external_id": "c7",
+   "amount": -8000,
+   "payee": null,
+   "import_payee_name": "Transfer : Nubank Conta",
+   "import_payee_name_original": "Transfer : Nubank Conta",
+   "shadow_payee": "",
+   "hint_account": "Nubank Conta"
+  },
+  {
+   "external_id": "c8",
+   "amount": -9000,
+   "payee": "Mercadoado livre sp",
+   "import_payee_name": "Mercadoado livre sp",
+   "import_payee_name_original": "Mercadoado livre sp",
+   "shadow_payee": "Mercadoado livre sp",
+   "hint_account": null
+  },
+  {
+   "external_id": "c9",
+   "amount": -11000,
+   "payee": "pix sav",
+   "import_payee_name": "pix sav",
+   "import_payee_name_original": "pix sav",
+   "shadow_payee": "pix sav",
+   "hint_account": "Nubank Conta"
+  }
+ ],
+ "bulk_rows": [
+  {
+   "amount": -10000,
+   "payee": "Padaria 42",
+   "import_payee_name": "PADOCA 42",
+   "hint": null,
+   "key_payee": "Padaria 42",
+   "occ": 1
+  },
+  {
+   "amount": -11000,
+   "payee": "pix sav",
+   "import_payee_name": "pix sav",
+   "hint": "Nubank Conta",
+   "key_payee": "Transfer : Nubank Conta",
+   "occ": 1
+  },
+  {
+   "amount": -12000,
+   "payee": "Padaria",
+   "import_payee_name": "padoca",
+   "hint": null,
+   "key_payee": "Padaria",
+   "occ": 1
+  },
+  {
+   "amount": -13000,
+   "payee": "Bakery",
+   "import_payee_name": "  Bakery  ",
+   "hint": null,
+   "key_payee": "Bakery",
+   "occ": 1
+  },
+  {
+   "amount": -2000,
+   "payee": "Uber *trip 123",
+   "import_payee_name": "UBER *TRIP 123",
+   "hint": null,
+   "key_payee": "Uber *trip 123",
+   "occ": 1
+  },
+  {
+   "amount": -3000,
+   "payee": "Padded",
+   "import_payee_name": "PADDED RAW",
+   "hint": null,
+   "key_payee": "Padded",
+   "occ": 1
+  },
+  {
+   "amount": -4000,
+   "payee": "Netflix",
+   "import_payee_name": "NETFLIX.COM",
+   "hint": null,
+   "key_payee": "Netflix",
+   "occ": 1
+  },
+  {
+   "amount": -5000,
+   "payee": "Transfer : Nubank Conta 42",
+   "import_payee_name": "PIX SAV 42",
+   "hint": null,
+   "key_payee": "Transfer : Nubank Conta 42",
+   "occ": 1
+  },
+  {
+   "amount": -6000,
+   "payee": "PIX THIRD",
+   "import_payee_name": "PIX THIRD",
+   "hint": "Third Conta",
+   "key_payee": "Transfer : Third Conta",
+   "occ": 1
+  },
+  {
+   "amount": -7000,
+   "payee": "Corner Shop",
+   "import_payee_name": "Corner Shop",
+   "hint": null,
+   "key_payee": "Corner Shop",
+   "occ": 1
+  },
+  {
+   "amount": -8000,
+   "payee": null,
+   "import_payee_name": "Transfer : Nubank Conta",
+   "hint": "Nubank Conta",
+   "key_payee": "Transfer : Nubank Conta",
+   "occ": 1
+  },
+  {
+   "amount": -9000,
+   "payee": "Mercadoado livre sp",
+   "import_payee_name": "MERCADO LIVRE SP",
+   "hint": null,
+   "key_payee": "Mercadoado livre sp",
+   "occ": 1
+  }
+ ]
+}

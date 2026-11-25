@@ -24,10 +24,9 @@
  */
 import type { Queryable } from '../../core/db';
 import { HttpError } from '../../core/validate';
-import { applyRules } from '@shared/domain/payees';
 import { TRANSFER_PAYEE_RE } from '@shared/domain/transfers';
 import * as store from '../store/transfer-payees';
-import { loadRenameRules, resolvePayeeId } from './transactions';
+import { loadRenameRules, matchingRule, resolvePayeeId } from './transactions';
 import { ensureTransferPayee, resolveTransferAccountFromText } from './transfer-payees';
 import type { PoolClient } from 'pg';
 
@@ -61,18 +60,19 @@ export async function resolveEditedPayee(
   const isTransferRow = row.transfer_transaction_id !== null || row.transfer_account_id !== null;
   if (isTransferRow && row.payee_id && (await store.isFormerName(client, budgetId, row.payee_id, text.trim()))) return { unchanged: true };
   if (isTransferRow) {
-    const rules = await loadRenameRules(client, budgetId);
-    const effective = applyRules(rules.rows, text).trim();
+    // A renaming rule that matches ASSIGNS its payee. The transfer payee of the row's own peer
+    // changes nothing; another account's moves the leg; an ORDINARY payee (even one called
+    // "Transfer : X" that nobody links) is that ordinary payee: the row stops being a transfer.
+    const hit = matchingRule(await loadRenameRules(client, budgetId), text);
+    const peer = row.transfer_account_id ?? current?.transfer_account_id ?? null;
+    if (hit) {
+      if (!hit.transfer_account_id) return { unchanged: false, payeeId: hit.payee_id };
+      if (hit.transfer_account_id === peer) return { unchanged: true };
+      return { unchanged: false, payeeId: await ensureTransferPayee(client, budgetId, hit.transfer_account_id) };
+    }
+    const effective = text.trim();
     if (TRANSFER_PAYEE_RE.test(effective)) {
-      const fromRule = effective !== text.trim();
-      // A renaming rule that produces the name of an ORDINARY payee ("Transfer : X"
-      // held by a payee nobody links) means that payee: the row stops being a transfer.
-      if (fromRule) {
-        const holder = await store.findPayeeRowByName(client, budgetId, effective);
-        if (holder && !holder.deleted && holder.transfer_account_id === null) return { unchanged: false, payeeId: holder.id };
-      }
-      const accountId = await resolveTransferAccountFromText(client, budgetId, effective, { fromRule });
-      const peer = row.transfer_account_id ?? current?.transfer_account_id ?? null;
+      const accountId = await resolveTransferAccountFromText(client, budgetId, effective);
       if (accountId === null || accountId === peer) return { unchanged: true };
       return { unchanged: false, payeeId: await ensureTransferPayee(client, budgetId, accountId) };
     }

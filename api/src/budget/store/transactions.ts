@@ -118,6 +118,11 @@ export async function insertBulkImportRow(db: Queryable, r: BulkImportRow): Prom
   return inserted.rows[0]?.id ?? null;
 }
 
+/** Set the payee of a row just inserted (the statement import creates a new payee only after its row is in). */
+export async function setRowPayee(db: Queryable, id: string, payeeId: string | null): Promise<void> {
+  await db.query('UPDATE transactions SET payee_id = $2 WHERE id = $1', [id, payeeId]);
+}
+
 /** The fields an edit needs from the live row it edits (scoped to the budget). */
 export interface EditableTransaction {
   repeat_rule_id: string | null;

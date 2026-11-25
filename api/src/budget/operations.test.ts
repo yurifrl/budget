@@ -142,6 +142,7 @@ describe.skipIf(!dbReady)('generated routes keep budgetAccess ownership (404 for
     budget_id: budgetId,
     id: someId,
     categoryId: someId,
+    rule_id: someId,
     user_id: someId,
     month: '2025-01-01',
     email: 'someone@example.com',

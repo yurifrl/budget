@@ -1,8 +1,8 @@
 import { z } from '../../zod';
 
 import { defineOperation, EXPOSE_ALL } from '../../operation-contract';
-import { budgetId, categorizationModeSchema, matchTypeSchema, nameSchema, uuidSchema } from './schemas';
-import { noContent, payeeAdminRowSchema, payeeMergedSchema, payeeRowSchema, payeeTxnPageSchema } from './outputs';
+import { budgetId, categorizationModeSchema, matchTypeSchema, nameSchema, ruleMatchTypeSchema, uuidSchema } from './schemas';
+import { noContent, payeeAdminRowSchema, payeeMergedSchema, payeeRowSchema, payeeTxnPageSchema, renameRuleSchema } from './outputs';
 
 const scoped = z.object({ id: uuidSchema, budget_id: budgetId });
 
@@ -117,12 +117,70 @@ export const payeesMerge = defineOperation({
 
 export const payeesSetRenameRule = defineOperation({
   name: 'budget_payees_set_rename_rule',
-  description: "Set a payee's rename rule (imported text matching the condition resolves to this payee); empty condition clears it.",
+  description:
+    "Single-rule form kept for released clients: set the payee's first \"is\" / \"contains\" renaming rule (imported text matching the condition is assigned to this payee); empty condition removes that rule. Other rules of the payee are untouched. Use budget_payees_rename_rules_* for several rules and \"starts with\" / \"ends with\".",
   input: scoped.extend({ match_type: matchTypeSchema, condition: z.string().trim().max(200) }),
   output: noContent,
   method: 'PUT',
   path: '/payees/:id/rename-rule',
   query: ['budget_id'],
   kind: 'write',
+  expose: EXPOSE_ALL,
+});
+
+const ruleScoped = scoped.extend({ rule_id: uuidSchema });
+const ruleBody = {
+  match_type: ruleMatchTypeSchema,
+  condition: z.string().trim().min(1).max(200),
+};
+const RULE_MATCHING =
+  'Matching ignores case and surrounding or repeated spaces (accents count). When several rules match one text the most specific wins: is, then starts with / ends with, then contains; then the longest pattern; then the oldest rule.';
+
+export const payeesRenameRulesList = defineOperation({
+  name: 'budget_payees_rename_rules_list',
+  description: `List a payee's renaming rules, oldest first. A rule says "imported payees that <is | contains | starts with | ends with> condition are renamed to this payee": a matching imported row is assigned to the payee itself and keeps the imported text as its import name. A payee can hold several rules. ${RULE_MATCHING}`,
+  input: scoped,
+  output: z.array(renameRuleSchema),
+  method: 'GET',
+  path: '/payees/:id/rename-rules',
+  query: ['budget_id'],
+  kind: 'read',
+  expose: EXPOSE_ALL,
+});
+
+export const payeesRenameRulesAdd = defineOperation({
+  name: 'budget_payees_rename_rules_add',
+  description: `Add a renaming rule to a payee. A transfer payee ("Transfer : <account>") can hold rules too: a row a rule assigns to it on import or bank sync stays an ordinary uncategorized row with a transfer hint for that account, and a register entry makes the transfer with its mirror. 409 when another payee already holds the same rule. ${RULE_MATCHING}`,
+  input: scoped.extend(ruleBody),
+  output: renameRuleSchema,
+  method: 'POST',
+  path: '/payees/:id/rename-rules',
+  query: ['budget_id'],
+  status: 201,
+  kind: 'write',
+  expose: EXPOSE_ALL,
+});
+
+export const payeesRenameRulesUpdate = defineOperation({
+  name: 'budget_payees_rename_rules_update',
+  description: 'Change the match type and condition of one renaming rule of a payee. 404 when the rule is not that payee\'s, 409 when another rule already has these values.',
+  input: ruleScoped.extend(ruleBody),
+  output: renameRuleSchema,
+  method: 'PUT',
+  path: '/payees/:id/rename-rules/:rule_id',
+  query: ['budget_id'],
+  kind: 'write',
+  expose: EXPOSE_ALL,
+});
+
+export const payeesRenameRulesRemove = defineOperation({
+  name: 'budget_payees_rename_rules_remove',
+  description: 'Remove one renaming rule of a payee. Rows already imported keep their payee.',
+  input: ruleScoped,
+  output: noContent,
+  method: 'DELETE',
+  path: '/payees/:id/rename-rules/:rule_id',
+  query: ['budget_id'],
+  kind: 'destructive',
   expose: EXPOSE_ALL,
 });

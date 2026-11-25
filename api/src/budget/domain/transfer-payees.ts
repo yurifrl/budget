@@ -27,6 +27,7 @@ import type { Queryable } from '../../core/db';
 import { HttpError } from '../../core/validate';
 import { TRANSFER_PAYEE_RE, transferPayeeName } from '@shared/domain/transfers';
 import * as store from '../store/transfer-payees';
+import * as rulesStore from '../store/rename-rules';
 import type { AccountPayeeRow, PayeeFullRow } from '../store/transfer-payees';
 
 const MAX_NAME_ATTEMPTS = 200;
@@ -181,16 +182,16 @@ export interface AbsorbResult {
   ruleMoved: boolean;
   /** The payee was NOT deleted because rows of another budget still reference it; it is unlinked instead. */
   keptReferencedFromOtherBudget: boolean;
-  /** What was lost: the source's renaming rule or "treat as transfer" rule the kept payee could not take. */
+  /** What was lost: the source's "treat as transfer" rule the kept payee could not take (renaming rules all move). */
   dropped: { kind: 'rename_rule' | 'transfer_rule'; payee_id: string; payee_name: string; detail: string }[];
 }
 
 /**
  * REPAIR ONLY. Fold a duplicate payee into the canonical one: every reference
  * (transactions, splits, scheduled rows, repeat rules, link records, account
- * pointers; each scoped to the budget) moves, the renaming rule and the "treat
+ * pointers; each scoped to the budget) moves, every renaming rule moves and the "treat
  * as transfer" rule move when the canonical payee has none, then the duplicate
- * row is deleted (or, when another budget references it, unlinked and kept). What cannot move (a payee holds one rule) is returned so the
+ * row is deleted (or, when another budget references it, unlinked and kept). What cannot move (a payee holds one "treat as transfer" rule) is returned so the
  * report can name it.
  */
 export async function absorbPayee(db: Queryable, budgetId: string, fromId: string, intoId: string): Promise<AbsorbResult> {
@@ -204,19 +205,13 @@ export async function absorbPayee(db: Queryable, budgetId: string, fromId: strin
   // kept one, so a stale edit after the repair cannot move a mirror.
   await store.recordFormerName(db, budgetId, into.id, from.name);
   await store.copyFormerNames(db, budgetId, from.id, into.id);
-  if (from.rename_condition !== null && from.rename_match_type !== null) {
-    await store.clearRenameRule(db, from.id);
-    if (into.rename_condition === null) {
-      await store.setRenameRule(db, into.id, from.rename_match_type, from.rename_condition);
-      result.ruleMoved = true;
-    } else if (into.rename_condition !== from.rename_condition || into.rename_match_type !== from.rename_match_type) {
-      result.dropped.push({
-        kind: 'rename_rule',
-        payee_id: from.id,
-        payee_name: from.name,
-        detail: `${from.rename_match_type} "${from.rename_condition}"`,
-      });
-    }
+  // Every renaming rule moves (a rule is unique per budget, so none can collide); the
+  // kept payee may hold several.
+  if (from.rename_rule_count > 0) {
+    await rulesStore.moveRules(db, budgetId, from.id, into.id);
+    await rulesStore.syncLegacyRuleColumns(db, budgetId, from.id);
+    await rulesStore.syncLegacyRuleColumns(db, budgetId, into.id);
+    result.ruleMoved = true;
   }
   if (from.transfer_rule !== null) {
     if (into.transfer_rule === null) await store.copyTransferRule(db, from.id, into.id);

@@ -83,6 +83,8 @@ const V = {
   payee: crypto.randomUUID(),
   txn: crypto.randomUUID(),
   rule: crypto.randomUUID(),
+  /** A renaming rule of the victim's payee. */
+  renameRule: crypto.randomUUID(),
   connection: crypto.randomUUID(),
 };
 // Attacker's own budget (budgetAccess lets them address it).
@@ -157,6 +159,11 @@ const samples: Record<string, Record<string, unknown>> = {
   budget_payees_delete: { id: V.payee, budget_id: A.budget },
   budget_payees_merge: { id: A.payee, budget_id: A.budget, target_id: V.payee },
   budget_payees_rename: { id: V.payee, budget_id: A.budget, name: 'pwned' },
+  budget_payees_rename_rules_add: { id: V.payee, budget_id: A.budget, match_type: 'contains', condition: 'pwned' },
+  budget_payees_rename_rules_list: { id: V.payee, budget_id: A.budget },
+  // The attacker's own payee with the victim's rule id: the rule is re-scoped by budget AND payee.
+  budget_payees_rename_rules_remove: { id: A.payee, budget_id: A.budget, rule_id: V.renameRule },
+  budget_payees_rename_rules_update: { id: A.payee, budget_id: A.budget, rule_id: V.renameRule, match_type: 'is', condition: 'pwned' },
   budget_payees_set_categorization: {
     id: V.payee,
     budget_id: A.budget,
@@ -204,7 +211,7 @@ async function budgetSnapshot(budgetId: string, withConnection = false): Promise
   const tables = [
     'budgets', 'accounts', 'category_groups', 'categories', 'category_bundles', 'payees', 'transactions',
     'subtransactions', 'txn_repeat_rules', 'category_targets', 'category_notes', 'month_notes', 'assignments', 'budget_members',
-    'transfer_marks', 'transfer_links', 'transfer_hints',
+    'transfer_marks', 'transfer_links', 'transfer_hints', 'payee_renaming_rules',
   ];
   const out: Record<string, unknown> = {};
   for (const t of tables) {
@@ -246,6 +253,7 @@ const POINTERS: Array<[table: string, column: string, target: string]> = [
   ['transfer_links', 'peer_transaction_id', 'transactions'],
   ['transfer_hints', 'transaction_id', 'transactions'],
   ['transfer_hints', 'account_id', 'accounts'],
+  ['payee_renaming_rules', 'payee_id', 'payees'],
   ['txn_repeat_rules', 'account_id', 'accounts'],
   ['txn_repeat_rules', 'category_id', 'categories'],
   ['txn_repeat_rules', 'payee_id', 'payees'],
@@ -321,6 +329,9 @@ beforeAll(async () => {
   ]);
   await pool.query(`INSERT INTO payees (id, budget_id, name) VALUES ($1, $2, $3), ($4, $5, 'Attacker Payee')`, [
     V.payee, V.budget, VICTIM_MARKER, A.payee, A.budget,
+  ]);
+  await pool.query(`INSERT INTO payee_renaming_rules (id, budget_id, payee_id, match_type, condition) VALUES ($1, $2, $3, 'is', 'victim rule')`, [
+    V.renameRule, V.budget, V.payee,
   ]);
   await pool.query(
     `INSERT INTO transactions (id, budget_id, account_id, date, amount, payee_id, category_id, memo, cleared, approved, repeat, deleted)

@@ -30,7 +30,6 @@ import { payeeIdFromRequest } from '../domain/edited-payee';
 import { insertMirror, removeMirror, resolveTransferPeer } from '../domain/transfers';
 import { advanceOccurrence } from '../domain/repeat-schedule';
 import { updateTransactionInClient } from '../domain/transaction-update';
-import { applyRules } from '@shared/domain/payees';
 import { getImportMetadata, listInstallmentSources } from '../../connections';
 import { upcomingInstallmentRows } from '../domain/upcoming-installments';
 import { budgetRouter } from '../router';
@@ -229,14 +228,15 @@ export const operations = [
         if (!(await categoryInBudget(client, categoryId, budget_id))) throw new HttpError(400, 'category not found in budget', 'category_not_in_budget');
       }
 
-      const rules = (await loadRenameRules(client, budget_id)).rows;
-      // A text that names an account's transfer payee does NOT store that payee
-      // (a payee-only half transfer): the row stays ordinary and the account is
-      // remembered as a hint for the matcher (see planImportedPayee); payees are
-      // created only for rows that are inserted (resolveStatementPayee).
+      const rules = await loadRenameRules(client, budget_id);
+      // A renaming rule that matches ASSIGNS its payee. A text that names an account's
+      // transfer payee (through a rule or as text) does NOT store that payee (a payee-only
+      // half transfer): the row stays ordinary and the account is remembered as a hint for
+      // the matcher (see planImportedPayee). Payees are created only for rows that are
+      // inserted (resolveStatementPayee).
       const payeeByName = new Map<string, StatementPayee>();
       for (const name of new Set(txns.map((t) => t.payee.trim()).filter(Boolean))) {
-        payeeByName.set(name, await resolveStatementPayee(client, budget_id, name, applyRules(rules, name)));
+        payeeByName.set(name, await resolveStatementPayee(client, budget_id, name, rules));
       }
 
       // Existing occurrence numbers per `YNAB:<milliunits>:<date>:<payee>`
@@ -248,18 +248,30 @@ export const operations = [
       // occurrence is <= an existing one for the same prefix is a re-import of
       // that row, not a new transaction.
       // The key keeps counting under the account's transfer payee for such text,
-      // as before: re-importing a file stays idempotent across this change.
-      const payeeKeyOf = (txn: (typeof txns)[number]) => {
-        const p = payeeByName.get(txn.payee.trim());
-        return p?.key ?? '-';
+      // as before: re-importing a file stays idempotent across this change. A file
+      // imported while a `contains` rule still spliced its payee into the text counted
+      // under that spliced payee: its keys are looked up too (read only), so those rows
+      // are still the same rows. Only the FIRST key is written for a new row.
+      const keysByName = new Map<string, string[]>();
+      const payeeKeysOf = async (txn: (typeof txns)[number]): Promise<string[]> => {
+        const name = txn.payee.trim();
+        let keys = keysByName.get(name);
+        if (!keys) {
+          const p = payeeByName.get(name);
+          const first = (await p?.key()) ?? '-';
+          keys = [...new Set([first, ...((await p?.earlierKeys()) ?? [])])];
+          keysByName.set(name, keys);
+        }
+        return keys;
       };
-      const prefixes = [
-        ...new Set(
-          txns
-            .filter((t) => !t.import_id)
-            .map((t) => `YNAB:${t.inflow - t.outflow}:${t.date}:${payeeKeyOf(t)}`),
-        ),
-      ];
+      const prefixesOf = async (txn: (typeof txns)[number]) => {
+        const milli = txn.inflow - txn.outflow;
+        return (await payeeKeysOf(txn)).map((k) => `YNAB:${milli}:${txn.date}:${k}`);
+      };
+      const prefixes: string[] = [];
+      for (const t of txns) {
+        if (!t.import_id) for (const prefix of await prefixesOf(t)) if (!prefixes.includes(prefix)) prefixes.push(prefix);
+      }
       const existingOccs = new Map<string, number[]>();
       if (prefixes.length > 0) {
         const found = await txnStore.findImportIdsLike(
@@ -287,21 +299,25 @@ export const operations = [
         const milliunits = txn.inflow - txn.outflow;
         let importId = txn.import_id ?? null;
         if (!importId) {
-          const prefix = `YNAB:${milliunits}:${txn.date}:${payeeKeyOf(txn)}`;
-          const occ = (batchOcc.get(prefix) ?? 0) + 1;
-          batchOcc.set(prefix, occ);
-          if ((existingOccs.get(prefix) ?? []).some((existing) => existing <= occ)) {
+          const [prefix, ...earlierPrefixes] = await prefixesOf(txn);
+          const occ = (batchOcc.get(prefix!) ?? 0) + 1;
+          batchOcc.set(prefix!, occ);
+          if ([prefix!, ...earlierPrefixes].some((p) => (existingOccs.get(p) ?? []).some((existing) => existing <= occ))) {
             duplicates += 1;
             continue;
           }
           importId = `${prefix}:${occ}`;
         }
+        const statementPayee = payeeByName.get(txn.payee.trim());
+        // A payee that does not exist yet is created after the row is in: a duplicate row
+        // (an explicit import id already present) creates nothing.
+        const payeeId = (await statementPayee?.existingPayeeId()) ?? null;
         const inserted = await txnStore.insertBulkImportRow(client, {
           budgetId: budget_id,
           accountId: account_id,
           date: txn.date,
           amount: milliunits,
-          payeeId: (await payeeByName.get(txn.payee.trim())?.ordinaryId()) ?? null,
+          payeeId,
           categoryId: txn.category_id,
           memo: txn.memo || null,
           importId,
@@ -313,7 +329,10 @@ export const operations = [
           duplicates += 1;
           continue;
         }
-        const hint = payeeByName.get(txn.payee.trim())?.plan.transferAccountId;
+        if (statementPayee && (await statementPayee.existingPayeeId()) === undefined) {
+          await txnStore.setRowPayee(client, inserted, await statementPayee.createPayee());
+        }
+        const hint = statementPayee?.plan.transferAccountId;
         if (hint && hint !== account_id && !txn.category_id) await setTransferHint(client, budget_id, inserted, hint);
         imported += 1;
         unclearedDelta += milliunits;

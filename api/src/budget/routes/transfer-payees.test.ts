@@ -88,11 +88,14 @@ async function legacyAccount(budgetId: string, name: string): Promise<string> {
 
 async function rawPayee(budgetId: string, name: string, accountId: string | null = null, extra: { rule?: [string, string]; hidden?: boolean } = {}) {
   const res = await pool!.query<{ id: string }>(
-    `INSERT INTO payees (budget_id, name, transfer_account_id, hidden, rename_match_type, rename_condition)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [budgetId, name, accountId, extra.hidden ?? false, extra.rule?.[0] ?? null, extra.rule?.[1] ?? null],
+    `INSERT INTO payees (budget_id, name, transfer_account_id, hidden) VALUES ($1, $2, $3, $4) RETURNING id`,
+    [budgetId, name, accountId, extra.hidden ?? false],
   );
-  return res.rows[0]!.id;
+  const id = res.rows[0]!.id;
+  if (extra.rule) {
+    await pool!.query('INSERT INTO payee_renaming_rules (budget_id, payee_id, match_type, condition) VALUES ($1, $2, $3, $4)', [budgetId, id, extra.rule[0], extra.rule[1]]);
+  }
+  return id;
 }
 
 async function rawTxn(budgetId: string, accountId: string, payeeId: string | null, amount = -1000) {
@@ -121,6 +124,8 @@ const accountPointer = async (accountId: string) =>
     .transfer_payee_id;
 const payeeIdOf = async (txnId: string) =>
   (await pool!.query<{ payee_id: string | null }>('SELECT payee_id FROM transactions WHERE id = $1', [txnId])).rows[0]!.payee_id;
+const ruleConditions = async (payeeId: string) =>
+  (await pool!.query<{ condition: string }>('SELECT condition FROM payee_renaming_rules WHERE payee_id = $1 ORDER BY created_at, id', [payeeId])).rows.map((r) => r.condition);
 const payeeExists = async (id: string) => (await pool!.query('SELECT 1 FROM payees WHERE id = $1', [id])).rowCount === 1;
 
 /** The invariant: one live payee points at the account, it has the expected name, and the account points back. */
@@ -239,8 +244,9 @@ describe.skipIf(!dbReady)('lifecycle: created with the account, renamed with it,
     expect(res.status, await res.clone().text()).toBe(200);
 
     expect(await expectOneTransferPayee(a, 'Transfer : Fold Target (2)')).toBe(payeeId);
-    const kept = (await pool!.query('SELECT name, hidden, deleted, rename_condition, categorization_mode, transfer_account_id FROM payees WHERE id = $1', [leftover])).rows[0];
-    expect(kept).toEqual({ name: 'Transfer : Fold Target', hidden: true, deleted: false, rename_condition: 'PIX LEFTOVER', categorization_mode: 'never', transfer_account_id: null });
+    const kept = (await pool!.query('SELECT name, hidden, deleted, categorization_mode, transfer_account_id FROM payees WHERE id = $1', [leftover])).rows[0];
+    expect(kept).toEqual({ name: 'Transfer : Fold Target', hidden: true, deleted: false, categorization_mode: 'never', transfer_account_id: null });
+    expect(await ruleConditions(leftover)).toEqual(['PIX LEFTOVER']);
     expect((await pool!.query('SELECT 1 FROM payee_locations WHERE payee_id = $1', [leftover])).rowCount).toBe(1);
     expect(await payeeIdOf(row)).toBe(leftover);
     // The collision is logged for the repair, which folds the leftover in.
@@ -333,7 +339,7 @@ describe.skipIf(!dbReady)('lifecycle: created with the account, renamed with it,
     await expectOneTransferPayee(copiedLone.id, 'Transfer : Copy Lone');
     // Nothing merged or deleted: both copies of the duplicate pair (and the rule) are there.
     expect((await linkedPayees(copiedDup.id)).map((p) => p.name).sort()).toEqual(['Transfer : Copy Dup', 'Transfer : Copy Dup Renamed']);
-    expect((await pool!.query("SELECT 1 FROM payees WHERE budget_id = $1 AND rename_condition = 'COPY-RULE'", [created])).rowCount).toBe(1);
+    expect((await pool!.query("SELECT 1 FROM payee_renaming_rules WHERE budget_id = $1 AND condition = 'COPY-RULE'", [created])).rowCount).toBe(1);
     // The report is not thrown away.
     const line = warn.lines.find((l) => l.includes('fresh start') && l.includes(created));
     expect(line).toContain('repair needed');
@@ -373,7 +379,8 @@ describe.skipIf(!dbReady)('repair: one canonical payee per account, report first
   }
 
   const snapshot = async (b: string) => ({
-    payees: (await pool!.query('SELECT id, name, deleted, hidden, transfer_account_id, rename_condition FROM payees WHERE budget_id = $1 ORDER BY id', [b])).rows,
+    payees: (await pool!.query('SELECT id, name, deleted, hidden, transfer_account_id FROM payees WHERE budget_id = $1 ORDER BY id', [b])).rows,
+    rules: (await pool!.query('SELECT id, payee_id, match_type, condition FROM payee_renaming_rules WHERE budget_id = $1 ORDER BY id', [b])).rows,
     accounts: (await pool!.query('SELECT id, transfer_payee_id FROM accounts WHERE budget_id = $1 ORDER BY id', [b])).rows,
     txns: (await pool!.query('SELECT id, payee_id FROM transactions WHERE budget_id = $1 ORDER BY id', [b])).rows,
   });
@@ -395,7 +402,7 @@ describe.skipIf(!dbReady)('repair: one canonical payee per account, report first
 
     expect(report.applied).toBe(false);
     expect(report.accounts_checked).toBe(7);
-    // One: 2 payees -> 1 (2 new-name rows move, one rule is dropped because Old already has one);
+    // One: 2 payees -> 1 (2 new-name rows move, and its renaming rule moves next to Old's own);
     // Two: adopts the name-only payee; Three and the two Twins: a payee is created;
     // Four: pointer + hidden fixed.
     expect(report.accounts_with_duplicates).toBe(1);
@@ -404,11 +411,10 @@ describe.skipIf(!dbReady)('repair: one canonical payee per account, report first
     expect(report.ambiguous_name_only_payees).toBe(1);
     expect(report.payees_removed).toBe(1);
     expect(report.transactions_repointed).toBe(2);
-    expect(report.rename_rules_dropped).toBe(1);
-    expect(report.dropped_rules).toEqual([
-      { kind: 'rename_rule', account_id: d.one, payee_id: d.newPayee, payee_name: 'Transfer : Rep One', detail: 'contains "NEW-RULE"', kept_payee_id: d.oldPayee },
-    ]);
-    expect(report.rename_rules_moved).toBe(0);
+    // A payee holds several renaming rules now: nothing is dropped, every rule moves.
+    expect(report.rename_rules_dropped).toBe(0);
+    expect(report.dropped_rules).toEqual([]);
+    expect(report.rename_rules_moved).toBe(1);
     expect(report.pointers_fixed).toBe(2);
     expect(report.payees_renamed).toBe(1);
     expect(await snapshot(d.b)).toEqual(before);
@@ -434,12 +440,12 @@ describe.skipIf(!dbReady)('repair: one canonical payee per account, report first
     expect(await payeeIdOf(d.oldRow)).toBe(d.oldPayee);
     expect(await payeeIdOf(d.newRow1)).toBe(d.oldPayee);
     expect(await payeeIdOf(d.newRow2)).toBe(d.oldPayee);
-    const rule = (await pool!.query('SELECT rename_condition FROM payees WHERE id = $1', [d.oldPayee])).rows[0];
-    expect(rule.rename_condition).toBe('OLD-RULE');
+    expect(await ruleConditions(d.oldPayee)).toEqual(['OLD-RULE', 'NEW-RULE']);
+    expect(await ruleConditions(d.newPayee)).toEqual([]);
     // Two: the name-only payee became the account's payee, rows and rule kept.
     expect(await expectOneTransferPayee(d.two, 'Transfer : Rep Two')).toBe(d.nameOnly);
     expect(await payeeIdOf(d.nameOnlyRow)).toBe(d.nameOnly);
-    expect((await pool!.query('SELECT rename_condition FROM payees WHERE id = $1', [d.nameOnly])).rows[0].rename_condition).toBe('TWO-RULE');
+    expect(await ruleConditions(d.nameOnly)).toEqual(['TWO-RULE']);
     // Three: created.
     await expectOneTransferPayee(d.three, 'Transfer : Rep Three');
     // Four: pointer set, payee visible again.
@@ -973,7 +979,7 @@ describe.skipIf(!dbReady)('repair: every reference moves, only within its own bu
     expect((await repair(b, true)).actions).toEqual([]);
   });
 
-  test('the report names every rule it drops, renaming and "treat as transfer"', async () => {
+  test('the report names every "treat as transfer" rule it drops; renaming rules all move', async () => {
     const b = await newBudget();
     const a = await legacyAccount(b, 'Drop Acct');
     const keep = await rawPayee(b, 'Transfer : Drop Acct', a, { rule: ['contains', 'KEEP-RULE'] });
@@ -984,10 +990,12 @@ describe.skipIf(!dbReady)('repair: every reference moves, only within its own bu
 
     const report = await repair(b, false);
     expect(report.dropped_rules).toEqual([
-      { kind: 'rename_rule', account_id: a, payee_id: extra, payee_name: 'Transfer : Drop Acct Old', detail: 'is "LOST-RULE"', kept_payee_id: keep },
       { kind: 'transfer_rule', account_id: a, payee_id: extra, payee_name: 'Transfer : Drop Acct Old', detail: 'never', kept_payee_id: keep },
     ]);
-    expect(report.rename_rules_dropped).toBe(1);
+    expect(report.rename_rules_dropped).toBe(0);
+    expect(report.rename_rules_moved).toBe(1);
+    await repair(b, true);
+    expect(await ruleConditions(keep)).toEqual(['KEEP-RULE', 'LOST-RULE']);
   });
 
   test('a rename racing a concurrent insert of the same name takes the next name instead of failing', async () => {
