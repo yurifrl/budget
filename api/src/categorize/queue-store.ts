@@ -122,28 +122,44 @@ const bundlePayeeMatch = (alias: string): string => `(
 
 /**
  * The queue: live transactions of this budget that the shared rule says need a
- * category, minus the ones a person already decided (accepted ⇒ categorized;
- * skipped ⇒ a skip decision; both must leave the queue). Args: $1 budget,
- * $2 pending transfer ids. The threshold is $3 in every query that uses this
- * CTE; the page's limit/offset are the last two args.
+ * category, minus the ones a person decided. A skip decision always leaves the
+ * queue; an accept whose category was later cleared by hand is STALE and comes
+ * back with its earlier suggestions (nothing on the shared transactions table
+ * cleans the record). Args: $1 budget, $2 pending transfer ids. The threshold
+ * is $3 in every query that uses this CTE; the page's limit/offset are the last
+ * two args.
  */
 const QUEUE_CTE = `with q as (
   select t.id as transaction_id, t.date::text as date, t.amount as amount,
          t.account_id, a.name as account_name,
          t.payee_id, coalesce(p.name, t.import_payee_name) as payee, t.memo,
-         ct.raw_payload
+         ct.raw_payload, r.revived
     ${NEEDS_CATEGORY_FROM}
     left join public.connection_transactions ct on ct.transaction_id = t.id and ct.budget_id = t.budget_id
+    cross join lateral (
+      select exists (
+        select 1 from public.categorize_decisions sd
+         where sd.transaction_id = t.id and sd.budget_id = t.budget_id and sd.kind = 'accept'
+      ) as revived
+    ) r
    ${NEEDS_CATEGORY_WHERE}
-     and not exists (
+     and (r.revived or not exists (
        select 1 from public.category_suggestions ds
         where ds.transaction_id = t.id and ds.status <> 'pending'
-     )
+     ))
      and not exists (
        select 1 from public.categorize_decisions cd
-        where cd.transaction_id = t.id and cd.budget_id = t.budget_id
+        where cd.transaction_id = t.id and cd.budget_id = t.budget_id and cd.kind = 'skip'
      )
 )`;
+
+/**
+ * What the queue shows as a pending suggestion: a pending row, or — for a
+ * stale accept, whose earlier rows are accepted/dismissed — the model's rows
+ * again (a manual row is the person's removed choice, not a suggestion).
+ */
+const QUEUE_PENDING = (alias: string): string =>
+  `(${alias}.status = 'pending' or (q.revived and ${alias}.source <> 'manual'))`;
 
 /** The visible suggestion set of one queue row, best rank first (JSON). */
 const SUGGESTIONS_JSON = `(
@@ -157,7 +173,7 @@ const SUGGESTIONS_JSON = `(
     from public.category_suggestions s
     join public.categories c on c.id = s.category_id and c.budget_id = $1
     join public.category_groups g on g.id = c.group_id and g.budget_id = $1
-   where s.transaction_id = q.transaction_id and s.status = 'pending' and s.confidence >= $3
+   where s.transaction_id = q.transaction_id and ${QUEUE_PENDING('s')} and s.confidence >= $3
      and ${ASSIGNABLE}
 )`;
 
@@ -166,14 +182,14 @@ const HAS_VISIBLE = `exists (
   select 1 from public.category_suggestions b
     join public.categories c on c.id = b.category_id and c.budget_id = $1
     join public.category_groups g on g.id = c.group_id and g.budget_id = $1
-   where b.transaction_id = q.transaction_id and b.status = 'pending'
+   where b.transaction_id = q.transaction_id and ${QUEUE_PENDING('b')}
      and ${ASSIGNABLE}
 )`;
 
 /** Any pending suggestion, even one whose category is not usable. */
 const HAS_ANY = `exists (
   select 1 from public.category_suggestions b
-   where b.transaction_id = q.transaction_id and b.status = 'pending'
+   where b.transaction_id = q.transaction_id and ${QUEUE_PENDING('b')}
 )`;
 
 /** At least one visible pending suggestion at/above the threshold. */
@@ -181,7 +197,7 @@ const HAS_ABOVE = `exists (
   select 1 from public.category_suggestions s
     join public.categories c on c.id = s.category_id and c.budget_id = $1
     join public.category_groups g on g.id = c.group_id and g.budget_id = $1
-   where s.transaction_id = q.transaction_id and s.status = 'pending'
+   where s.transaction_id = q.transaction_id and ${QUEUE_PENDING('s')}
      and s.confidence >= $3 and ${ASSIGNABLE}
 )`;
 
@@ -195,7 +211,7 @@ const TOP_CTE = `${QUEUE_CTE}, top as (
         from public.category_suggestions s
         join public.categories c on c.id = s.category_id and c.budget_id = $1
         join public.category_groups g on g.id = c.group_id and g.budget_id = $1
-       where s.transaction_id = q.transaction_id and s.status = 'pending'
+       where s.transaction_id = q.transaction_id and ${QUEUE_PENDING('s')}
          and s.confidence >= $3 and ${ASSIGNABLE}
        order by s.rank
        limit 1
@@ -289,7 +305,7 @@ export async function listQueue(
                 from public.category_suggestions s
                 join public.categories c on c.id = s.category_id and c.budget_id = $1
                 join public.category_groups g on g.id = c.group_id and g.budget_id = $1
-               where s.transaction_id = q.transaction_id and s.status = 'pending'
+               where s.transaction_id = q.transaction_id and ${QUEUE_PENDING('s')}
                  and s.confidence >= $3 and ${ASSIGNABLE}
                order by s.rank
                limit 1
