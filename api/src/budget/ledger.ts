@@ -29,7 +29,7 @@ import { loadRenameRules, resolveImportedPayee } from './domain/transactions';
 export { applyBalanceDeltas, type BalanceDelta } from './domain/transactions';
 export { linkTransfers, linkTransfers as linkCardPayments } from './domain/transfer-links';
 export { adoptAccountCurrency } from './store/accounts';
-export { setTransferHint } from './store/transfers';
+export { clearTransferHints, setTransferHint } from './store/transfers';
 export {
   insertImportedTransaction,
   refreshImportedTransaction,
@@ -46,7 +46,11 @@ export {
 export interface ResolvedPayee {
   id: string | null;
   name: string;
+  /** The text `import_payee_name` keeps (the bank's text, also when no payee is stored). */
+  importName: string;
   transferAccountId: string | null;
+  /** What an earlier sync stored for the same text (the transfer payee); see `ImportedPayee.legacy`. */
+  legacy: { id: string; name: string } | null;
 }
 
 export interface ImportPayeeResolver {
@@ -66,12 +70,12 @@ export function createImportPayeeResolver(client: PoolClient, budgetId: string):
   return {
     async resolve(rawName: string): Promise<ResolvedPayee> {
       const name = rawName.trim();
-      if (!name) return { id: null, name: '', transferAccountId: null };
+      if (!name) return { id: null, name: '', importName: '', transferAccountId: null, legacy: null };
       if (!cache.has(name)) {
         if (!rules) rules = (await loadRenameRules(client, budgetId)).rows;
         const effective = applyRules(rules, name);
         const payee = await resolveImportedPayee(client, budgetId, name, effective, { verbatim: true });
-        cache.set(name, { id: payee.id, name: payee.name, transferAccountId: payee.transferAccountId });
+        cache.set(name, { id: payee.id, name: payee.name, importName: payee.importName, transferAccountId: payee.transferAccountId, legacy: payee.legacy });
       }
       return cache.get(name)!;
     },

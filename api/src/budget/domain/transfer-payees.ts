@@ -104,7 +104,11 @@ async function accountNameIsUnique(db: Queryable, account: AccountPayeeRow): Pro
  * any pointer: callers decide whether that is allowed). Used by
  * `ensureTransferPayee` (pointer empty) and by the repair.
  */
-export async function createTransferPayee(db: Queryable, account: AccountPayeeRow): Promise<string> {
+export async function createTransferPayee(
+  db: Queryable,
+  account: AccountPayeeRow,
+  opts: { setPointer?: boolean } = {},
+): Promise<string> {
   const unique = await accountNameIsUnique(db, account);
   for (let attempt = 0; attempt < 5; attempt++) {
     const choice = await chooseNewName(db, account, unique);
@@ -113,7 +117,7 @@ export async function createTransferPayee(db: Queryable, account: AccountPayeeRo
     else if (choice.kind === 'adopt') payeeId = (await store.adoptPayee(db, choice.holder.id, account.id)) ? choice.holder.id : null;
     else payeeId = await store.insertTransferPayee(db, account.budget_id, choice.name, account.id);
     if (payeeId) {
-      await store.setAccountTransferPayee(db, account.id, payeeId);
+      if (opts.setPointer !== false) await store.setAccountTransferPayee(db, account.id, payeeId);
       return payeeId;
     }
   }
@@ -122,9 +126,9 @@ export async function createTransferPayee(db: Queryable, account: AccountPayeeRo
 
 /**
  * The account's transfer payee id. Uses what exists without writing: the
- * account's pointer when that payee points back at the account, else the
- * canonical payee that points at the account (a pointer at another account's
- * payee is never used).
+ * account's pointer (as it is, also an unlinked name-only payee), else the
+ * canonical payee that points at the account. A pointer at ANOTHER account's
+ * payee is ignored for the request (never handed out, never re-pointed).
  * Only when there is neither does it CREATE one (and set the account's
  * pointer). It never un-hides, un-deletes, re-points or merges: inconsistent
  * data is the repair's job (a hidden, retired or duplicated payee is used as
@@ -142,11 +146,15 @@ export async function ensureTransferPayee(
     throw new HttpError(400, 'account not found in budget', 'account_not_in_budget');
   }
   if (account.transfer_payee_id) {
-    // The pointer is only used when the payee points back at this account: a
-    // pointer at another account's payee (bad data, the repair fixes it) must
-    // never hand that payee to a mirror or a link of this one.
     const pointed = await store.getPayeeRow(db, budgetId, account.transfer_payee_id);
-    if (pointed?.transfer_account_id === accountId) return pointed.id;
+    if (!pointed || pointed.transfer_account_id === accountId || pointed.transfer_account_id === null) return account.transfer_payee_id;
+    // The pointer names ANOTHER account's payee (bad data): this request ignores
+    // it and writes nothing to repair it (that is the repair's job). It uses the
+    // payee that points at this account, else creates one the way a missing payee
+    // is created, WITHOUT touching the pointer.
+    const linked = await store.listPayeesLinkedTo(db, budgetId, accountId);
+    const canonical = pickCanonical(null, linked);
+    return canonical ? canonical.id : createTransferPayee(db, account, { setPointer: false });
   }
   const linked = await store.listPayeesLinkedTo(db, budgetId, accountId);
   const canonical = pickCanonical(null, linked);

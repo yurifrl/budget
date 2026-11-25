@@ -634,7 +634,7 @@ async function syncOnce(
               amount: milli,
               payeeId: payee.id,
               importId,
-              importPayeeName: payee.name || null,
+              importPayeeName: payee.importName || null,
               cleared,
             });
             // The text said "Transfer : <account>": the row stays an ordinary uncategorized
@@ -694,31 +694,48 @@ async function syncOnce(
 
           const upstreamPayee = await resolver.resolve(txn.description);
           // The ledger's read-back form is date-only (`t.date::text`); compare
-          // like with like so unchanged upstream rows stay duplicates.
-          const upstreamPayload: OwnedPayload = {
+          // like with like so unchanged upstream rows stay duplicates. The payee is
+          // compared in BOTH forms the same bank text has been stored in: what a new
+          // row gets now (ordinary payee, no transfer payee) and what an earlier sync
+          // stored (the account's transfer payee). Either one is "unchanged".
+          const upstreamPayload = (payee: string): OwnedPayload => ({
             date: txn.date.slice(0, 10),
             amount: milli,
             memo: '',
-            payee: upstreamPayee.name,
-          };
-          if (samePayload(current, upstreamPayload)) {
+            payee,
+          });
+          const legacyForm = upstreamPayee.legacy !== null && current.payee === upstreamPayee.legacy.name;
+          if (samePayload(current, upstreamPayload(upstreamPayee.name)) || (legacyForm && samePayload(current, upstreamPayload(current.payee)))) {
             result.duplicates += 1;
             continue;
           }
 
           // Upstream changed a row the user left untouched → refresh the owned
-          // fields; cleared/approved state is preserved.
+          // fields; cleared/approved state is preserved. A row an earlier sync stored
+          // with the transfer payee keeps it (the engine never rewrites a payee only
+          // because transfer text is resolved differently now).
+          const keep = legacyForm ? upstreamPayee.legacy! : null;
+          const payeeId = keep ? keep.id : upstreamPayee.id;
+          const storedName = keep ? keep.name : upstreamPayee.name;
           await ledger.refreshImportedTransaction(pg, existing.id, {
             date: txn.date.slice(0, 10),
             amount: milli,
-            payeeId: upstreamPayee.id,
-            importPayeeName: upstreamPayee.name || null,
+            payeeId,
+            importPayeeName: (keep ? keep.name : upstreamPayee.importName) || null,
           });
+          // The hint follows the row: a refreshed row of transfer text keeps or gets it, any other text drops it.
+          if (!keep) {
+            if (upstreamPayee.transferAccountId && upstreamPayee.transferAccountId !== acc.id) {
+              await ledger.setTransferHint(pg, acc.budget_id, existing.id, upstreamPayee.transferAccountId);
+            } else {
+              await ledger.clearTransferHints(pg, acc.budget_id, [existing.id]);
+            }
+          }
           await pg.query(
             `UPDATE connection_transactions
              SET last_synced_payload = $2, updated_at = now()
              WHERE transaction_id = $1`,
-            [existing.id, JSON.stringify(upstreamPayload)],
+            [existing.id, JSON.stringify(upstreamPayload(storedName))],
           );
           result.updated += 1;
           const bucket = existing.cleared === 'uncleared' ? 'uncleared_delta' : 'cleared_delta';

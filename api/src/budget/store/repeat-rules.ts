@@ -23,10 +23,19 @@ export async function skipRepeatRulePast(db: Queryable, ruleId: string, after: s
 
 /** Passed-due upcoming occurrences become entered rows; returns what flipped. */
 export async function flipPassedUpcoming(db: Queryable, budgetId: string, today: string) {
-  const flipped = await db.query<{ account_id: string; amount: string }>(
+  const flipped = await db.query<{
+    id: string;
+    account_id: string;
+    amount: string;
+    date: string;
+    memo: string | null;
+    approved: boolean;
+    payee_id: string | null;
+    transfer_transaction_id: string | null;
+  }>(
     `UPDATE transactions SET upcoming = false
        WHERE budget_id = $1 AND upcoming AND NOT deleted AND date <= $2
-       RETURNING account_id, amount`,
+       RETURNING id, account_id, amount, date::text AS date, memo, approved, payee_id, transfer_transaction_id`,
     [budgetId, today],
   );
   return { rows: flipped.rows, count: flipped.rowCount ?? 0 };
@@ -55,19 +64,9 @@ export async function listLiveRulesForGeneration(db: Queryable, budgetId: string
   return rules.rows;
 }
 
-/**
- * Materialize one upcoming occurrence; returns its id, or null when it already
- * exists (idempotent). `categoryId` is the category the occurrence carries (the
- * rule's, except for a transfer between two on-budget accounts: none).
- */
-export async function insertUpcomingOccurrence(
-  db: Queryable,
-  budgetId: string,
-  rule: LiveRepeatRule,
-  date: string,
-  categoryId: string | null,
-): Promise<string | null> {
-  const inserted = await db.query<{ id: string }>(
+/** Materialize one upcoming occurrence; false when it already exists (idempotent). */
+export async function insertUpcomingOccurrence(db: Queryable, budgetId: string, rule: LiveRepeatRule, date: string): Promise<boolean> {
+  const inserted = await db.query(
     `INSERT INTO transactions
                (budget_id, account_id, date, amount, payee_id, category_id, memo,
                 cleared, approved, flag_color, flag_name, repeat,
@@ -75,11 +74,10 @@ export async function insertUpcomingOccurrence(
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'uncleared', true, NULL, NULL, $8, $9, $3, true, false)
              ON CONFLICT (repeat_rule_id, occurrence_date)
                WHERE repeat_rule_id IS NOT NULL AND deleted = false
-             DO NOTHING
-             RETURNING id`,
-    [budgetId, rule.account_id, date, Number(rule.amount), rule.payee_id, categoryId, rule.memo, rule.frequency, rule.id],
+             DO NOTHING`,
+    [budgetId, rule.account_id, date, Number(rule.amount), rule.payee_id, rule.category_id, rule.memo, rule.frequency, rule.id],
   );
-  return inserted.rows[0]?.id ?? null;
+  return (inserted.rowCount ?? 0) > 0;
 }
 
 export async function setRuleNextDue(db: Queryable, ruleId: string, next: string): Promise<void> {
@@ -118,13 +116,12 @@ export interface AnchorRow {
   budget_id: string;
   deleted: boolean;
   repeat_rule_id: string | null;
-  transfer_transaction_id: string | null;
 }
 
 /** Lock the Make Repeating anchor row. */
 export async function lockAnchorTransaction(db: Queryable, transactionId: string): Promise<AnchorRow | undefined> {
   const anchor = await db.query<AnchorRow>(
-    'SELECT id, account_id, payee_id, category_id, memo, amount, date, budget_id, deleted, repeat_rule_id, transfer_transaction_id FROM transactions WHERE id = $1 FOR UPDATE',
+    'SELECT id, account_id, payee_id, category_id, memo, amount, date, budget_id, deleted, repeat_rule_id FROM transactions WHERE id = $1 FOR UPDATE',
     [transactionId],
   );
   return anchor.rows[0];
@@ -169,26 +166,6 @@ export async function linkAnchorToRule(
   );
 }
 
-/**
- * The mirror of a transfer anchor that became a pending occurrence is pending
- * too (its balance delta withheld with the anchor's). Returns its ledger state
- * (to reverse the delta applied when it was entered), undefined when it is not
- * a live, entered row.
- */
-export async function markMirrorUpcoming(
-  db: Queryable,
-  budgetId: string,
-  mirrorId: string,
-): Promise<{ account_id: string; amount: string; cleared: 'cleared' | 'uncleared' | 'reconciled' } | undefined> {
-  const r = await db.query(
-    `UPDATE transactions SET upcoming = true
-      WHERE id = $1 AND budget_id = $2 AND NOT deleted AND NOT upcoming
-      RETURNING account_id, amount, cleared`,
-    [mirrorId, budgetId],
-  );
-  return r.rows[0];
-}
-
 /** Soft-delete a live rule of the budget; false when there was none. */
 export async function softDeleteRuleInBudget(db: Queryable, ruleId: string, budgetId: string): Promise<boolean> {
   const rule = await db.query(
@@ -199,14 +176,6 @@ export async function softDeleteRuleInBudget(db: Queryable, ruleId: string, budg
 }
 
 export async function deletePendingOccurrences(db: Queryable, ruleId: string): Promise<void> {
-  // The pending mirrors of transfer occurrences go with them (they carry no rule id).
-  await db.query(
-    `UPDATE transactions SET deleted = true
-      WHERE upcoming AND NOT deleted
-        AND id IN (SELECT transfer_transaction_id FROM transactions
-                    WHERE repeat_rule_id = $1 AND upcoming AND NOT deleted AND transfer_transaction_id IS NOT NULL)`,
-    [ruleId],
-  );
   await db.query('UPDATE transactions SET deleted = true WHERE repeat_rule_id = $1 AND upcoming AND NOT deleted', [ruleId]);
 }
 

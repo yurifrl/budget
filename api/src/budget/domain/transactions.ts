@@ -91,25 +91,35 @@ export async function upsertPayeeResolvingTransfers(
 
 /** The payee of an imported row (bank sync, statement import). */
 export interface ImportedPayee {
-  /** The payee the row is stored with: ordinary or null, NEVER an account's transfer payee. */
+  /** The payee a NEW row is stored with: ordinary or null, NEVER an account's transfer payee. */
   id: string | null;
-  /** The stored payee's name ('' when none): what the row's import name and sync shadow say. */
+  /** The stored payee's name ('' when none): what the sync shadow says. */
   name: string;
+  /** The name the row's `import_payee_name` keeps: the bank's text, also when the stored payee is none. */
+  importName: string;
   /** The account the payee text pointed at ("Transfer : <account>", as text or through a renaming rule), if any. */
   transferAccountId: string | null;
   /** The id the row counts under when the text names an account: that account's transfer payee (statement-import idempotency keys). */
   transferPayeeId: string | null;
+  /**
+   * What the bank sync stored before imports stopped storing transfer payees: the
+   * account's transfer payee under the rule-rewritten text. A row stored that way
+   * (payee-only, from an earlier sync) is NOT changed by a later sync: its payee is
+   * compared and kept against this, never against `id`/`name`. Null when the text
+   * names no account.
+   */
+  legacy: { id: string; name: string } | null;
 }
 
 /**
  * Resolve the payee of an IMPORTED row. Unlike the register, an import never
  * stores an account's transfer payee without the transfer behind it (a
  * payee-only half transfer, and the other side may arrive from the other bank):
- * when the text (after the renaming rules) means "Transfer : <account>", the row
+ * when the text (after the renaming rules) means "Transfer : <account>", a NEW row
  * keeps the ordinary payee of the RAW text and the account is returned for the
  * caller to record as a transfer hint, so the matcher offers the row as a strong
  * suggestion for that account. A raw text that is itself the name of a transfer
- * payee leaves the row without a payee (its text stays in the import name).
+ * payee leaves the row without a payee (its text stays in `importName`).
  * Any other text is an ordinary payee, as before.
  */
 export async function resolveImportedPayee(
@@ -120,19 +130,21 @@ export async function resolveImportedPayee(
   opts: { verbatim?: boolean } = {},
 ): Promise<ImportedPayee> {
   const trimmed = effective.trim();
-  if (!trimmed) return { id: null, name: '', transferAccountId: null, transferPayeeId: null };
+  if (!trimmed) return { id: null, name: '', importName: '', transferAccountId: null, transferPayeeId: null, legacy: null };
   const raw = rawText.trim();
   const accountId = await resolveTransferAccountFromText(client, budgetId, trimmed, { fromRule: trimmed !== raw });
   if (!accountId) {
     const id = await upsertPayee(client, budgetId, effective, opts);
-    return { id, name: effective, transferAccountId: null, transferPayeeId: null };
+    return { id, name: effective, importName: effective, transferAccountId: null, transferPayeeId: null, legacy: null };
   }
   const transferPayeeId = await ensureTransferPayee(client, budgetId, accountId);
+  const legacy = { id: transferPayeeId, name: effective };
   const holder = raw ? await findPayeeRowByName(client, budgetId, raw) : undefined;
   if (!raw || (holder && (holder.transfer_account_id !== null || holder.deleted))) {
-    return { id: null, name: '', transferAccountId: accountId, transferPayeeId };
+    return { id: null, name: '', importName: effective, transferAccountId: accountId, transferPayeeId, legacy };
   }
-  return { id: await upsertPayee(client, budgetId, opts.verbatim ? rawText : raw), name: opts.verbatim ? rawText : raw, transferAccountId: accountId, transferPayeeId };
+  const name = opts.verbatim ? rawText : raw;
+  return { id: await upsertPayee(client, budgetId, name), name, importName: name, transferAccountId: accountId, transferPayeeId, legacy };
 }
 
 export async function resolvePayeeId(

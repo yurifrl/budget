@@ -79,6 +79,7 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0117_transfer_payee_account_idx.sql': 'index:public.payees_transfer_account_idx',
   '0118_transfer_payee_former_names.sql': 'table:public.transfer_payee_former_names',
   '0119_transfer_hints.sql': 'table:public.transfer_hints',
+  '0120_transfer_links_adopted.sql': 'column:public.transfer_links.adopted',
 };
 
 /**

@@ -318,31 +318,170 @@ describe.skipIf(!dbReady)('transfer integrity (budget-nq2f)', () => {
       await expectLedgerConsistent();
     });
 
-    test('only an equal amount in the same account within three days is adopted; rows are used once, closest first', async () => {
+    test('only an equal amount in the same account within three days is adopted, and only when it is unambiguous', async () => {
       await reset();
       const d = (n: number) => daysAgo(n);
-      // Two hand-made transfers of the same amount, two days apart.
-      const first = await create({ payee: 'Transfer : Nubank Conta', outflow: 800_000, date: d(5) });
-      const second = await create({ payee: 'Transfer : Nubank Conta', outflow: 800_000, date: d(3) });
-      const mirrors = [first, second].map(async (c) => (await row(c.json.id)).transfer_transaction_id!);
-      const [m1, m2] = await Promise.all(mirrors);
+      // One hand-made transfer, three bank rows: too far, another amount, and the match.
+      const made = await create({ payee: 'Transfer : Nubank Conta', outflow: 800_000, date: d(4) });
+      const handMirror = (await row(made.json.id)).transfer_transaction_id!;
       upstream = {
         [EXT_NU]: [
-          txn(EXT_NU, 'r2b-far', 800_000, 'Recebido', {}, d(10)), // 5 days from the first: not adopted
-          txn(EXT_NU, 'r2b-diff', 700_000, 'Recebido', {}, d(5)), // another amount: not adopted
-          txn(EXT_NU, 'r2b-near', 800_000, 'Recebido', {}, d(4)), // between the two: adopted by one of them
+          txn(EXT_NU, 'r2b-far', 800_000, 'Recebido', {}, d(10)), // 6 days away: not adopted
+          txn(EXT_NU, 'r2b-diff', 700_000, 'Recebido', {}, d(4)), // another amount: not adopted
+          txn(EXT_NU, 'r2b-near', 800_000, 'Recebido', {}, d(3)),
         ],
       };
       await sync();
       const alive = (await rowsOf(nubank)).filter((r) => !r.deleted);
       const near = alive.find((r) => r.import_id === `${PROVIDER}:r2b-near`)!;
-      expect(near.transfer_transaction_id).not.toBeNull();
+      expect(near.transfer_transaction_id).toBe(made.json.id);
       expect(alive.find((r) => r.import_id === `${PROVIDER}:r2b-far`)!.transfer_transaction_id).toBeNull();
       expect(alive.find((r) => r.import_id === `${PROVIDER}:r2b-diff`)!.transfer_transaction_id).toBeNull();
-      // Exactly one of the two hand-made mirrors was replaced; the other is untouched.
-      const gone = [m1!, m2!].filter((id) => alive.every((r) => r.id !== id));
-      expect(gone).toHaveLength(1);
+      expect((await row(handMirror)).deleted).toBe(true);
       await expectLedgerConsistent();
+    });
+
+    test('ambiguity: two hand-made mirrors for one bank row, or two bank rows for one mirror, leave everything as it is', async () => {
+      for (const shape of ['two-mirrors', 'two-bank-rows'] as const) {
+        await reset();
+        const d = (n: number) => daysAgo(n);
+        const first = await create({ payee: 'Transfer : Nubank Conta', outflow: 800_000, date: d(5) });
+        const second = shape === 'two-mirrors' ? await create({ payee: 'Transfer : Nubank Conta', outflow: 800_000, date: d(3) }) : null;
+        upstream = {
+          [EXT_NU]:
+            shape === 'two-mirrors'
+              ? [txn(EXT_NU, 'amb-1', 800_000, 'Recebido', {}, d(4))]
+              : [txn(EXT_NU, 'amb-1', 800_000, 'Recebido', {}, d(4)), txn(EXT_NU, 'amb-2', 800_000, 'Recebido', {}, d(6))],
+        };
+        await sync();
+        const before = await rowsOf();
+        await sync();
+        expect(await rowsOf()).toEqual(before);
+        const alive = (await rowsOf(nubank)).filter((r) => !r.deleted);
+        expect(alive.filter((r) => r.import_id !== null).every((r) => r.transfer_transaction_id === null)).toBe(true);
+        expect((await row(first.json.id)).transfer_transaction_id).not.toBeNull();
+        if (second) expect((await row(second.json.id)).transfer_transaction_id).not.toBeNull();
+      }
+    });
+
+    describe('the matcher\'s gates apply to adoption', () => {
+      const setup = async (bankMilli: number, raw: Record<string, unknown> = {}, description = 'Recebido') => {
+        await reset();
+        const date = daysAgo(1);
+        const made = await create({ payee: 'Transfer : Nubank Conta', outflow: bankMilli, date });
+        const handMirror = (await row(made.json.id)).transfer_transaction_id!;
+        upstream = { [EXT_NU]: [txn(EXT_NU, 'gate-n', bankMilli, description, raw, date)] };
+        return { leg: made.json.id as string, handMirror, date };
+      };
+      const expectNotAdopted = async (ctx: { leg: string; handMirror: string }) => {
+        const bank = await byImport(`${PROVIDER}:gate-n`);
+        expect(bank.transfer_transaction_id).toBeNull();
+        expect((await row(ctx.handMirror)).deleted).toBe(false);
+        expect((await row(ctx.leg)).transfer_transaction_id).toBe(ctx.handMirror);
+        return bank;
+      };
+
+      test('a payee with a "never" transfer rule is never adopted into a transfer', async () => {
+        const ctx = await setup(700_000, {}, 'Aluguel');
+        await pool.query(
+          `INSERT INTO payees (budget_id, name, transfer_rule) VALUES ($1,'Aluguel','never') ON CONFLICT (budget_id, name) DO UPDATE SET transfer_rule = 'never'`,
+          [B],
+        );
+        await sync();
+        await expectNotAdopted(ctx);
+      });
+
+      test('a row the person marked (outside, dismissed, manual) is left alone', async () => {
+        for (const state of ['outside', 'dismissed', 'manual'] as const) {
+          const ctx = await setup(650_000);
+          // Import the bank row without letting the linker run, then mark it.
+          await pool.query('UPDATE accounts SET connection_id = $1 WHERE id = $2', [connId, nubank]);
+          const bankId = (
+            await pool.query<{ id: string }>(
+              `INSERT INTO transactions (budget_id, account_id, date, amount, cleared, approved, repeat, deleted, import_id, import_payee_name, import_payee_name_original)
+               VALUES ($1,$2,$3,650000,'cleared',false,'never',false,'gate:mark','Recebido','Recebido') RETURNING id`,
+              [B, nubank, ctx.date],
+            )
+          ).rows[0]!.id;
+          await pool.query("INSERT INTO transfer_marks (transaction_id, budget_id, state) VALUES ($1,$2,$3)", [bankId, B, state]);
+          upstream = {};
+          await sync();
+          expect((await row(bankId)).transfer_transaction_id).toBeNull();
+          expect((await row(ctx.handMirror)).deleted).toBe(false);
+          if (state !== 'outside') expect((await pool.query('SELECT state FROM transfer_marks WHERE transaction_id = $1', [bankId])).rows[0].state).toBe(state);
+        }
+      });
+
+      test('a bank category that contradicts a transfer vetoes it', async () => {
+        const ctx = await setup(640_000, { category: 'Shopping', operationType: 'PIX' });
+        await sync();
+        await expectNotAdopted(ctx);
+      });
+
+      test('the bank rules hold: a card never receives the outflow side', async () => {
+        await reset();
+        const date = daysAgo(1);
+        await pool.query("UPDATE accounts SET type = 'creditCard', account_group = 'CREDIT' WHERE id = $1", [itau]);
+        try {
+          const made = await create({ payee: 'Transfer : Nubank Conta', outflow: 630_000, date, account_id: itau });
+          expect(made.status).toBe(201);
+          upstream = { [EXT_NU]: [txn(EXT_NU, 'gate-n', 630_000, 'Recebido', {}, date)] };
+          await sync();
+          const bank = await byImport(`${PROVIDER}:gate-n`);
+          expect(bank.transfer_transaction_id).toBeNull();
+        } finally {
+          await pool.query("UPDATE accounts SET type = 'checking', account_group = 'CASH' WHERE id = $1", [itau]);
+        }
+      });
+
+      test('a reconciled hand-made row is never replaced', async () => {
+        const ctx = await setup(620_000);
+        await pool.query("UPDATE transactions SET cleared = 'reconciled' WHERE id = $1", [ctx.handMirror]);
+        await sync();
+        await expectNotAdopted(ctx);
+      });
+    });
+
+    test('the merge keeps what the person set, and Undo (POST /transfers/unlink) restores the state before the adoption', async () => {
+      await reset();
+      const date = daysAgo(2);
+      const made = await create({ payee: 'Transfer : Nubank Conta', outflow: 450_000, date, memo: 'rent for May', cleared: 'cleared' });
+      expect(made.status).toBe(201);
+      const leg = await row(made.json.id);
+      const handMirror = leg.transfer_transaction_id!;
+      await pool.query("UPDATE transactions SET flag_color = 'red' WHERE id = $1", [handMirror]); // the person flagged the row that gets replaced
+      upstream = { [EXT_NU]: [txn(EXT_NU, 'm-n', 450_000, 'Transferência Recebida', {}, daysAgo(1))] }; // the bank says another day, uncleared? (cleared: true)
+      await sync();
+      const bank = await byImport(`${PROVIDER}:m-n`);
+      expect(bank.transfer_transaction_id).toBe(leg.id);
+      const fields = (await pool.query('SELECT memo, flag_color, approved, cleared, date::text AS date FROM transactions WHERE id = $1', [bank.id])).rows[0];
+      expect(fields).toMatchObject({ memo: 'rent for May', flag_color: 'red', approved: true, cleared: 'cleared', date });
+      // A link record on both legs, the bank's remembering what it replaced.
+      const recs = (await pool.query('SELECT transaction_id, peer_transaction_id, adopted FROM transfer_links WHERE budget_id = $1 ORDER BY transaction_id', [B])).rows;
+      expect(recs).toHaveLength(2);
+      expect(recs.find((r) => r.transaction_id === bank.id).adopted.replaced_id).toBe(handMirror);
+      const list = await op('budget_transactions_list', { budget_id: B });
+      expect(list.json.find((x: { id: string }) => x.id === bank.id).transfer_link_method).toBe('auto');
+      expect(await balances(nubank)).toEqual([450_000, 0]);
+
+      const undo = await op('budget_transfers_unlink', { budget_id: B, transaction_ids: [bank.id] });
+      expect(undo.json).toMatchObject({ unlinked: 1 });
+      // The bank row is its own again, the hand-made pair is back, nothing is counted twice or lost.
+      const restored = await row(bank.id);
+      expect(restored).toMatchObject({ transfer_account_id: null, transfer_transaction_id: null, payee: 'Transferência Recebida', mark: 'manual', deleted: false });
+      const after = (await pool.query('SELECT memo, flag_color, approved, date::text AS date FROM transactions WHERE id = $1', [bank.id])).rows[0];
+      expect(after).toMatchObject({ memo: null, flag_color: null, approved: false, date: daysAgo(1) });
+      const back = await row(handMirror);
+      expect(back).toMatchObject({ deleted: false, transfer_transaction_id: leg.id, transfer_account_id: itau });
+      expect(await row(leg.id)).toMatchObject({ transfer_transaction_id: handMirror, transfer_account_id: nubank });
+      expect((await pool.query('SELECT count(*)::int AS n FROM transfer_links WHERE budget_id = $1', [B])).rows[0].n).toBe(0);
+      // Both the bank row and the hand-made mirror count in Nubank now (the person decides which to delete).
+      expect(await balances(nubank)).toEqual([900_000, 0]);
+      await expectLedgerConsistent();
+      // And the next sync does not adopt it again (it carries the manual mark).
+      await sync();
+      expect((await row(bank.id)).transfer_transaction_id).toBeNull();
+      expect((await row(handMirror)).deleted).toBe(false);
     });
   });
 
@@ -431,4 +570,180 @@ describe.skipIf(!dbReady)('transfer integrity (budget-nq2f)', () => {
       expect((await row(toHouse.json.id)).category_id).toBe(categoryId);
     });
   });
+
+  describe('a bank sync never rewrites a row that is correct as it was stored', () => {
+    const tp = async (acc: string) => (await pool.query('SELECT transfer_payee_id AS id FROM accounts WHERE id = $1', [acc])).rows[0].id as string;
+    const readyToAssignInput = async () => ({ rows: await rowsOf(), balances: [await balances(itau), await balances(nubank)] });
+
+    /** A row as the sync of the previous release stored it: the transfer payee, the shadow payload saying so. */
+    async function mainEraRow(importSuffix: string, text: string) {
+      upstream = { [EXT_ITAU]: [txn(EXT_ITAU, importSuffix, -40_000, text)] };
+      await sync();
+      const r0 = await byImport(`${PROVIDER}:${importSuffix}`);
+      await pool.query('UPDATE transactions SET payee_id = $2, import_payee_name = $3, import_payee_name_original = $3 WHERE id = $1', [r0.id, await tp(nubank), text]);
+      await pool.query(
+        `UPDATE connection_transactions SET last_synced_payload = jsonb_set(last_synced_payload::jsonb, '{payee}', to_jsonb($2::text))::json WHERE transaction_id = $1`,
+        [r0.id, text],
+      ).catch(() =>
+        pool.query(`UPDATE connection_transactions SET last_synced_payload = jsonb_set(last_synced_payload, '{payee}', to_jsonb($2::text)) WHERE transaction_id = $1`, [r0.id, text]),
+      );
+      await pool.query('DELETE FROM transfer_hints WHERE transaction_id = $1', [r0.id]);
+      return r0.id;
+    }
+
+    test('a payee-only transfer row of an earlier sync (the text names the account) keeps its payee on every later sync', async () => {
+      await reset();
+      const id = await mainEraRow('b1-text', 'Transfer : Nubank Conta');
+      const before = await readyToAssignInput();
+      const first = await sync();
+      const second = await sync();
+      expect(await readyToAssignInput()).toEqual(before);
+      expect(first.updated + second.updated).toBe(0);
+      expect(await row(id)).toMatchObject({ payee: 'Transfer : Nubank Conta', transfer_account_id: null });
+      expect((await pool.query('SELECT count(*)::int AS n FROM transfer_hints WHERE transaction_id = $1', [id])).rows[0].n).toBe(0);
+    });
+
+    test('the same through a renaming rule, and when the bank changes the amount the row keeps its payee', async () => {
+      await reset();
+      const payee = await tp(nubank);
+      expect((await op('budget_payees_set_rename_rule', { id: payee, budget_id: B, match_type: 'is', condition: 'PIX NUBANK B1' })).status).toBe(204);
+      const id = await mainEraRow('b1-rule', 'PIX NUBANK B1');
+      // The earlier sync stored the rule-rewritten text as the import name and in the shadow.
+      await pool.query(`UPDATE transactions SET import_payee_name = 'Transfer : Nubank Conta', import_payee_name_original = 'Transfer : Nubank Conta' WHERE id = $1`, [id]);
+      await pool.query(
+        `UPDATE connection_transactions SET last_synced_payload = jsonb_set(last_synced_payload::jsonb, '{payee}', '"Transfer : Nubank Conta"')::json WHERE transaction_id = $1`,
+        [id],
+      ).catch(() =>
+        pool.query(`UPDATE connection_transactions SET last_synced_payload = jsonb_set(last_synced_payload, '{payee}', '"Transfer : Nubank Conta"') WHERE transaction_id = $1`, [id]),
+      );
+      const before = await readyToAssignInput();
+      await sync();
+      expect(await readyToAssignInput()).toEqual(before);
+      // The bank corrects the amount: the row is refreshed (as on main) and still keeps the transfer payee.
+      upstream = { [EXT_ITAU]: [txn(EXT_ITAU, 'b1-rule', -45_000, 'PIX NUBANK B1')] };
+      const res = await sync();
+      expect(res.updated).toBe(1);
+      expect(await row(id)).toMatchObject({ payee: 'Transfer : Nubank Conta', amount: -45_000 });
+      expect((await pool.query('SELECT count(*)::int AS n FROM transfer_hints WHERE transaction_id = $1', [id])).rows[0].n).toBe(0);
+      await sync();
+      expect((await row(id)).payee).toBe('Transfer : Nubank Conta');
+    });
+
+    test('a NEW row of the same text follows the new path, keeps the bank text in its import name, and later syncs leave it alone', async () => {
+      await reset();
+      upstream = { [EXT_ITAU]: [txn(EXT_ITAU, 'b1-new', -40_000, 'Transfer : Nubank Conta')] };
+      await sync();
+      const r = await byImport(`${PROVIDER}:b1-new`);
+      expect(r).toMatchObject({ payee: null, transfer_account_id: null });
+      // Follow-up: the imported text is not lost when no payee is stored.
+      const meta = (await pool.query('SELECT import_payee_name AS n FROM transactions WHERE id = $1', [r.id])).rows[0];
+      expect(meta.n).toBe('Transfer : Nubank Conta');
+      const hint = (await pool.query('SELECT account_id FROM transfer_hints WHERE transaction_id = $1', [r.id])).rows[0];
+      expect(hint.account_id).toBe(nubank);
+      const before = await rowsOf();
+      const res = await sync();
+      await sync();
+      expect(await rowsOf()).toEqual(before);
+      expect(res.updated).toBe(0);
+      // When the bank changes the amount the row is refreshed and keeps its hint.
+      upstream = { [EXT_ITAU]: [txn(EXT_ITAU, 'b1-new', -41_000, 'Transfer : Nubank Conta')] };
+      expect((await sync()).updated).toBe(1);
+      expect((await pool.query('SELECT account_id FROM transfer_hints WHERE transaction_id = $1', [r.id])).rows[0].account_id).toBe(nubank);
+      // And when the text stops naming an account the hint goes.
+      upstream = { [EXT_ITAU]: [txn(EXT_ITAU, 'b1-new', -41_000, 'Padaria do Ze')] };
+      expect((await sync()).updated).toBe(1);
+      expect((await pool.query('SELECT count(*)::int AS n FROM transfer_hints WHERE transaction_id = $1', [r.id])).rows[0].n).toBe(0);
+      expect(await row(r.id)).toMatchObject({ payee: 'Padaria do Ze' });
+    });
+  });
+
+  describe('a hint ends with the question it asked', () => {
+    async function hinted(suffix: string) {
+      await reset();
+      upstream = { [EXT_ITAU]: [txn(EXT_ITAU, suffix, -30_000, 'Transfer : Nubank Conta')] };
+      await sync();
+      const r = await byImport(`${PROVIDER}:${suffix}`);
+      const has = async () => (await pool.query('SELECT count(*)::int AS n FROM transfer_hints WHERE transaction_id = $1', [r.id])).rows[0].n === 1;
+      expect(await has()).toBe(true);
+      return { r, has };
+    }
+    test('a category ends it', async () => {
+      const { r, has } = await hinted('h5-cat');
+      expect((await patch(r.id, { category_id: categoryId })).status).toBe(204);
+      expect(await has()).toBe(false);
+    });
+    test('another payee ends it', async () => {
+      const { r, has } = await hinted('h5-payee');
+      expect((await patch(r.id, { payee: 'Padaria' })).status).toBe(204);
+      expect(await has()).toBe(false);
+    });
+    test('"not a transfer" (and "outside") end it', async () => {
+      for (const state of ['dismissed', 'outside'] as const) {
+        const { r, has } = await hinted(`h5-${state}`);
+        expect((await op('budget_transfers_mark', { budget_id: B, transaction_ids: [r.id], state })).status).toBe(200);
+        expect(await has()).toBe(false);
+      }
+    });
+    test('an edit that changes nothing about the payee keeps it', async () => {
+      const { r, has } = await hinted('h5-memo');
+      expect((await patch(r.id, { memo: 'only a note' })).status).toBe(204);
+      expect(await has()).toBe(true);
+    });
+  });
+
+  describe('releasing a leg and making it a transfer again', () => {
+    test('does not count the account twice: the released bank row is linked again, no mirror is added, unlink works on it', async () => {
+      await reset();
+      const { out, inn } = await linkedPair('f2');
+      expect((await patch(out.id, { payee: 'Padaria' })).status).toBe(204);
+      const afterRelease = await balances(nubank);
+      expect((await patch(out.id, { payee: 'Transfer : Nubank Conta' })).status).toBe(204);
+      const live = (await rowsOf(nubank)).filter((r) => !r.deleted);
+      expect(live.map((r) => r.id)).toEqual([inn.id]); // one row, not two
+      expect(live[0]).toMatchObject({ transfer_transaction_id: out.id, transfer_account_id: itau, import_id: `${PROVIDER}:f2-n` });
+      expect(await row(out.id)).toMatchObject({ transfer_transaction_id: inn.id, transfer_account_id: nubank });
+      expect(await balances(nubank)).toEqual(afterRelease);
+      await expectLedgerConsistent();
+      const snapshot = await rowsOf();
+      await sync();
+      expect(await rowsOf()).toEqual(snapshot);
+      const undo = await op('budget_transfers_unlink', { budget_id: B, transaction_ids: [inn.id] });
+      expect(undo.json).toMatchObject({ unlinked: 1 });
+    });
+    test('another amount still gets its own mirror', async () => {
+      await reset();
+      const { out } = await linkedPair('f2b');
+      expect((await patch(out.id, { payee: 'Padaria' })).status).toBe(204);
+      expect((await patch(out.id, { payee: 'Transfer : Nubank Conta', outflow: 1_000_000 })).status).toBe(204);
+      const live = (await rowsOf(nubank)).filter((r) => !r.deleted);
+      expect(live).toHaveLength(2);
+      await expectLedgerConsistent();
+    });
+  });
+
+  describe('deleting a leg of an adopted pair', () => {
+    test('deleting the user\'s leg restores the bank row; deleting the bank row removes the hand-made leg as on main', async () => {
+      await reset();
+      const date = daysAgo(1);
+      const made = await create({ payee: 'Transfer : Nubank Conta', outflow: 510_000, date });
+      upstream = { [EXT_NU]: [txn(EXT_NU, 'del-n', 510_000, 'Recebido', {}, date)] };
+      await sync();
+      const bank = await byImport(`${PROVIDER}:del-n`);
+      expect((await del(made.json.id)).status).toBe(204);
+      expect(await row(bank.id)).toMatchObject({ deleted: false, transfer_transaction_id: null, payee: 'Recebido' });
+      expect((await row(made.json.id)).deleted).toBe(true);
+      await expectLedgerConsistent();
+
+      await reset();
+      const made2 = await create({ payee: 'Transfer : Nubank Conta', outflow: 520_000, date });
+      upstream = { [EXT_NU]: [txn(EXT_NU, 'del2-n', 520_000, 'Recebido', {}, date)] };
+      await sync();
+      const bank2 = await byImport(`${PROVIDER}:del2-n`);
+      expect((await del(bank2.id)).status).toBe(204);
+      expect((await row(bank2.id)).deleted).toBe(true);
+      expect((await row(made2.json.id)).deleted).toBe(true); // the user's hand-made leg goes with it, as main deletes both
+      await expectLedgerConsistent();
+    });
+  });
+
 });

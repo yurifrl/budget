@@ -149,203 +149,137 @@ afterAll(async () => {
 
 const generate = (b: string) => op('budget_repeat_rules_generate', { budget_id: b });
 
-describe.skipIf(!dbReady)('repeat rules write complete transfers', () => {
-  test('an occurrence is two upcoming legs with both pointers, the peer transfer payees and no category; a leg to an off-budget account keeps it; balances follow the flip', async () => {
+describe.skipIf(!dbReady)('repeat rules: pending occurrences stay as they are, the pair is written when they become real', () => {
+  const makeRule = (b: string, accountId: string, payee: string, cat: string | null, days: number, outflow = 100_000) =>
+    op('budget_repeat_rules_create', {
+      budget_id: b,
+      account_id: accountId,
+      payee,
+      category_id: cat,
+      memo: 'rent',
+      outflow,
+      inflow: 0,
+      frequency: 'monthly',
+      next_due_date: iso(days),
+    });
+  /** Make the occurrences due `days` ago-or-today so the next generation flips them. */
+  const dueNow = (b: string, from: string) =>
+    pool.query('UPDATE transactions SET date = $2::date, occurrence_date = $2::date WHERE budget_id = $1 AND date = $3::date AND upcoming', [b, iso(0), from]);
+
+  test('pending occurrences are single rows as on main (no mirror, no pointers, no balance); when one becomes real it is a complete transfer, a leg to an off-budget account keeps its category', async () => {
     const { id: b, category } = await newBudget('nq2f-repeat');
     const rent = await account(b, 'Rent Home');
     const savings = await account(b, 'Rent Savings');
     const house = await account(b, 'Rent House', { on_budget: false });
+    expect((await makeRule(b, rent, 'Transfer : Rent Savings', category, 1)).status).toBe(201);
+    expect((await makeRule(b, rent, 'Transfer : Rent House', category, 1)).status).toBe(201);
 
-    const make = (accountId: string, payee: string, cat: string | null) =>
-      op('budget_repeat_rules_create', {
-        budget_id: b,
-        account_id: accountId,
-        payee,
-        category_id: cat,
-        memo: 'rent',
-        outflow: 100_000,
-        inflow: 0,
-        frequency: 'monthly',
-        next_due_date: iso(1),
-      });
-    expect((await make(rent, 'Transfer : Rent Savings', category)).status).toBe(201);
-    expect((await make(rent, 'Transfer : Rent House', category)).status).toBe(201);
-
-    // Each rule: occurrences (3-4 months ahead), each with its mirror, all pending: no balance moved yet.
-    const all = await txns(b);
-    expect(all.every((t) => t.upcoming)).toBe(true);
-    expect(await balances(rent)).toEqual([0, 0]);
-    expect(await balances(savings)).toEqual([0, 0]);
-    expect(await balances(house)).toEqual([0, 0]);
-
-    for (const leg of all.filter((t) => t.account_id === rent && t.repeat_rule_id)) {
-      const mirror = await get(leg.transfer_transaction_id!);
-      expect(mirror.upcoming).toBe(true);
-      expect(mirror.repeat_rule_id).toBeNull();
-      expect(mirror.date).toBe(leg.date);
-      if (leg.transfer_account_id === savings) {
-        await expectComplete(leg, mirror);
-        expect(leg.category_id).toBeNull(); // on-budget pair: no category, whatever the rule says
-        expect(mirror.category_id).toBeNull();
-      } else {
-        expect(leg.transfer_account_id).toBe(house);
-        expect(leg.category_id).toBe(category); // off-budget peer: the leg keeps its category
-        expect(mirror.category_id).toBeNull();
-        expect(mirror.account_id).toBe(house);
-        expect(mirror.transfer_account_id).toBe(rent);
-        expect(leg.payee_id).toBe(await payeeOf(house));
-        expect(mirror.payee_id).toBe(await payeeOf(rent));
-      }
+    const pending = await txns(b);
+    expect(pending.length).toBeGreaterThanOrEqual(6);
+    for (const t of pending) {
+      expect(t).toMatchObject({ upcoming: true, account_id: rent, transfer_account_id: null, transfer_transaction_id: null });
+      expect(t.category_id).toBe(category); // exactly as main writes it
     }
-    const legs = all.filter((t) => t.account_id === rent);
-    const mirrors = all.filter((t) => t.account_id !== rent);
-    expect(mirrors).toHaveLength(legs.length);
+    for (const id of [rent, savings, house]) expect(await balances(id)).toEqual([0, 0]);
+    expect((await generate(b)).json).toMatchObject({ created: 0 }); // idempotent
 
-    // Generation is idempotent: no occurrence and no mirror twice.
-    expect((await generate(b)).json).toMatchObject({ created: 0 });
-    expect(await txns(b)).toHaveLength(all.length);
-
-    // The first occurrence falls due (its date passes): the next run flips BOTH legs of each and applies every delta.
-    await pool.query('UPDATE transactions SET date = $2::date WHERE budget_id = $1 AND date = $3::date', [b, iso(0), iso(1)]);
-    expect((await generate(b)).json).toMatchObject({ flipped: 4 });
+    await dueNow(b, iso(1));
+    expect((await generate(b)).json).toMatchObject({ flipped: 2 });
+    const real = (await txns(b)).filter((t) => !t.upcoming);
+    expect(real).toHaveLength(4); // 2 legs + 2 mirrors
+    const toSavings = real.find((t) => t.account_id === rent && t.transfer_account_id === savings)!;
+    const toHouse = real.find((t) => t.account_id === rent && t.transfer_account_id === house)!;
+    await expectComplete(toSavings, await get(toSavings.transfer_transaction_id!));
+    expect(toSavings.category_id).toBeNull();
+    await expectComplete(toHouse, await get(toHouse.transfer_transaction_id!));
+    expect(toHouse.category_id).toBe(category); // off-budget peer: keeps its category
     expect(await balances(rent)).toEqual([0, -200_000]);
     expect(await balances(savings)).toEqual([0, 100_000]);
     expect(await balances(house)).toEqual([0, 100_000]);
     await expectLedgerConsistent(rent, savings, house);
+    // The still-pending future occurrences have no mirror.
+    expect((await txns(b)).filter((t) => t.upcoming).every((t) => t.transfer_transaction_id === null)).toBe(true);
+    // Idempotent: nothing more to flip, no second mirror.
+    expect((await generate(b)).json).toMatchObject({ flipped: 0 });
+    expect((await txns(b)).filter((t) => !t.upcoming)).toHaveLength(4);
   });
 
-  test('editing either half of a pending transfer occurrence detaches the pair and applies both withheld deltas; deleting the rule removes the pending mirrors', async () => {
+  test('editing a pending transfer occurrence makes it real and writes its mirror; the ordinary balance rules of the detach hold', async () => {
     const { id: b } = await newBudget('nq2f-repeat-edit');
     const home = await account(b, 'Edit Home');
     const peer = await account(b, 'Edit Peer');
-    const res = await op('budget_repeat_rules_create', {
-      budget_id: b,
-      account_id: home,
-      payee: 'Transfer : Edit Peer',
-      category_id: null,
-      memo: 'm',
-      outflow: 50_000,
-      inflow: 0,
-      frequency: 'monthly',
-      next_due_date: iso(2),
-    });
-    expect(res.status).toBe(201);
-    const rule = res.json.id as string;
-    const occurrences = (await txns(b, home)).filter((t) => t.repeat_rule_id === rule);
-    expect(occurrences.length).toBeGreaterThanOrEqual(3);
-
-    // Edit the LEG of the first occurrence.
-    const [first, second] = occurrences;
+    const rule = (await makeRule(b, home, 'Transfer : Edit Peer', null, 2, 50_000)).json.id as string;
+    const [first] = (await txns(b, home)).filter((t) => t.repeat_rule_id === rule);
+    expect(first!.transfer_transaction_id).toBeNull();
+    expect((await txns(b, peer))).toHaveLength(0);
     expect((await op('budget_transactions_update', { id: first!.id, budget_id: b, patch: { memo: 'edited' } })).status).toBe(204);
-    const detachedLeg = await get(first!.id);
-    const detachedMirror = await get(first!.transfer_transaction_id!);
-    expect(detachedLeg).toMatchObject({ upcoming: false, repeat_rule_id: null });
-    expect(detachedMirror).toMatchObject({ upcoming: false, repeat_rule_id: null });
+    const leg = await get(first!.id);
+    expect(leg).toMatchObject({ upcoming: false, repeat_rule_id: null });
+    const mirror = await get(leg.transfer_transaction_id!);
+    await expectComplete(leg, mirror);
+    expect(mirror).toMatchObject({ upcoming: false, repeat_rule_id: null, account_id: peer });
     expect(await balances(home)).toEqual([0, -50_000]);
     expect(await balances(peer)).toEqual([0, 50_000]);
-
-    // Edit the MIRROR of the second occurrence: the leg that carries the rule follows.
-    expect((await op('budget_transactions_update', { id: second!.transfer_transaction_id!, budget_id: b, patch: { memo: 'from the other side' } })).status).toBe(204);
-    expect(await get(second!.id)).toMatchObject({ upcoming: false, repeat_rule_id: null });
-    expect(await get(second!.transfer_transaction_id!)).toMatchObject({ upcoming: false });
-    expect(await balances(home)).toEqual([0, -100_000]);
-    expect(await balances(peer)).toEqual([0, 100_000]);
-    await expectLedgerConsistent(home, peer);
-
-    // Deleting the rule removes what is still pending, mirrors included; entered rows stay.
-    expect((await op('budget_repeat_rules_delete', { id: rule, budget_id: b })).status).toBe(204);
-    const left = (await txns(b)).filter((t) => !t.deleted);
-    expect(left.every((t) => !t.upcoming)).toBe(true);
-    expect(left).toHaveLength(4);
     await expectLedgerConsistent(home, peer);
   });
 
-  test('a transfer payee whose account cannot receive the transfer writes nothing (never a payee-only occurrence)', async () => {
+  test('a transfer payee whose account cannot receive the transfer flips as on main: no mirror, nothing fails', async () => {
     const { id: b } = await newBudget('nq2f-repeat-closed');
     const home = await account(b, 'Closed Home');
     const gone = await account(b, 'Closed Peer');
-    const res = await op('budget_repeat_rules_create', {
-      budget_id: b,
-      account_id: home,
-      payee: 'Transfer : Closed Peer',
-      category_id: null,
-      memo: 'm',
-      outflow: 10_000,
-      inflow: 0,
-      frequency: 'monthly',
-      next_due_date: iso(1),
-    });
-    expect(res.status).toBe(201);
-    expect((await txns(b)).length).toBeGreaterThan(0);
-    await pool.query('DELETE FROM transactions WHERE budget_id = $1', [b]);
+    expect((await makeRule(b, home, 'Transfer : Closed Peer', null, 1, 10_000)).status).toBe(201);
     await pool.query('UPDATE accounts SET closed = true WHERE id = $1', [gone]);
-    await pool.query('UPDATE txn_repeat_rules SET next_due_date = $2 WHERE budget_id = $1', [b, iso(1)]);
-    await generate(b);
-    expect(await txns(b)).toEqual([]);
+    await dueNow(b, iso(1));
+    expect((await generate(b)).json).toMatchObject({ flipped: 1 });
+    expect((await txns(b, gone))).toHaveLength(0);
+    const flipped = (await txns(b, home)).filter((t) => !t.upcoming);
+    expect(flipped).toHaveLength(1);
+    expect(flipped[0]!.transfer_transaction_id).toBeNull();
+    expect(await balances(home)).toEqual([0, -10_000]);
   });
 });
 
-describe.skipIf(!dbReady)('a budget copy (fresh start) carries transfers complete', () => {
-  test('pairs inside the carried accounts, pairs to an unlinked account, half-linked sources and pending occurrences', async () => {
+describe.skipIf(!dbReady)('a budget copy (fresh start) behaves as on main', () => {
+  test('rows and balances are copied as main copies them: unlinked accounts start at 0, no leg is invented in them, no pointer is rewritten', async () => {
     const { id: b, category } = await newBudget('nq2f-copy');
     const a1 = await account(b, 'Copy Linked A', { linked: true });
     const a2 = await account(b, 'Copy Linked B', { linked: true });
     const c = await account(b, 'Copy Unlinked C');
     const payee = { a1: await payeeOf(a1), a2: await payeeOf(a2), c: await payeeOf(c) };
-    await pool.query(`UPDATE accounts SET cleared_balance = -900000 WHERE id = $1`, [a1]);
-    await pool.query(`UPDATE accounts SET cleared_balance = 900000 WHERE id = $1`, [a2]);
-
-    // A1 -> A2, a pair that still carries a (legacy) category on a leg.
-    const x1 = await rawTxn(b, a1, { amount: -300_000, payee_id: payee.a2, category_id: category, transfer_account_id: a2 });
+    await pool.query('UPDATE accounts SET cleared_balance = -900000 WHERE id = $1', [a1]);
+    await pool.query('UPDATE accounts SET cleared_balance = 900000 WHERE id = $1', [a2]);
+    // A1 -> A2 (a complete pair), A1 -> C (C is not carried), three of 100000 from A1 to C, C spent 250000.
+    const x1 = await rawTxn(b, a1, { amount: -300_000, payee_id: payee.a2, transfer_account_id: a2 });
     const x2 = await rawTxn(b, a2, { amount: 300_000, payee_id: payee.a1, transfer_account_id: a1, transfer_transaction_id: x1 });
     await pool.query('UPDATE transactions SET transfer_transaction_id = $2 WHERE id = $1', [x1, x2]);
-    // A1 -> C (C is not carried): the other leg lives in C.
-    const y1 = await rawTxn(b, a1, { amount: -200_000, payee_id: payee.c, transfer_account_id: c });
-    const y2 = await rawTxn(b, c, { amount: 200_000, payee_id: payee.a1, transfer_account_id: a1, transfer_transaction_id: y1 });
-    await pool.query('UPDATE transactions SET transfer_transaction_id = $2 WHERE id = $1', [y1, y2]);
-    // A2 -> A1 restored-style: only the transaction pointers.
-    const z1 = await rawTxn(b, a2, { amount: -400_000, payee_id: payee.a1 });
-    const z2 = await rawTxn(b, a1, { amount: 400_000, payee_id: payee.a2, transfer_transaction_id: z1 });
-    await pool.query('UPDATE transactions SET transfer_transaction_id = $2 WHERE id = $1', [z1, z2]);
-    // A pending transfer occurrence (rule on A1 -> A2) with its pending mirror.
-    const rule = (await op('budget_repeat_rules_create', {
-      budget_id: b,
-      account_id: a1,
-      payee: 'Transfer : Copy Linked B',
-      category_id: null,
-      memo: 'm',
-      outflow: 10_000,
-      inflow: 0,
-      frequency: 'monthly',
-      next_due_date: iso(40),
-    })).json.id as string;
+    for (let k = 0; k < 3; k++) {
+      const y1 = await rawTxn(b, a1, { amount: -100_000, payee_id: payee.c, transfer_account_id: c, date: iso(-10 - k) });
+      const y2 = await rawTxn(b, c, { amount: 100_000, payee_id: payee.a1, transfer_account_id: a1, transfer_transaction_id: y1, date: iso(-10 - k) });
+      await pool.query('UPDATE transactions SET transfer_transaction_id = $2 WHERE id = $1', [y1, y2]);
+    }
+    await rawTxn(b, c, { amount: -250_000, payee_id: null, date: iso(-5) });
+    await pool.query('UPDATE transactions SET category_id = $2 WHERE id = $1', [x1, category]);
+    await pool.query('UPDATE accounts SET cleared_balance = 50000 WHERE id = $1', [c]);
 
     const res = await op('budget_fresh_start', { budget_id: b });
     expect(res.status, JSON.stringify(res.json)).toBe(200);
     const nb = res.json.created.id as string;
     budgets.push(nb);
-    const newAccount = async (name: string) => (await pool.query('SELECT id FROM accounts WHERE budget_id = $1 AND name = $2', [nb, name])).rows[0].id as string;
-    const [n1, n2, nc] = [await newAccount('Copy Linked A'), await newAccount('Copy Linked B'), await newAccount('Copy Unlinked C')];
+    const accounts = (await pool.query('SELECT name, cleared_balance::int AS c, uncleared_balance::int AS u FROM accounts WHERE budget_id = $1 ORDER BY name', [nb])).rows;
+    // Linked accounts keep their balance, the unlinked one starts at 0: main's rule.
+    expect(accounts).toEqual([
+      { name: 'Copy Linked A', c: -900_000, u: 0 },
+      { name: 'Copy Linked B', c: 900_000, u: 0 },
+      { name: 'Copy Unlinked C', c: 0, u: 0 },
+    ]);
+    const newC = (await pool.query('SELECT id FROM accounts WHERE budget_id = $1 AND name = $2', [nb, 'Copy Unlinked C'])).rows[0].id as string;
+    expect(await txns(nb, newC)).toEqual([]); // no other leg is copied into it
     const rows = await txns(nb);
-    const find = (account: string, amount: number, upcoming = false) => rows.find((t) => t.account_id === account && t.amount === amount && t.upcoming === upcoming)!;
-
-    // Inside the carried accounts: complete, no category.
-    await expectComplete(find(n1, -300_000), find(n2, 300_000));
-    expect(find(n1, -300_000).category_id).toBeNull();
-    // Restored-style source: the missing account pointers are written from the peer.
-    await expectComplete(find(n2, -400_000), find(n1, 400_000));
-    // To the unlinked account: its leg is copied too so the pair stays a pair, and C's balance is that leg.
-    await expectComplete(find(n1, -200_000), find(nc, 200_000));
-    expect(await balances(nc)).toEqual([200_000, 0]);
-    expect(await balances(n1)).toEqual([-900_000, 0]);
-    // The pending occurrence and its pending mirror.
-    const pendingLeg = rows.find((t) => t.account_id === n1 && t.upcoming)!;
-    const pendingMirror = rows.find((t) => t.account_id === n2 && t.upcoming)!;
-    expect(pendingLeg.repeat_rule_id).not.toBeNull();
-    await expectComplete(pendingLeg, pendingMirror);
-    expect(pendingMirror.repeat_rule_id).toBeNull();
-    await expectLedgerConsistent(nc);
-    void rule;
+    expect(rows).toHaveLength(5); // the carried accounts' rows only (1 + 3 + 1 of A1/A2)
+    // Rows are as main copies them: the account pointer mapped, the transaction pointer NULL, the category kept.
+    for (const r of rows) expect(r.transfer_transaction_id).toBeNull();
+    expect(rows.filter((r) => r.transfer_account_id !== null)).toHaveLength(5);
+    expect(rows.find((r) => r.amount === -300_000)!.category_id).not.toBeNull();
   });
 });
 
@@ -435,5 +369,45 @@ describe.skipIf(!dbReady)('repair of half-linked transfer rows: report first, --
     expect(await balances(c)).toEqual([241_000, 0]); // the mirror moved the peer account by its amount
     expect(mirror).toMatchObject({ account_id: c, amount: 33_000, upcoming: false });
     expect((await repair(b, true, true)).half_linked).toMatchObject({ needs_mirror: 0, mirrors_created: 0 });
+  });
+
+  test('a pair the repair made can be undone with POST /transfers/unlink: both legs get back what they were', async () => {
+    const { id: b } = await newBudget('nq2f-fix-unlink');
+    const a = await account(b, 'Un A');
+    const c = await account(b, 'Un B');
+    const bankPayee = (await pool.query<{ id: string }>(`INSERT INTO payees (budget_id, name) VALUES ($1,'PIX recebido') RETURNING id`, [b])).rows[0]!.id;
+    const legPayee = await payeeOf(c);
+    const leg = await rawTxn(b, a, { amount: -120_000, payee_id: legPayee, date: iso(-2) });
+    const bank = await rawTxn(b, c, { amount: 120_000, payee_id: bankPayee, import_id: 'bank:un1', date: iso(-2) });
+    await repair(b, true);
+    await expectComplete(await get(leg), await get(bank));
+    const records = (await pool.query('SELECT transaction_id FROM transfer_links WHERE budget_id = $1', [b])).rows.map((r) => r.transaction_id).sort();
+    expect(records).toEqual([leg, bank].sort()); // a record on BOTH legs
+
+    const undo = await op('budget_transfers_unlink', { budget_id: b, transaction_ids: [bank] });
+    expect(undo.json).toMatchObject({ unlinked: 1 });
+    expect(await get(bank)).toMatchObject({ payee_id: bankPayee, transfer_account_id: null, transfer_transaction_id: null, import_id: 'bank:un1' });
+    // The leg is back to what the repair found: the transfer payee, no pointers (listed again by the report).
+    expect(await get(leg)).toMatchObject({ payee_id: legPayee, transfer_account_id: null, transfer_transaction_id: null });
+  });
+
+  test('a hand-made mirror and bank rows the adoption gates refused are listed (kind unadopted, with the reason), never touched', async () => {
+    const { id: b } = await newBudget('nq2f-fix-unadopted');
+    const a = await account(b, 'Ua A');
+    const c = await account(b, 'Ua B');
+    const x1 = await rawTxn(b, a, { amount: -80_000, payee_id: await payeeOf(c), transfer_account_id: c, date: iso(-3) });
+    const x2 = await rawTxn(b, c, { amount: 80_000, payee_id: await payeeOf(a), transfer_account_id: a, transfer_transaction_id: x1, date: iso(-3) });
+    await pool.query('UPDATE transactions SET transfer_transaction_id = $2 WHERE id = $1', [x1, x2]);
+    const n1 = await rawTxn(b, c, { amount: 80_000, import_id: 'bank:ua1', date: iso(-3) });
+    const n2 = await rawTxn(b, c, { amount: 80_000, import_id: 'bank:ua2', date: iso(-2) });
+    const before = await txns(b);
+    const report = await repair(b, false);
+    const unadopted = report.half_linked.items.filter((i) => i.kind === 'unadopted');
+    expect(unadopted.map((i) => [i.transaction_id, i.peer_id, i.detail]).sort()).toEqual(
+      [[n1, x2, 'ambiguous'], [n2, x2, 'ambiguous']].sort(),
+    );
+    expect(report.half_linked.unadopted).toBe(2);
+    await repair(b, true);
+    expect(await txns(b)).toEqual(before); // nothing is merged or deleted for the person
   });
 });

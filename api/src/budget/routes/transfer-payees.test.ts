@@ -767,18 +767,19 @@ describe.skipIf(!dbReady)('ordinary requests never repair: they use bad data as 
     const before = { payees: await payeeState(b), accounts: await pointers(b) };
 
     await createTransfer(b, src, 'Transfer : Bad Retired');
-    expect({ payees: await payeeState(b), accounts: await pointers(b) }).toEqual(before);
+    await createTransfer(b, src, 'Transfer : Bad Stolen');
 
-    // An account whose pointer names ANOTHER account's payee never hands that payee out: the
-    // mirror and the leg get a payee that points at THIS account (the one that exists, else a
-    // new one), and the other account's payee is untouched.
-    const t = await createTransfer(b, src, 'Transfer : Bad Stolen');
-    const stolenPayee = t.body!.payee_id;
-    expect(stolenPayee).not.toBe(otherPayee);
-    expect((await pool!.query('SELECT transfer_account_id FROM payees WHERE id = $1', [stolenPayee])).rows[0].transfer_account_id).toBe(stolen);
-    const mirror = (await pool!.query('SELECT payee_id FROM transactions WHERE account_id = $1', [stolen])).rows[0];
-    expect(mirror.payee_id).toBe((await pool!.query('SELECT transfer_payee_id FROM accounts WHERE id = $1', [src])).rows[0].transfer_payee_id);
-    expect((await pool!.query('SELECT transfer_account_id FROM payees WHERE id = $1', [otherPayee])).rows[0].transfer_account_id).toBe(other);
+    // Nothing was repaired: every pointer and every payee row is as it was, a retired payee
+    // stays retired, and the other account's payee is not re-pointed or handed to the mirror.
+    // The only write is the missing payee of the account whose pointer is wrong, created
+    // unlinked from the pointer (like a missing payee), which is left to the repair.
+    expect(await pointers(b)).toEqual(before.accounts);
+    const after = await payeeState(b);
+    for (const row of before.payees) expect(after).toContainEqual(row);
+    const added = after.filter((p) => !before.payees.some((q) => q.id === p.id));
+    expect(added).toEqual([expect.objectContaining({ name: 'Transfer : Bad Stolen', transfer_account_id: stolen, deleted: false })]);
+    const stolenMirror = (await pool!.query('SELECT payee_id FROM transactions WHERE account_id = $1', [stolen])).rows[0];
+    expect(stolenMirror.payee_id).not.toBe(otherPayee);
   });
 
   test('an account whose payee is missing gets one created, and nothing else changes', async () => {
@@ -851,7 +852,8 @@ describe.skipIf(!dbReady)('the same text resolution on import, bank sync and rep
       const resolver = createImportPayeeResolver(client, b);
       // The text names the account (the same account as in the register), but the stored payee is never its transfer payee.
       const toDst = await resolver.resolve('Transfer : Sync Dst');
-      expect(toDst).toEqual({ id: null, name: '', transferAccountId: dst });
+      expect(toDst).toMatchObject({ id: null, name: '', importName: 'Transfer : Sync Dst', transferAccountId: dst });
+      expect(toDst.legacy?.name).toBe('Transfer : Sync Dst');
       const toLegacy = await resolver.resolve('Transfer : Sync Legacy');
       expect(toLegacy.transferAccountId).toBe(legacy);
       expect(toLegacy.id).toBeNull();

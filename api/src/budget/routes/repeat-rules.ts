@@ -22,7 +22,7 @@ import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { repeatRulesCreate, repeatRulesDelete, repeatRulesGenerate, repeatRulesList } from '@shared/contracts/budget';
 import { ONE_WAY_ERROR, bothPositive } from '@shared/contracts/budget/schemas';
-import { applyBalanceDeltas, deriveDeltas, resolvePayeeId } from '../domain/transactions';
+import { applyBalanceDeltas, resolvePayeeId } from '../domain/transactions';
 import { advanceOccurrence, isoDate } from '../domain/repeat-schedule';
 import { generateDueOccurrences } from '../domain/repeat-generation';
 import { budgetRouter } from '../router';
@@ -80,11 +80,6 @@ export const operations = [
           await applyBalanceDeltas(client, body.budget_id, [
             { account_id: t.account_id, cleared_delta: 0, uncleared_delta: -Number(t.amount) },
           ]);
-          // A transfer anchor's mirror is pending with it: its entered balance is withheld too.
-          const mirror = t.transfer_transaction_id
-            ? await rulesStore.markMirrorUpcoming(client, body.budget_id, t.transfer_transaction_id)
-            : undefined;
-          if (mirror) await applyBalanceDeltas(client, body.budget_id, deriveDeltas(mirror, null));
         }
       } else {
         if (!body.next_due_date) {

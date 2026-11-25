@@ -216,6 +216,16 @@ export interface TransferLinkSql {
   prev_category_id: string | null;
   prev_blocked: boolean | null;
   created_mirror: boolean;
+  /** Set on the bank row of an adopted pair: the hand-made row it replaced and what it took over. */
+  adopted?: AdoptedRecord | null;
+}
+
+/** What an adoption replaced (stored in `transfer_links.adopted`), enough to undo it. */
+export interface AdoptedRecord {
+  /** The hand-made row that was soft-deleted. */
+  replaced_id: string;
+  /** The bank row's own fields before it took the user's over. */
+  prev: { memo: string | null; flag_color: string | null; flag_name: string | null; approved: boolean; cleared: 'cleared' | 'uncleared' | 'reconciled'; date: string };
 }
 
 /** Point both legs at each other with their transfer payees; categories cleared (both accounts on budget). */
@@ -237,11 +247,12 @@ export async function writeTransferLeg(
 export async function insertTransferLink(db: Queryable, budgetId: string, link: TransferLinkSql): Promise<void> {
   await db.query(
     `INSERT INTO transfer_links
-       (transaction_id, budget_id, peer_transaction_id, method, prev_payee_id, prev_category_id, prev_blocked, created_mirror)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       (transaction_id, budget_id, peer_transaction_id, method, prev_payee_id, prev_category_id, prev_blocked, created_mirror, adopted)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      ON CONFLICT (transaction_id) DO UPDATE SET peer_transaction_id = EXCLUDED.peer_transaction_id,
        method = EXCLUDED.method, prev_payee_id = EXCLUDED.prev_payee_id, prev_category_id = EXCLUDED.prev_category_id,
-       prev_blocked = EXCLUDED.prev_blocked, created_mirror = EXCLUDED.created_mirror, created_at = now()`,
+       prev_blocked = EXCLUDED.prev_blocked, created_mirror = EXCLUDED.created_mirror, adopted = EXCLUDED.adopted,
+       created_at = now()`,
     [
       link.transaction_id,
       budgetId,
@@ -251,6 +262,7 @@ export async function insertTransferLink(db: Queryable, budgetId: string, link: 
       link.prev_category_id,
       link.prev_blocked,
       link.created_mirror,
+      link.adopted ? JSON.stringify(link.adopted) : null,
     ],
   );
 }
@@ -259,7 +271,7 @@ export async function insertTransferLink(db: Queryable, budgetId: string, link: 
 export async function getTransferLinks(db: Queryable, budgetId: string, ids: readonly string[]): Promise<TransferLinkSql[]> {
   if (ids.length === 0) return [];
   const r = await db.query<TransferLinkSql>(
-    `SELECT transaction_id, peer_transaction_id, method, prev_payee_id, prev_category_id, prev_blocked, created_mirror
+    `SELECT transaction_id, peer_transaction_id, method, prev_payee_id, prev_category_id, prev_blocked, created_mirror, adopted
      FROM transfer_links
      WHERE budget_id = $1 AND (transaction_id = ANY($2) OR peer_transaction_id = ANY($2))`,
     [budgetId, ids],
@@ -368,7 +380,7 @@ export async function clearCategoryOfOnBudgetTransfers(db: Queryable, budgetId: 
 /** The link record of one leg (the undo record of the matcher / a person's link), if any. */
 export async function getTransferLink(db: Queryable, budgetId: string, transactionId: string): Promise<TransferLinkSql | undefined> {
   const r = await db.query<TransferLinkSql>(
-    `SELECT transaction_id, peer_transaction_id, method, prev_payee_id, prev_category_id, prev_blocked, created_mirror
+    `SELECT transaction_id, peer_transaction_id, method, prev_payee_id, prev_category_id, prev_blocked, created_mirror, adopted
      FROM transfer_links WHERE budget_id = $1 AND transaction_id = $2`,
     [budgetId, transactionId],
   );
@@ -408,30 +420,32 @@ export async function getMirrorFacts(db: Queryable, budgetId: string, id: string
   return r.rows[0];
 }
 
-/** A hand-made leg and a bank-imported row that could be its real counterpart (same account, amount, within days). */
+/** A hand-made transfer leg and a bank-imported row that could be its real counterpart (same account, amount, within days). */
 export interface AdoptablePair {
+  /** The hand-made row the bank row would replace. */
   hand_id: string;
   bank_id: string;
-  /** The hand-made leg's peer (kept). */
+  /** The hand-made row's peer (kept). */
   peer_id: string;
   peer_account_id: string;
   days: number;
-  hand_date: string;
-  bank_date: string;
 }
 
 /**
  * Pairs of (hand-made transfer leg, imported row) that look like one movement.
  * A hand-made leg has no import id and no sync shadow, sits in a mutual pair
  * with a live row of another on-budget account, and is not reconciled. The
- * imported row is live, uncategorized, unsplit, unlinked, not "dismissed", not
- * hinted at another account, in the SAME account with the SAME signed amount,
- * at most `maxDays` apart. Closest first; the caller picks greedily.
+ * imported row is live, uncategorized, unsplit, unlinked, in the SAME account
+ * with the SAME signed amount, at most `maxDays` apart, carries NO decision of
+ * the person's (no mark of any kind) and no payee "never" rule, and is not
+ * hinted at another account. Neither hand-made row has a mark or a "never"
+ * payee. The domain applies the matcher's account/bank rules, evidence and
+ * ambiguity checks on top.
  */
 export async function listAdoptablePairs(db: Queryable, budgetId: string, maxDays: number): Promise<AdoptablePair[]> {
   const r = await db.query<AdoptablePair>(
     `SELECT h.id AS hand_id, n.id AS bank_id, p.id AS peer_id, p.account_id AS peer_account_id,
-            abs(n.date - h.date)::int AS days, h.date::text AS hand_date, n.date::text AS bank_date
+            abs(n.date - h.date)::int AS days
        FROM transactions h
        JOIN transactions p ON p.id = h.transfer_transaction_id AND p.transfer_transaction_id = h.id
                           AND p.budget_id = h.budget_id AND NOT p.deleted
@@ -442,15 +456,66 @@ export async function listAdoptablePairs(db: Queryable, budgetId: string, maxDay
       WHERE h.budget_id = $1 AND NOT h.deleted AND NOT h.upcoming AND h.import_id IS NULL AND h.cleared <> 'reconciled'
         AND h.transfer_account_id = p.account_id AND p.transfer_account_id = h.account_id
         AND NOT EXISTS (SELECT 1 FROM connection_transactions s WHERE s.transaction_id = h.id)
+        AND NOT EXISTS (SELECT 1 FROM transfer_marks m WHERE m.transaction_id IN (h.id, p.id, n.id))
+        AND NOT EXISTS (SELECT 1 FROM payees py WHERE py.id IN (n.payee_id, h.payee_id, p.payee_id) AND py.transfer_rule = 'never')
         AND NOT n.deleted AND NOT n.upcoming AND n.import_id IS NOT NULL AND n.category_id IS NULL
         AND n.transfer_account_id IS NULL AND n.transfer_transaction_id IS NULL
         AND NOT EXISTS (SELECT 1 FROM subtransactions s WHERE s.transaction_id = n.id AND NOT s.deleted)
-        AND NOT EXISTS (SELECT 1 FROM transfer_marks m WHERE m.transaction_id = n.id AND m.state = 'dismissed')
         AND NOT EXISTS (SELECT 1 FROM transfer_hints th WHERE th.transaction_id = n.id AND th.account_id <> p.account_id)
       ORDER BY days, h.date, h.id, n.date, n.id`,
     [budgetId, maxDays],
   );
   return r.rows;
+}
+
+/** The user-facing fields of a row (what an adoption merges). */
+export interface RowFields {
+  id: string;
+  account_id: string;
+  amount: string;
+  date: string;
+  memo: string | null;
+  flag_color: string | null;
+  flag_name: string | null;
+  approved: boolean;
+  cleared: 'cleared' | 'uncleared' | 'reconciled';
+  payee_id: string | null;
+  category_id: string | null;
+  deleted: boolean;
+}
+
+export async function getRowFields(db: Queryable, budgetId: string, id: string): Promise<RowFields | undefined> {
+  const r = await db.query<RowFields>(
+    `SELECT id, account_id, amount::text AS amount, date::text AS date, memo, flag_color, flag_name, approved, cleared,
+            payee_id, category_id, deleted
+       FROM transactions WHERE id = $1 AND budget_id = $2`,
+    [id, budgetId],
+  );
+  return r.rows[0];
+}
+
+/** Write the merged user-facing fields of an adoption (or restore them on undo). */
+export async function setRowFields(
+  db: Queryable,
+  budgetId: string,
+  id: string,
+  f: { memo: string | null; flag_color: string | null; flag_name: string | null; approved: boolean; cleared: string; date: string },
+): Promise<void> {
+  await db.query(
+    `UPDATE transactions SET memo = $3, flag_color = $4, flag_name = $5, approved = $6, cleared = $7, date = $8
+      WHERE id = $1 AND budget_id = $2`,
+    [id, budgetId, f.memo, f.flag_color, f.flag_name, f.approved, f.cleared, f.date],
+  );
+}
+
+/** Bring a soft-deleted row back as one leg of a pair (undo of an adoption). */
+export async function reviveLeg(db: Queryable, budgetId: string, id: string, peerAccountId: string, peerId: string): Promise<boolean> {
+  const r = await db.query(
+    `UPDATE transactions SET deleted = false, transfer_account_id = $3, transfer_transaction_id = $4
+      WHERE id = $1 AND budget_id = $2 AND deleted`,
+    [id, budgetId, peerAccountId, peerId],
+  );
+  return (r.rowCount ?? 0) > 0;
 }
 
 /** Point the peer of an adopted pair at the imported row (both pointers). */
@@ -461,4 +526,31 @@ export async function repointPeerLeg(db: Queryable, budgetId: string, peerId: st
     ownAccountId,
     newPeerId,
   ]);
+}
+
+/**
+ * The bank row a person's transfer leg was released from earlier (marked
+ * "manual" when the leg stopped being a transfer) that is again the other side
+ * of a leg now becoming a transfer: same account, same signed amount, within
+ * `maxDays`, live, unlinked, uncategorized, unsplit. Only when exactly one row
+ * fits.
+ */
+export async function findReleasedBankRow(
+  db: Queryable,
+  budgetId: string,
+  accountId: string,
+  amount: number,
+  date: string,
+  maxDays: number,
+): Promise<string | undefined> {
+  const r = await db.query<{ id: string }>(
+    `SELECT t.id FROM transactions t
+      WHERE t.budget_id = $1 AND t.account_id = $2 AND NOT t.deleted AND NOT t.upcoming AND t.import_id IS NOT NULL
+        AND t.amount = $3 AND abs(t.date - $4::date) <= $5
+        AND t.transfer_account_id IS NULL AND t.transfer_transaction_id IS NULL AND t.category_id IS NULL
+        AND EXISTS (SELECT 1 FROM transfer_marks m WHERE m.transaction_id = t.id AND m.state = 'manual')
+        AND NOT EXISTS (SELECT 1 FROM subtransactions s WHERE s.transaction_id = t.id AND NOT s.deleted)`,
+    [budgetId, accountId, amount, date, maxDays],
+  );
+  return r.rows.length === 1 ? r.rows[0]!.id : undefined;
 }

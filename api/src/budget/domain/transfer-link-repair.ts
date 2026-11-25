@@ -42,8 +42,9 @@ import { MAX_TRANSFER_DAYS_APART } from './transfer-matcher';
 import { applyBalanceDeltas } from './transactions';
 import { ensureTransferPayee } from './transfer-payees';
 import { insertMirror } from './transfers';
+import { planAdoptions } from './transfer-links';
 
-export type HalfLinkedKind = 'complete_pointers' | 'set_payee' | 'clear_category' | 'pair' | 'needs_mirror' | 'ambiguous';
+export type HalfLinkedKind = 'complete_pointers' | 'set_payee' | 'clear_category' | 'pair' | 'needs_mirror' | 'ambiguous' | 'unadopted';
 
 export interface HalfLinkedItem {
   kind: HalfLinkedKind;
@@ -63,6 +64,8 @@ export interface HalfLinkedReport {
   paired: number;
   needs_mirror: number;
   ambiguous: number;
+  /** Hand-made mirrors and bank rows that look like one movement but the matcher's gates refused to merge (see `planAdoptions`). */
+  unadopted: number;
   /** Mirrors created by `apply` with `createMirrors`. */
   mirrors_created: number;
 }
@@ -208,6 +211,9 @@ export async function planHalfLinkedTransfers(db: Queryable, budgetId: string): 
       pairs.push({ leg, other: best });
     }
   }
+  for (const refusal of (await planAdoptions(db, budgetId)).refused) {
+    items.push({ kind: 'unadopted', transaction_id: refusal.bank_id, peer_id: refusal.hand_id, peer_account_id: null, detail: refusal.reason });
+  }
   const count = (kind: HalfLinkedKind) => items.filter((i) => i.kind === kind).length;
   return {
     report: {
@@ -218,6 +224,7 @@ export async function planHalfLinkedTransfers(db: Queryable, budgetId: string): 
       paired: count('pair'),
       needs_mirror: count('needs_mirror'),
       ambiguous: count('ambiguous'),
+      unadopted: count('unadopted'),
       mirrors_created: 0,
     },
     pairs,
@@ -256,18 +263,26 @@ export async function repairHalfLinkedTransfers(
     const internal = await bothOnBudget(db, budgetId, leg.account_id, leg.peer_account_id);
     await store.writeTransferLeg(db, leg.id, leg.peer_account_id, other.id, legPayee, { clearCategory: internal });
     await store.writeTransferLeg(db, other.id, leg.account_id, leg.id, otherPayee, { clearCategory: internal });
-    if (other.payee_id !== otherPayee || (internal && other.category_id !== null)) {
-      // The other side's row changed: keep what it was so Undo can restore it.
-      await store.insertTransferLink(db, budgetId, {
-        transaction_id: other.id,
-        peer_transaction_id: leg.id,
-        method: 'auto',
-        prev_payee_id: other.payee_id,
-        prev_category_id: other.category_id,
-        prev_blocked: hints.get(other.id)?.blocked ?? null,
-        created_mirror: false,
-      });
-    }
+    // A record on BOTH legs, each with what it was, so POST /transfers/unlink restores
+    // the state from before the repair (the one-sided record made unlink a no-op).
+    await store.insertTransferLink(db, budgetId, {
+      transaction_id: other.id,
+      peer_transaction_id: leg.id,
+      method: 'auto',
+      prev_payee_id: other.payee_id,
+      prev_category_id: other.category_id,
+      prev_blocked: hints.get(other.id)?.blocked ?? null,
+      created_mirror: false,
+    });
+    await store.insertTransferLink(db, budgetId, {
+      transaction_id: leg.id,
+      peer_transaction_id: other.id,
+      method: 'auto',
+      prev_payee_id: leg.payee_id,
+      prev_category_id: leg.category_id,
+      prev_blocked: null,
+      created_mirror: false,
+    });
     await blockImportShadows(db, [other.id]);
     await store.setTransferMarks(db, budgetId, [leg.id, other.id], null);
     await store.clearTransferHints(db, budgetId, [leg.id, other.id]);
