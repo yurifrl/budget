@@ -124,7 +124,7 @@ app.route('/', featuresRoutes());
 const op = makeOpCaller(app, contracts);
 
 /** Ids captured while seeding, used to build each read's sample input. */
-const seeded = { account: '', card: '', category: '', payee: '', connection: '', importedTxn: '' };
+const seeded = { account: '', card: '', category: '', payee: '', rule: '', connection: '', importedTxn: '' };
 
 async function ok(name: string, input: Record<string, unknown>) {
   const res = await op(name, input);
@@ -198,6 +198,7 @@ beforeAll(async () => {
 // Several rules per payee: a second one of another type, validated by the list read and the add/update outputs.
 const addedRule = await ok('budget_payees_rename_rules_add', { id: rent.payee_id, budget_id: B, match_type: 'starts_with', condition: 'landlord' });
 await ok('budget_payees_rename_rules_update', { id: rent.payee_id, budget_id: B, rule_id: addedRule.id, match_type: 'ends_with', condition: 'landlord' });
+seeded.rule = addedRule.id;
   await ok('budget_assignments_set', { budget_id: B, month: `${today.slice(0, 7)}-01`, category_id: c1.id, budgeted: 1_500_000 });
   await ok('budget_month_notes_set', { budget_id: B, month: `${today.slice(0, 7)}-01`, note: 'month' });
   await ok('budget_category_notes_set', { categoryId: c1.id, budget_id: B, month: `${today.slice(0, 7)}-01`, note: 'cat' });
@@ -231,6 +232,9 @@ await ok('budget_payees_rename_rules_update', { id: rent.payee_id, budget_id: B,
     [card.id],
   );
   seeded.importedTxn = importedRow.rows[0]!.id;
+// Apply a rule to past rows and take it back: the write outputs are validated by the handlers.
+const applied = await ok('budget_payees_rename_rules_apply', { id: seeded.payee, budget_id: B, rule_id: seeded.rule });
+await ok('budget_payees_rename_rules_revert', { budget_id: B, apply_id: applied.apply_id });
 
   // Features: a value for everyone and one user override, so the admin list validates real rows.
   // The user's own value is ON: the connection above runs on the shared keys and must stay usable
@@ -276,6 +280,7 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     budget_month_notes_list: { budget_id: B },
     budget_payees_list: { budget_id: B },
     budget_payees_rename_rules_list: { id: seeded.payee, budget_id: B },
+    budget_payees_rename_rules_apply_preview: { id: seeded.payee, budget_id: B, rule_id: seeded.rule },
     budget_payees_transactions: { id: seeded.payee, budget_id: B },
     budget_payee_suggestions_get: { id: seeded.payee, budget_id: B },
     budget_payees_transfer_rule_get: { id: seeded.payee, budget_id: B },
