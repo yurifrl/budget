@@ -44,6 +44,7 @@ import {
   type FiledItem,
 } from './accept.logic';
 import { leaveStore } from './leave.store';
+import { useUnloadGuard } from './useUnloadGuard';
 import type { ShownBundle } from './queue.logic';
 import { t } from './i18n';
 import { bundleChangedMessage, bundleToastLabel, isBundleChanged, rowSubject, type PickedCategory } from './page.logic';
@@ -159,6 +160,7 @@ export function useCategorizeAccept({
   // still in the strip, it asks what to do with them (a page torn down by the
   // navigator cannot be relied on to speak for itself). Nothing is sent from here.
   const stack = state.stack;
+  useUnloadGuard(pendingSkips({ stack }).length > 0);
   useEffect(() => {
     if (budgetId) leaveStore.publish(budgetId, pendingSkips({ stack }));
   }, [budgetId, stack]);
