@@ -35,6 +35,7 @@ import {
 import { CategorizeError } from './errors';
 import { DEFAULT_RATE_LIMIT_DELAY_MS, MAX_RATE_LIMIT_DELAY_MS } from './jobspec';
 import type { CandidateCursor } from './store';
+import { recordRunProgress } from './store';
 
 const HEARTBEAT_EVERY_MS = 10_000;
 
@@ -132,6 +133,9 @@ export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): C
           return { problem: result.problem };
         }
         await ctx.log('info', 'categorize run prepared', { total: result.total, remaining: result.remaining });
+        // Make the total visible to categorize_run_status before the first
+        // chunk. Progress is observability, never a reason to fail the run.
+        await recordRunProgress(db, args.runId, args.budgetId, 0, result.total).catch(() => undefined);
         return result;
       });
     },
@@ -165,11 +169,25 @@ export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): C
           inputTokens: 0,
           outputTokens: 0,
         };
+        // Persist progress for categorize_run_status (Temporal's heartbeat
+        // payload is not queryable from the API). Serialized writes and a
+        // time gate keep it to one small upsert per heartbeat interval.
+        let lastPersisted = 0;
+        let writes: Promise<void> = Promise.resolve();
+        const persist = (done: number, total: number): void => {
+          const now = Date.now();
+          if (now - lastPersisted < HEARTBEAT_EVERY_MS) return;
+          lastPersisted = now;
+          writes = writes
+            .then(() => recordRunProgress(db, args.runId, args.budgetId, done, total))
+            .catch(() => undefined);
+        };
         const timer = setInterval(() => {
           // A tick can race the activity's completion; a heartbeat there must
           // never crash the worker.
           try {
             Context.current().heartbeat(progress);
+            persist(args.doneBefore + progress.examined, args.total);
           } catch {
             /* activity already finished */
           }
@@ -188,6 +206,7 @@ export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): C
             onProgress: (next) => {
               progress = { ...next };
               Context.current().heartbeat(progress);
+              persist(args.doneBefore + progress.examined, args.total);
             },
           });
           if ('problem' in result) {
@@ -227,6 +246,12 @@ export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): C
           throw toActivityFailure(error);
         } finally {
           clearInterval(timer);
+          // Final row for this chunk, after any queued writes, so status shows
+          // the completed count immediately.
+          await writes;
+          await recordRunProgress(db, args.runId, args.budgetId, args.doneBefore + progress.examined, args.total).catch(
+            () => undefined,
+          );
         }
       });
     },

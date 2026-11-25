@@ -194,9 +194,26 @@ start at `0100`). One image runs both the API and the worker
   Operations:
   `GET|PUT|DELETE /ai/credentials`, `GET /ai/credentials/test`,
   `POST /ai/provider-detect`, `POST /ai/models`; the key is never returned.
-- **Category suggestions.** `api/src/categorize/` is a new feature with no
-  HTTP surface yet; the queue/accept contracts are budget-edxg. A
-  `categorize_run` job (one per budget: subject key = budget id, so triggers
+- **Category suggestions.** `api/src/categorize/` owns the engine and the
+  Categorize page's HTTP surface (`/categorize`, behind budgetAccess; contracts
+  in `shared/src/contracts/categorize/`): `GET /queue` (the owner's own text
+  unmasked, merchant panel, states, suggestions at/above the threshold,
+  per-state counts that sum to the queue, and whole-queue bundles carrying a
+  `bundle_key`, count, total, date range and suggestion but no transaction ids;
+  the key is built from payee/category ids (an unlinked payee is hashed, never
+  embedded), and `bundle=<key>` pages one bundle's rows), `POST /run` + `GET
+  /run` (any member starts the owner-key run; status gives done/total from
+  `categorize_run_progress` (0114), the last run, and why AI is unavailable),
+  `POST /accept` (explicit pairs or one server-resolved `bundle_key` with the
+  page's `expected_count`; a changed count is refused with
+  `categorize_bundle_changed`, capped at 1000 rows, atomic through the
+  transaction update path), `POST /undo` (one round trip; only a recorded
+  accept is reversed, and only while its category is still the one accept set
+  and the row still needs a category; a skip record is never touched;
+  everything else is skipped with a reason), `POST /skip` (a skip decision for
+  any queued state, freezing the row for the engine), and `GET|PUT /settings`
+  (confidence threshold, read at queue time; 0113). Decisions do not expire.
+  A `categorize_run` job (one per budget: subject key = budget id, so triggers
   coalesce; `force` re-asks rows that already have suggestions) has a prepare
   activity resolve the run's key through one `runActorForBudget` function
   (today the budget owner: own key, else the shared key when the flag is on;
