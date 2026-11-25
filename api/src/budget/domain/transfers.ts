@@ -11,9 +11,9 @@
  * here.
  */
 import type { PoolClient } from 'pg';
-import { TRANSFER_PAYEE_RE, transferPayeeName } from '@shared/domain/transfers';
 import { HttpError } from '../../core/validate';
 import { deriveDeltas, type BalanceDelta } from './transactions';
+import { ensureTransferPayee } from './transfer-payees';
 
 /** The row facts a mirror is derived from (amount in milliunits). */
 export interface TransferLeg {
@@ -34,35 +34,13 @@ export interface TransferPeer {
   internal: boolean;
 }
 
-/** The per-account "Transfer : <name>" payee, created (and linked) when missing. */
-export async function ensureTransferPayee(
-  client: PoolClient,
-  budgetId: string,
-  accountId: string,
-  accountName: string,
-): Promise<string> {
-  const existing = await client.query<{ transfer_payee_id: string | null }>(
-    'SELECT transfer_payee_id FROM accounts WHERE id = $1',
-    [accountId],
-  );
-  const linked = existing.rows[0]?.transfer_payee_id;
-  if (linked) return linked;
-  const payee = await client.query<{ id: string }>(
-    `INSERT INTO payees (budget_id, name, transfer_account_id)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (budget_id, name) DO UPDATE
-       SET transfer_account_id = EXCLUDED.transfer_account_id, deleted = false
-     RETURNING id`,
-    [budgetId, transferPayeeName(accountName), accountId],
-  );
-  await client.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2', [payee.rows[0].id, accountId]);
-  return payee.rows[0].id;
-}
+export { ensureTransferPayee } from './transfer-payees';
 
 /**
- * The peer account a payee transfers to, or null for an ordinary payee.
- * A payee named "Transfer : <account>" that was never linked (accounts created
- * before transfer payees existed) is linked on first use.
+ * The peer account a payee transfers to, or null for an ordinary payee. The
+ * identity is the payee's `transfer_account_id` (set when the account's
+ * transfer payee is created); payee TEXT is resolved to that payee before it
+ * gets here (`resolveTransferPayeeText`), so no name is parsed in this check.
  */
 export async function resolveTransferPeer(
   client: PoolClient,
@@ -71,28 +49,12 @@ export async function resolveTransferPeer(
   ownAccountId: string,
 ): Promise<TransferPeer | null> {
   if (!payeeId) return null;
-  const payee = await client.query<{
-    name: string;
-    transfer_account_id: string | null;
-  }>('SELECT name, transfer_account_id FROM payees WHERE id = $1 AND budget_id = $2', [payeeId, budgetId]);
-  const row = payee.rows[0];
-  if (!row) return null;
-  let peerId = row.transfer_account_id;
-  if (!peerId) {
-    const peerName = TRANSFER_PAYEE_RE.exec(row.name)?.[1];
-    if (!peerName) return null;
-    const byName = await client.query<{ id: string }>(
-      'SELECT id FROM accounts WHERE budget_id = $1 AND name = $2 AND deleted = false',
-      [budgetId, peerName.trim()],
-    );
-    if (byName.rowCount !== 1) return null;
-    peerId = byName.rows[0].id;
-    await client.query('UPDATE payees SET transfer_account_id = $1 WHERE id = $2', [peerId, payeeId]);
-    await client.query('UPDATE accounts SET transfer_payee_id = $1 WHERE id = $2 AND transfer_payee_id IS NULL', [
-      payeeId,
-      peerId,
-    ]);
-  }
+  const payee = await client.query<{ transfer_account_id: string | null }>(
+    'SELECT transfer_account_id FROM payees WHERE id = $1 AND budget_id = $2',
+    [payeeId, budgetId],
+  );
+  const peerId = payee.rows[0]?.transfer_account_id;
+  if (!peerId) return null;
   if (peerId === ownAccountId) throw new HttpError(400, 'cannot transfer to the same account', 'cannot_transfer_to_same_account');
   const accounts = await client.query<{
     id: string;

@@ -3,6 +3,7 @@ import type { Queryable } from '../../core/db';
 import type { z } from '@shared/zod';
 import { applyRules, type RenameRule } from '@shared/domain/payees';
 import { HttpError } from '../../core/validate';
+import { resolveTransferPayeeText } from './transfer-payees';
 import { ONE_WAY_ERROR, bothPositive, type subTxnListSchema } from '@shared/contracts/budget/schemas';
 
 /**
@@ -68,6 +69,25 @@ export async function upsertPayee(
   return result.rows[0].id;
 }
 
+/**
+ * Create-or-find a payee for a statement/register TEXT (already rule-rewritten):
+ * a "Transfer : <account>" text means that account's transfer payee (same
+ * resolution everywhere: register, import, bank sync); any other text is an
+ * ordinary payee created by name. `fromRule` = a renaming rule produced the
+ * text, so it already is a payee's name.
+ */
+export async function upsertPayeeResolvingTransfers(
+  client: PoolClient,
+  budgetId: string,
+  effectiveName: string,
+  opts: { verbatim?: boolean; fromRule?: boolean } = {},
+): Promise<string | null> {
+  const trimmed = effectiveName.trim();
+  if (!trimmed) return null;
+  const transferPayee = await resolveTransferPayeeText(client, budgetId, trimmed, { fromRule: opts.fromRule });
+  return transferPayee ?? upsertPayee(client, budgetId, effectiveName, { verbatim: opts.verbatim });
+}
+
 export async function resolvePayeeId(
   client: PoolClient,
   budgetId: string,
@@ -77,7 +97,8 @@ export async function resolvePayeeId(
   // Rename rules fire at transaction create/import: the stored name is the
   // rule-rewritten one, so the renamed payee is what gets created/upserted.
   const rules = await loadRenameRules(client, budgetId);
-  return upsertPayee(client, budgetId, applyRules(rules.rows, name));
+  const effective = applyRules(rules.rows, name);
+  return upsertPayeeResolvingTransfers(client, budgetId, effective, { fromRule: effective !== name });
 }
 
 export async function applyBalanceDeltas(

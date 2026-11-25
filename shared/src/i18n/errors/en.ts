@@ -100,6 +100,8 @@ export default {
   account_must_be_closed_first: 'Close this account before deleting it.',
   member_not_in_budget: 'That person is not a member of this budget.',
   payee_name_reserved: 'The name "{name}" is reserved for a transfer payee. Choose a different name.',
+  transfer_payee_protected: '"{name}" is the transfer payee of an account. It follows the account\'s name and cannot be renamed, merged, hidden or deleted.',
+  payee_not_in_budget: 'That payee is not in this budget.',
   payee_name_deleted_exists: 'A deleted payee is already named "{name}". Choose a different name.',
   payee_name_exists: 'A payee named "{name}" already exists. Choose a different name, or use Merge to combine them.',
   cannot_merge_into_itself: 'A payee cannot be merged into itself. Choose another payee.',
