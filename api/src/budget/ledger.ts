@@ -4,8 +4,10 @@
  * through this module only (exported from the budget barrel); it is built on
  * the same functions budget's own routes use:
  *
- * - payees: `loadRenameRules` + `applyRules` + `upsertPayeeResolvingTransfers`
- *   (domain/transactions.ts), the /bulk import and transaction-create path;
+ * - payees: `loadRenameRules` + `applyRules` + `resolveImportedPayee`
+ *   (domain/transactions.ts), the /bulk import path: a text that names an account's
+ *   transfer payee leaves the row ordinary and returns the account as a hint
+ *   (`setTransferHint`), never a payee-only half transfer;
  * - balances: `applyBalanceDeltas` (domain/transactions.ts);
  * - transfers between own accounts: `linkTransfers` (domain/transfer-links.ts;
  *   `linkCardPayments` is its former name, kept for callers);
@@ -22,11 +24,12 @@
 import type { PoolClient } from 'pg';
 
 import { applyRules, type RenameRule } from '@shared/domain/payees';
-import { loadRenameRules, upsertPayeeResolvingTransfers } from './domain/transactions';
+import { loadRenameRules, resolveImportedPayee } from './domain/transactions';
 
 export { applyBalanceDeltas, type BalanceDelta } from './domain/transactions';
 export { linkTransfers, linkTransfers as linkCardPayments } from './domain/transfer-links';
 export { adoptAccountCurrency } from './store/accounts';
+export { setTransferHint } from './store/transfers';
 export {
   insertImportedTransaction,
   refreshImportedTransaction,
@@ -34,10 +37,16 @@ export {
   type ImportedTransaction,
 } from './store/transactions';
 
-/** A payee resolved for an imported row: id (null when blank) and the stored (rule-rewritten) name. */
+/**
+ * A payee resolved for an imported row: id (null when blank) and the stored
+ * name (rule-rewritten; for a text that names an account, the raw text of the
+ * ordinary payee). `transferAccountId`: the account the text pointed at, to be
+ * recorded with `setTransferHint` once the row exists.
+ */
 export interface ResolvedPayee {
   id: string | null;
   name: string;
+  transferAccountId: string | null;
 }
 
 export interface ImportPayeeResolver {
@@ -57,12 +66,12 @@ export function createImportPayeeResolver(client: PoolClient, budgetId: string):
   return {
     async resolve(rawName: string): Promise<ResolvedPayee> {
       const name = rawName.trim();
-      if (!name) return { id: null, name: '' };
+      if (!name) return { id: null, name: '', transferAccountId: null };
       if (!cache.has(name)) {
         if (!rules) rules = (await loadRenameRules(client, budgetId)).rows;
         const effective = applyRules(rules, name);
-        const id = await upsertPayeeResolvingTransfers(client, budgetId, effective, { verbatim: true, fromRule: effective !== name });
-        cache.set(name, id === null ? { id: null, name: '' } : { id, name: effective });
+        const payee = await resolveImportedPayee(client, budgetId, name, effective, { verbatim: true });
+        cache.set(name, { id: payee.id, name: payee.name, transferAccountId: payee.transferAccountId });
       }
       return cache.get(name)!;
     },

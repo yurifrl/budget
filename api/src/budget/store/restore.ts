@@ -225,8 +225,13 @@ export async function insertRestoredTransaction(
   );
 }
 
-export async function linkRestoredTransferPeer(db: Queryable, transactionId: string, peerId: string): Promise<void> {
-  await db.query('UPDATE public.transactions SET transfer_transaction_id = $1 WHERE id = $2', [peerId, transactionId]);
+/** Point a restored leg at its peer: BOTH pointers (the peer's row and the peer's account). */
+export async function linkRestoredTransferPeer(db: Queryable, transactionId: string, peerId: string, peerAccountId: string): Promise<void> {
+  await db.query('UPDATE public.transactions SET transfer_transaction_id = $1, transfer_account_id = $2 WHERE id = $3', [
+    peerId,
+    peerAccountId,
+    transactionId,
+  ]);
 }
 
 export async function insertRestoredAssignment(

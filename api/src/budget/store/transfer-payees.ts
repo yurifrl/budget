@@ -202,6 +202,14 @@ export async function copyTransferRule(db: Queryable, fromId: string, toId: stri
   );
 }
 
+/** Switch the "treat as transfer" rule off (the rule columns reset to their defaults). */
+export async function clearTransferRule(db: Queryable, payeeId: string): Promise<void> {
+  await db.query(
+    `UPDATE payees SET transfer_rule = NULL, transfer_rule_account_id = NULL, transfer_rule_since = NULL WHERE id = $1`,
+    [payeeId],
+  );
+}
+
 /** Repair only: hard-delete a payee nothing references any more (its name becomes free). */
 export async function deletePayeeRow(db: Queryable, budgetId: string, payeeId: string): Promise<void> {
   await db.query('DELETE FROM payees WHERE id = $1 AND budget_id = $2', [payeeId, budgetId]);
@@ -212,6 +220,16 @@ export async function recordFormerName(db: Queryable, budgetId: string, payeeId:
   await db.query(
     'INSERT INTO transfer_payee_former_names (payee_id, budget_id, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
     [payeeId, budgetId, name],
+  );
+}
+
+/** Give `toId` every former name `fromId` had (idempotent). */
+export async function copyFormerNames(db: Queryable, budgetId: string, fromId: string, toId: string): Promise<void> {
+  await db.query(
+    `INSERT INTO transfer_payee_former_names (payee_id, budget_id, name)
+     SELECT $3, budget_id, name FROM transfer_payee_former_names WHERE payee_id = $1 AND budget_id = $2
+     ON CONFLICT DO NOTHING`,
+    [fromId, budgetId, toId],
   );
 }
 

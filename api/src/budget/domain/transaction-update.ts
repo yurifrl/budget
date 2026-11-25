@@ -20,9 +20,35 @@ import { findAccountInBudget } from '../store/accounts';
 import { categoryInBudget } from '../store/categories';
 import { getRepeatRuleSchedule, skipRepeatRulePast } from '../store/repeat-rules';
 import * as txnStore from '../store/transactions';
+import { clearCategoryOfOnBudgetTransfers } from '../store/transfers';
 
 type PatchTxn = z.output<typeof patchTxnSchema>;
 type SubTxnList = z.output<typeof subTxnListSchema>;
+
+/** The rule's next due date moves past a detached occurrence. */
+async function skipRuleAfterOccurrence(client: PoolClient, ruleId: string, occurrenceDate: string | null): Promise<void> {
+  const rule = await getRepeatRuleSchedule(client, ruleId);
+  if (rule && occurrenceDate) {
+    await skipRepeatRulePast(client, ruleId, advanceOccurrence(occurrenceDate, rule.frequency, rule.month_last_day));
+  }
+}
+
+/**
+ * The other half of a transfer occurrence leaves the schedule with the edited
+ * half: it stops being upcoming (its withheld balance delta is applied) and, if
+ * it carries the rule's occurrence, lets go of it.
+ */
+async function detachUpcomingPeer(client: PoolClient, budgetId: string, peerId: string): Promise<void> {
+  const peer = await txnStore.getLiveTransactionInBudget(client, peerId, budgetId);
+  if (!peer?.upcoming) return;
+  await txnStore.updateTransactionSet(client, peerId, [
+    { raw: 'upcoming = false' },
+    { raw: 'repeat_rule_id = NULL' },
+    { raw: 'occurrence_date = NULL' },
+  ]);
+  await applyBalanceDeltas(client, budgetId, deriveDeltas(null, peer));
+  if (peer.repeat_rule_id) await skipRuleAfterOccurrence(client, peer.repeat_rule_id, peer.occurrence_date);
+}
 
 export async function updateTransactionInClient(
   client: PoolClient,
@@ -89,9 +115,12 @@ export async function updateTransactionInClient(
   // YNAB turns the future instance into a free-standing transaction and
   // the rule's next_due_date skips past the occurrence instead. The
   // withheld balance delta is applied as part of the flip (the client's
-  // edit delta then re-balances the edited amounts on top).
-  if (Object.keys(patch).length > 0 && existing.upcoming && existing.repeat_rule_id) {
-    set.push({ raw: 'repeat_rule_id = NULL' }, { raw: 'occurrence_date = NULL' }, { raw: 'upcoming = false' });
+  // edit delta then re-balances the edited amounts on top). A transfer
+  // occurrence is two upcoming rows (the leg that carries the rule and its
+  // mirror): editing either detaches the pair, each side's delta applied.
+  if (Object.keys(patch).length > 0 && existing.upcoming && (existing.repeat_rule_id || existing.transfer_transaction_id)) {
+    set.push({ raw: 'upcoming = false' });
+    if (existing.repeat_rule_id) set.push({ raw: 'repeat_rule_id = NULL' }, { raw: 'occurrence_date = NULL' });
     await applyBalanceDeltas(client, budget_id, [
       {
         account_id: existing.account_id,
@@ -99,11 +128,8 @@ export async function updateTransactionInClient(
         uncleared_delta: Number(existing.amount),
       },
     ]);
-    const rule = await getRepeatRuleSchedule(client, existing.repeat_rule_id);
-    if (rule && existing.occurrence_date) {
-      const after = advanceOccurrence(existing.occurrence_date, rule.frequency, rule.month_last_day);
-      await skipRepeatRulePast(client, existing.repeat_rule_id, after);
-    }
+    if (existing.repeat_rule_id) await skipRuleAfterOccurrence(client, existing.repeat_rule_id, existing.occurrence_date);
+    if (existing.transfer_transaction_id) await detachUpcomingPeer(client, budget_id, existing.transfer_transaction_id);
   }
   // Set when the edit changes the payee: the transfer link must follow it.
   let payeeChanged = false;
@@ -150,6 +176,10 @@ export async function updateTransactionInClient(
     payeeChanged || existing.transfer_transaction_id
       ? await syncMirror(client, budget_id, id, payeeChanged ? (transferPeer?.accountId ?? null) : undefined)
       : [];
+
+  // A leg of a transfer between two on-budget accounts carries no category,
+  // whatever this edit (or an earlier write) put there.
+  await clearCategoryOfOnBudgetTransfers(client, budget_id, [id]);
 
   // Derived from the row before/after the edit.
   const after = await txnStore.getLedgerRow(client, id);

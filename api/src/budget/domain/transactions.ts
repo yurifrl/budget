@@ -3,7 +3,8 @@ import type { Queryable } from '../../core/db';
 import type { z } from '@shared/zod';
 import { applyRules, type RenameRule } from '@shared/domain/payees';
 import { HttpError } from '../../core/validate';
-import { resolveTransferPayeeText } from './transfer-payees';
+import { ensureTransferPayee, resolveTransferAccountFromText, resolveTransferPayeeText } from './transfer-payees';
+import { findPayeeRowByName } from '../store/transfer-payees';
 import { ONE_WAY_ERROR, bothPositive, type subTxnListSchema } from '@shared/contracts/budget/schemas';
 
 /**
@@ -51,7 +52,7 @@ export async function loadRenameRules(client: Queryable, budgetId: string) {
  * `is` rule's replacement is a payee name used as-is there.
  */
 export async function upsertPayee(
-  client: PoolClient,
+  client: Queryable,
   budgetId: string,
   effectiveName: string,
   opts: { verbatim?: boolean } = {},
@@ -88,6 +89,52 @@ export async function upsertPayeeResolvingTransfers(
   return transferPayee ?? upsertPayee(client, budgetId, effectiveName, { verbatim: opts.verbatim });
 }
 
+/** The payee of an imported row (bank sync, statement import). */
+export interface ImportedPayee {
+  /** The payee the row is stored with: ordinary or null, NEVER an account's transfer payee. */
+  id: string | null;
+  /** The stored payee's name ('' when none): what the row's import name and sync shadow say. */
+  name: string;
+  /** The account the payee text pointed at ("Transfer : <account>", as text or through a renaming rule), if any. */
+  transferAccountId: string | null;
+  /** The id the row counts under when the text names an account: that account's transfer payee (statement-import idempotency keys). */
+  transferPayeeId: string | null;
+}
+
+/**
+ * Resolve the payee of an IMPORTED row. Unlike the register, an import never
+ * stores an account's transfer payee without the transfer behind it (a
+ * payee-only half transfer, and the other side may arrive from the other bank):
+ * when the text (after the renaming rules) means "Transfer : <account>", the row
+ * keeps the ordinary payee of the RAW text and the account is returned for the
+ * caller to record as a transfer hint, so the matcher offers the row as a strong
+ * suggestion for that account. A raw text that is itself the name of a transfer
+ * payee leaves the row without a payee (its text stays in the import name).
+ * Any other text is an ordinary payee, as before.
+ */
+export async function resolveImportedPayee(
+  client: PoolClient,
+  budgetId: string,
+  rawText: string,
+  effective: string,
+  opts: { verbatim?: boolean } = {},
+): Promise<ImportedPayee> {
+  const trimmed = effective.trim();
+  if (!trimmed) return { id: null, name: '', transferAccountId: null, transferPayeeId: null };
+  const raw = rawText.trim();
+  const accountId = await resolveTransferAccountFromText(client, budgetId, trimmed, { fromRule: trimmed !== raw });
+  if (!accountId) {
+    const id = await upsertPayee(client, budgetId, effective, opts);
+    return { id, name: effective, transferAccountId: null, transferPayeeId: null };
+  }
+  const transferPayeeId = await ensureTransferPayee(client, budgetId, accountId);
+  const holder = raw ? await findPayeeRowByName(client, budgetId, raw) : undefined;
+  if (!raw || (holder && (holder.transfer_account_id !== null || holder.deleted))) {
+    return { id: null, name: '', transferAccountId: accountId, transferPayeeId };
+  }
+  return { id: await upsertPayee(client, budgetId, opts.verbatim ? rawText : raw), name: opts.verbatim ? rawText : raw, transferAccountId: accountId, transferPayeeId };
+}
+
 export async function resolvePayeeId(
   client: PoolClient,
   budgetId: string,
@@ -102,7 +149,7 @@ export async function resolvePayeeId(
 }
 
 export async function applyBalanceDeltas(
-  client: PoolClient,
+  client: Queryable,
   budgetId: string,
   deltas: BalanceDelta[],
 ): Promise<void> {

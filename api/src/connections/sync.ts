@@ -637,6 +637,12 @@ async function syncOnce(
               importPayeeName: payee.name || null,
               cleared,
             });
+            // The text said "Transfer : <account>": the row stays an ordinary uncategorized
+            // one (no payee-only half transfer, no mirror: the other side may arrive from the
+            // other bank) and the matcher is told which account it is probably with.
+            if (payee.transferAccountId && payee.transferAccountId !== acc.id) {
+              await ledger.setTransferHint(pg, acc.budget_id, insertedId, payee.transferAccountId);
+            }
             await pg.query(
               `INSERT INTO connection_transactions
                  (transaction_id, budget_id, provider, external_transaction_id, last_synced_payload, blocked,

@@ -20,12 +20,14 @@ import {
   type BalanceDelta,
   insertSubTxns,
   loadRenameRules,
+  resolveImportedPayee,
   resolvePayeeId,
-  upsertPayeeResolvingTransfers,
+  type ImportedPayee,
 } from '../domain/transactions';
 import { linkTransfers, transferOverview } from '../domain/transfer-links';
+import { setTransferHint } from '../store/transfers';
 import { payeeIdFromRequest } from '../domain/edited-payee';
-import { deleteMirror, insertMirror, resolveTransferPeer, syncMirror } from '../domain/transfers';
+import { insertMirror, removeMirror, resolveTransferPeer } from '../domain/transfers';
 import { advanceOccurrence } from '../domain/repeat-schedule';
 import { updateTransactionInClient } from '../domain/transaction-update';
 import { applyRules } from '@shared/domain/payees';
@@ -228,10 +230,12 @@ export const operations = [
       }
 
       const rules = (await loadRenameRules(client, budget_id)).rows;
-      const payeeIdByName = new Map<string, string | null>();
+      // A text that names an account's transfer payee does NOT store that payee
+      // (a payee-only half transfer): the row stays ordinary and the account is
+      // remembered as a hint for the matcher (see resolveImportedPayee).
+      const payeeByName = new Map<string, ImportedPayee>();
       for (const name of new Set(txns.map((t) => t.payee.trim()).filter(Boolean))) {
-        const effective = applyRules(rules, name);
-        payeeIdByName.set(name, await upsertPayeeResolvingTransfers(client, budget_id, effective, { fromRule: effective !== name }));
+        payeeByName.set(name, await resolveImportedPayee(client, budget_id, name, applyRules(rules, name)));
       }
 
       // Existing occurrence numbers per `YNAB:<milliunits>:<date>:<payee>`
@@ -242,7 +246,12 @@ export const operations = [
       // vendor, same day, same amount, charged twice). An incoming row whose
       // occurrence is <= an existing one for the same prefix is a re-import of
       // that row, not a new transaction.
-      const payeeKeyOf = (txn: (typeof txns)[number]) => payeeIdByName.get(txn.payee.trim()) ?? '-';
+      // The key keeps counting under the account's transfer payee for such text,
+      // as before: re-importing a file stays idempotent across this change.
+      const payeeKeyOf = (txn: (typeof txns)[number]) => {
+        const p = payeeByName.get(txn.payee.trim());
+        return p?.transferPayeeId ?? p?.id ?? '-';
+      };
       const prefixes = [
         ...new Set(
           txns
@@ -291,7 +300,7 @@ export const operations = [
           accountId: account_id,
           date: txn.date,
           amount: milliunits,
-          payeeId: payeeIdByName.get(txn.payee.trim()) ?? null,
+          payeeId: payeeByName.get(txn.payee.trim())?.id ?? null,
           categoryId: txn.category_id,
           memo: txn.memo || null,
           importId,
@@ -303,6 +312,8 @@ export const operations = [
           duplicates += 1;
           continue;
         }
+        const hint = payeeByName.get(txn.payee.trim())?.transferAccountId;
+        if (hint && hint !== account_id && !txn.category_id) await setTransferHint(client, budget_id, inserted, hint);
         imported += 1;
         unclearedDelta += milliunits;
       }
@@ -348,10 +359,11 @@ export const operations = [
       }
       // Reverse the row's effect — except a pending upcoming
       // occurrence, whose balance delta was withheld and so has nothing to undo.
-      // Deleting one side of a transfer deletes the other; its reversal is
-      // server-derived like every mirror delta.
+      // Deleting one side of a transfer takes the other out of the pair: a
+      // hand-made mirror is deleted (its reversal is server-derived like every
+      // mirror delta); a bank row the matcher linked is restored, never deleted.
       const mirrorDeltas = deleted.transfer_transaction_id
-        ? await deleteMirror(client, budgetId, deleted.transfer_transaction_id)
+        ? await removeMirror(client, budgetId, id, deleted.transfer_transaction_id)
         : [];
       await applyBalanceDeltas(client, budgetId, [
         ...(deleted.upcoming ? [] : deriveDeltas(deleted, null)),

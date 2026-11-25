@@ -242,13 +242,16 @@ export async function copyBudgetForFreshStart(client: Queryable, oldId: string, 
      SELECT t.id AS old_id, gen_random_uuid() AS new_id,
             t.date, t.amount, t.payee_id, t.category_id, t.memo,
             t.cleared, t.approved, t.flag_color, t.flag_name,
-            t.transfer_account_id,
+            COALESCE(t.transfer_account_id, peer.account_id) AS transfer_account_id,
             t.import_id, t.import_payee_name, t.import_payee_name_original,
             t.debt_transaction_type, t.repeat,
-            acc.new AS new_account_id
+            acc.new AS new_account_id,
+            (a_old.on_budget AND COALESCE(pa.on_budget, false)) AS internal_transfer
        FROM transactions t
        JOIN acc_map acc ON acc.old = t.account_id
        JOIN accounts a_old ON a_old.id = acc.old
+       LEFT JOIN transactions peer ON peer.id = t.transfer_transaction_id AND peer.budget_id = t.budget_id
+       LEFT JOIN accounts pa ON pa.id = COALESCE(t.transfer_account_id, peer.account_id)
       WHERE t.budget_id = $1 AND NOT t.deleted
         AND NOT t.upcoming
         AND t.date <= current_date
@@ -260,7 +263,8 @@ export async function copyBudgetForFreshStart(client: Queryable, oldId: string, 
         transfer_account_id, transfer_transaction_id,
         import_id, import_payee_name, import_payee_name_original,
         debt_transaction_type, matched_transaction_id, repeat, deleted)
-     SELECT s.new_id, $2, s.new_account_id, s.date, s.amount, pay.new, cat.new, s.memo,
+     SELECT s.new_id, $2, s.new_account_id, s.date, s.amount, pay.new,
+            CASE WHEN s.internal_transfer THEN NULL ELSE cat.new END, s.memo,
             s.cleared, s.approved, s.flag_color, s.flag_name,
             acc2.new, NULL,
             s.import_id, s.import_payee_name, s.import_payee_name_original,
@@ -273,6 +277,23 @@ export async function copyBudgetForFreshStart(client: Queryable, oldId: string, 
    INSERT INTO txn_map SELECT old_id, new_id FROM src`,
     [oldId, newId],
   );
+  // Transfers are copied COMPLETE. The other leg of a copied transfer lives in
+  // another account: when that account is not one of the carried (linked) ones,
+  // its leg is copied too, so the pair stays a pair, and the account's balance is
+  // the sum of what it was given (an unlinked account carries nothing else).
+  await copyTransferMirrors(client, oldId, newId, { upcoming: false });
+  await client.query(
+    `UPDATE accounts a SET cleared_balance = COALESCE(s.cleared, 0), uncleared_balance = COALESCE(s.uncleared, 0)
+       FROM (SELECT t.account_id,
+                    SUM(CASE WHEN t.cleared <> 'uncleared' THEN t.amount ELSE 0 END) AS cleared,
+                    SUM(CASE WHEN t.cleared = 'uncleared' THEN t.amount ELSE 0 END) AS uncleared
+               FROM transactions t JOIN txn_map tm ON tm.new = t.id
+              WHERE t.budget_id = $1 AND NOT t.deleted AND NOT t.upcoming
+              GROUP BY t.account_id) s
+      WHERE a.id = s.account_id AND a.budget_id = $1 AND NOT a.direct_import_linked`,
+    [newId],
+  );
+
   // Split legs follow their parents through the txn map.
   await client.query(
     `INSERT INTO subtransactions
@@ -316,19 +337,42 @@ export async function copyBudgetForFreshStart(client: Queryable, oldId: string, 
     [oldId, newId],
   );
   await client.query(
-    `INSERT INTO transactions
-     (budget_id, account_id, date, amount, payee_id, category_id, memo,
-      cleared, approved, repeat, repeat_rule_id, occurrence_date, upcoming, deleted)
-   SELECT $2, acc.new, t_old.date, t_old.amount, pay.new, cat.new, t_old.memo,
-          'uncleared', true, t_old.repeat, rmap.new, t_old.occurrence_date, true, false
-     FROM transactions t_old
-     JOIN txn_repeat_rules r_old ON r_old.id = t_old.repeat_rule_id
-     JOIN rule_map rmap ON rmap.old = r_old.id
-     JOIN acc_map acc ON acc.old = t_old.account_id
-     LEFT JOIN pay_map pay ON pay.old = t_old.payee_id
-     LEFT JOIN cat_map cat ON cat.old = t_old.category_id
-    WHERE t_old.budget_id = $1 AND t_old.upcoming AND NOT t_old.deleted`,
+    `WITH src AS (
+     SELECT t_old.id AS old_id, gen_random_uuid() AS new_id, acc.new AS new_account_id, t_old.date, t_old.amount,
+            pay.new AS new_payee_id,
+            CASE WHEN a_old.on_budget AND COALESCE(pa.on_budget, false) THEN NULL ELSE cat.new END AS new_category_id,
+            t_old.memo, t_old.repeat, rmap.new AS new_rule_id, t_old.occurrence_date,
+            COALESCE(t_old.transfer_account_id, peer.account_id) AS old_peer_account_id
+       FROM transactions t_old
+       JOIN txn_repeat_rules r_old ON r_old.id = t_old.repeat_rule_id
+       JOIN rule_map rmap ON rmap.old = r_old.id
+       JOIN acc_map acc ON acc.old = t_old.account_id
+       JOIN accounts a_old ON a_old.id = t_old.account_id
+       LEFT JOIN transactions peer ON peer.id = t_old.transfer_transaction_id AND peer.budget_id = t_old.budget_id
+       LEFT JOIN accounts pa ON pa.id = COALESCE(t_old.transfer_account_id, peer.account_id)
+       LEFT JOIN pay_map pay ON pay.old = t_old.payee_id
+       LEFT JOIN cat_map cat ON cat.old = t_old.category_id
+      WHERE t_old.budget_id = $1 AND t_old.upcoming AND NOT t_old.deleted
+   ), ins AS (
+     INSERT INTO transactions
+     (id, budget_id, account_id, date, amount, payee_id, category_id, memo,
+      cleared, approved, repeat, repeat_rule_id, occurrence_date, upcoming, deleted, transfer_account_id)
+     SELECT s.new_id, $2, s.new_account_id, s.date, s.amount, s.new_payee_id, s.new_category_id, s.memo,
+            'uncleared', true, s.repeat, s.new_rule_id, s.occurrence_date, true, false, acc2.new
+       FROM src s
+       LEFT JOIN acc_map acc2 ON acc2.old = s.old_peer_account_id
+   )
+   INSERT INTO txn_map SELECT old_id, new_id FROM src`,
     [oldId, newId],
+  );
+  // The pending mirrors of transfer occurrences (no rule of their own) follow them.
+  await copyTransferMirrors(client, oldId, newId, { upcoming: true });
+  // Every copied transfer row points at its copied peer, both ways.
+  await client.query(
+    `UPDATE transactions n SET transfer_transaction_id = pm.new, transfer_account_id = pn.account_id
+       FROM txn_map nm, transactions o, txn_map pm, transactions pn
+      WHERE n.budget_id = $1 AND nm.new = n.id AND o.id = nm.old AND o.transfer_transaction_id = pm.old AND pn.id = pm.new`,
+    [newId],
   );
 
   // ---- targets, notes, payee pointers (assignments reset — YNAB parity).
@@ -429,4 +473,41 @@ export async function deleteOwnedBudget(db: Queryable, id: string, user: Caller)
 export async function getBudgetRevision(db: Queryable, budgetId: string): Promise<string | undefined> {
   const r = await db.query<{ revision: string }>('SELECT revision FROM public.budgets WHERE id = $1', [budgetId]);
   return r.rows[0]?.revision;
+}
+
+/**
+ * Copy the peer rows of already copied transfer rows that were not themselves
+ * copied (their account is not a carried one), into the same new accounts.
+ * `upcoming` selects the pending mirrors of transfer occurrences (no category,
+ * no rule) instead of the entered ones. Uses the temp maps of
+ * `copyBudgetForFreshStart`; the pointers are written by the caller afterwards.
+ */
+async function copyTransferMirrors(client: Queryable, oldId: string, newId: string, opts: { upcoming: boolean }): Promise<void> {
+  await client.query(
+    `WITH src AS (
+     SELECT m.id AS old_id, gen_random_uuid() AS new_id, acc.new AS new_account_id, acc2.new AS new_peer_account_id,
+            m.date, m.amount, pay.new AS new_payee_id, m.memo, m.cleared, m.approved, m.flag_color, m.flag_name,
+            m.import_id, m.import_payee_name, m.import_payee_name_original, m.debt_transaction_type, m.repeat
+       FROM transactions o
+       JOIN txn_map om ON om.old = o.id
+       JOIN transactions m ON m.id = o.transfer_transaction_id AND m.budget_id = o.budget_id AND NOT m.deleted
+                          AND m.upcoming = $3 AND ($3 OR m.date <= current_date)
+       JOIN acc_map acc ON acc.old = m.account_id
+       JOIN acc_map acc2 ON acc2.old = o.account_id
+       LEFT JOIN pay_map pay ON pay.old = m.payee_id
+      WHERE o.budget_id = $1 AND NOT EXISTS (SELECT 1 FROM txn_map x WHERE x.old = m.id)
+   ), ins AS (
+     INSERT INTO transactions
+       (id, budget_id, account_id, date, amount, payee_id, category_id, memo, cleared, approved, flag_color, flag_name,
+        transfer_account_id, transfer_transaction_id, import_id, import_payee_name, import_payee_name_original,
+        debt_transaction_type, matched_transaction_id, repeat, upcoming, deleted)
+     SELECT s.new_id, $2, s.new_account_id, s.date, s.amount, s.new_payee_id, NULL, s.memo,
+            CASE WHEN $3 THEN 'uncleared' ELSE s.cleared END, s.approved, s.flag_color, s.flag_name,
+            s.new_peer_account_id, NULL, s.import_id, s.import_payee_name, s.import_payee_name_original,
+            s.debt_transaction_type, NULL, s.repeat, $3, false
+       FROM src s
+   )
+   INSERT INTO txn_map SELECT old_id, new_id FROM src`,
+    [oldId, newId, opts.upcoming],
+  );
 }

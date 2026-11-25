@@ -78,6 +78,7 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0116_categorize_decision_kind.sql': ['column:public.categorize_decisions.kind', 'column:public.categorize_decisions.category_id'],
   '0117_transfer_payee_account_idx.sql': 'index:public.payees_transfer_account_idx',
   '0118_transfer_payee_former_names.sql': 'table:public.transfer_payee_former_names',
+  '0119_transfer_hints.sql': 'table:public.transfer_hints',
 };
 
 /**

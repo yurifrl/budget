@@ -419,7 +419,14 @@ describe.skipIf(!dbReady)('repair: one canonical payee per account, report first
     const planned = await repair(d.b, false);
     const applied = await repair(d.b, true);
     expect(applied.applied).toBe(true);
-    expect({ ...applied, applied: false }).toEqual(planned);
+    // The report is the plan it executed. The half-linked rows are read where the run
+    // stands: a payee-only row of a folded name-only payee only shows up once the payee is
+    // linked, so that part is compared separately (a leg without any other side is
+    // reported, not created, and the second run lists it again).
+    expect({ ...applied, applied: false, half_linked: planned.half_linked }).toEqual(planned);
+    expect(planned.half_linked.needs_mirror).toBe(3);
+    expect(applied.half_linked.needs_mirror).toBe(4);
+    expect(applied.half_linked.mirrors_created).toBe(0);
 
     // One: the pointed payee ("Rep Old") survives, renamed; the later one is gone and its rows moved.
     expect(await expectOneTransferPayee(d.one, 'Transfer : Rep One')).toBe(d.oldPayee);
@@ -760,9 +767,18 @@ describe.skipIf(!dbReady)('ordinary requests never repair: they use bad data as 
     const before = { payees: await payeeState(b), accounts: await pointers(b) };
 
     await createTransfer(b, src, 'Transfer : Bad Retired');
-    await createTransfer(b, src, 'Transfer : Bad Stolen');
-
     expect({ payees: await payeeState(b), accounts: await pointers(b) }).toEqual(before);
+
+    // An account whose pointer names ANOTHER account's payee never hands that payee out: the
+    // mirror and the leg get a payee that points at THIS account (the one that exists, else a
+    // new one), and the other account's payee is untouched.
+    const t = await createTransfer(b, src, 'Transfer : Bad Stolen');
+    const stolenPayee = t.body!.payee_id;
+    expect(stolenPayee).not.toBe(otherPayee);
+    expect((await pool!.query('SELECT transfer_account_id FROM payees WHERE id = $1', [stolenPayee])).rows[0].transfer_account_id).toBe(stolen);
+    const mirror = (await pool!.query('SELECT payee_id FROM transactions WHERE account_id = $1', [stolen])).rows[0];
+    expect(mirror.payee_id).toBe((await pool!.query('SELECT transfer_payee_id FROM accounts WHERE id = $1', [src])).rows[0].transfer_payee_id);
+    expect((await pool!.query('SELECT transfer_account_id FROM payees WHERE id = $1', [otherPayee])).rows[0].transfer_account_id).toBe(other);
   });
 
   test('an account whose payee is missing gets one created, and nothing else changes', async () => {
@@ -809,11 +825,18 @@ describe.skipIf(!dbReady)('the same text resolution on import, bank sync and rep
       ],
     });
     expect(res.status, await res.clone().text()).toBe(201);
-    const payees = (await pool!.query<{ amount: number; payee_id: string }>(
-      'SELECT amount::int AS amount, payee_id FROM transactions WHERE account_id = $1 ORDER BY date',
+    // The text is resolved to the right account, but an import never stores the transfer payee
+    // without a transfer behind it: the rows stay ordinary and carry the account as a hint.
+    const rows = (await pool!.query<{ payee_id: string | null; account_id: string | null; name: string | null }>(
+      `SELECT t.payee_id, h.account_id, p.name FROM transactions t
+       LEFT JOIN transfer_hints h ON h.transaction_id = t.id LEFT JOIN payees p ON p.id = t.payee_id
+       WHERE t.account_id = $1 ORDER BY t.date`,
       [target],
-    )).rows.map((r) => r.payee_id);
-    expect(payees).toEqual([olderPayee, olderPayee, newerPayee]);
+    )).rows;
+    expect(rows.map((r) => r.account_id)).toEqual([older, older, newer]);
+    expect(rows.map((r) => r.payee_id)).not.toContain(olderPayee);
+    expect(rows.map((r) => r.payee_id)).not.toContain(newerPayee);
+    expect(rows.map((r) => r.name)).toEqual([null, 'PIX IMP OLDER', null]);
     // No ordinary payee called "Transfer : Imp Twin" was created next to the system ones.
     expect((await pool!.query("SELECT count(*)::int AS n FROM payees WHERE budget_id = $1 AND name LIKE 'Transfer : Imp Twin%'", [b])).rows[0].n).toBe(2);
   });
@@ -826,11 +849,18 @@ describe.skipIf(!dbReady)('the same text resolution on import, bank sync and rep
     const { withTransaction } = await import('../../core/db');
     await withTransaction(pool!, async (client) => {
       const resolver = createImportPayeeResolver(client, b);
-      expect((await resolver.resolve('Transfer : Sync Dst')).id).toBe((await accountPointer(dst))!);
-      const legacyId = (await resolver.resolve('Transfer : Sync Legacy')).id;
+      // The text names the account (the same account as in the register), but the stored payee is never its transfer payee.
+      const toDst = await resolver.resolve('Transfer : Sync Dst');
+      expect(toDst).toEqual({ id: null, name: '', transferAccountId: dst });
+      const toLegacy = await resolver.resolve('Transfer : Sync Legacy');
+      expect(toLegacy.transferAccountId).toBe(legacy);
+      expect(toLegacy.id).toBeNull();
+      // Resolving made sure the legacy account has its transfer payee.
       const pointer = (await client.query<{ transfer_payee_id: string | null }>('SELECT transfer_payee_id FROM accounts WHERE id = $1', [legacy])).rows[0]!.transfer_payee_id;
-      expect(legacyId).toBe(pointer!);
-      expect((await resolver.resolve('Corner Shop')).id).not.toBe((await accountPointer(dst))!);
+      expect(pointer).not.toBeNull();
+      const shop = await resolver.resolve('Corner Shop');
+      expect(shop.id).not.toBeNull();
+      expect(shop.transferAccountId).toBeNull();
     });
   });
 

@@ -90,10 +90,10 @@ export interface BulkImportRow {
 
 /**
  * Statement-import (/bulk) row: uncleared, unapproved, deduped on the live
- * (account_id, import_id) index. Returns false when the import_id already
- * exists (DO NOTHING).
+ * (account_id, import_id) index. Returns the new id, or null when the import_id
+ * already exists (DO NOTHING).
  */
-export async function insertBulkImportRow(db: Queryable, r: BulkImportRow): Promise<boolean> {
+export async function insertBulkImportRow(db: Queryable, r: BulkImportRow): Promise<string | null> {
   const inserted = await db.query<{ id: string }>(
     `INSERT INTO transactions
           (budget_id, account_id, date, amount, payee_id, category_id, memo, cleared, approved,
@@ -115,7 +115,7 @@ export async function insertBulkImportRow(db: Queryable, r: BulkImportRow): Prom
       r.importPayeeNameOriginal,
     ],
   );
-  return inserted.rowCount !== 0;
+  return inserted.rows[0]?.id ?? null;
 }
 
 /** The fields an edit needs from the live row it edits (scoped to the budget). */

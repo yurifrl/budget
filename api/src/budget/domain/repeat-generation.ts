@@ -5,14 +5,18 @@
  * occurrence date passes. The (rule_id, occurrence_date) unique partial index
  * makes it idempotent — safe on every app load and on a periodic tick.
  */
+import type { PoolClient } from 'pg';
+
 import { pool, withTransaction } from '../../core/db';
 import { applyBalanceDeltas } from './transactions';
+import { findTransferPeer, insertMirror } from './transfers';
 import { advanceOccurrence } from './repeat-schedule';
 import {
   budgetsWithLiveRules,
   flipPassedUpcoming,
   insertUpcomingOccurrence,
   listLiveRulesForGeneration,
+  type LiveRepeatRule,
   setRuleNextDue,
 } from '../store/repeat-rules';
 
@@ -22,6 +26,32 @@ const HORIZON_MONTHS = 3;
 export interface GenerationResult {
   flipped: number;
   created: number;
+}
+
+/**
+ * Materialize one occurrence. A rule whose payee is an account's transfer payee
+ * writes a COMPLETE transfer: the occurrence and its mirror in the peer account
+ * (both pointers on both legs, each leg's payee the other account's transfer
+ * payee, no category between two on-budget accounts), both upcoming so the
+ * balance is withheld from both until the date passes. A transfer payee whose
+ * account cannot receive one (the rule's own account, a closed or deleted
+ * account) writes nothing: a payee-only half transfer is never created.
+ */
+async function materialize(client: PoolClient, budgetId: string, rule: LiveRepeatRule, date: string): Promise<boolean> {
+  const found = await findTransferPeer(client, budgetId, rule.payee_id, rule.account_id);
+  if (found.kind === 'invalid') return false;
+  const peer = found.kind === 'peer' ? found.peer : null;
+  const id = await insertUpcomingOccurrence(client, budgetId, rule, date, peer?.internal ? null : rule.category_id);
+  if (!id) return false;
+  if (peer) {
+    await insertMirror(
+      client,
+      budgetId,
+      { id, account_id: rule.account_id, date, memo: rule.memo, amount: rule.amount, cleared: 'uncleared', approved: true, upcoming: true },
+      peer.accountId,
+    );
+  }
+  return true;
 }
 
 /**
@@ -65,9 +95,7 @@ export async function generateDueOccurrences(budgetId: string): Promise<Generati
       // Cap guards against a pathological rule spinning the loop; 400
       // iterations cover every frequency over the 3-month window.
       for (let i = 0; next <= horizon && i < 400; i++) {
-        if (next >= today) {
-          if (await insertUpcomingOccurrence(client, budgetId, rule, next)) created += 1;
-        }
+        if (next >= today && (await materialize(client, budgetId, rule, next))) created += 1;
         next = advanceOccurrence(next, rule.frequency, rule.month_last_day);
       }
       if (next !== rule.next_due_date) {

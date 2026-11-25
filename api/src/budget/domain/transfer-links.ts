@@ -25,6 +25,7 @@ import { bankKey } from './bank-key';
 import { applyBalanceDeltas, type BalanceDelta } from './transactions';
 import { deleteMirror, ensureTransferPayee, insertMirror } from './transfers';
 import {
+  MAX_TRANSFER_DAYS_APART,
   daysApart,
   evidenceLabel,
   pairViolation,
@@ -72,6 +73,7 @@ function toMatchRow(r: store.TransferCandidateSql, hint: ImportHint | undefined)
     mark: r.mark,
     bank: bankKey(r.institution),
     connectionId: r.connection_id,
+    hintAccountId: r.hint_account_id,
   };
 }
 
@@ -136,6 +138,61 @@ async function linkLegs(
   }
   await blockImportShadows(client, [out.id, inn.id]);
   await store.setTransferMarks(client, budgetId, [out.id, inn.id], null);
+  await store.clearTransferHints(client, budgetId, [out.id, inn.id]);
+}
+
+/**
+ * A transfer entered by hand has a hand-made mirror in the other account (no
+ * import id, no bank shadow). When the bank later imports the REAL other side
+ * (same account, same signed amount, within MAX_TRANSFER_DAYS_APART), keeping
+ * both would count the money twice: the imported row replaces the mirror. The
+ * hand-made row is soft-deleted (its balance reversed, so the account ends where
+ * it would be had only the bank row ever existed), the imported row takes its
+ * place in the pair (both pointers on both legs, the peer account's transfer
+ * payee, no category, shadow frozen) and gets a link record, so unlinking it
+ * later restores it. A leg of the pair with its own link record keeps it,
+ * pointed at the new row. Nothing is created: only what already pairs is joined.
+ * Closest date first; a row is used once; repeated until nothing more adopts
+ * (a pair of two hand-made rows can be replaced by both bank sides in turn).
+ * Idempotent: with nothing hand-made left it reads and writes nothing.
+ */
+async function adoptHandMadeMirrors(client: PoolClient, budgetId: string): Promise<number> {
+  let adopted = 0;
+  for (let pass = 0; pass < 10; pass++) {
+    const used = new Set<string>();
+    const deltas: BalanceDelta[] = [];
+    let applied = 0;
+    for (const pair of await store.listAdoptablePairs(client, budgetId, MAX_TRANSFER_DAYS_APART)) {
+      if (used.has(pair.hand_id) || used.has(pair.bank_id) || used.has(pair.peer_id)) continue;
+      used.add(pair.hand_id).add(pair.bank_id).add(pair.peer_id);
+      const [bank] = await store.getTransferRows(client, budgetId, [pair.bank_id]);
+      if (!bank) continue;
+      const hints = await listImportHints(client, [bank.id]);
+      const peerPayee = await ensureTransferPayee(client, budgetId, pair.peer_account_id);
+      await store.writeTransferLeg(client, bank.id, pair.peer_account_id, pair.peer_id, peerPayee);
+      await store.repointPeerLeg(client, pair.peer_id, bank.account_id, bank.id);
+      await store.insertTransferLink(client, budgetId, {
+        transaction_id: bank.id,
+        peer_transaction_id: pair.peer_id,
+        method: 'auto',
+        prev_payee_id: bank.payee_id,
+        prev_category_id: bank.category_id,
+        prev_blocked: hints.get(bank.id)?.blocked ?? null,
+        created_mirror: false,
+      });
+      await store.repointTransferLinkPeer(client, budgetId, pair.peer_id, pair.hand_id, bank.id);
+      await store.deleteTransferLinks(client, budgetId, [pair.hand_id]);
+      deltas.push(...(await deleteMirror(client, budgetId, pair.hand_id)));
+      await blockImportShadows(client, [bank.id]);
+      await store.setTransferMarks(client, budgetId, [bank.id], null);
+      await store.clearTransferHints(client, budgetId, [bank.id]);
+      applied += 1;
+    }
+    if (deltas.length > 0) await applyBalanceDeltas(client, budgetId, deltas);
+    adopted += applied;
+    if (applied === 0) break;
+  }
+  return adopted;
 }
 
 /**
@@ -143,11 +200,14 @@ async function linkLegs(
  * return how many pairs were linked. Call inside the caller's transaction.
  */
 export async function linkTransfers(client: PoolClient, budgetId: string, today: string = todayIso()): Promise<number> {
+  // Hand-made mirrors first: a bank row that is the real other side of one joins
+  // that pair, so it is not left for the matcher to pair with something else.
+  const adopted = await adoptHandMadeMirrors(client, budgetId);
   const { byId, hints, plan } = await loadContext(client, budgetId, today);
   for (const link of plan.links) {
     await linkLegs(client, budgetId, byId.get(link.outflowId)!, byId.get(link.inflowId)!, link.method, (id) => hints.get(id)?.blocked ?? null);
   }
-  return plan.links.length;
+  return plan.links.length + adopted;
 }
 
 /** What the register list needs per row: suggestion summary, pending state, who linked it. */
@@ -285,6 +345,7 @@ export async function linkByUser(
         });
         await blockImportShadows(client, [row.id]);
         await store.setTransferMarks(client, budgetId, [row.id], null);
+        await store.clearTransferHints(client, budgetId, [row.id]);
         deltas.push(...mirror.deltas);
         linked.push(row.id, mirror.mirrorId);
         continue;

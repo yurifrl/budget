@@ -11,8 +11,12 @@
  * here.
  */
 import type { PoolClient } from 'pg';
+import type { Queryable } from '../../core/db';
+import { setImportShadowsBlocked } from '../../connections';
 import { HttpError } from '../../core/validate';
-import { deriveDeltas, type BalanceDelta } from './transactions';
+import * as payeeStore from '../store/transfer-payees';
+import * as store from '../store/transfers';
+import { deriveDeltas, upsertPayee, type BalanceDelta } from './transactions';
 import { ensureTransferPayee } from './transfer-payees';
 
 /** The row facts a mirror is derived from (amount in milliunits). */
@@ -24,6 +28,8 @@ export interface TransferLeg {
   amount: string | number;
   cleared: 'cleared' | 'uncleared' | 'reconciled';
   approved: boolean;
+  /** A pending occurrence of a repeat rule: its balance delta is withheld, and so is its mirror's. */
+  upcoming?: boolean;
 }
 
 /** Both legs of an on-budget <-> on-budget transfer stay inside the budget: no category. */
@@ -75,6 +81,36 @@ export async function resolveTransferPeer(
   };
 }
 
+/**
+ * The peer a transfer payee leads to for a row that is not being written by a
+ * person (repeat-rule generation): null for an ordinary payee AND for a transfer
+ * payee whose account cannot receive a transfer now (the row's own account, a
+ * deleted or closed account), where the caller skips the row.
+ */
+export async function findTransferPeer(
+  client: PoolClient,
+  budgetId: string,
+  payeeId: string | null,
+  ownAccountId: string,
+): Promise<{ kind: 'none' } | { kind: 'invalid' } | { kind: 'peer'; peer: TransferPeer }> {
+  if (!payeeId) return { kind: 'none' };
+  const payee = await client.query<{ transfer_account_id: string | null }>(
+    'SELECT transfer_account_id FROM payees WHERE id = $1 AND budget_id = $2',
+    [payeeId, budgetId],
+  );
+  const peerId = payee.rows[0]?.transfer_account_id;
+  if (!peerId) return { kind: 'none' };
+  if (peerId === ownAccountId) return { kind: 'invalid' };
+  const accounts = await client.query<{ id: string; on_budget: boolean; closed: boolean }>(
+    'SELECT id, on_budget, closed FROM accounts WHERE id = ANY($1) AND budget_id = $2 AND deleted = false',
+    [[peerId, ownAccountId], budgetId],
+  );
+  const peer = accounts.rows.find((a) => a.id === peerId);
+  const own = accounts.rows.find((a) => a.id === ownAccountId);
+  if (!peer || !own || peer.closed) return { kind: 'invalid' };
+  return { kind: 'peer', peer: { accountId: peerId, onBudget: peer.on_budget, internal: peer.on_budget && own.on_budget } };
+}
+
 /** The ledger state `deriveDeltas` needs, from a leg. */
 const ledger = (leg: Pick<TransferLeg, 'account_id' | 'amount' | 'cleared'>) => ({
   account_id: leg.account_id,
@@ -87,7 +123,7 @@ const ledger = (leg: Pick<TransferLeg, 'account_id' | 'amount' | 'cleared'>) => 
  * mirror's balance deltas (to be applied by the caller, with the leg's own).
  */
 export async function insertMirror(
-  client: PoolClient,
+  client: Queryable,
   budgetId: string,
   leg: TransferLeg,
   peerAccountId: string,
@@ -98,8 +134,8 @@ export async function insertMirror(
   const inserted = await client.query<{ id: string }>(
     `INSERT INTO transactions
       (budget_id, account_id, date, amount, payee_id, category_id, memo, cleared, approved, repeat, deleted,
-       transfer_account_id, transfer_transaction_id)
-     VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, 'never', false, $9, $10)
+       transfer_account_id, transfer_transaction_id, upcoming)
+     VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, 'never', false, $9, $10, $11)
      RETURNING id`,
     [
       budgetId,
@@ -112,6 +148,7 @@ export async function insertMirror(
       leg.approved,
       leg.account_id,
       leg.id,
+      leg.upcoming === true,
     ],
   );
   const mirrorId = inserted.rows[0].id;
@@ -122,26 +159,92 @@ export async function insertMirror(
   ]);
   return {
     mirrorId,
-    deltas: deriveDeltas(
-      null,
-      ledger({
-        account_id: peerAccountId,
-        amount: mirrorAmount,
-        cleared: leg.cleared,
-      }),
-    ),
+    // A pending occurrence withholds its balance delta (applied when it flips): so does its mirror.
+    deltas: leg.upcoming
+      ? []
+      : deriveDeltas(
+          null,
+          ledger({
+            account_id: peerAccountId,
+            amount: mirrorAmount,
+            cleared: leg.cleared,
+          }),
+        ),
   };
 }
 
 /** Soft-delete a mirror row; returns the deltas that take its amount back out of its account. */
-export async function deleteMirror(client: PoolClient, budgetId: string, mirrorId: string): Promise<BalanceDelta[]> {
+export async function deleteMirror(client: Queryable, budgetId: string, mirrorId: string): Promise<BalanceDelta[]> {
   const res = await client.query<TransferLeg>(
     `UPDATE transactions SET deleted = true, transfer_transaction_id = NULL
      WHERE id = $1 AND budget_id = $2 AND deleted = false
-     RETURNING id, account_id, date::text AS date, memo, amount, cleared, approved`,
+     RETURNING id, account_id, date::text AS date, memo, amount, cleared, approved, upcoming`,
     [mirrorId, budgetId],
   );
-  return res.rows[0] ? deriveDeltas(ledger(res.rows[0]), null) : [];
+  const row = res.rows[0];
+  return row && !row.upcoming ? deriveDeltas(ledger(row), null) : [];
+}
+
+/**
+ * A transfer leg stops being a transfer (its payee was edited to an ordinary
+ * one, it moved to another peer, or it was deleted): take its mirror out of
+ * the pair. Returns the balance deltas of the mirror's removal.
+ *
+ *  - a mirror THE SYSTEM OR A PERSON LINKED from a bank row (a `transfer_links`
+ *    record with `created_mirror = false`) is NEVER deleted: it is restored to
+ *    what it was before the link, exactly as POST /transfers/unlink does (its
+ *    previous payee and category, the sync shadow unblocked when it was not
+ *    blocked before, marked "manual" so it is suggested but not re-linked on
+ *    its own). Its bank id stays live, so a later sync neither skips nor
+ *    duplicates it, and no balance moves;
+ *  - any other row that came from an import (`import_id` set, no usable
+ *    record: restored data, rows linked before records existed) gets the same
+ *    treatment with the payee its import name stands for;
+ *  - a hand-made mirror (register / "Other account..." link: no import id) is
+ *    soft-deleted and its balance reversed.
+ * The link records of both legs are dropped (the pair no longer exists).
+ */
+export async function removeMirror(client: Queryable, budgetId: string, legId: string, mirrorId: string): Promise<BalanceDelta[]> {
+  const mirror = await store.getMirrorFacts(client, budgetId, mirrorId);
+  if (!mirror) {
+    await store.deleteTransferLinks(client, budgetId, [legId, mirrorId]);
+    return [];
+  }
+  const record = await store.getTransferLink(client, budgetId, mirrorId);
+  const own = record && record.peer_transaction_id === legId ? record : undefined;
+  let deltas: BalanceDelta[] = [];
+  if (own && !own.created_mirror) {
+    await store.restoreUnlinkedLeg(client, mirrorId, {
+      payeeId: await usablePayee(client, budgetId, own.prev_payee_id),
+      categoryId: own.prev_category_id,
+    });
+    if (own.prev_blocked === false) await setImportShadowsBlocked(client, [mirrorId], false);
+    await store.setTransferMarks(client, budgetId, [mirrorId], 'manual');
+  } else if (!own && mirror.import_id !== null) {
+    await store.restoreUnlinkedLeg(client, mirrorId, { payeeId: await ordinaryPayeeOfImport(client, budgetId, mirror.import_payee_name), categoryId: null });
+    await store.setTransferMarks(client, budgetId, [mirrorId], 'manual');
+  } else {
+    deltas = await deleteMirror(client, budgetId, mirrorId);
+  }
+  await store.deleteTransferLinks(client, budgetId, [legId, mirrorId]);
+  await store.clearTransferHints(client, budgetId, [mirrorId]);
+  return deltas;
+}
+
+/** A recorded previous payee, when it still exists as an ordinary live payee of the budget. */
+async function usablePayee(client: Queryable, budgetId: string, payeeId: string | null): Promise<string | null> {
+  if (!payeeId) return null;
+  const row = await payeeStore.getPayeeRow(client, budgetId, payeeId);
+  return row && !row.deleted && !row.transfer_account_id ? row.id : null;
+}
+
+/** The ordinary payee an import's payee text names (created when new); null when blank or when the name belongs to a transfer payee. */
+async function ordinaryPayeeOfImport(client: Queryable, budgetId: string, importName: string | null): Promise<string | null> {
+  const name = importName?.trim();
+  if (!name) return null;
+  const holder = await payeeStore.findPayeeRowByName(client, budgetId, name);
+  if (!holder) return upsertPayee(client, budgetId, name);
+  return !holder.deleted && !holder.transfer_account_id ? holder.id : null;
 }
 
 /**
@@ -157,7 +260,7 @@ export async function syncMirror(
   requestedPeerId: string | null | undefined,
 ): Promise<BalanceDelta[]> {
   const rowRes = await client.query<TransferLeg & { transfer_transaction_id: string | null }>(
-    `SELECT id, account_id, date::text AS date, memo, amount, cleared, approved, transfer_transaction_id
+    `SELECT id, account_id, date::text AS date, memo, amount, cleared, approved, upcoming, transfer_transaction_id
      FROM transactions WHERE id = $1 AND budget_id = $2`,
     [txnId, budgetId],
   );
@@ -166,7 +269,7 @@ export async function syncMirror(
   const mirrorId = row.transfer_transaction_id;
   const mirrorRes = mirrorId
     ? await client.query<TransferLeg>(
-        `SELECT id, account_id, date::text AS date, memo, amount, cleared, approved
+        `SELECT id, account_id, date::text AS date, memo, amount, cleared, approved, upcoming
          FROM transactions WHERE id = $1 AND budget_id = $2 AND deleted = false`,
         [mirrorId, budgetId],
       )
@@ -196,10 +299,10 @@ export async function syncMirror(
       [row.date, row.memo, next.amount, payeeId, row.account_id, mirror.id],
     );
     await client.query('UPDATE transactions SET transfer_account_id = $1 WHERE id = $2', [peerAccountId, row.id]);
-    return deriveDeltas(ledger(mirror), ledger(next));
+    return mirror.upcoming ? [] : deriveDeltas(ledger(mirror), ledger(next));
   }
   const deltas: BalanceDelta[] = [];
-  if (mirror) deltas.push(...(await deleteMirror(client, budgetId, mirror.id)));
+  if (mirror) deltas.push(...(await removeMirror(client, budgetId, row.id, mirror.id)));
   if (peerAccountId) {
     deltas.push(...(await insertMirror(client, budgetId, row, peerAccountId)).deltas);
   } else {

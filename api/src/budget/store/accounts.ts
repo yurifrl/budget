@@ -288,11 +288,11 @@ export async function softDeleteAccountTransactions(db: Queryable, accountId: st
 }
 
 /** Retire repeat rules homed on the account or targeting its transfer payee. */
-export async function retireAccountRepeatRules(db: Queryable, accountId: string, transferPayeeId: string | null): Promise<void> {
+export async function retireAccountRepeatRules(db: Queryable, accountId: string, transferPayeeIds: readonly string[]): Promise<void> {
   await db.query(
     `UPDATE txn_repeat_rules SET deleted = true
-       WHERE deleted = false AND (account_id = $1 OR payee_id = $2)`,
-    [accountId, transferPayeeId],
+       WHERE deleted = false AND (account_id = $1 OR payee_id = ANY($2::uuid[]))`,
+    [accountId, transferPayeeIds],
   );
 }
 

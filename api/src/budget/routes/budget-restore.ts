@@ -199,13 +199,14 @@ export const operations = [
             ? await ensureTransferPayee(client, budgetId, accountIds[peerAccountIndex])
             : await payeeFor(txn.payee);
 
+        // Restored accounts are all on budget: a transfer leg carries no category.
         const categoryId =
-          txn.categoryIndex === null
+          txn.categoryIndex === null || txn.transferPeerIndex !== null
             ? null
             : matchedCategoryIds
               ? matchedCategoryIds[txn.categoryIndex]
               : categoryIds[txn.categoryIndex];
-        if (matchedCategoryIds && txn.categoryIndex !== null && categoryId === null) uncategorized++;
+        if (matchedCategoryIds && txn.categoryIndex !== null && txn.transferPeerIndex === null && categoryId === null) uncategorized++;
 
         const flag = txn.flag === '' ? null : txn.flag;
         await insertRestoredTransaction(client, {
@@ -228,7 +229,7 @@ export const operations = [
         if (transactions[peer].transferPeerIndex !== i) {
           throw new HttpError(400, `transaction ${i}: transferPeerIndex ${peer} is not mutual`, 'invalid_backup');
         }
-        await linkRestoredTransferPeer(client, txnIds[i], txnIds[peer]);
+        await linkRestoredTransferPeer(client, txnIds[i], txnIds[peer], accountIds[transactions[peer].accountIndex]);
       }
 
       // ---- assignments -------------------------------------------------------

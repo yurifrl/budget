@@ -25,6 +25,7 @@ const row = (over: Partial<MatchRow>): MatchRow => ({
   bank: null,
   connectionId: null,
   checking: true,
+  hintAccountId: null,
   ...over,
 });
 const out = (over: Partial<MatchRow> = {}) => row(over);

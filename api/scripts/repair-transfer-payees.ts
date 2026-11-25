@@ -5,6 +5,11 @@
  *
  *   DATABASE_URL=postgres://... bun scripts/repair-transfer-payees.ts --budget <uuid>          report only
  *   DATABASE_URL=postgres://... bun scripts/repair-transfer-payees.ts --budget <uuid> --apply  repair
+ *   ... --apply --create-mirrors   also create the missing other side of one-sided transfer legs
+ *                                  (moves the peer account's balance: only after reading the report)
+ *
+ * It also reports and repairs half-linked transfer rows (see
+ * src/budget/domain/transfer-link-repair.ts): `half_linked` in the output.
  *
  * The default is a READ-ONLY report (one READ ONLY transaction: it cannot
  * write, whatever the code does): it prints, as JSON, what --apply would
@@ -20,8 +25,9 @@ const args = process.argv.slice(2);
 const budgetIndex = args.indexOf('--budget');
 const budgetId = budgetIndex >= 0 ? args[budgetIndex + 1] : undefined;
 const apply = args.includes('--apply');
+const createMirrors = args.includes('--create-mirrors');
 if (!budgetId || !/^[0-9a-f-]{36}$/i.test(budgetId)) {
-  console.error('usage: bun scripts/repair-transfer-payees.ts --budget <uuid> [--apply]');
+  console.error('usage: bun scripts/repair-transfer-payees.ts --budget <uuid> [--apply [--create-mirrors]]');
   process.exit(2);
 }
 
@@ -30,7 +36,7 @@ const client = await pool.connect();
 let code = 0;
 try {
   await client.query(apply ? 'BEGIN' : 'BEGIN READ ONLY');
-  const report = await repairTransferPayees(client, budgetId, { apply });
+  const report = await repairTransferPayees(client, budgetId, { apply, createMirrors });
   await client.query(apply ? 'COMMIT' : 'ROLLBACK');
   console.log(JSON.stringify(report, null, 2));
 } catch (err) {

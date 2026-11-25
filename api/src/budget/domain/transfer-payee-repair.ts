@@ -32,6 +32,7 @@ import type { Queryable } from '../../core/db';
 import { TRANSFER_PAYEE_RE, transferPayeeName } from '@shared/domain/transfers';
 import * as store from '../store/transfer-payees';
 import type { AccountPayeeRow, PayeeFullRow } from '../store/transfer-payees';
+import { repairHalfLinkedTransfers, type HalfLinkedReport } from './transfer-link-repair';
 import { absorbPayee, createTransferPayee, isTransferPayeeNameFor, pickCanonical, renameTransferPayee } from './transfer-payees';
 
 export interface DroppedRule {
@@ -98,6 +99,12 @@ export interface TransferPayeeRepairReport {
    */
   kept_payees: KeptPayee[];
   actions: AccountRepairAction[];
+  /**
+   * Half-linked transfer rows (repeat rules, restores, budget copies, payee-only
+   * imports): completed or paired by `apply`; `needs_mirror` and `ambiguous` rows
+   * are only listed (see transfer-link-repair.ts).
+   */
+  half_linked: HalfLinkedReport;
 }
 
 export interface RepairInput {
@@ -157,6 +164,7 @@ export function planTransferPayeeRepair(input: RepairInput): TransferPayeeRepair
     dropped_rules: [],
     kept_payees: [],
     actions: [],
+    half_linked: { items: [], complete_pointers: 0, set_payee: 0, clear_category: 0, paired: 0, needs_mirror: 0, ambiguous: 0, mirrors_created: 0 },
   };
 
   for (const account of accounts) {
@@ -269,10 +277,10 @@ async function loadInput(db: Queryable, budgetId: string): Promise<RepairInput> 
 export async function repairTransferPayees(
   db: Queryable,
   budgetId: string,
-  opts: { apply: boolean },
+  opts: { apply: boolean; /** Also create the missing other side of one-sided transfer legs (moves the peer account's balance). */ createMirrors?: boolean },
 ): Promise<TransferPayeeRepairReport> {
   const report = planTransferPayeeRepair(await loadInput(db, budgetId));
-  if (!opts.apply) return report;
+  if (!opts.apply) return { ...report, half_linked: await repairHalfLinkedTransfers(db, budgetId, { apply: false }) };
   for (const action of report.actions) {
     if (action.canonical_payee_id === null) {
       const account = (await store.getAccountRow(db, action.account_id))!;
@@ -287,5 +295,7 @@ export async function repairTransferPayees(
     // Names last: the folded payees may have held the account's current name.
     if (action.rename) await renameTransferPayee(db, budgetId, action.account_id);
   }
-  return { ...report, applied: true };
+  // After the payees are right: rows that are only part of a transfer.
+  const half_linked = await repairHalfLinkedTransfers(db, budgetId, { apply: true, createMirrors: opts.createMirrors });
+  return { ...report, applied: true, half_linked };
 }
