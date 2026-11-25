@@ -332,6 +332,10 @@ describe('skipFailureKind', () => {
     expect(skipFailureKind({ status: 409, code: 'categorize_already_categorized' })).toBe('refused');
     expect(skipFailureKind({ status: 409, code: 'categorize_not_needing_category' })).toBe('refused');
     expect(skipFailureKind({ status: 500 })).toBe('retry');
+    expect(skipFailureKind({ status: 400 })).toBe('rejected');
+    expect(skipFailureKind({ status: 403 })).toBe('rejected');
+    expect(skipFailureKind({ status: 404 })).toBe('rejected');
+    expect(skipFailureKind({ status: 409, code: 'something_else' })).toBe('retry');
     expect(skipFailureKind({ status: 'FETCH_ERROR' })).toBe('retry');
     expect(skipFailureKind(null)).toBe('retry');
   });

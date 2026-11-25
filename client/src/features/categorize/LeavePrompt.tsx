@@ -31,6 +31,7 @@ export function CategorizeLeavePrompt() {
   const [sending, setSending] = useState(false);
   const [failedCount, setFailedCount] = useState(0);
   const [sentCount, setSentCount] = useState(0);
+  const [droppedCount, setDroppedCount] = useState(0);
   const budgets = useGetBudgetsQuery();
   const budgetName = budgets.data?.find((b) => b.id === held?.budgetId)?.name ?? '';
 
@@ -44,19 +45,23 @@ export function CategorizeLeavePrompt() {
   const sendAndLeave = async () => {
     if (!held || sending) return;
     setSending(true);
-    const { sent, failed } = await sendEntries(held.entries, (transactionId) =>
+    const { sent, dropped, retry } = await sendEntries(held.entries, (transactionId) =>
       dispatch(budgetApi.endpoints.skipCategorize.initiate({ budgetId: held.budgetId, transactionId })).unwrap(),
     );
     setSending(false);
-    setFailedCount(failed.length);
-    setSentCount((n) => n + sent.length);
-    // What was sent leaves the prompt and the page's strip; what could not be sent stays for another try.
-    leaveStore.settle('sent', sent.map((entry) => entry.item.transactionId));
+    setFailedCount(retry.length);
+    setDroppedCount(dropped.length);
+    // A full success starts the next failure line from zero.
+    setSentCount((n) => (retry.length === 0 ? 0 : n + sent.length));
+    // What was sent, and what the server refuses for good, leaves the prompt and the page's strip;
+    // only what may pass (network, 5xx) stays for another try.
+    leaveStore.settle('sent', [...sent, ...dropped].map((entry) => entry.item.transactionId));
   };
 
   const resetResult = () => {
     setFailedCount(0);
     setSentCount(0);
+    setDroppedCount(0);
   };
 
   const keepAndLeave = () => {
@@ -81,7 +86,11 @@ export function CategorizeLeavePrompt() {
       <Text style={styles.body}>{t('leave.body', { count, budget: budgetName })}</Text>
       {sending ? <Text style={styles.body}>{t('leave.sending')}</Text> : null}
       {failedCount > 0 && !sending ? (
-        <Text style={styles.error}>{t('leave.sendFailed', { count: failedCount, sent: sentCount })}</Text>
+        <Text style={styles.error}>
+          {sentCount > 0 ? `${t('leave.sentSoFar', { count: sentCount })} ` : ''}
+          {t('leave.sendFailed', { count: failedCount })}
+          {droppedCount > 0 ? ` ${t('leave.droppedNote', { count: droppedCount })}` : ''}
+        </Text>
       ) : null}
       <View style={styles.actions}>
         <GhostButton label={t('leave.stay')} onPress={stay} disabled={sending} />

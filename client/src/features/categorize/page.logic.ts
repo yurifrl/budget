@@ -240,14 +240,19 @@ export function pageKey(budgetId: string | null): string {
 }
 
 /**
- * Why a skip send failed. `refused`: the server says the row no longer needs
- * a category (categorized elsewhere, already decided): it leaves the strip with
- * a note. `retry`: anything else (network, 5xx): the row stays in the strip.
+ * Why a skip send failed. `refused`: the server says the row no longer needs a
+ * category (categorized elsewhere, already decided): it leaves the strip with a
+ * note. `rejected`: 400, 403 or 404, the request can never succeed (not allowed,
+ * gone): it leaves the strip with a note instead of being retried forever.
+ * `retry`: anything else (network, 5xx): the row stays in the strip.
  */
-export function skipFailureKind(error: unknown): 'refused' | 'retry' {
-  const code =
-    typeof error === 'object' && error !== null && 'code' in error ? (error as { code?: unknown }).code : null;
-  return code === 'categorize_already_categorized' || code === 'categorize_not_needing_category' ? 'refused' : 'retry';
+export function skipFailureKind(error: unknown): 'refused' | 'rejected' | 'retry' {
+  const read = (key: string): unknown =>
+    typeof error === 'object' && error !== null && key in error ? (error as Record<string, unknown>)[key] : null;
+  const code = read('code');
+  if (code === 'categorize_already_categorized' || code === 'categorize_not_needing_category') return 'refused';
+  const status = read('status');
+  return status === 400 || status === 403 || status === 404 ? 'rejected' : 'retry';
 }
 
 /**

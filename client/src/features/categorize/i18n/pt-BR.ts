@@ -160,8 +160,16 @@ const m: Translation<typeof en> = {
   'leave.keep': 'Manter e sair',
   'leave.stay': 'Ficar',
   'leave.sendFailed': {
-    one: '{sent} enviadas, {count} não pôde ser enviada. Tente de novo, ou mantenha e saia: volta na próxima visita.',
-    other: '{sent} enviadas, {count} não puderam ser enviadas. Tente de novo, ou mantenha e saia: voltam na próxima visita.',
+    one: '{count} não pôde ser enviada. Tente de novo, ou mantenha e saia: volta na próxima visita.',
+    other: '{count} não puderam ser enviadas. Tente de novo, ou mantenha e saia: voltam na próxima visita.',
+  },
+  'leave.sentSoFar': {
+    one: '{count} enviada.',
+    other: '{count} enviadas.',
+  },
+  'leave.droppedNote': {
+    one: 'Outra não pôde ser enviada de vez e saiu da lista.',
+    other: '{count} outras não puderam ser enviadas de vez e saíram da lista.',
   },
   'one.skip': 'Deixar sem categoria',
   'one.skipHint': 'Tira da lista para todos do orçamento. Você ainda pode categorizar no registro.',
@@ -173,6 +181,7 @@ const m: Translation<typeof en> = {
   undo: 'Desfazer',
   'error.accept': 'Não foi possível categorizar estas transações.',
   'error.skipRefused': '{subject} já foi categorizada em outro lugar, então saiu da lista sozinha.',
+  'error.skipRejected': '{subject} não pode ser enviada (sem permissão, ou não existe mais), então saiu da faixa.',
   'toast.sending': 'Estas linhas estão sendo enviadas: não dá mais para desfazer.',
   'error.skip': 'Não foi possível pular esta transação.',
   'error.bundleChanged':

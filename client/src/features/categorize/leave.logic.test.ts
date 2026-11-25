@@ -10,25 +10,30 @@ const entry = (seq: number, id: string): SkipEntry => ({
   item: { transactionId: id, categoryId: '', categoryName: '', subject: id },
   meta: { payeeId: null, topCategoryId: null, amount: 0 },
 });
+const ids = (list: SkipEntry[]) => list.map((e) => e.item.transactionId);
 
 describe('sendEntries', () => {
   test('sends each row once, in order', async () => {
     const calls: string[] = [];
     const out = await sendEntries([entry(1, 'a'), entry(2, 'b')], async (id) => void calls.push(id));
     expect(calls).toEqual(['a', 'b']);
-    expect(out.sent.length).toBe(2);
-    expect(out.failed).toEqual([]);
+    expect(ids(out.sent)).toEqual(['a', 'b']);
+    expect(out.dropped).toEqual([]);
+    expect(out.retry).toEqual([]);
   });
 
-  test('a failed row does not stop the rest and is returned for another try', async () => {
-    const out = await sendEntries([entry(1, 'a'), entry(2, 'b'), entry(3, 'c')], async (id) => {
-      if (id === 'b') throw new Error('no');
+  test('a row refused for good is dropped, one that may pass is kept, and neither stops the rest', async () => {
+    const out = await sendEntries([entry(1, 'a'), entry(2, 'b'), entry(3, 'c'), entry(4, 'd')], async (id) => {
+      if (id === 'b') throw { status: 409, code: 'categorize_already_categorized' };
+      if (id === 'c') throw { status: 500 };
+      if (id === 'd') throw { status: 403 };
     });
-    expect(out.sent.map((e) => e.item.transactionId)).toEqual(['a', 'c']);
-    expect(out.failed.map((e) => e.item.transactionId)).toEqual(['b']);
+    expect(ids(out.sent)).toEqual(['a']);
+    expect(ids(out.dropped)).toEqual(['b', 'd']);
+    expect(ids(out.retry)).toEqual(['c']);
   });
 
   test('nothing to send is nothing sent', async () => {
-    expect(await sendEntries([], async () => {})).toEqual({ sent: [], failed: [] });
+    expect(await sendEntries([], async () => {})).toEqual({ sent: [], dropped: [], retry: [] });
   });
 });

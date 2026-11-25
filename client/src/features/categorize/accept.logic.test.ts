@@ -14,6 +14,9 @@ import {
   skippedLabel,
   toastActionable,
   topEntry,
+  topIsUndoable,
+  unlocked,
+  waitingSkips,
   visibleRows,
   withoutPendingSkips,
   type AcceptAction,
@@ -364,17 +367,20 @@ describe('Done locks the rows it will send', () => {
     expect(state.hiddenIds).toContain('s1');
   });
 
-  test('Z goes to the action below the locked rows', () => {
+  test('Z does not pass over the locked rows to undo an older accept: the top is not undoable', () => {
     const state = locked();
-    expect(topEntry(state)?.seq).toBe(1);
+    expect(topEntry(state)?.seq).toBe(3);
+    expect(topIsUndoable(state)).toBe(false);
     expect(sendingCount(state)).toBe(2);
     expect(toastActionable(state)).toBe(false);
   });
 
-  test('with only locked rows there is nothing to undo, but Z can say it is sending', () => {
-    const state = run([skipStart(1, 's1'), { type: 'skipsLocked', seqs: [1] }]);
-    expect(topEntry(state)).toBeNull();
-    expect(canUndo(state)).toBe(true);
+  test('rows Done has taken are not offered to the leave prompt; a restored row is never locked', () => {
+    const state = run([skipStart(1, 's1'), skipStart(2, 's2'), { type: 'skipsLocked', seqs: [1] }]);
+    expect(waitingSkips(state).map((e) => e.item.transactionId)).toEqual(['s2']);
+    const locked1 = pendingSkips(state)[0]!;
+    expect(locked1.sending).toBe(true);
+    expect('sending' in unlocked(locked1)).toBe(false);
   });
 
   test('each row leaves the stack as its own request starts, and the busy count stays balanced', () => {

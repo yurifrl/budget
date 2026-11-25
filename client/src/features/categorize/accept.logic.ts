@@ -174,18 +174,9 @@ export function withoutPendingSkips<T extends { transaction_id: string }>(
   return leaving.size === 0 ? [...items] : items.filter((item) => !leaving.has(item.transaction_id));
 }
 
-/**
- * The action Undo and Z reverse: the most recent one that can still be undone.
- * Rows locked by Done are on their way to the server and are passed over, so Z
- * goes to the action below them.
- */
+/** The action Undo and Z reverse: the most recent one. A row locked by Done is still the top: Z then says so, it never passes over it. */
 export function topEntry(state: Pick<AcceptState, 'stack'>): UndoEntry | null {
-  for (let i = state.stack.length - 1; i >= 0; i -= 1) {
-    const entry = state.stack[i]!;
-    if (entry.kind === 'skip' && entry.sending) continue;
-    return entry;
-  }
-  return null;
+  return state.stack[state.stack.length - 1] ?? null;
 }
 
 /** Rows locked by Done: they cannot be undone any more, and Z says so instead of doing nothing. */
@@ -399,13 +390,30 @@ export function acceptIdle(state: Pick<AcceptState, 'busy'>): boolean {
  * still in flight: pressing Z then waits for the answer instead of being ignored.
  */
 export function canUndo(state: Pick<AcceptState, 'stack'>): boolean {
-  return topEntry(state) !== null || sendingCount(state) > 0;
+  return state.stack.length > 0;
+}
+
+/** True when Z has something to undo right now (the top is not a row Done is sending). */
+export function topIsUndoable(state: Pick<AcceptState, 'stack'>): boolean {
+  const top = topEntry(state);
+  return top !== null && !(top.kind === 'skip' && top.sending);
+}
+
+/** The rows a page may offer the leave prompt: those still waiting (Done has committed the others). */
+export function waitingSkips(state: Pick<AcceptState, 'stack'>): SkipEntry[] {
+  return pendingSkips(state).filter((entry) => !entry.sending);
+}
+
+/** A restored row is never "sending": whatever Done took is gone, the rest is plainly waiting. */
+export function unlocked(entry: SkipEntry): SkipEntry {
+  const { sending: _sending, ...rest } = entry;
+  return rest;
 }
 
 /** The toast shows its Undo only while the action it speaks of is the one Undo would reverse. */
 export function toastActionable(state: Pick<AcceptState, 'toast' | 'stack'>): boolean {
   const top = topEntry(state);
-  return state.toast !== null && top !== null && top.seq === state.toast.seq;
+  return state.toast !== null && top !== null && top.seq === state.toast.seq && topIsUndoable(state);
 }
 
 /** The skips waiting in the strip for Done, oldest first. */

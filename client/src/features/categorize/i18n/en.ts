@@ -167,8 +167,16 @@ export default {
   'leave.keep': 'Keep them and leave',
   'leave.stay': 'Stay',
   'leave.sendFailed': {
-    one: '{sent} sent, {count} could not be sent. Try again, or keep it and leave: it comes back next visit.',
-    other: '{sent} sent, {count} could not be sent. Try again, or keep them and leave: they come back next visit.',
+    one: '{count} could not be sent. Try again, or keep it and leave: it comes back next visit.',
+    other: '{count} could not be sent. Try again, or keep them and leave: they come back next visit.',
+  },
+  'leave.sentSoFar': {
+    one: '{count} sent.',
+    other: '{count} sent.',
+  },
+  'leave.droppedNote': {
+    one: '{count} more could not be sent for good and left the list.',
+    other: '{count} more could not be sent for good and left the list.',
   },
   'one.skip': 'Leave uncategorized',
   'one.skipHint': 'Takes it off this list for everyone in the budget. You can still categorize it in the register.',
@@ -181,6 +189,7 @@ export default {
   undo: 'Undo',
   'error.accept': 'Could not file these transactions.',
   'error.skipRefused': '{subject} was already categorized elsewhere, so it left the list on its own.',
+  'error.skipRejected': '{subject} cannot be sent (not allowed, or it no longer exists), so it left the strip.',
   'toast.sending': 'These rows are being sent: they can no longer be undone.',
   'error.skip': 'Could not skip this transaction.',
   'error.bundleChanged':
