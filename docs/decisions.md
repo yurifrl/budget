@@ -2391,54 +2391,84 @@ on a sync, an ordinary request or a budget copy.
   gone never fires.
 - **Several rules per payee: `payee_renaming_rules` (0121).** Additive: id, budget,
   payee, `match_type` (`is`, `contains`, `starts_with`, `ends_with`), `condition`,
-  `created_at`; unique per budget on (match type, pattern with surrounding and
-  repeated spaces collapsed, lower case). A rule belongs to one payee (409
-  `rename_rule_exists` names the holder). The migration copies each live payee's
-  single rule into it (oldest payee first, so of two payees holding the same
-  pattern the older keeps it; only payees with no rule in the table yet, so a
-  re-run changes nothing and never brings a removed rule back).
-- **The old columns stay, as a mirror.** `payees.rename_match_type` /
-  `rename_condition` (0016) are NOT dropped: the database is shared with
-  syscd-app, which may still read them. This app never reads them back; every
-  rule write (new operations, the single-rule operation, merge, delete, repair,
-  budget copy) keeps them equal to the payee's first "is" / "contains" rule (null
-  without one; left empty rather than failing when another payee's column already
-  holds the same text, the old unique index). Released clients keep working:
-  `budget_payees_set_rename_rule` (PUT /payees/:id/rename-rule, same input and
-  output) sets, changes or, with an empty condition, removes that first is/contains
+  `created_at`; one exact (budget, match type, pattern) per budget (the only index).
+  The migration copies each live payee's single rule AS IT IS (not trimmed, not
+  case-folded), oldest payee first, only for payees with no row in the table yet, so a
+  re-run changes nothing and never brings a removed rule back, and it drops nothing:
+  patterns that differ only by case or by spacing stay two rules, the older fires first
+  (as on main). The add / update operations refuse a rule another rule already says
+  (same match type, same pattern ignoring case: 409 `rename_rule_exists` naming the
+  holder); a pattern of 1 character is refused for contains / starts / ends (400; stored
+  ones keep working; `is` may be 1).
+- **The old columns are an input, and a mirror.** `payees.rename_match_type` /
+  `rename_condition` (0016) are NOT dropped: the database is shared with syscd-app and
+  the released client's single-rule call writes them. A rule found there that the table
+  does not have (same payee and match type and pattern ignoring case) is read as a rule
+  of the payee for matching, shown by the payee list and the rule list (which make it a
+  row), and made a row before ANY rule write of that payee (add, update, remove, the
+  single-rule call, merge, repair), so the mirror never erases it. Every rule write then
+  mirrors the payee's first "is" / "contains" rule into the columns (null without one;
+  left empty rather than failing when another payee's column already holds the same
+  text). A column cleared by the other app while the table keeps the rule cannot be told
+  from "not written": the table wins and the next write restores the column. Released
+  clients keep working: `budget_payees_set_rename_rule` (PUT /payees/:id/rename-rule,
+  same input and output) sets, changes or, with an empty condition, removes that first
   rule and leaves the others; the payee list keeps `rename_match_type` /
-  `rename_condition` (that rule, never a "starts with" one, which the released
-  enums do not know) and gains `rename_rules` (every rule). New operations:
+  `rename_condition` (never a "starts with" rule, which the released enums do not know)
+  and gains `rename_rules` (every rule). New operations:
   `budget_payees_rename_rules_list` (GET /payees/:id/rename-rules), `_add` (POST),
-  `_update` (PUT /payees/:id/rename-rules/:rule_id), `_remove` (DELETE ...).
-  Deleting a payee removes its rules; merging moves them to the target (the text
-  keeps resolving to the rows' payee); the repair moves them all (nothing is
-  dropped any more: `rename_rules_dropped` stays 0, `dropped_rules` lists only
-  "treat as transfer" rules); a fresh-start copy copies them.
-- **Matching.** Case-insensitive, surrounding and repeated whitespace ignored on
-  both sides; accents count ("pão" is not "pao"), as before. When several rules
-  match one text (of one payee or of several): the most specific first (`is`, then
-  `starts with` = `ends with`, then `contains`), then the longest pattern, then the
-  oldest rule (created_at, id). Defined once in `shared/src/domain/payees.ts`
-  (`findRenameRule`); a blank pattern never matches.
-- **Rows already imported keep their payee, import key and dedupe.** Main's
-  behaviour is kept, frozen, in `domain/legacy-rename.ts` and used only to READ what
-  earlier imports stored. Bank sync: a row whose payee is what the earlier
-  behaviour stored for the same text (`earlierNames`) is unchanged, never rewritten
-  for that alone; a row the bank actually changes (date, amount) or a new row takes
-  the new assignment, and a rule newly added or broadened re-applies to untouched
-  rows at the next sync, as a rule edit always did. Statement import: the import id
-  keeps counting under what it always did (the account's transfer payee for text
-  that names an account, otherwise the ordinary payee's id, now the assigned
-  payee's id for a rule hit); the keys the earlier behaviour counted under are also
-  looked up (read only), so a file imported before is still all duplicates. Neither
-  creates a payee for a row it does not insert or change. Proven by
-  `connections/rename-rules-legacy.test.ts` against rows recorded from main
-  (`testdata/main-rename-capture.json`).
+  `_update` (PUT /payees/:id/rename-rules/:rule_id), `_remove` (DELETE ...). `created_at`
+  is ISO UTC with milliseconds everywhere. Deleting a payee removes its rules; merging
+  moves them to the target (the text keeps resolving to the rows' payee); the repair
+  moves them all (`rename_rules_dropped` stays 0, `dropped_rules` lists only "treat as
+  transfer" rules); a fresh-start copy copies them. A rule of the transfer payee of a
+  closed or deleted account never fires.
+- **Matching is main's comparison, nothing more.** Both the pattern and the text are
+  compared after `toLowerCase()` and nothing else (`normalizeRuleText`, the one function
+  the matcher and the frozen earlier matcher share): no trimming, no collapsing of
+  repeated spaces, no accent folding ("pão" is not "pao"). The callers trim the TEXT
+  (bank sync, statement import) and the contract trims a pattern when it is written, as
+  before; a text with two spaces matches only a pattern with the same two spaces. When
+  several rules match one text (of one payee or of several): the most specific first
+  (`is`, then `starts with` = `ends with`, then `contains`), then the longest pattern, then
+  the oldest rule (created_at, id). A blank pattern never matches.
+- **Rows already imported keep their payee, import key and dedupe.** Main's behaviour
+  is kept, frozen, in `domain/legacy-rename.ts` and used only to READ what earlier
+  imports stored. Bank sync: a row whose payee is what the earlier behaviour stored for
+  the same text (`earlierNames`, also when that was the text itself) is unchanged, never
+  rewritten for that alone; a row the bank actually changes (date, amount) or a new row
+  takes the new assignment, and a rule newly added or broadened re-applies to untouched
+  rows at the next sync, as a rule edit always did. Statement import: the import id keeps
+  counting under what it always did (the account's transfer payee for text that names an
+  account, otherwise the ordinary payee's id, now the assigned payee's id for a rule hit);
+  the keys the earlier behaviour counted under are also looked up (read only; the payee a
+  new key names is created only for a row that is inserted), so a file imported before is
+  still all duplicates and creates no payee. Proven by
+  `connections/rename-rules-legacy.test.ts` against rows recorded by running main
+  (`testdata/main-rename-capture.json`: double spaces in bank text and in patterns, patterns
+  differing only by case or spacing, overlapping rules, rules on transfer payees, rows the
+  person edited, client-style statement rows), both through the migration and straight
+  from the columns.
+- **A payee the person chose is not a bank text.** The released client's statement
+  import sends the chosen payee's NAME as `payee` and the parsed statement text as
+  `import_payee_name_original`. Main ran every `payee` through the rules and could not
+  tell them apart; /bulk now treats a row whose `import_payee_name_original` differs from
+  `payee` as a chosen payee: no rule applies to it (it is found or created by name), while
+  the statement text still is assigned.
 - **The matcher sees an assigned row as untouched.** `untouched_ledger` (candidate
-  loader) also accepts a payee equal to the sync shadow's last payee: a bank row a
-  rule assigned is "as the bank sent it", so auto-linking works as it did when the
-  import name was the rewritten name.
+  loader) also accepts a payee equal to the sync shadow's last payee, and a statement row
+  (no shadow) whose payee is one a rule of that payee assigns for the imported text, by
+  main's own test: a `contains` rule counts when the text with the pattern replaced by the
+  payee's name equals the text (main's spliced name), an `is` rule when the name equals it,
+  a `starts with` / `ends with` rule always (they never existed on main). A rule-assigned
+  row is therefore untouched exactly where main's was, and the hinted text rows of T3
+  stay untouched.
+- **Editing a rule re-points rows imported under it.** (Same as main, worth saying where
+  rules are edited.) Rows that earlier imports stored from a rule's payee are recognised
+  as long as the CURRENT rules still reproduce what that rule stored; changing or
+  removing such a rule makes the next bank sync re-point the untouched rows and a
+  re-import of the same file duplicate them. The Manage Payees screen should say so when a
+  rule is edited.
 - **Carry-overs of review nq2f round 4.** F-a: a /bulk text naming an account whose
   pointer names another account's payee no longer stores an ordinary payee called
   "Transfer : <account>" (the account gets its linked payee, the key stays the
@@ -2446,4 +2476,5 @@ on a sync, an ordinary request or a budget copy.
   duplicate row with its own import id creates none. F-c: re-linking a leg whose
   previous payee was a transfer payee records the ordinary payee its import text
   stands for, so unlinking does not leave it without one. F-d: a hint naming a
-  soft-deleted account is ignored by the matcher.
+  soft-deleted account is ignored by the matcher. POST /payees with a name a transfer
+  payee's rule matches creates that ordinary payee, never returns the transfer payee.

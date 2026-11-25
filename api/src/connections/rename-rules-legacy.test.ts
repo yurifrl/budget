@@ -329,6 +329,8 @@ describe.skipIf(!dbReady)('rows imported from now on: what the matcher and the p
     const c = await build('f1', true);
     budgets.push(c.B);
     // Same texts into a new account, assigned by the rules of the table.
+    // The matcher's own candidate loader is the thing under test (a test may reach into a feature's internals).
+    // eslint-disable-next-line import/no-restricted-paths
     const { listTransferCandidates } = await import('../budget/store/transfers');
     const fresh = crypto.randomUUID();
     await pool.query(`INSERT INTO accounts (id, budget_id, name, type, account_group, on_budget) VALUES ($1,$2,'Fresh Conta','checking','CASH',true)`, [fresh, c.B]);
