@@ -15,9 +15,24 @@ export function IndigoButton({ label, onPress, disabled, style }: { label: strin
   );
 }
 
-export function GhostButton({ label, onPress, style }: { label: string; onPress?: () => void; style?: StyleProp<ViewStyle> }) {
+export function GhostButton({
+  label,
+  onPress,
+  style,
+  disabled,
+}: {
+  label: string;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+}) {
   return (
-    <Pressable onPress={onPress} style={[styles.btnGhost, style]} accessibilityRole="button">
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={[styles.btnGhost, style, disabled && styles.btnIndigoOff]}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}>
       <Text style={styles.btnGhostText}>{label}</Text>
     </Pressable>
   );

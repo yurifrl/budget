@@ -14,11 +14,9 @@ import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors } from '@/ui/theme';
 
 import { t } from './i18n';
-import type { UndoEntry } from './accept.logic';
-import { leavingText, queueRowSubline, type FiledEntry } from './oneByOne.logic';
+import { queueRowSubline, type FiledEntry } from './oneByOne.logic';
 import { thresholdPercent } from './page.logic';
 import { confidenceBand, type ConfidenceBand } from './queue.logic';
-import { useNow } from './useNow';
 
 const BAND_COLOR: Record<ConfidenceBand, string> = {
   high: colors.greenPillFg,
@@ -32,33 +30,23 @@ const ROWS_ABOVE = 2;
 export function QueuePane({
   rows,
   filed,
-  pendingSkips,
-  onCancelSkip,
   focusedId,
   total,
-  leaving,
   hiddenBelow,
   onFocus,
 }: {
   rows: readonly CategorizeQueueRow[];
   /** Rows done this visit: dimmed lines above the queue, not focusable. */
   filed: readonly FiledEntry[];
-  /** Skips waiting for their own timer: each shows its countdown and its own Undo. */
-  pendingSkips: readonly Extract<UndoEntry, { kind: 'skip' }>[];
-  onCancelSkip: (transactionId: string) => void;
   focusedId: string | null;
   /** Rows the queue holds (all of them, not only this page). */
   total: number;
-  /** Skips still waiting for their timer; the total above still counts them. */
-  leaving: number;
   /** Rows beyond the loaded page. */
   hiddenBelow: number;
   onFocus: (row: CategorizeQueueRow) => void;
 }) {
   const { formatMoney, formatDateShort } = useMoneyFormat();
   const scroll = useRef<ScrollViewInstance>(null);
-  const waiting = new Map(pendingSkips.map((entry) => [entry.item.transactionId, entry.sendAt]));
-  const now = useNow(waiting.size > 0, [...waiting.values()].join(','));
   const layouts = useRef(new Map<string, { y: number; height: number }>());
 
   // Keep the focused row in view, with a couple of filed rows above it as the
@@ -85,7 +73,6 @@ export function QueuePane({
           {t('one.queueTitle')}{' '}
           <Text style={styles.count}>
             {t('one.queueLeft', { count: total })}
-            {leaving > 0 ? ` · ${t('one.queueLeaving', { count: leaving })}` : ''}
           </Text>
         </Text>
         <Text style={styles.order}>{t('one.queueOrder')}</Text>
@@ -94,26 +81,16 @@ export function QueuePane({
         {filed.map(({ row, text }) => {
           const payee = row.payee?.trim() || row.raw_bank_description?.trim() || t('row.unnamed');
           const cents = milliToCents(row.amount);
-          const sendAt = waiting.get(row.transaction_id);
           return (
-            <View key={`filed-${row.transaction_id}`} style={[styles.row, styles.rowFiled, sendAt !== undefined && styles.rowLeaving]}>
+            <View key={`filed-${row.transaction_id}`} style={[styles.row, styles.rowFiled]}>
               <View style={styles.rowText}>
                 <Text style={styles.payeeFiled} numberOfLines={1}>
                   {payee}
                 </Text>
-                <Text style={sendAt !== undefined ? styles.leaving : styles.sub} numberOfLines={1}>
-                  {sendAt !== undefined ? leavingText(sendAt, now) : `${formatDateShort(row.date)} · ✓ ${text}`}
+                <Text style={styles.sub} numberOfLines={1}>
+                  {formatDateShort(row.date)} · ✓ {text}
                 </Text>
               </View>
-              {sendAt !== undefined ? (
-                <Pressable
-                  onPress={() => onCancelSkip(row.transaction_id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${t('undo')} ${payee}`}
-                  hitSlop={6}>
-                  <Text style={styles.undo}>{t('undo')}</Text>
-                </Pressable>
-              ) : null}
               <Text style={styles.amountFiled}>{formatMoney(cents)}</Text>
             </View>
           );
@@ -190,10 +167,6 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
   },
   rowFiled: { opacity: 0.55 },
-  // A pending skip is at full strength: it is the one thing on this list that can still be undone.
-  rowLeaving: { opacity: 1, backgroundColor: colors.bg2 },
-  leaving: { color: colors.yellowPillFg, fontSize: 11.5 },
-  undo: { color: colors.indigo3, fontSize: 12.5, fontWeight: '700' },
   payeeFiled: { color: colors.muted, fontSize: 13.5, fontWeight: '600' },
   amountFiled: { color: colors.muted, fontSize: 13, fontWeight: '700' },
   rowFocused: { backgroundColor: colors.indigoSoft, borderLeftColor: colors.indigo2 },

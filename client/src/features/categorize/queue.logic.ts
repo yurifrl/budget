@@ -16,6 +16,7 @@ import type {
 } from '@/budget/data/api';
 import type { MoneyFormat } from '@/domain/format';
 
+import type { LeavingMeta } from './accept.logic';
 import { t } from './i18n';
 
 /** Bundle cards rendered before the "Show N more bundles" row. */
@@ -37,11 +38,20 @@ export function topSuggestions(suggestions: readonly CategorizeSuggestion[]): Ca
   return suggestions.slice(0, SUGGESTION_LIMIT);
 }
 
+/**
+ * A bundle as the page shows it: `count` and `total` leave out the rows waiting
+ * in the "Leaving uncategorized" strip. `serverCount` is what the server counts,
+ * which is what a bundle accept must quote back.
+ */
+export interface ShownBundle extends CategorizeBundle {
+  serverCount: number;
+}
+
 export interface BundleView {
   /** Every bundle, most transactions first (the queue order the mock shows). */
-  all: CategorizeBundle[];
-  shown: CategorizeBundle[];
-  hidden: CategorizeBundle[];
+  all: ShownBundle[];
+  shown: ShownBundle[];
+  hidden: ShownBundle[];
   /** Transactions behind the "Show N more bundles" row. */
   hiddenTransactionCount: number;
   /** "Accept all above threshold" files every bundle's transactions. */
@@ -52,8 +62,49 @@ export interface BundleView {
   manualCount: number;
 }
 
-export function bundleView(queue: CategorizeQueue): BundleView {
-  const all = [...queue.bundles].sort((a, b) => b.count - a.count || a.payee.localeCompare(b.payee));
+/**
+ * The bundles without the rows in the strip: a row belongs to the bundle with
+ * its payee and its top suggestion; a bundle with nothing left is dropped.
+ */
+export function bundlesWithoutLeaving(
+  bundles: readonly CategorizeBundle[],
+  leaving: readonly LeavingMeta[],
+): ShownBundle[] {
+  return bundles.flatMap((bundle) => {
+    const mine = leaving.filter(
+      (row) => row.payeeId === bundle.payee_id && row.topCategoryId === bundle.suggestion.category_id,
+    );
+    const count = bundle.count - mine.length;
+    if (count <= 0) return [];
+    return [
+      {
+        ...bundle,
+        count,
+        total: bundle.total - mine.reduce((sum, row) => sum + row.amount, 0),
+        serverCount: bundle.count,
+      },
+    ];
+  });
+}
+
+/** The header counts without the rows in the strip (they are still counted by the server until Done). */
+export function countsWithoutLeaving<T extends Pick<CategorizeCounts, 'left_to_categorize' | 'above_threshold'>>(
+  counts: T,
+  leaving: readonly LeavingMeta[],
+): T {
+  const suggested = leaving.filter((row) => row.topCategoryId !== null).length;
+  return {
+    ...counts,
+    left_to_categorize: Math.max(0, counts.left_to_categorize - leaving.length),
+    above_threshold: Math.max(0, counts.above_threshold - suggested),
+  };
+}
+
+export function bundleView(queue: CategorizeQueue, leaving: readonly LeavingMeta[] = []): BundleView {
+  const counts = countsWithoutLeaving(queue.counts, leaving);
+  const all = bundlesWithoutLeaving(queue.bundles, leaving).sort(
+    (a, b) => b.count - a.count || a.payee.localeCompare(b.payee),
+  );
   const shown = all.slice(0, BUNDLE_CARD_LIMIT);
   const hidden = all.slice(BUNDLE_CARD_LIMIT);
   return {
@@ -65,7 +116,7 @@ export function bundleView(queue: CategorizeQueue): BundleView {
     manualRows: queue.rows.filter((row) => row.suggestions.length === 0),
     // The states sum to the queue; above_threshold counts the rows with a
     // visible suggestion, so the rest is exactly the manual group.
-    manualCount: Math.max(0, queue.counts.left_to_categorize - queue.counts.above_threshold),
+    manualCount: Math.max(0, counts.left_to_categorize - counts.above_threshold),
   };
 }
 

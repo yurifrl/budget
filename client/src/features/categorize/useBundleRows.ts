@@ -9,7 +9,9 @@
 import { skipToken } from '@reduxjs/toolkit/query';
 import { useEffect, useState } from 'react';
 
-import { useGetCategorizeQueueQuery, type CategorizeBundle, type CategorizeQueueRow } from '@/budget/data/api';
+import { useGetCategorizeQueueQuery, type CategorizeQueueRow } from '@/budget/data/api';
+
+import type { ShownBundle } from './queue.logic';
 
 const PAGE_SIZE = 200;
 
@@ -23,7 +25,7 @@ interface Collected {
   rows: CategorizeQueueRow[];
 }
 
-export function useBundleRows(budgetId: string | null, bundle: CategorizeBundle | null) {
+export function useBundleRows(budgetId: string | null, bundle: ShownBundle | null) {
   const bundleKey = bundle?.bundle_key ?? null;
   const [page, setPage] = useState<PageState>({ bundleKey, offset: 0 });
   const [collected, setCollected] = useState<Collected>({ bundleKey: null, rows: [] });
@@ -50,7 +52,8 @@ export function useBundleRows(budgetId: string | null, bundle: CategorizeBundle 
   }, [bundle, offset, query.data]);
 
   const rows = collected.bundleKey === bundleKey ? collected.rows : [];
-  const total = bundle?.count ?? 0;
+  // Paged against what the server counts: rows waiting in the strip are still listed by it.
+  const total = bundle?.serverCount ?? 0;
   return {
     rows,
     loading: query.isLoading,

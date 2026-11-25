@@ -127,12 +127,3 @@ export function filedToText(categoryName: string): string {
   return t('one.filedTo', { category: categoryName });
 }
 
-/** Whole seconds until a pending skip is sent, between 0 and the window (never more than 10 s, even if the clock is a tick behind). */
-export function secondsLeft(sendAt: number, now: number, window = 10): number {
-  return Math.min(window, Math.max(0, Math.ceil((sendAt - now) / 1000)));
-}
-
-/** "leaving uncategorized in 7s" for a skip still waiting for its timer. */
-export function leavingText(sendAt: number, now: number): string {
-  return t('one.leavingIn', { seconds: secondsLeft(sendAt, now) });
-}
