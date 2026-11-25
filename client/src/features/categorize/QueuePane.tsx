@@ -94,7 +94,7 @@ export function QueuePane({
                   {payee}
                 </Text>
                 <Text style={sendAt !== undefined ? styles.leaving : styles.sub} numberOfLines={1}>
-                  {formatDateShort(row.date)} · {sendAt !== undefined ? leavingText(sendAt, now) : `✓ ${text}`}
+                  {sendAt !== undefined ? leavingText(sendAt, now) : `${formatDateShort(row.date)} · ✓ ${text}`}
                 </Text>
               </View>
               {sendAt !== undefined ? (
