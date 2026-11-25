@@ -124,6 +124,13 @@ export function formatDateWith(prefs: Pick<FmtPrefs, 'dateFormat'>, iso: string)
   return prefs.dateFormat === "MM/DD/YYYY" ? `${m}/${d}/${y}` : `${d}/${m}/${y}`;
 }
 
+/** Day and month without the year, in the date-format pref's order ("21/11" / "11/21"). */
+export function formatDateShortWith(prefs: Pick<FmtPrefs, 'dateFormat'>, iso: string): string {
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return prefs.dateFormat === "MM/DD/YYYY" ? `${m}/${d}` : `${d}/${m}`;
+}
+
 const MONTH_SHORT_KEYS = [
   "month.short.1", "month.short.2", "month.short.3", "month.short.4", "month.short.5", "month.short.6",
   "month.short.7", "month.short.8", "month.short.9", "month.short.10", "month.short.11", "month.short.12",
@@ -320,6 +327,8 @@ export interface MoneyFormat {
   formatAmount(cents: Cents): string;
   parseMoney(input: string): Cents;
   formatDate(iso: string): string;
+  /** Day and month only ("21/11"), for tight ranges. */
+  formatDateShort(iso: string): string;
   formatDateLong(iso: string): string;
   parseDateInput(raw: string, today?: string): string | null;
 }
@@ -333,6 +342,7 @@ export function moneyFormat(prefs: FmtPrefs = DEFAULT_FMT_PREFS, masked = false)
     formatAmount: (cents) => formatAmountWith(prefs, cents, masked),
     parseMoney: (input) => parseMoneyWith(prefs.numberLocale, input),
     formatDate: (iso) => formatDateWith(prefs, iso),
+    formatDateShort: (iso) => formatDateShortWith(prefs, iso),
     formatDateLong: (iso) => formatDateLongWith(prefs, iso),
     parseDateInput: (raw, today = todayIso()) => parseDateInputWith(prefs, raw, today),
   };

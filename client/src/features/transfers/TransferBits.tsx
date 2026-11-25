@@ -3,9 +3,10 @@
  * payee screen: the ⇄ suggestion icon, the "auto · payee rule" label, the
  * match pill and the toast with Undo.
  */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { colors, radius } from '@/ui/theme';
+import { ActionToast, TagPill } from '@/ui/bits';
+import { colors } from '@/ui/theme';
 import { t } from './i18n';
 import type { MatchKind } from './transfers.logic';
 import type { TransferToastState } from './useTransfers';
@@ -34,28 +35,19 @@ export function TransferAutoLabel() {
 }
 
 export function MatchPill({ kind }: { kind: MatchKind }) {
-  const style = kind === 'sure' ? styles.pillSure : kind === 'choose' || kind === 'confirm' ? styles.pillChoose : styles.pillOne;
+  const tone = kind === 'sure' ? 'blue' : kind === 'choose' || kind === 'confirm' ? 'yellow' : 'gray';
   const label =
     kind === 'sure' ? t('match.sure') : kind === 'confirm' ? t('match.confirm') : kind === 'choose' ? t('match.choose') : t('match.oneSide');
-  return <Text style={[styles.pill, style]}>{label}</Text>;
+  return <TagPill label={label} tone={tone} />;
 }
 
-/** Bottom toast; with `undo` it carries an Undo button. */
+/** Bottom toast; with `undo` it carries an Undo button (shared ActionToast). */
 export function TransferToast({ toast }: { toast: TransferToastState | null }) {
   if (!toast) return null;
-  return (
-    <View style={styles.toast} accessibilityLiveRegion="polite">
-      <Text style={styles.toastText}>✓ {toast.text}</Text>
-      {toast.undo ? (
-        <Pressable onPress={toast.undo} accessibilityRole="button" hitSlop={6}>
-          <Text style={styles.toastUndo}>{t('toast.undo')}</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
+  return <ActionToast message={toast.text} actionLabel={toast.undo ? t('toast.undo') : undefined} onAction={toast.undo} />;
 }
 
-export const styles = StyleSheet.create({
+const styles = StyleSheet.create({
   icon: {
     width: 22,
     height: 22,
@@ -71,26 +63,4 @@ export const styles = StyleSheet.create({
   iconOn: { borderStyle: 'solid', borderColor: colors.blue },
   iconGlyph: { color: colors.blue, fontSize: 12, fontWeight: '800', lineHeight: 14 },
   auto: { color: colors.blue, fontSize: 10, flexShrink: 1 },
-  pill: { fontSize: 11, borderRadius: 6, paddingVertical: 2, paddingHorizontal: 8, overflow: 'hidden', alignSelf: 'flex-start' },
-  pillSure: { backgroundColor: colors.bluePillBg, color: colors.blue },
-  pillChoose: { backgroundColor: colors.yellowPillBg, color: colors.yellowPillFg },
-  pillOne: { backgroundColor: colors.grayPillBg, color: colors.grayPillFg },
-  toast: {
-    position: 'absolute',
-    bottom: 18,
-    alignSelf: 'center',
-    zIndex: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    maxWidth: '92%',
-    backgroundColor: colors.card2,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    borderRadius: radius.sm,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-  },
-  toastText: { color: colors.text, fontSize: 13, fontWeight: '600', flexShrink: 1 },
-  toastUndo: { color: colors.indigo3, fontSize: 13, fontWeight: '700' },
 });

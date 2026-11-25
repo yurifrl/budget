@@ -13,7 +13,7 @@ import { Container } from '@/platform/di/container';
 import { Tokens } from '@/platform/di/tokens';
 import type { KVStore } from '@/platform/storage/types';
 
-import { budgetApi } from './api';
+import { budgetApi, CATEGORIZE_COUNT_LIMIT, CATEGORIZE_QUEUE_TAGS, queueProvidedTags } from './api';
 
 const BASE = 'http://api.test:3999';
 
@@ -324,11 +324,26 @@ describe('formerly hand-written URLs now come from contracts (same routes)', () 
 });
 
 describe('the split slice is still one api', () => {
+  test('the Categorize queue follows transaction, category and payee writes', () => {
+    const types: readonly string[] = CATEGORIZE_QUEUE_TAGS;
+    for (const type of ['Categorize', 'Transactions', 'Categories', 'Payees']) {
+      expect(types).toContain(type);
+    }
+  });
+
+  test("the rail badge's one-row read follows only the Categorize tag; the page's reads follow every write", () => {
+    expect(queueProvidedTags('b1', { limit: CATEGORIZE_COUNT_LIMIT })).toEqual([{ type: 'Categorize', id: 'b1' }]);
+    expect(queueProvidedTags('b1', { limit: 200 }).map((t) => t.type)).toEqual([...CATEGORIZE_QUEUE_TAGS]);
+    // A bundle's rows with limit 1 are not the badge.
+    expect(queueProvidedTags('b1', { limit: 1, bundle: 'k' }).length).toBe(CATEGORIZE_QUEUE_TAGS.length);
+    expect(queueProvidedTags('b1', {}).length).toBe(CATEGORIZE_QUEUE_TAGS.length);
+  });
+
   test('one reducer path, the same tag types, every endpoint reachable from budgetApi', () => {
     expect(budgetApi.reducerPath).toBe('budgetApi');
     const endpoints = Object.keys(budgetApi.endpoints);
-    expect(endpoints).toHaveLength(98);
-    for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget', 'getTransferSuggestions', 'setPayeeTransferRule']) {
+    expect(endpoints).toHaveLength(106);
+    for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget', 'getTransferSuggestions', 'setPayeeTransferRule', 'getCategorizeQueue', 'acceptCategorize', 'undoCategorize', 'skipCategorize', 'startCategorizeRun', 'getCategorizeRunStatus', 'getCategorizeSettings', 'setCategorizeSettings']) {
       expect(endpoints).toContain(name);
     }
   });

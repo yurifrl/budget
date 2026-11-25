@@ -10,6 +10,7 @@ export default {
   'rail.plan': 'Plan',
   'rail.reflect': 'Reflect',
   'rail.allAccounts': 'All Accounts',
+  'rail.categorize': 'Categorize',
   'rail.expand': 'Expand sidebar',
   'rail.collapse': 'Collapse sidebar',
   'rail.openAccount': 'Open account {name}',

@@ -293,7 +293,7 @@ shell/      BudgetLayout (rail / drawer / tabs, sheets it hosts), rail/
             context.ts (useBudgetShell) and menuNav.ts (useMenuNav): the only
             shell files features may import
 features/   home plan accounts banks payees import backup reflect spending
-            settings people auth profile: each holds its screens, components,
+            settings people auth profile categorize: each holds its screens, components,
             hooks (useXxx.ts) and feature-local logic (*.logic.ts + tests);
             index.ts is its public surface
 domain/     pure TypeScript (only itself and @shared/*): the engine
@@ -351,6 +351,20 @@ under `src/` and on a non-pure domain import.
   `mapping.ts` converts wire milliunits to the domain's cents and back.
   Wire-typed view logic lives in the feature that uses it (e.g.
   `features/banks/model/`), not in `domain/`.
+- **Categorize page.** `features/categorize` (`/categorize`, rail item with the
+  queue count). One RTK Query slice (`data/api/categorize.ts`, eight
+  operations); the queue read carries the counts, bundles and one page of rows,
+  so Bundles and One by one are two views of the same cache entry and both
+  refresh on the `Categorize` tag (part of `BUDGET_DATA_TAGS`, so another
+  client's write refreshes them on the revision poll). Filing is optimistic:
+  `accept.logic.ts` reduces what the person sees (rows hidden at once, restored
+  by exactly the failed request, the last accept stays undoable after its toast),
+  `useCategorizeAccept` owns the requests; single-row filings may overlap so
+  quick key presses are never dropped, batches are exclusive. The One by one
+  keys (`keys.logic.ts`, one document listener in `useCategorizeKeys.ts`) never
+  fire while a field has focus. Nothing is ever applied without a click or key:
+  the page only files what the person picked. Skip is the server's budget-wide
+  skip decision (the row leaves every queue and is never re-classified).
 - **Engine.** `domain/zeroSum.ts` (`computeBudgetMonth`) is the canonical
   engine (`docs/budget-engine-spec.md`); `domain/engine.ts` holds helpers
   around it (balances, assigned lookups, target funding, Cost to Be Me, the

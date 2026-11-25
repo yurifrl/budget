@@ -17,13 +17,14 @@
  * Keyboard: ↑/↓ move the highlight, Enter picks, Esc closes.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
 import {
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type TextInputInstance,
   type ViewInstance,
   type StyleProp,
   type TextStyle,
@@ -52,6 +53,7 @@ export function Combobox({
   placeholder,
   chevron,
   autoFocus,
+  inputRef,
   style,
   containerStyle,
   accessibilityLabel,
@@ -69,6 +71,8 @@ export function Combobox({
   /** Select-affordance glyph (⌄) pinned at the right edge — pick-style cells. */
   chevron?: boolean;
   autoFocus?: boolean;
+  /** The text input's ref, for callers that focus it from a shortcut ("/"). */
+  inputRef?: Ref<TextInputInstance>;
   style?: StyleProp<TextStyle>;
   containerStyle?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
@@ -176,6 +180,7 @@ export function Combobox({
   return (
     <View ref={containerRef} style={[styles.container, containerStyle]}>
       <TextInput
+        ref={inputRef}
         value={value}
         onChangeText={(t) => {
           onChangeText(t);
