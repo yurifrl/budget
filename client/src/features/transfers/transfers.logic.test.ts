@@ -5,14 +5,11 @@ import type { PayeeAdminRow } from '@/budget/data/rows';
 import type { Account, Transaction } from '@/domain/types';
 import {
   accountsHint,
-  bulkSummary,
   chipCounts,
   filterByChip,
   findSuggestion,
   linkedToast,
   popoverSides,
-  reviewRow,
-  scopeSuggestions,
   transferRules,
   transferTargets,
   whyLine,
@@ -83,17 +80,24 @@ describe('register chips', () => {
     tx({ id: 'e', upcoming: true }),
   ];
   const needs = (t: Transaction) => !t.categoryId && !t.transferAccountId && !t.transferPending;
-  test('counts needs-category and transfers (upcoming rows excluded) and takes suggestions from the list', () => {
-    expect(chipCounts(rows, needs, [sure, choose])).toEqual({ needsCategory: 1, suggested: 2, transfers: 2 });
+  test('counts needs-category, suggested and transfers rows (upcoming rows excluded)', () => {
+    const withSuggestions = [
+      ...rows,
+      tx({ id: 'f', categoryId: 'c', transferSuggestion: { confidence: 'sure', candidateCount: 1, counterpartId: 'g' } }),
+      tx({ id: 'g', categoryId: 'c', transferSuggestion: { confidence: 'sure', candidateCount: 1, counterpartId: 'f' } }),
+      tx({ id: 'h', upcoming: true, transferSuggestion: { confidence: 'oneSide', candidateCount: 0, counterpartId: null } }),
+    ];
+    expect(chipCounts(withSuggestions, needs)).toEqual({ needsCategory: 1, suggested: 2, transfers: 2 });
   });
   test('filters rows per chip', () => {
     expect(filterByChip(rows, 'needsCategory', needs).map((r) => r.id)).toEqual(['a', 'e']);
     expect(filterByChip(rows, 'transfers', needs).map((r) => r.id)).toEqual(['c', 'd']);
     expect(filterByChip(rows, 'all', needs)).toHaveLength(5);
   });
-  test('account scope keeps suggestions touching the account', () => {
-    expect(scopeSuggestions([sure, choose, oneSide], 'card').map((s) => s.id)).toEqual(['o2']);
-    expect(scopeSuggestions([sure, choose, oneSide], null)).toHaveLength(3);
+  test('the suggested chip keeps the rows that carry the ⇄ icon, both legs of a pair', () => {
+    const flagged = (id: string) => tx({ id, transferSuggestion: { confidence: 'sure', candidateCount: 1, counterpartId: null } });
+    const list = [tx({ id: 'a' }), flagged('f'), tx({ id: 'b' }), flagged('g')];
+    expect(filterByChip(list, 'suggested', needs).map((r) => r.id)).toEqual(['f', 'g']);
   });
 });
 
@@ -131,22 +135,7 @@ describe('popover', () => {
   });
 });
 
-describe('review list and bulk bar', () => {
-  test('rows: sure has a link and dismisses both legs; choose waits for a pick; one side has no target', () => {
-    expect(reviewRow(sure)).toMatchObject({ match: 'sure', amount: 300_000, link: { transaction_id: 'o1', counterpart_id: 'i1' }, dismissIds: ['o1', 'i1'] });
-    expect(reviewRow(choose)).toMatchObject({ match: 'choose', link: null, dismissIds: ['o2'] });
-    expect(reviewRow(choose).choices).toHaveLength(2);
-    expect(reviewRow(choose, 'i2').choices).toHaveLength(0);
-    expect(reviewRow(oneSide)).toMatchObject({ match: 'oneSide', to: null, link: null });
-  });
-  test('summary: totals out / in and only the links that can be sent', () => {
-    const s = bulkSummary([reviewRow(sure), reviewRow(choose), reviewRow(oneSide)]);
-    expect(s.count).toBe(3);
-    expect(s.out).toBe(300_000 + 10_000 + 80_000);
-    expect(s.in).toBe(300_000);
-    expect(s.links).toEqual([{ transaction_id: 'o1', counterpart_id: 'i1' }]);
-    expect(s.dismissIds).toEqual(['o1', 'i1', 'o2', 'o3']);
-  });
+describe('toast', () => {
   test('toast text', () => {
     expect(linkedToast({ linked: ['a', 'b', 'c', 'd', 'e', 'f'], rules_created: 1 })).toBe('3 linked as transfers · 1 payee rule created');
     expect(linkedToast({ linked: ['a', 'b'], rules_created: 0 })).toBe('1 linked as transfer');

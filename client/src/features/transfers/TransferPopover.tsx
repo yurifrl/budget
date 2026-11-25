@@ -14,7 +14,7 @@ import type { Account } from '@/domain/types';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
 import { t } from './i18n';
-import { TransferCheckbox } from './TransferBits';
+import { SelectionCheckbox } from '@/ui/SelectionCheckbox';
 import { popoverSides, transferTargets, whyLine, type TransferLeg } from './transfers.logic';
 import type { TransfersState } from './useTransfers';
 
@@ -122,13 +122,13 @@ export function TransferPopover({
                 ) : null}
                 <Text style={styles.why}>{whyLine(item, sides)}</Text>
                 {payee ? (
-                  <Pressable style={styles.check} onPress={() => setRemember(!remember)}>
-                    <TransferCheckbox checked={remember} onToggle={() => setRemember(!remember)} label={t('popover.remember', { payee })} />
-                    <View style={{ flex: 1 }}>
+                  <View style={styles.check}>
+                    <SelectionCheckbox checked={remember} onToggle={() => setRemember(!remember)} label={t('popover.remember', { payee })} />
+                    <Pressable style={{ flex: 1 }} onPress={() => setRemember(!remember)}>
                       <Text style={styles.checkText}>{t('popover.remember', { payee })}</Text>
                       <Text style={styles.muted}>{t('popover.rememberSub')}</Text>
-                    </View>
-                  </Pressable>
+                    </Pressable>
+                  </View>
                 ) : null}
                 <View style={[styles.actions, isPhone && styles.actionsPhone]}>
                   <Pressable style={styles.btn} accessibilityRole="button" onPress={() => void actions.dismiss([sides.row.transaction_id]).then(done)}>

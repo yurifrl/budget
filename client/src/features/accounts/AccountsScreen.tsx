@@ -34,7 +34,6 @@ import {
   chipCounts,
   TransferChips,
   TransferPopover,
-  TransferReviewList,
   TransferToast,
   useTransfers,
 } from "@/features/transfers";
@@ -86,11 +85,11 @@ export function AccountsScreen() {
   // optional-chained and the hooks tolerate a budget that is still loading.
   const filter = useRegisterFilter({ budget, selectedAccountId, parseMoney });
   const { transactions, registerTxns, scheduledTxns } = filter;
-  // Transfers between own accounts (budget-mit6): chip count, review list, popover, toast.
-  const transfers = useTransfers({ budgetId, accountId: selectedAccountId });
+  // Transfers between own accounts (budget-mit6): chip count, ⇄ popover, toast.
+  const transfers = useTransfers({ budgetId });
   const counts = useMemo(
-    () => chipCounts(transactions, filter.needsCategory, transfers.scoped),
-    [transactions, filter.needsCategory, transfers.scoped],
+    () => chipCounts(transactions, filter.needsCategory),
+    [transactions, filter.needsCategory],
   );
 
   const [inlineAddOpen, setInlineAddOpen] = useState(false);
@@ -257,7 +256,7 @@ export function AccountsScreen() {
           <TransferChips chip={filter.chip} counts={counts} onChange={filter.setChip} />
 
           {/* register header */}
-          {showWide && filter.chip !== "suggested" ? (
+          {showWide ? (
             <RegisterHeader
               allSelected={selection.allRegisterSelected}
               onToggleAll={selection.toggleSelectAllVisible}
@@ -275,15 +274,6 @@ export function AccountsScreen() {
             />
           ) : null}
 
-          {filter.chip === "suggested" ? (
-            <TransferReviewList
-              suggestions={transfers.scoped}
-              loading={transfers.loading}
-              isPhone={shell.isPhone}
-              actions={transfers}
-              onOpenPopover={transfers.openPopover}
-            />
-          ) : (
           <RegisterList
             budget={budget}
             budgetId={budgetId}
@@ -308,8 +298,7 @@ export function AccountsScreen() {
             onOpenMenu={openRowMenu}
             onOpenTransfer={(t, x, y) => transfers.openPopover(t.id, x, y)}
           />
-          )}
-          {selectedTxns.length > 0 && filter.chip !== "suggested" ? (
+          {selectedTxns.length > 0 ? (
             <SelectionBar
               count={selectedTxns.length}
               categories={filter.categories}

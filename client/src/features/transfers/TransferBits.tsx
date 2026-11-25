@@ -3,12 +3,10 @@
  * payee screen: the ⇄ suggestion icon, the "auto · payee rule" label, the
  * match pill, a checkbox and the toast with Undo.
  */
-import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius } from '@/ui/theme';
 import { t } from './i18n';
-import type { MatchKind } from './transfers.logic';
 import type { TransferToastState } from './useTransfers';
 
 /** ⇄ next to the category of a row that looks like a transfer; opens the popover at the press point. */
@@ -31,28 +29,6 @@ export function TransferAutoLabel() {
     <Text style={styles.auto} numberOfLines={1}>
       {t('row.autoRule')}
     </Text>
-  );
-}
-
-export function MatchPill({ kind }: { kind: MatchKind }) {
-  const style = kind === 'sure' ? styles.pillSure : kind === 'choose' ? styles.pillChoose : styles.pillOne;
-  const label = kind === 'sure' ? t('match.sure') : kind === 'choose' ? t('match.choose') : t('match.oneSide');
-  return <Text style={[styles.pill, style]}>{label}</Text>;
-}
-
-export function TransferCheckbox({ checked, onToggle, label }: { checked: boolean; onToggle: () => void; label: string }) {
-  return (
-    <Pressable
-      onPress={onToggle}
-      hitSlop={6}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
-      accessibilityLabel={label}
-      style={styles.checkCell}>
-      <View style={[styles.checkbox, checked && styles.checkboxOn]}>
-        {checked ? <Ionicons name="checkmark" size={12} color={colors.white} /> : null}
-      </View>
-    </Pressable>
   );
 }
 
@@ -87,21 +63,6 @@ export const styles = StyleSheet.create({
   iconOn: { borderStyle: 'solid', borderColor: colors.blue },
   iconGlyph: { color: colors.blue, fontSize: 12, fontWeight: '800', lineHeight: 14 },
   auto: { color: colors.blue, fontSize: 10, flexShrink: 1 },
-  pill: { fontSize: 11, borderRadius: 6, paddingVertical: 2, paddingHorizontal: 8, overflow: 'hidden', alignSelf: 'flex-start' },
-  pillSure: { backgroundColor: colors.bluePillBg, color: colors.blue },
-  pillChoose: { backgroundColor: colors.yellowPillBg, color: colors.yellowPillFg },
-  pillOne: { backgroundColor: colors.grayPillBg, color: colors.grayPillFg },
-  checkCell: { width: 26, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  checkbox: {
-    width: 17,
-    height: 17,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: colors.faint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxOn: { backgroundColor: colors.indigo, borderColor: colors.indigo },
   toast: {
     position: 'absolute',
     bottom: 18,
