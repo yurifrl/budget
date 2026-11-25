@@ -309,18 +309,32 @@ export const NEEDS_CATEGORY_WHERE = `where t.budget_id = $1 and t.category_id is
 export const NEEDS_CATEGORY_WHERE_IGNORING_CATEGORY = `where t.budget_id = $1 ${NEEDS_CATEGORY_BODY}`;
 
 /**
- * The run adds: skip rows with any suggestion, and rows whose attempt says
- * no-suggestion (same payee/memo fingerprint) or failed (still backing off /
- * out of attempts). Args: $3 force, $4 max failed attempts.
+ * An accept decision whose transaction has no category again: the person
+ * cleared it by hand after accepting. `public.transactions` is shared with the
+ * syscd-app, so no trigger cleans the record; readers treat it as no decision
+ * and accept/skip replace it. Every query using this fragment already requires
+ * `t.category_id is null`, so an accept decision there can only be stale.
+ */
+export const STALE_ACCEPT = `exists (
+      select 1 from public.categorize_decisions sd
+       where sd.transaction_id = t.id and sd.budget_id = t.budget_id and sd.kind = 'accept'
+    )`;
+
+/**
+ * The run adds: skip rows with any suggestion (unless an accept went stale),
+ * rows with a skip decision, and rows whose attempt says no-suggestion (same
+ * payee/memo fingerprint) or failed (still backing off / out of attempts).
+ * Args: $3 force, $4 max failed attempts.
  */
 const CANDIDATE_FROM = NEEDS_CATEGORY_FROM;
 const CANDIDATE_WHERE = `${NEEDS_CATEGORY_WHERE}
     and not exists (
       select 1 from public.categorize_decisions cd
-       where cd.transaction_id = t.id and cd.budget_id = t.budget_id
+       where cd.transaction_id = t.id and cd.budget_id = t.budget_id and cd.kind = 'skip'
     )
     and (
       $3::boolean
+      or ${STALE_ACCEPT}
       or not exists (select 1 from public.category_suggestions cs where cs.transaction_id = t.id)
     )
     and (
@@ -664,16 +678,37 @@ export async function listAttempts(
 }
 
 /**
+ * Undo's restore, reused for a stale accept: the person's manual row goes and
+ * the model's rows are pending again, so the next accept/skip/engine write
+ * starts from the state accept requires.
+ */
+export async function restorePendingSuggestions(db: Queryable, budgetId: string, transactionId: string): Promise<void> {
+  await db.query(
+    `delete from public.category_suggestions
+      where transaction_id = $1 and budget_id = $2 and source = 'manual'`,
+    [transactionId, budgetId],
+  );
+  await db.query(
+    `update public.category_suggestions
+        set status = 'pending', updated_at = now()
+      where transaction_id = $1 and budget_id = $2 and status <> 'pending'`,
+    [transactionId, budgetId],
+  );
+}
+
+/**
  * Replace one transaction's suggestion set atomically, and only while the
  * transaction is still live, uncategorized and in this budget: the row lock
  * makes a concurrent categorization win (then nothing is written).
  *
- * A transaction with ANY decided row (accepted or dismissed) is left alone:
- * the person already answered it, so no new suggestion may overwrite a decided
- * one at its rank, hide it behind a pending row, or resurrect a category they
- * dismissed. Callers skip such transactions too (`CANDIDATE_WHERE`); this is
- * the last line of defence. Ranks above the new answer are dropped while
- * pending only. Returns false when nothing was written.
+ * A transaction with any live decision is left alone: the person already
+ * answered it, so no new suggestion may overwrite a decided one at its rank,
+ * hide it behind a pending row, or resurrect a category they dismissed. The
+ * exception is a STALE accept (its category was cleared by hand): its
+ * suggestions are restored to pending and the run may answer again. Callers
+ * skip such transactions too (`CANDIDATE_WHERE`); this is the last line of
+ * defence. Ranks above the new answer are dropped while pending only. Returns
+ * false when nothing was written.
  */
 export async function replaceSuggestions(
   pool: Pool,
@@ -687,17 +722,20 @@ export async function replaceSuggestions(
       [transactionId, budgetId],
     );
     if (locked.rowCount === 0) return false;
-    const decided = await client.query(
-      `select 1 from public.categorize_decisions
-        where transaction_id = $1 and budget_id = $2 limit 1`,
+    const decisions = await client.query<{ kind: string }>(
+      'select kind from public.categorize_decisions where transaction_id = $1 and budget_id = $2 for update',
       [transactionId, budgetId],
     );
-    if ((decided.rowCount ?? 0) > 0) return false;
-    const existing = await client.query<{ status: string }>(
-      'select status from public.category_suggestions where transaction_id = $1 and budget_id = $2',
-      [transactionId, budgetId],
-    );
-    if (existing.rows.some((row) => row.status !== 'pending')) return false;
+    if (decisions.rows.some((row) => row.kind !== 'accept')) return false;
+    if (decisions.rows.length > 0) {
+      await restorePendingSuggestions(client, budgetId, transactionId);
+    } else {
+      const existing = await client.query<{ status: string }>(
+        'select status from public.category_suggestions where transaction_id = $1 and budget_id = $2',
+        [transactionId, budgetId],
+      );
+      if (existing.rows.some((row) => row.status !== 'pending')) return false;
+    }
     for (const [index, suggestion] of suggestions.entries()) {
       await client.query(
         `insert into public.category_suggestions
