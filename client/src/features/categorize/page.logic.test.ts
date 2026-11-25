@@ -7,6 +7,7 @@ import {
   aiReasonMessage,
   bundleToastLabel,
   categoryOptions,
+  bundleChangedMessage,
   isBundleChanged,
   rowSubject,
   runHeaderView,
@@ -246,5 +247,19 @@ describe('accept helpers', () => {
         suggestion: { category_id: 'c1', category_name: 'Transport', confidence: 0.93, reason: null, source: 'ai' },
       }),
     ).toBe('Uber · 9 transactions → Transport');
+  });
+});
+
+describe('bundleChangedMessage', () => {
+  test('names the old and the new count and says the list is updated', () => {
+    expect(
+      bundleChangedMessage({ status: 409, code: 'categorize_bundle_changed', params: { expected: 3, actual: 2 } }),
+    ).toBe('That bundle changed from 3 to 2 transactions. The list is updated: check it and accept again.');
+  });
+
+  test('without counts it still says what happened', () => {
+    expect(bundleChangedMessage({ status: 409, code: 'categorize_bundle_changed' })).toBe(
+      'That bundle changed. The list is updated: check it and accept again.',
+    );
   });
 });

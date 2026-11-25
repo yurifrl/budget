@@ -85,12 +85,14 @@ export function BundlesView({
         </View>
       ) : null}
 
-      <View style={styles.sectionHead}>
-        <Text style={styles.sectionTitle}>{t('bundles.sectionTitle')}</Text>
-        <Text style={styles.sectionHint} numberOfLines={1}>
-          {t('bundles.sectionHint')}
-        </Text>
-      </View>
+      {cards.length > 0 ? (
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionTitle}>{t('bundles.sectionTitle')}</Text>
+          <Text style={styles.sectionHint} numberOfLines={1}>
+            {t('bundles.sectionHint')}
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.cards}>
         {cards.map((bundle) => (

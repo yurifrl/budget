@@ -158,6 +158,24 @@ export function isBundleChanged(error: unknown): boolean {
   );
 }
 
+/**
+ * What to tell the person when a bundle accept is refused because its count
+ * moved. The list is already refreshing when this shows, so the sentence says
+ * so (the server's own text asks for a page reload).
+ */
+export function bundleChangedMessage(error: unknown): string {
+  const params = typeof error === 'object' && error !== null && 'params' in error ? error.params : null;
+  const read = (key: string): number | null => {
+    const value = typeof params === 'object' && params !== null ? (params as Record<string, unknown>)[key] : null;
+    return typeof value === 'number' ? value : null;
+  };
+  const expected = read('expected');
+  const actual = read('actual');
+  return expected !== null && actual !== null
+    ? t('error.bundleChanged', { expected, actual })
+    : t('error.bundleChangedNoCounts');
+}
+
 /** "Uber · R$ 18,90" for the undo toast; payee (or raw bank text) and amount. */
 export function rowSubject(
   row: Pick<CategorizeQueueRow, 'payee' | 'raw_bank_description' | 'amount'>,

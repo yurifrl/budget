@@ -147,6 +147,9 @@ export default {
   undo: 'Undo',
   'error.accept': 'Could not file these transactions.',
   'error.skip': 'Could not skip this transaction.',
+  'error.bundleChanged':
+    'That bundle changed from {expected} to {actual} transactions. The list is updated: check it and accept again.',
+  'error.bundleChangedNoCounts': 'That bundle changed. The list is updated: check it and accept again.',
   'error.undo': 'Could not undo.',
   'error.threshold': 'Could not save the confidence threshold.',
   'toast.filed': '{subject} → {category}',

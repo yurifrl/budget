@@ -139,6 +139,9 @@ const m: Translation<typeof en> = {
   undo: 'Desfazer',
   'error.accept': 'Não foi possível categorizar estas transações.',
   'error.skip': 'Não foi possível pular esta transação.',
+  'error.bundleChanged':
+    'Esse pacote mudou de {expected} para {actual} transações. A lista foi atualizada: confira e aceite de novo.',
+  'error.bundleChangedNoCounts': 'Esse pacote mudou. A lista foi atualizada: confira e aceite de novo.',
   'error.undo': 'Não foi possível desfazer.',
   'error.threshold': 'Não foi possível salvar o limite de confiança.',
   'toast.filed': '{subject} → {category}',

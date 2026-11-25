@@ -1,7 +1,8 @@
 /**
  * One expanded bundle's rows, paged at the queue contract's 200-row cap. The
- * first page is cached by RTK Query like any queue read; "show more rows"
- * fetches the next offset and appends (deduped by transaction id). Changing
+ * first page is cached by RTK Query like any queue read and replaces what was
+ * shown whenever it is re-read (so a filed row leaves the card); "show more
+ * rows" fetches the next offset and appends (deduped by transaction id). Changing
  * the open bundle resets the pages without a render-time race on the offset.
  */
 
@@ -37,14 +38,16 @@ export function useBundleRows(budgetId: string | null, bundle: CategorizeBundle 
     if (!bundle || !query.data) return;
     const rows = query.data.rows;
     setCollected((prev) => {
-      if (prev.bundleKey !== bundle.bundle_key) return { bundleKey: bundle.bundle_key, rows };
+      // The first page is the bundle as it is now (a filed row has left it);
+      // only the pages after it are appended.
+      if (offset === 0 || prev.bundleKey !== bundle.bundle_key) return { bundleKey: bundle.bundle_key, rows };
       const seen = new Set(prev.rows.map((row) => row.transaction_id));
       return {
         bundleKey: bundle.bundle_key,
         rows: [...prev.rows, ...rows.filter((row) => !seen.has(row.transaction_id))],
       };
     });
-  }, [bundle, query.data]);
+  }, [bundle, offset, query.data]);
 
   const rows = collected.bundleKey === bundleKey ? collected.rows : [];
   const total = bundle?.count ?? 0;

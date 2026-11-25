@@ -33,7 +33,7 @@ import {
   type FiledItem,
 } from './accept.logic';
 import { t } from './i18n';
-import { bundleToastLabel, isBundleChanged, rowSubject, type PickedCategory } from './page.logic';
+import { bundleChangedMessage, bundleToastLabel, isBundleChanged, rowSubject, type PickedCategory } from './page.logic';
 
 /** The mock's undo window. */
 const UNDO_TOAST_MS = 10_000;
@@ -203,9 +203,14 @@ export function useCategorizeAccept({
       });
       return true;
     } catch (err) {
-      reduce({ type: 'failed', error: apiErrorMessage(err, t('error.accept')), requestIds });
+      const changed = isBundleChanged(err);
+      reduce({
+        type: 'failed',
+        error: changed ? bundleChangedMessage(err) : apiErrorMessage(err, t('error.accept')),
+        requestIds,
+      });
       markGone(bundle.bundle_key, false);
-      if (isBundleChanged(err)) setBundleChangeTick((tick) => tick + 1);
+      if (changed) setBundleChangeTick((tick) => tick + 1);
       queueRefetch();
       return false;
     } finally {
