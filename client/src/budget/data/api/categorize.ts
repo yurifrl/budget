@@ -43,6 +43,15 @@ export type CategorizeUndoResult = OperationOutput<typeof categorizeUndo>;
 export type CategorizeSkipResult = OperationOutput<typeof categorizeSkip>;
 export type CategorizeRunStartResult = OperationOutput<typeof categorizeRunStart>;
 
+/**
+ * The queue reads transactions, category names/visibility and payee names, so
+ * it provides those tags too: every local write that already invalidates one
+ * of them (register edits, payee merge/rename, category hide/delete/rename)
+ * refreshes the queue without editing each mutation. The revision watcher
+ * covers writes from other clients through the `Categorize` tag.
+ */
+export const CATEGORIZE_QUEUE_TAGS = ['Categorize', 'Transactions', 'Categories', 'Payees'] as const; // eslint-disable-line budget-i18n/no-untranslated-string -- RTK cache tag names, never rendered
+
 export const categorizeApi = aiApi.injectEndpoints({
   endpoints: (b) => ({
     /** One queue page; counts and bundles cover the whole queue. `bundle` pages one bundle's rows. */
@@ -52,7 +61,7 @@ export const categorizeApi = aiApi.injectEndpoints({
     >({
       query: ({ budgetId, limit, offset, bundle }) =>
         contractRequest(categorizeQueueList, { budget_id: budgetId, limit, offset, bundle }),
-      providesTags: (_r, _e, { budgetId }) => [{ type: 'Categorize', id: budgetId }],
+      providesTags: (_r, _e, { budgetId }) => CATEGORIZE_QUEUE_TAGS.map((type) => ({ type, id: budgetId })),
     }),
 
     /** File explicit pairs, or one server-resolved bundle with the count the queue showed. */

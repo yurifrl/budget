@@ -13,7 +13,7 @@ import { Container } from '@/platform/di/container';
 import { Tokens } from '@/platform/di/tokens';
 import type { KVStore } from '@/platform/storage/types';
 
-import { budgetApi } from './api';
+import { budgetApi, CATEGORIZE_QUEUE_TAGS } from './api';
 
 const BASE = 'http://api.test:3999';
 
@@ -324,6 +324,13 @@ describe('formerly hand-written URLs now come from contracts (same routes)', () 
 });
 
 describe('the split slice is still one api', () => {
+  test('the Categorize queue follows transaction, category and payee writes', () => {
+    const types: readonly string[] = CATEGORIZE_QUEUE_TAGS;
+    for (const type of ['Categorize', 'Transactions', 'Categories', 'Payees']) {
+      expect(types).toContain(type);
+    }
+  });
+
   test('one reducer path, the same tag types, every endpoint reachable from budgetApi', () => {
     expect(budgetApi.reducerPath).toBe('budgetApi');
     const endpoints = Object.keys(budgetApi.endpoints);

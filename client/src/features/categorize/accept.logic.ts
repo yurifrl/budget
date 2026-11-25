@@ -52,6 +52,7 @@ export type AcceptAction =
   | { type: 'undoSucceeded'; transactionIds: string[]; restored: number; skipped: number }
   | { type: 'undoFailed'; error: string }
   | { type: 'dismissToast' }
+  | { type: 'clearError' }
   | { type: 'reset' };
 
 function without(ids: readonly string[], remove: readonly string[]): string[] {
@@ -97,6 +98,8 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
       return { ...state, pending: null, error: action.error };
     case 'dismissToast':
       return { ...state, toast: null };
+    case 'clearError':
+      return { ...state, error: null };
     case 'reset':
       return initialAcceptState;
   }

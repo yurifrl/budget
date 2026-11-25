@@ -97,6 +97,17 @@ describe('acceptReducer', () => {
     expect(dismissed.hiddenIds).toEqual(['t1']);
   });
 
+  test('clearing an error keeps the toast and the hidden rows', () => {
+    const failed = acceptReducer(
+      acceptReducer(initialAcceptState, { type: 'succeeded', transactionIds: ['t1'], label: 'x' }),
+      { type: 'undoFailed', error: 'Nope' },
+    );
+    const cleared = acceptReducer(failed, { type: 'clearError' });
+    expect(cleared.error).toBeNull();
+    expect(cleared.toast?.transactionIds).toEqual(['t1']);
+    expect(cleared.hiddenIds).toEqual(['t1']);
+  });
+
   test('reset forgets everything', () => {
     const accepted = acceptReducer(initialAcceptState, {
       type: 'start',
