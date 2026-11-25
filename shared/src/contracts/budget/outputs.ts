@@ -329,7 +329,7 @@ export const transferSuggestionSchema = z.object({
   candidates: z.array(
     transferLegSchema.extend({
       days_apart: z.number().int(),
-      /** Only on `refused` suggestions: the account rule this pairing breaks. `card_outflow`: a card is never the paying side; `card_payment_other_bank`: a checking account paying another bank's card; `cash_same_bank`: checking to checking within one bank. */
+      /** Only on `refused` suggestions: the account rule this pairing breaks. `card_outflow`: a card is never the paying side; `card_payment_other_bank`: a checking, savings or cash account paying another bank's card; `cash_same_bank`: checking to checking within one bank. */
       rule: z.enum(transferViolations).optional(),
     }),
   ),
@@ -342,7 +342,7 @@ export const transferLinkResultSchema = z.object({
   /**
    * Counterpart links made although they break an account rule (they are still
    * linked): `card_outflow` a card is never the paying side; `card_payment_other_bank`
-   * a checking account paid another bank's card; `cash_same_bank` checking to
+   * a checking, savings or cash account paid another bank's card; `cash_same_bank` checking to
    * checking within one bank.
    */
   warnings: z.array(

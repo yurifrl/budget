@@ -39,6 +39,7 @@ const itau = crypto.randomUUID();
 const nubank = crypto.randomUUID();
 const nucard = crypto.randomUUID();
 const itauSavings = crypto.randomUUID();
+const itauCard = crypto.randomUUID();
 const otherAcc = crypto.randomUUID();
 const groupId = crypto.randomUUID();
 const categoryId = crypto.randomUUID();
@@ -105,8 +106,8 @@ describe.skipIf(!dbReady)('transfers between own accounts (operations)', () => {
       `INSERT INTO accounts (id, budget_id, name, type, account_group) VALUES
        ($1,$5,'Itau Conta','checking','CASH'),($2,$5,'Nubank Conta','checking','CASH'),
        ($3,$5,'Nubank Cartao','creditCard','CREDIT'),($4,$6,'Other Budget Conta','checking','CASH'),
-       ($7,$5,'Itau Poupanca','savings','CASH')`,
-      [itau, nubank, nucard, otherAcc, B, OTHER, itauSavings],
+       ($7,$5,'Itau Poupanca','savings','CASH'),($8,$5,'Itau Cartao','creditCard','CREDIT')`,
+      [itau, nubank, nucard, otherAcc, B, OTHER, itauSavings, itauCard],
     );
     await pool.query('INSERT INTO category_groups (id, budget_id, name) VALUES ($1,$2,$3)', [groupId, B, 'G']);
     await pool.query('INSERT INTO categories (id, budget_id, group_id, name) VALUES ($1,$2,$3,$4)', [categoryId, B, groupId, 'Gifts']);
@@ -360,6 +361,75 @@ describe.skipIf(!dbReady)('transfers between own accounts (operations)', () => {
       expect({ rows: await snapshot(), links: await links() }).toEqual(before);
       expect((await get(a)).transfer_transaction_id).toBe(b);
       expect((await get(b)).transfer_transaction_id).toBe(a);
+    } finally {
+      await pool.query('UPDATE accounts SET institution = NULL WHERE id = ANY($1)', [[itau, nucard]]);
+    }
+  });
+  test('account rules (budget-zkts): refused suggestions link through POST /transfers/link with their warning (card_outflow, cash_same_bank, savings -> card)', async () => {
+    await reset();
+    const setBanks = (labels: [string, string | null][]) =>
+      Promise.all(labels.map(([id, label]) => pool.query('UPDATE accounts SET institution = $2 WHERE id = $1', [id, label])));
+    await setBanks([
+      [itau, 'itau'],
+      [nubank, 'itau'],
+      [itauSavings, 'itau'],
+      [nucard, 'Nubank'],
+      [itauCard, 'itau'],
+    ]);
+    try {
+      const cardOut = await imported(nucard, -30_000, '2026-10-02', 'Compra');
+      const cardIn = await imported(itauCard, 30_000, '2026-10-02', 'Estorno');
+      const sameBankOut = await imported(itau, -45_000, '2026-10-04', 'PIX TRANSF');
+      const sameBankIn = await imported(nubank, 45_000, '2026-10-04', 'Transferência recebida');
+      const savingsOut = await imported(itauSavings, -55_000, '2026-10-06', 'Resgate');
+      const savingsIn = await imported(nucard, 55_000, '2026-10-06', 'Pagamento recebido');
+      expect(await runLinker()).toBe(0);
+      const sug = (await op('budget_transfer_suggestions_list', { budget_id: B })).json as {
+        id: string;
+        basis: string;
+        candidates: { transaction_id: string; rule?: string }[];
+      }[];
+      const cases = [
+        [cardOut, cardIn, 'card_outflow'],
+        [sameBankOut, sameBankIn, 'cash_same_bank'],
+        [savingsOut, savingsIn, 'card_payment_other_bank'],
+      ] as const;
+      for (const [out, inn, rule] of cases) {
+        expect(sug.find((x) => x.id === out)).toMatchObject({ basis: 'refused', candidates: [{ transaction_id: inn, rule }] });
+        const res = await op('budget_transfers_link', { budget_id: B, links: [{ transaction_id: out, counterpart_id: inn }] });
+        expect(res.status, JSON.stringify(res.json)).toBe(200);
+        expect(res.json.warnings).toEqual([{ transaction_id: out, counterpart_id: inn, rule }]);
+        expect(res.json.linked.sort()).toEqual([out, inn].sort());
+        expect((await get(out)).transfer_transaction_id).toBe(inn);
+        expect((await get(inn)).transfer_transaction_id).toBe(out);
+      }
+    } finally {
+      await setBanks([
+        [itau, null],
+        [nubank, null],
+        [itauSavings, null],
+        [nucard, null],
+        [itauCard, null],
+      ]);
+    }
+  });
+
+  test('account rules (budget-zkts): "not a transfer" dismisses a refused suggestion for good, and clearing it brings it back', async () => {
+    await reset();
+    await pool.query('UPDATE accounts SET institution = $2 WHERE id = $1', [itau, 'itau']);
+    await pool.query('UPDATE accounts SET institution = $2 WHERE id = $1', [nucard, 'Nubank']);
+    try {
+      const a = await imported(itau, -70_000, '2026-10-14', 'PIX TRANSF SERGIO');
+      const b = await imported(nucard, 70_000, '2026-10-14', 'Pagamento recebido');
+      expect((await list()).get(a)!.transfer_suggestion).toMatchObject({ confidence: 'sure', counterpart_id: b });
+      const dismissed = await op('budget_transfers_mark', { budget_id: B, transaction_ids: [a, b], state: 'dismissed' });
+      expect(dismissed.status, JSON.stringify(dismissed.json)).toBe(200);
+      for (const id of [a, b]) expect((await list()).get(id)!.transfer_suggestion).toBeNull();
+      const sug = await op('budget_transfer_suggestions_list', { budget_id: B });
+      expect(sug.json.some((x: { id: string }) => x.id === a)).toBe(false);
+      expect(await runLinker()).toBe(0);
+      await op('budget_transfers_mark', { budget_id: B, transaction_ids: [a, b], state: null });
+      expect((await list()).get(a)!.transfer_suggestion).toMatchObject({ confidence: 'sure', counterpart_id: b });
     } finally {
       await pool.query('UPDATE accounts SET institution = NULL WHERE id = ANY($1)', [[itau, nucard]]);
     }

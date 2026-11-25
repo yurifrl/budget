@@ -1892,7 +1892,8 @@ app. The two now ship independently.
   breaking candidates are dropped before any tie-break: (1) a card only
   receives (card→card is no longer paired; a lone card outflow is never a
   one-side suggestion, also when its payee has a rule: such a row can never
-  pair); (2) cash→card only within one bank; (3) checking→checking only
+  pair); (2) cash→card only within one bank (any checking, savings or
+  cash-in-hand account paying a card); (3) checking→checking only
   across banks. Rule 3 is judged on the account type, not the matcher's
   `cash` kind: savings and cash-in-hand accounts are `cash` too, and a move
   between a checking and a savings account of one bank (either way) is an
@@ -1909,14 +1910,19 @@ app. The two now ship independently.
   production data and an owner decision.
 - Owner decision (refused pairs): a pair a rule refuses is never linked
   automatically (not by evidence, not by an `auto` payee rule), but it is not
-  hidden: when a row finds no allowed partner, the refused candidates become
-  a suggestion with `basis: 'refused'` (`sure` when mutual and unique,
-  `choose` otherwise), each candidate carrying the rule it breaks (`rule`:
-  `card_outflow` | `card_payment_other_bank` | `cash_same_bank`). It counts
-  as a suspected transfer in the register chip and the suggestions list, and
-  the row is then not also a one-side or waiting/outside rule row. Refused
-  candidates are not offered to a row that has an allowed partner. Only pairs
-  main would have matched are ever refused candidates (card→card, cash→card
+  hidden: a row that stays unlinked carries every refused candidate it has.
+  A row without a suggestion gets a `refused` one (`basis: 'refused'`, `sure`
+  when the pair is mutual and neither row has another candidate, `choose`
+  otherwise); a row already in a choose group or in a pair left for the
+  person gets the refused candidates added and becomes `choose`; a row whose
+  only partner is refused is offered it even when that partner has allowed
+  candidates of its own. Each refused candidate carries the rule it breaks
+  (`rule`: `card_outflow` | `card_payment_other_bank` | `cash_same_bank`).
+  Refused candidates never change which allowed pair is linked, and a row that
+  is linked is never offered one. They count as suspected transfers in the
+  register chip and the suggestions list, and the row is then not also a
+  one-side or waiting/outside rule row. Only pairs main would have matched
+  are ever refused candidates (card→card, cash→card
   at another bank, checking→checking at one bank); a card outflow against a
   cash inflow (refund, cash advance) was never a transfer candidate and is
   none now. Confirming

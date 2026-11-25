@@ -267,17 +267,22 @@ interface BucketResult {
 
 /**
  * Pairs the account rules refuse (budget-zkts) are never linked, whatever the
- * evidence or the payee rule, but they are still offered: among the rows of one
- * amount bucket that found no allowed partner, an outflow and an inflow that
- * main would have paired (card > card, cash > card at another bank, checking >
- * checking at one bank) but a rule refuses become a suggestion naming the rule each candidate
- * breaks (`basis: 'refused'`). One mutual candidate on both sides is `sure`,
- * anything else `choose`. Rows with such a suggestion are not also one-side or
- * waiting rule rows.
+ * evidence or the payee rule, but they are still offered. Among the rows of one
+ * amount bucket that end up unlinked, an outflow and an inflow that main would
+ * have paired (card > card, cash > card at another bank, checking > checking
+ * at one bank) but a rule refuses are a refused candidate of each other. Every
+ * such row carries a suggestion listing it, which never changes what is linked:
+ *  - an outflow without a suggestion gets a `refused` one (`sure` when the
+ *    pair is mutual and neither row has any other candidate, else `choose`);
+ *  - an outflow that already has a suggestion (a choose group, or a pair left
+ *    for the person) gets the refused candidates added, closest date first,
+ *    and becomes `choose`; its basis stays.
+ * `violations` names the rule each refused candidate breaks. Rows involved are
+ * not also one-side or waiting rule rows. Returns their ids.
  */
-function refusedSuggestions(unpaired: readonly Node[]): { suggestions: Suggestion[]; covered: Set<string> } {
-  const outs = unpaired.filter((n) => n.row.amount < 0);
-  const ins = unpaired.filter((n) => n.row.amount > 0);
+function addRefusedSuggestions(bucket: readonly Node[], linked: ReadonlySet<string>, own: Suggestion[]): Set<string> {
+  const outs = bucket.filter((n) => n.row.amount < 0 && !linked.has(n.row.id));
+  const ins = bucket.filter((n) => n.row.amount > 0 && !linked.has(n.row.id));
   const byOut = new Map<string, { node: Node; violation: PairViolation }[]>();
   const insDegree = new Map<string, number>();
   for (const o of outs) {
@@ -289,24 +294,37 @@ function refusedSuggestions(unpaired: readonly Node[]): { suggestions: Suggestio
       insDegree.set(i.row.id, (insDegree.get(i.row.id) ?? 0) + 1);
     }
   }
-  const suggestions: Suggestion[] = [];
+  const ownById = new Map(own.map((sug) => [sug.id, sug]));
+  const offered = new Set(own.flatMap((sug) => sug.candidateIds));
+  const nodes = new Map(bucket.map((n) => [n.row.id, n]));
   const covered = new Set<string>();
   for (const o of outs) {
     const list = byOut.get(o.row.id);
     if (!list) continue;
-    list.sort((a, b) => daysApart(a.node.row.date, o.row.date) - daysApart(b.node.row.date, o.row.date) || order(a.node, b.node));
-    const sure = list.length === 1 && insDegree.get(list[0].node.row.id) === 1;
-    suggestions.push({
-      id: o.row.id,
-      confidence: sure ? 'sure' : 'choose',
-      basis: 'refused',
-      candidateIds: list.map((c) => c.node.row.id),
-      violations: Object.fromEntries(list.map((c) => [c.node.row.id, c.violation])),
-    });
+    const violations = Object.fromEntries(list.map((c) => [c.node.row.id, c.violation]));
+    const existing = ownById.get(o.row.id);
+    if (existing) {
+      existing.candidateIds = [...existing.candidateIds, ...list.map((c) => c.node.row.id)]
+        .map((id) => nodes.get(id)!)
+        .sort((a, b) => daysApart(a.row.date, o.row.date) - daysApart(b.row.date, o.row.date) || order(a, b))
+        .map((n) => n.row.id);
+      existing.confidence = 'choose';
+      existing.violations = { ...existing.violations, ...violations };
+    } else {
+      list.sort((a, b) => daysApart(a.node.row.date, o.row.date) - daysApart(b.node.row.date, o.row.date) || order(a.node, b.node));
+      const only = list.length === 1 && insDegree.get(list[0].node.row.id) === 1 && !offered.has(list[0].node.row.id);
+      own.push({
+        id: o.row.id,
+        confidence: only ? 'sure' : 'choose',
+        basis: 'refused',
+        candidateIds: list.map((c) => c.node.row.id),
+        violations,
+      });
+    }
     covered.add(o.row.id);
     for (const c of list) covered.add(c.node.row.id);
   }
-  return { suggestions, covered };
+  return covered;
 }
 
 /** Resolve one amount bucket (all rows share the absolute amount). */
@@ -481,14 +499,18 @@ export function planTransfers(
     const ins = bucket.filter((n) => n.row.amount > 0);
     const { pairs, open } = resolveBucket(outs, ins);
     const pairedIds = new Set<string>();
+    const linkedIds = new Set<string>();
+    const first = plan.suggestions.length;
     for (const { o, i, basis } of pairs) {
       pairedIds.add(o.row.id);
       pairedIds.add(i.row.id);
       const manual = o.row.mark === 'manual' || i.row.mark === 'manual';
       if (!manual && (o.rule || i.rule)) {
         plan.links.push({ outflowId: o.row.id, inflowId: i.row.id, method: 'rule', basis });
+        linkedIds.add(o.row.id).add(i.row.id);
       } else if (!manual && autoLinkable(o, i, basis)) {
         plan.links.push({ outflowId: o.row.id, inflowId: i.row.id, method: 'auto', basis });
+        linkedIds.add(o.row.id).add(i.row.id);
       } else {
         plan.suggestions.push({ id: o.row.id, confidence: 'sure', basis, candidateIds: [i.row.id] });
       }
@@ -503,10 +525,10 @@ export function planTransfers(
         .map((n) => n.row.id);
       plan.suggestions.push({ id: o.row.id, confidence: 'choose', basis: 'ambiguous', candidateIds });
     }
-    const unpaired = bucket.filter((n) => !pairedIds.has(n.row.id) && !open.has(n.row.id));
-    const refused = refusedSuggestions(unpaired);
-    plan.suggestions.push(...refused.suggestions);
-    for (const n of unpaired) if (!refused.covered.has(n.row.id)) lone.push(n);
+    const own = plan.suggestions.splice(first);
+    const covered = addRefusedSuggestions(bucket, linkedIds, own);
+    plan.suggestions.push(...own);
+    for (const n of bucket) if (!pairedIds.has(n.row.id) && !open.has(n.row.id) && !covered.has(n.row.id)) lone.push(n);
   }
 
   for (const n of lone) {
