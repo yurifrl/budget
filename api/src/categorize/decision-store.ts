@@ -16,7 +16,7 @@ import { categoryAssignability, updateTransactionInClient } from '../budget';
 import { withTransaction, type Queryable } from '../core/db';
 import { HttpError } from '../core/validate';
 import { bundleTransactionIds, type BundleKey } from './queue-store';
-import { NEEDS_CATEGORY_FROM, NEEDS_CATEGORY_WHERE, NEEDS_CATEGORY_WHERE_IGNORING_CATEGORY, pendingTransferIds } from './store';
+import { NEEDS_CATEGORY_FROM, NEEDS_CATEGORY_WHERE, NEEDS_CATEGORY_WHERE_IGNORING_CATEGORY, pendingTransferIds, restorePendingSuggestions } from './store';
 
 export type DecisionItem = { transaction_id: string; category_id: string };
 export type UndoSkipReason = 'no_decision' | 'category_changed' | 'upcoming' | 'skipped' | 'not_found';
@@ -164,7 +164,11 @@ async function acceptItems(
     const row = locked.get(item.transaction_id);
     if (!row) throw new HttpError(404, 'transaction not found');
     const decision = decisions.get(item.transaction_id);
-    if (decision) {
+    // An accept whose category is gone (the person cleared it by hand) is
+    // STALE: no decision any more, so this accept replaces it. A skip still
+    // freezes the row.
+    const staleAccept = decision?.kind === 'accept' && row.category_id === null;
+    if (!staleAccept && decision) {
       // Idempotent only for a pair accept itself applied; another value (or a
       // skip) means a person (or another tab) changed it after this queue was
       // read. A repeat never rewrites the model's suggestion.
@@ -177,15 +181,22 @@ async function acceptItems(
     if (!(await stillNeedsCategory(client, budgetId, item.transaction_id, pending))) {
       throw new HttpError(409, 'transaction no longer needs a category', 'categorize_not_needing_category');
     }
-    // A skipped transaction has a decision (checked above); any other decided
-    // suggestion also freezes it. Undo's "previous status" is therefore pending.
-    const decided = await client.query(
-      `select 1 from public.category_suggestions
-        where transaction_id = $1 and budget_id = $2 and status <> 'pending' limit 1`,
-      [item.transaction_id, budgetId],
-    );
-    if ((decided.rowCount ?? 0) > 0) {
-      throw new HttpError(409, 'transaction already has a decision', 'categorize_already_categorized');
+    if (staleAccept) {
+      // The queue shows this row again: put its earlier suggestions back, so
+      // accept and the decision write start from the state a first accept
+      // expects.
+      await restorePendingSuggestions(client, budgetId, item.transaction_id);
+    } else {
+      // Any other decided suggestion freezes it. Undo's "previous status" is
+      // therefore pending.
+      const decided = await client.query(
+        `select 1 from public.category_suggestions
+          where transaction_id = $1 and budget_id = $2 and status <> 'pending' limit 1`,
+        [item.transaction_id, budgetId],
+      );
+      if ((decided.rowCount ?? 0) > 0) {
+        throw new HttpError(409, 'transaction already has a decision', 'categorize_already_categorized');
+      }
     }
     await updateTransactionInClient(client, {
       budgetId,
@@ -195,7 +206,10 @@ async function acceptItems(
     });
     await client.query(
       `insert into public.categorize_decisions (transaction_id, budget_id, kind, category_id, user_id)
-       values ($1, $2, 'accept', $3, $4)`,
+       values ($1, $2, 'accept', $3, $4)
+       on conflict (transaction_id) do update
+         set kind = 'accept', category_id = excluded.category_id,
+             user_id = excluded.user_id, created_at = now()`,
       [item.transaction_id, budgetId, item.category_id, userId],
     );
     await settleSuggestions(client, budgetId, item.transaction_id, item.category_id);
@@ -317,17 +331,7 @@ export async function undoAccept(
         patch: { category_id: null },
         subtransactions: undefined,
       });
-      await client.query(
-        `delete from public.category_suggestions
-          where transaction_id = $1 and budget_id = $2 and source = 'manual'`,
-        [transactionId, budgetId],
-      );
-      await client.query(
-        `update public.category_suggestions
-            set status = 'pending', updated_at = now()
-          where transaction_id = $1 and budget_id = $2 and source <> 'manual'`,
-        [transactionId, budgetId],
-      );
+      await restorePendingSuggestions(client, budgetId, transactionId);
       await client.query(
         `delete from public.categorize_decisions where transaction_id = $1 and budget_id = $2`,
         [transactionId, budgetId],
@@ -339,10 +343,10 @@ export async function undoAccept(
 }
 
 /**
- * Skip a transaction in the queue whatever its state: dismiss its pending
- * suggestions and record a skip decision (which also hides it from the queue).
- * Repeating is a no-op; only a transaction that already has a category (or an
- * accept decision) is a 409.
+ * Skip a transaction in the queue whatever its state: dismiss its suggestions
+ * and record a skip decision (which also hides it from the queue). Repeating is
+ * a no-op. A stale accept (accepted, then the category was cleared by hand) is
+ * replaced; a transaction that already carries a category is a 409.
  */
 export async function skipTransaction(
   pool: Pool,
@@ -361,21 +365,30 @@ export async function skipTransaction(
         for update`,
       [transactionId, budgetId],
     );
-    if (decision.rows[0]) {
-      if (decision.rows[0].kind === 'skip') return { dismissed: 0 };
-      throw new HttpError(409, 'transaction already has a decision', 'categorize_already_categorized');
-    }
+    const current = decision.rows[0];
+    if (current?.kind === 'skip') return { dismissed: 0 };
+    // A stale accept's rows are accepted/dismissed, not pending: dismiss them
+    // all so a later read has nothing to revive.
     const dismissed = await client.query(
       `update public.category_suggestions
           set status = 'dismissed', updated_at = now()
-        where transaction_id = $1 and budget_id = $2 and status = 'pending'`,
+        where transaction_id = $1 and budget_id = $2 and status <> 'dismissed'`,
       [transactionId, budgetId],
     );
-    await client.query(
-      `insert into public.categorize_decisions (transaction_id, budget_id, kind, category_id, user_id)
-       values ($1, $2, 'skip', null, $3)`,
-      [transactionId, budgetId, userId],
-    );
+    if (current) {
+      await client.query(
+        `update public.categorize_decisions
+            set kind = 'skip', category_id = null, user_id = $3, created_at = now()
+          where transaction_id = $1 and budget_id = $2`,
+        [transactionId, budgetId, userId],
+      );
+    } else {
+      await client.query(
+        `insert into public.categorize_decisions (transaction_id, budget_id, kind, category_id, user_id)
+         values ($1, $2, 'skip', null, $3)`,
+        [transactionId, budgetId, userId],
+      );
+    }
     return { dismissed: dismissed.rowCount ?? 0 };
   });
 }

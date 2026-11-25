@@ -204,7 +204,7 @@ async function budgetSnapshot(budgetId: string, withConnection = false): Promise
   const tables = [
     'budgets', 'accounts', 'category_groups', 'categories', 'category_bundles', 'payees', 'transactions',
     'subtransactions', 'txn_repeat_rules', 'category_targets', 'category_notes', 'month_notes', 'assignments', 'budget_members',
-    'transfer_marks', 'transfer_links',
+    'transfer_marks', 'transfer_links', 'transfer_hints',
   ];
   const out: Record<string, unknown> = {};
   for (const t of tables) {
@@ -244,6 +244,8 @@ const POINTERS: Array<[table: string, column: string, target: string]> = [
   ['transfer_marks', 'transaction_id', 'transactions'],
   ['transfer_links', 'transaction_id', 'transactions'],
   ['transfer_links', 'peer_transaction_id', 'transactions'],
+  ['transfer_hints', 'transaction_id', 'transactions'],
+  ['transfer_hints', 'account_id', 'accounts'],
   ['txn_repeat_rules', 'account_id', 'accounts'],
   ['txn_repeat_rules', 'category_id', 'categories'],
   ['txn_repeat_rules', 'payee_id', 'payees'],
@@ -528,12 +530,16 @@ const bodyCases: BodyCase[] = [
     input: { budget_id: A.budget, txn: txnBase({ account_id: V.account }) } },
   { op: 'budget_transactions_create', fields: ['txn.category_id'], outcome: 'reject', status: 400,
     input: { budget_id: A.budget, txn: txnBase({ category_id: V.category }) } },
+  { op: 'budget_transactions_create', fields: ['txn.payee_id'], outcome: 'reject', status: 400,
+    input: { budget_id: A.budget, txn: txnBase({ payee_id: V.payee }) } },
   { op: 'budget_transactions_create', fields: ['txn.matched_transaction_id'], outcome: 'ignored',
     input: { budget_id: A.budget, txn: txnBase({ matched_transaction_id: V.txn }) } },
   { op: 'budget_transactions_create', fields: ['subtransactions[].category_id'], outcome: 'reject', status: 400,
     input: { budget_id: A.budget, txn: txnBase(), subtransactions: [{ category_id: V.category, memo: null, outflow: 1000, inflow: 0 }] } },
   { op: 'budget_transactions_update', fields: ['patch.account_id'], outcome: 'reject', status: 400,
     input: { id: A.txn, budget_id: A.budget, patch: { account_id: V.account } } },
+  { op: 'budget_transactions_update', fields: ['patch.payee_id'], outcome: 'reject', status: 400,
+    input: { id: A.txn, budget_id: A.budget, patch: { payee_id: V.payee } } },
   { op: 'budget_transactions_update', fields: ['patch.category_id'], outcome: 'reject', status: 400,
     input: { id: A.txn, budget_id: A.budget, patch: { category_id: V.category } } },
   { op: 'budget_transactions_update', fields: ['patch.matched_transaction_id'], outcome: 'reject', status: 400,

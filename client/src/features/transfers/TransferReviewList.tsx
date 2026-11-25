@@ -11,8 +11,10 @@ import type { TransferSuggestion } from '@/budget/data/api';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
 import { t } from './i18n';
-import { MatchPill, TransferCheckbox } from './TransferBits';
-import { bulkSummary, reviewRow, type ReviewRow, type TransferLeg } from './transfers.logic';
+import { SelectionCheckbox } from '@/ui/SelectionCheckbox';
+import { tableStyles } from '@/ui/registerTable';
+import { MatchPill } from './TransferBits';
+import { allSelected, bulkSummary, reviewRow, selectAllRows, type ReviewRow, type TransferLeg } from './transfers.logic';
 import type { TransfersState } from './useTransfers';
 
 function Side({ leg }: { leg: TransferLeg }) {
@@ -23,7 +25,7 @@ function Side({ leg }: { leg: TransferLeg }) {
   );
 }
 
-function ToCell({ row, onPick }: { row: ReviewRow; onPick: (x: number, y: number) => void }) {
+function ToSide({ row, onPick }: { row: ReviewRow; onPick: (x: number, y: number) => void }) {
   if (row.to && row.from) return <Side leg={row.to} />;
   if (row.choices.length > 0) {
     return (
@@ -40,6 +42,19 @@ function ToCell({ row, onPick }: { row: ReviewRow; onPick: (x: number, y: number
     <Text style={[styles.cell, styles.muted]} numberOfLines={2}>
       {t('review.noMatch')}
     </Text>
+  );
+}
+
+function ToCell({ row, onPick }: { row: ReviewRow; onPick: (x: number, y: number) => void }) {
+  return (
+    <>
+      <ToSide row={row} onPick={onPick} />
+      {row.reason ? (
+        <Text style={styles.reason} numberOfLines={2}>
+          {row.reason}
+        </Text>
+      ) : null}
+    </>
   );
 }
 
@@ -61,7 +76,7 @@ export function TransferReviewList({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const chosen = rows.filter((r) => selected.has(r.id));
   const summary = bulkSummary(chosen);
-  const allOn = rows.length > 0 && chosen.length === rows.length;
+  const allOn = allSelected(rows, selected);
   const toggle = (id: string) => {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
@@ -80,6 +95,11 @@ export function TransferReviewList({
           <Text style={[styles.muted, { flexShrink: 1 }]} numberOfLines={1}>
             {t('bulk.totals', { out: `– ${formatMoney(summary.out)}`, in: `+ ${formatMoney(summary.in)}` })}
           </Text>
+          {summary.needConfirm > 0 ? (
+            <Text style={[styles.reason, { flexShrink: 1 }]} numberOfLines={2}>
+              {t('bulk.includesRefused', { count: summary.needConfirm })}
+            </Text>
+          ) : null}
           <View style={{ flex: 1 }} />
           <Pressable style={styles.btn} accessibilityRole="button" onPress={() => void actions.dismiss(summary.dismissIds).then(after)}>
             <Text style={styles.btnText}>{t('bulk.dismiss')}</Text>
@@ -94,13 +114,13 @@ export function TransferReviewList({
         </View>
       ) : null}
       {!isPhone ? (
-        <View style={styles.head}>
-          <TransferCheckbox checked={allOn} onToggle={() => setSelected(allOn ? new Set() : new Set(rows.map((r) => r.id)))} label={t('review.selectAll')} />
-          <Text style={[styles.headText, { width: 70 }]}>{t('review.colDate')}</Text>
-          <Text style={[styles.headText, { flex: 1 }]}>{t('review.colFrom')}</Text>
-          <Text style={[styles.headText, { flex: 1.2 }]}>{t('review.colTo')}</Text>
-          <Text style={[styles.headText, { width: 76 }]}>{t('review.colMatch')}</Text>
-          <Text style={[styles.headText, { width: 110, textAlign: 'right' }]}>{t('review.colAmount')}</Text>
+        <View style={[tableStyles.head, styles.head]}>
+          <SelectionCheckbox marginRight={0} checked={allOn} onToggle={() => setSelected(allOn ? new Set() : selectAllRows(rows, selected))} label={t('review.selectAll')} />
+          <Text style={[tableStyles.headText, { width: 70 }]}>{t('review.colDate')}</Text>
+          <Text style={[tableStyles.headText, { flex: 1 }]}>{t('review.colFrom')}</Text>
+          <Text style={[tableStyles.headText, { flex: 1.2 }]}>{t('review.colTo')}</Text>
+          <Text style={[tableStyles.headText, { width: 76 }]}>{t('review.colMatch')}</Text>
+          <Text style={[tableStyles.headText, { width: 110, textAlign: 'right' }]}>{t('review.colAmount')}</Text>
         </View>
       ) : null}
       <FlatList
@@ -109,7 +129,7 @@ export function TransferReviewList({
         ListEmptyComponent={<Text style={styles.empty}>{loading ? t('review.loading') : t('review.empty')}</Text>}
         renderItem={({ item: r }) => {
           const on = selected.has(r.id);
-          const check = <TransferCheckbox checked={on} onToggle={() => toggle(r.id)} label={t('review.select', { payee: r.payee })} />;
+          const check = <SelectionCheckbox marginRight={0} checked={on} onToggle={() => toggle(r.id)} label={t('review.select', { payee: r.payee })} />;
           const amount = <Text style={styles.amount}>{formatMoney(r.amount)}</Text>;
           const pick = (x: number, y: number) => onOpenPopover(r.id, x, y);
           if (isPhone) {
@@ -135,7 +155,7 @@ export function TransferReviewList({
             );
           }
           return (
-            <View style={[styles.row, on && styles.rowOn]}>
+            <View style={[tableStyles.row, styles.row, on && styles.rowOn]}>
               {check}
               <Text style={[styles.cell, { width: 70 }]}>{formatDate(r.date)}</Text>
               <View style={{ flex: 1, minWidth: 0 }}>{fromCell(r)}</View>
@@ -171,26 +191,8 @@ const styles = StyleSheet.create({
   },
   bulkPhone: { flexWrap: 'wrap', marginHorizontal: 12 },
   bulkCount: { color: colors.text, fontWeight: '700', fontSize: 13 },
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 6,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-  },
-  headText: { color: colors.faint, fontSize: 11, letterSpacing: 0.5 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+  head: { paddingVertical: 6 },
+  row: { paddingVertical: 9 },
   rowPhone: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -204,6 +206,7 @@ const styles = StyleSheet.create({
   lineTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cell: { color: colors.text, fontSize: 13 },
   muted: { color: colors.muted, fontSize: 12 },
+  reason: { color: colors.yellowPillFg, fontSize: 11 },
   warn: { color: colors.yellowPillFg },
   link: { color: colors.indigo3, fontWeight: '600' },
   arrow: { color: colors.blue, fontWeight: '800' },

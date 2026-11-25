@@ -1886,6 +1886,67 @@ app. The two now ship independently.
   "Apply to past rows" clears it. Undone links are marked `manual`: still
   suggested, never auto-linked again.
 
+## Transfer account rules by bank (budget-zkts)
+
+- The person's rules, enforced in the matcher's `fits` (`pairViolation`), so
+  breaking candidates are dropped before any tie-break: (1) a card only
+  receives (card→card is no longer paired; a lone card outflow is never a
+  one-side suggestion, also when its payee has a rule: such a row can never
+  pair); (2) cash→card only within one bank (any checking, savings or
+  cash-in-hand account paying a card); (3) checking→checking only
+  across banks. Rule 3 is judged on the account type, not the matcher's
+  `cash` kind: savings and cash-in-hand accounts are `cash` too, and a move
+  between a checking and a savings account of one bank (either way) is an
+  ordinary transfer that keeps linking and being suggested.
+- Bank of an account: `bankKey(accounts.institution ?? connections.institution)`
+  (`domain/bank-key.ts`: accents/punctuation/suffixes stripped, known brands
+  mapped, so "Itaú Unibanco PF" = "itau", "Nu Pagamentos S.A." = "Nubank").
+  With no label on either side, the same `connection_id` means the same bank.
+  Otherwise unknown: rules 2 and 3 do not apply (old behaviour).
+  One side labelled and the other not, on the same connection: the same bank
+  (the unlabelled account is taken to share the connection's bank); with
+  different connections it is unknown. Pinned in `transfer-matcher.test.ts`.
+  How "same bank" is decided (labels versus connection id) stays open until
+  production data and an owner decision.
+- Owner decision (refused pairs): a pair a rule refuses is never linked
+  automatically (not by evidence, not by an `auto` payee rule), but it is not
+  hidden: a row that stays unlinked carries every refused candidate it has.
+  A row without a suggestion gets a `refused` one (`basis: 'refused'`, `sure`
+  when the pair is mutual and neither row has another candidate, `choose`
+  otherwise); a row already in a choose group or in a pair left for the
+  person gets the refused candidates added and becomes `choose`; a row whose
+  only partner is refused is offered it even when that partner has allowed
+  candidates of its own. Each refused candidate carries the rule it breaks
+  (`rule`: `card_outflow` | `card_payment_other_bank` | `cash_same_bank`).
+  Refused candidates never change which allowed pair is linked, and a row that
+  is linked is never offered one. They count as suspected transfers in the
+  register chip and the suggestions list, and the row is then not also a
+  one-side or waiting/outside rule row. Only pairs main would have matched
+  are ever refused candidates (card→card, cash→card
+  at another bank, checking→checking at one bank); a card outflow against a
+  cash inflow (refund, cash advance) was never a transfer candidate and is
+  none now. Confirming
+  goes through `POST /transfers/link` with `counterpart_id` and returns the
+  existing warning. Contract change is additive (new basis value, optional
+  `candidates[].rule`). A released client has no text for `refused`: its
+  "Why:" line falls through to "no matching row in your accounts" (wrong but
+  harmless; the link action still works), so the client should add a reason
+  per `rule` (e.g. "different banks").
+- Known limit of "same bank" (follow-up, not fixed here): bank labels come
+  from the account's institution, else the connection's, and the same
+  connection counts as one bank when labels are missing. A connection that
+  holds several banks with unlabelled accounts would be treated as one bank.
+  Production data (read by the owner) has one bank per live connection and a
+  label on every linked account, so it does not occur today. A fix would
+  store the bank per account at link/sync time and treat the MeuPluggy
+  wrapper connection as unknown.
+- Re-running the matcher never touches a link that already exists, even one
+  that breaks these rules: only unlinked rows are candidates and nothing
+  unlinks (tested in `budget/routes/transfers.test.ts`).
+- A fixed-account payee rule is the person's choice and skips rules 2–3.
+  `POST /transfers/link` with a counterpart never blocks; a pair that breaks
+  a rule is linked and listed in `warnings`.
+
 ## Category suggestions engine (budget-fvtx)
 
 - `connection_transactions.raw_payload` (0105) is the provider transaction
@@ -2105,3 +2166,207 @@ app. The two now ship independently.
   active run. Provider calls run on the `<queue>-ai` task queue (1 activity
   start/s across pods, one activity at a time per worker), separate from
   ledger and bank work.
+
+## Transfer payee lifecycle (budget-upgg, transfers T2)
+
+Plan: `.agents/plans/2026-11-24_transfers-refactor.md` (T2). Code:
+`api/src/budget/domain/transfer-payees.ts` (lifecycle, protection, text
+resolution), `edited-payee.ts` (the payee of an edit), `transfer-payee-repair.ts`
+(plan, report, repair), `store/transfer-payees.ts` (SQL),
+`scripts/repair-transfer-payees.ts`.
+
+- Every account has exactly one system payee "Transfer : <account>", found by
+  id: `payees.transfer_account_id` and `accounts.transfer_payee_id` are set
+  together when the payee is created.
+- Created with the account in every path that makes accounts: `POST /accounts`,
+  restore (a transfer leg takes the PEER account's payee by account id), budget
+  copy (an account the copy left without one gets one). Renamed in the same
+  transaction as the account (`renameTransferPayee`: same payee id, new name).
+  Kept when the account is closed. Retired when the account is deleted; the
+  retired payee's name gets a "(deleted <id>)" tail so a new account of that name
+  can have its own.
+- Names are unique per budget, so a second account with the same name gets
+  "Transfer : X (2)", the third "(3)". Whether two accounts may share a name is
+  an open owner question; the numbering stays until it is answered.
+- **Ordinary requests never repair.** `ensureTransferPayee` uses what exists
+  without writing (the account's pointer, else the payee that points at the
+  account). It writes only to CREATE a payee when there is none (and set the
+  account's pointer), or to adopt a LIVE payee nobody links to whose name is
+  exactly the account's (set its `transfer_account_id`, and the pointer). It does
+  not un-hide, un-delete, re-point, merge or insert a numbered payee to work
+  around bad data. Renaming an account renames its own payee and nothing else:
+  a name held by any other payee (another account's, an ordinary one, a
+  leftover) is skipped, the payee takes the next numbered name, and the
+  collision is logged (`[transfer-payee] account ...`) for the repair; a
+  concurrent insert of the wanted name is retried with the next name
+  (savepoint). Fresh start copies duplicates as they are and logs the report
+  (`[transfer-payee] fresh start ...`); it deletes and merges nothing.
+- **Only the repair merges and deletes.** `repairTransferPayees` and
+  `scripts/repair-transfer-payees.ts` (report first, `--apply` in one
+  transaction, idempotent). Folding a duplicate moves its transactions, splits,
+  scheduled rows, repeat rules, locations and `transfer_links.prev_payee_id`
+  within the budget; its renaming and "treat as transfer" rules move when the
+  kept payee has none, otherwise they are lost and the report lists each one
+  (`dropped_rules`). A duplicate that rows of ANOTHER budget reference is not
+  deleted (the foreign keys would null those rows): it is unlinked and kept, and
+  the report lists it in `kept_payees` ("referenced from another budget", see
+  `docs/runbooks/transfer-payee-cross-budget.md`). A numbered name is normalised
+  to the plain one once nothing else holds it.
+- Uniqueness is kept by code, not by an index: the shared database's other app
+  also writes `payees`. Migration 0117 only adds a plain partial index on
+  `payees(transfer_account_id)`. It is not built CONCURRENTLY: the migration
+  runner runs every file inside a transaction, where that is not allowed; the
+  build briefly blocks writes to `payees`, which is small.
+- The payee endpoints refuse to rename, merge (source or target), delete or
+  hide a transfer payee: 409 `transfer_payee_protected` with `params.name`.
+  Showing a hidden one, renaming rules, categorization and the "treat as
+  transfer" rule stay allowed.
+- `GET /payees` lists transfer payees only with `include_transfers=true`, each
+  with `transfer_account_id` and the additive `transfer_account_name`. Default
+  off because every current client caller would show them as ordinary payees.
+- **Payee text is still accepted, and one resolver reads it everywhere** (register
+  create/edit, repeat rules, statement import, bank sync), in this order:
+  (1) the exact name of a LINKED transfer payee ("Transfer : X", "Transfer : X
+  (2)") means that payee's account; (2) text produced by a renaming rule whose
+  target is a live payee nobody links stays that ordinary payee (no transfer);
+  (3) "Transfer : <name>" means the live account called <name>, the newest when
+  several share it (a text that is no payee's name); (4) no match is an ordinary
+  payee. So with two accounts named X, "Transfer : X" is the one holding that
+  payee name (the older), "Transfer : X (2)" the second; payee_id reaches either.
+  Duplicate and make-repeat, which re-send the stored name, keep the peer.
+- **`payee_id` (additive, optional) on transaction create and update** wins over
+  the text (null = no payee); a payee outside the budget is 400
+  `payee_not_in_budget`. New clients send it.
+- **Edits never read stale text as a change** (the released client re-sends the
+  payee text on every edit, duplicate and make-repeat): text equal to the name of
+  the row's current "Transfer : ..." payee is unchanged; on a row that is
+  already a transfer, a "Transfer : ..." text naming no account, or the row's
+  current peer, is unchanged; only text naming a different live account, or an
+  ordinary payee, changes it. Text equal to a FORMER name of the row's current
+  transfer payee is unchanged too, even when a new account holds that name now:
+  `renameTransferPayee` records the old name in `transfer_payee_former_names`
+  (migration 0118, same transaction), because the released client re-sends the
+  cached text and the server cannot tell it from a deliberate pick otherwise. On
+  create the same text means the account that holds the name now. A duplicate or make-repeat sent with a stale text creates an
+  ordinary row (no mirror). A non-transfer row whose stored payee is a legacy
+  "Transfer : X" cannot be turned into a transfer by re-picking that same text.
+
+## Two open accounts never share a name (2026-11-25)
+
+Creating or renaming an account to the name of another OPEN account of the
+budget (case-, edge- and space-run-insensitive) is `409 account_name_exists`
+(`params.name` = the holder's name); reopening a closed account into such a
+name is refused the same way. Closed and deleted accounts do not block. Existing
+duplicates are grandfathered: editing their other fields, re-sending the same
+name, closing them, restore and fresh start (raw SQL copies) all keep working;
+the transfer-payee repair script reports them. No unique index (the database is
+shared with another app): the check runs in the write's transaction after a
+`FOR NO KEY UPDATE` row lock on the budget, which serializes account-name writes
+of one budget and does not block the FK checks of other inserts. Bank linking
+(`PATCH /accounts/:id` with `link`) never creates or renames an account.
+||||||| 5e847a6
+
+## Transfer integrity on the server (budget-nq2f, transfers T3)
+
+Plan: `.agents/plans/2026-11-24_transfers-refactor.md` (T3). Model: a transaction
+is a transfer when its payee is an account's system transfer payee; between two
+on-budget accounts it is ONE linked pair (both `transfer_account_id` and
+`transfer_transaction_id` on both legs, each leg's payee the peer account's
+transfer payee) with no category. Schema (additive): migration 0119 adds the table
+`transfer_hints`, 0120 the nullable column `transfer_marks.released`.
+Rule of the review round: a row that is correct as main stores it does not change
+on a sync, an ordinary request or a budget copy.
+
+- **A leg leaving a pair never deletes a bank row (R1).** Editing the payee of one
+  leg to an ordinary payee, moving it to another peer, or deleting it takes the
+  other leg out of the pair through `removeMirror` (domain/transfers.ts): an
+  IMPORTED mirror (import id set) that the matcher or a person linked (a
+  `transfer_links` record, `created_mirror = false`) is RESTORED as
+  `POST /transfers/unlink` does (previous payee and category, shadow unblocked
+  when it was not blocked before, mark `manual`: suggested, never re-linked on
+  its own); an imported row without a record gets the ordinary payee its import
+  name stands for; a row without import id (hand-made mirror, or the user's own
+  row that was linked) is soft-deleted with its balance reversed, as on main. The
+  bank id stays live, so later syncs neither skip nor duplicate it. The release is
+  recorded in `transfer_marks.released` (which leg released the row, and the row's
+  fields at that moment); any later write of the mark (an unlink, "not a transfer",
+  a link) clears it. When THAT leg's payee is set back to the transfer of the same
+  account, exactly that row is linked again (same account, opposite amount,
+  still unlinked, uncategorized, and unchanged since the release: payee, date,
+  memo, flag, approval, cleared state) instead of adding a second mirror next to it;
+  in every other case a mirror is created as on main, and no mark or payee of a row
+  the user did not choose is touched. A link record on both legs lets unlink work.
+- **A hand-entered transfer plus a later bank import of the other side still
+  yields two rows, as on main (R2 is NOT fixed here).** The matcher ignores rows
+  that already carry pointers, so the hand-made mirror and the bank row both stay
+  and the account counts the money twice until the person deletes one. An
+  automatic replacement was tried and cut: it ignored decisions, adopted unrelated
+  same-amount rows over the whole history and merged the user's fields into a bank
+  row. A suggestion-based fix (offer the pair, let the person confirm, undo-able)
+  is a separate task (budget-kzof).
+  The same holds when a re-link is refused (the released bank row was edited, or
+  its leg was deleted): the peer account then has the released bank row plus a new
+  mirror, two rows for one movement, as with a hand-entered transfer; budget-kzof
+  will offer the merge as a suggestion.
+- **Imports never store a transfer payee without the transfer (item 6).** A NEW
+  statement-import or bank-sync row whose payee text (after the renaming rules)
+  means "Transfer : <account>" is not given that payee: it would be a payee-only
+  half transfer, and a mirror created from an import would duplicate the money
+  when the other side arrives from the other bank. It stays an ordinary
+  uncategorized row with the ordinary payee of its raw text (none when the raw text
+  is itself a transfer payee's name; the bank text stays in `import_payee_name`),
+  and the account goes to `transfer_hints`. The matcher treats a hinted row as
+  STRONG evidence for THAT account (it pairs only with a row of it; the bank rules
+  still refuse the same pairs; the bank's own contradicting category ("against")
+  stays a veto; alone it is a one-side suggestion). The hint ends
+  when the row is linked, gets a category, gets another payee, or is marked "not a
+  transfer"/"outside"; a refreshed row keeps or loses it with its text. **Rows an
+  earlier sync stored with the transfer payee are not touched:** the sync compares
+  the bank text in both forms it has been stored in, so such a row stays
+  "unchanged" and, when the bank corrects its amount or date, keeps its payee.
+  Statement-import ids keep counting under the id main used (the account's own
+  pointer when it has one, even a wrong one), so re-importing a file stays
+  idempotent; the ordinary payee of the raw text is created only for rows that are
+  inserted (an all-duplicate re-import creates no payee, as the sync). A row the
+  sync changes takes payee, shadow name, import name and hint from ONE resolution,
+  so row and shadow always agree. The register still creates the mirror.
+- **Complete transfers.** Repeat rules: occurrences behave as on main (a pending
+  occurrence is one row: no mirror, no pointers, no engine or balance effect, Make
+  Repeating unchanged). When an occurrence becomes a REAL transaction (the date
+  passes in `generateDueOccurrences`, or an edit detaches it) and its payee is an
+  account's transfer payee, the pair is written: both pointers, the mirror with
+  the peer's payee, no category between two on-budget accounts, the mirror's
+  balance applied; a payee whose account cannot receive it (own, closed, deleted)
+  stays as it is. A restore writes both pointers and no category on legs. A
+  **budget copy is as on main** (rows copied as they are, unlinked accounts start
+  at 0, no leg is copied into accounts that are not carried over, no balance
+  changes); the half-linked rows it leaves are listed by the repair.
+- **Rows already half-linked are reported, never rewritten on read.** The transfer
+  payee repair (`scripts/repair-transfer-payees.ts`, report first, `--apply`,
+  idempotent, one budget) lists and repairs them (`half_linked`;
+  domain/transfer-link-repair.ts): a mutual pair missing the account pointer, a
+  payee-less leg or a category on an on-budget pair is completed; a leg known only
+  by its account pointer or only by its transfer payee is paired with the one row
+  that is its other side (same day for the account pointer, within 3 days for a
+  payee-only leg), no balance moves, a record on both legs so unlink works; a leg with no other side
+  (`needs_mirror`) or several (`ambiguous`) is only reported;
+  `--apply --create-mirrors` creates the missing mirrors (it moves the peer
+  account's balance: only after reading the report).
+- **No category on a leg of an on-budget pair, on every write path.** Create, edit
+  (also Categorize accept), link, restore, flip of an occurrence, repair; a leg to
+  an off-budget account keeps its category. A "leg" is a row with a transfer
+  pointer to an on-budget peer: a payee-only row from main (no pointers) is not
+  touched by an unrelated edit. The server reads a category on such rows only to
+  display it (payee transaction list, backup export, Categorize's read of a row
+  already excluded from its queue) and for the payee's "most used category"
+  suggestion; no budget math, report or MCP output depends on it (the engine is
+  client-side and already ignored it).
+- **Payee lifecycle carry-overs.** The repair's absorb records the folded payee's
+  name and former names on the kept payee, and clears the folded payee's "treat as
+  transfer" rule after moving it (or listing it in `dropped_rules`). A transfer row
+  edited to text a renaming rule turns into an ORDINARY payee's name stops being a
+  transfer. `ensureTransferPayee` writes only what was agreed (create a missing
+  payee; adopt an exactly-named unlinked one): a pointer at ANOTHER account's payee
+  is ignored for the request (the account's own linked payee is used, else one is
+  created WITHOUT touching the pointer) and left to the repair. Deleting an account
+  retires the payees that point at it, never another account's.

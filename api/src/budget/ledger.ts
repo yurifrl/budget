@@ -4,8 +4,10 @@
  * through this module only (exported from the budget barrel); it is built on
  * the same functions budget's own routes use:
  *
- * - payees: `loadRenameRules` + `applyRules` + `upsertPayee`
- *   (domain/transactions.ts), the /bulk import and transaction-create path;
+ * - payees: `loadRenameRules` + `applyRules` + `resolveImportedPayee`
+ *   (domain/transactions.ts), the /bulk import path: a text that names an account's
+ *   transfer payee leaves the row ordinary and returns the account as a hint
+ *   (`setTransferHint`), never a payee-only half transfer;
  * - balances: `applyBalanceDeltas` (domain/transactions.ts);
  * - transfers between own accounts: `linkTransfers` (domain/transfer-links.ts;
  *   `linkCardPayments` is its former name, kept for callers);
@@ -22,11 +24,12 @@
 import type { PoolClient } from 'pg';
 
 import { applyRules, type RenameRule } from '@shared/domain/payees';
-import { loadRenameRules, upsertPayee } from './domain/transactions';
+import { loadRenameRules, planImportedPayee, resolveImportedPayee } from './domain/transactions';
 
 export { applyBalanceDeltas, type BalanceDelta } from './domain/transactions';
 export { linkTransfers, linkTransfers as linkCardPayments } from './domain/transfer-links';
 export { adoptAccountCurrency } from './store/accounts';
+export { clearTransferHints, setTransferHint } from './store/transfers';
 export {
   insertImportedTransaction,
   refreshImportedTransaction,
@@ -34,14 +37,30 @@ export {
   type ImportedTransaction,
 } from './store/transactions';
 
-/** A payee resolved for an imported row: id (null when blank) and the stored (rule-rewritten) name. */
+/**
+ * A payee resolved for an imported row: id (null when blank) and the stored
+ * name (rule-rewritten; for a text that names an account, the raw text of the
+ * ordinary payee). `transferAccountId`: the account the text pointed at, to be
+ * recorded with `setTransferHint` once the row exists.
+ */
 export interface ResolvedPayee {
   id: string | null;
   name: string;
+  /** The text `import_payee_name` keeps (the bank's text, also when no payee is stored). */
+  importName: string;
+  transferAccountId: string | null;
+  /** The name an earlier sync stored for the same text (the transfer payee); see `ImportedPayeePlan.legacyName`. */
+  legacyName: string | null;
 }
 
+/** What a text means, without any write (no payee is created): for rows that already exist. */
+export type PeekedPayee = Omit<ResolvedPayee, 'id'>;
+
 export interface ImportPayeeResolver {
+  /** Create-or-find the payee of a row being inserted or changed. */
   resolve(rawName: string): Promise<ResolvedPayee>;
+  /** What the text means, with no write: for an existing row that may stay as it is. */
+  peek(rawName: string): Promise<PeekedPayee>;
 }
 
 /**
@@ -54,15 +73,23 @@ export interface ImportPayeeResolver {
 export function createImportPayeeResolver(client: PoolClient, budgetId: string): ImportPayeeResolver {
   const cache = new Map<string, ResolvedPayee>();
   let rules: RenameRule[] | null = null;
+  const blank: ResolvedPayee = { id: null, name: '', importName: '', transferAccountId: null, legacyName: null };
   return {
+    async peek(rawName: string): Promise<PeekedPayee> {
+      const name = rawName.trim();
+      if (!name) return blank;
+      if (!rules) rules = (await loadRenameRules(client, budgetId)).rows;
+      const plan = await planImportedPayee(client, budgetId, name, applyRules(rules, name), { verbatim: true });
+      return { name: plan.name, importName: plan.importName, transferAccountId: plan.transferAccountId, legacyName: plan.legacyName };
+    },
     async resolve(rawName: string): Promise<ResolvedPayee> {
       const name = rawName.trim();
-      if (!name) return { id: null, name: '' };
+      if (!name) return blank;
       if (!cache.has(name)) {
         if (!rules) rules = (await loadRenameRules(client, budgetId)).rows;
         const effective = applyRules(rules, name);
-        const id = await upsertPayee(client, budgetId, effective, { verbatim: true });
-        cache.set(name, id === null ? { id: null, name: '' } : { id, name: effective });
+        const payee = await resolveImportedPayee(client, budgetId, name, effective, { verbatim: true });
+        cache.set(name, { id: payee.id, name: payee.name, importName: payee.importName, transferAccountId: payee.transferAccountId, legacyName: payee.legacyName });
       }
       return cache.get(name)!;
     },

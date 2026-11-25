@@ -5,13 +5,17 @@ import type { PayeeAdminRow } from '@/budget/data/rows';
 import type { Account, Transaction } from '@/domain/types';
 import {
   accountsHint,
+  allSelected,
   bulkSummary,
   chipCounts,
   filterByChip,
   findSuggestion,
   linkedToast,
+  matchKind,
   popoverSides,
   reviewRow,
+  ruleReason,
+  selectAllRows,
   scopeSuggestions,
   transferRules,
   transferTargets,
@@ -128,6 +132,70 @@ describe('popover', () => {
     );
     expect(whyLine(choose, popoverSides(choose, 'o2', 'i3'))).toBe('Why: same amount, 1 day apart · 2 possible matches');
     expect(whyLine(oneSide, popoverSides(oneSide, 'o3'))).toBe('Why: Pluggy says "Same person transfer" · no matching row in your accounts');
+  });
+});
+
+describe('refused suggestions (account rules)', () => {
+  const refusedSure: TransferSuggestion = {
+    id: 'r1',
+    confidence: 'sure',
+    basis: 'refused',
+    leg: leg('r1', 'itau', -250_000),
+    candidates: [cand('r2', 'card', 250_000, { rule: 'card_payment_other_bank' })],
+  };
+  const refusedChoose: TransferSuggestion = {
+    id: 'r3',
+    confidence: 'choose',
+    basis: 'refused',
+    leg: leg('r3', 'card', -90_000),
+    candidates: [cand('r4', 'nu', 90_000, { rule: 'card_outflow' }), cand('r5', 'itau', 90_000, { rule: 'cash_same_bank' })],
+  };
+  test('a lone refused pair is "confirm", never "sure"; a sure pair stays sure', () => {
+    expect(matchKind(refusedSure)).toBe('confirm');
+    expect(matchKind(sure)).toBe('sure');
+    expect(matchKind(refusedChoose)).toBe('choose');
+    expect(reviewRow(refusedSure)).toMatchObject({ match: 'confirm', link: { transaction_id: 'r1', counterpart_id: 'r2' }, reason: 'card paid from another bank' });
+    expect(reviewRow(refusedChoose).reason).toBe('a card cannot pay a transfer / same bank, checking to checking');
+    expect(reviewRow(sure).reason).toBeNull();
+  });
+  test('the why line names the broken rule instead of "no matching row"', () => {
+    expect(whyLine(refusedSure, popoverSides(refusedSure, 'r1'))).toBe('Why: same amount, same day · card paid from another bank');
+    expect(whyLine(refusedChoose, popoverSides(refusedChoose, 'r3'))).toBe('Why: a card cannot pay a transfer / same bank, checking to checking');
+    expect(whyLine(refusedChoose, popoverSides(refusedChoose, 'r3', 'r5'))).toBe('Why: same amount, same day · same bank, checking to checking');
+  });
+  test('a refused pair never says it was edited after import', () => {
+    const edited: TransferSuggestion = { ...refusedSure, leg: leg('r1', 'itau', -250_000, { untouched: false }) };
+    expect(whyLine(edited, popoverSides(edited, 'r1'))).toBe('Why: same amount, same day · card paid from another bank');
+  });
+  test('an unknown rule falls back to the generic reason, never an empty part', () => {
+    const unknown = { ...refusedSure, candidates: [cand('r2', 'card', 250_000, { rule: 'brand_new' as never })] };
+    expect(ruleReason('brand_new' as never)).toBe('the account rules do not link it on their own');
+    expect(whyLine(unknown, popoverSides(unknown, 'r1'))).toBe('Why: same amount, same day · the account rules do not link it on their own');
+    expect(reviewRow(unknown).reason).toBe('the account rules do not link it on their own');
+  });
+  test('the list shows the reason of refused candidates on a suggestion that is not refused itself', () => {
+    const mixed: TransferSuggestion = { ...choose, candidates: [choose.candidates[0], { ...choose.candidates[1], rule: 'card_outflow' }] };
+    expect(reviewRow(mixed).reason).toBe('a card cannot pay a transfer');
+    expect(reviewRow(choose).reason).toBeNull();
+  });
+  test('Select all skips refused pairs but keeps one ticked by hand; the bulk bar counts it', () => {
+    const rows = [reviewRow(sure), reviewRow(refusedSure), reviewRow(choose)];
+    expect(rows.map((r) => r.needsConfirm)).toEqual([false, true, false]);
+    expect([...selectAllRows(rows, new Set())]).toEqual(['o1', 'o2']);
+    expect([...selectAllRows(rows, new Set(['r1']))].sort()).toEqual(['o1', 'o2', 'r1']);
+    expect(allSelected(rows, new Set(['o1']))).toBe(false);
+    expect(allSelected(rows, new Set(['o1', 'o2']))).toBe(true);
+    expect(allSelected([reviewRow(refusedSure)], new Set())).toBe(false);
+    const all = bulkSummary(rows.filter((r) => selectAllRows(rows, new Set()).has(r.id)));
+    expect(all.needConfirm).toBe(0);
+    expect(all.links).toEqual([{ transaction_id: 'o1', counterpart_id: 'i1' }]);
+    const hand = bulkSummary(rows.filter((r) => r.id === 'r1' || r.id === 'o1'));
+    expect(hand.needConfirm).toBe(1);
+    expect(hand.links).toContainEqual({ transaction_id: 'r1', counterpart_id: 'r2' });
+  });
+  test('a pick that breaks a rule adds its reason after the usual basis', () => {
+    const mixed: TransferSuggestion = { ...choose, candidates: [choose.candidates[0], { ...choose.candidates[1], rule: 'card_outflow' }] };
+    expect(whyLine(mixed, popoverSides(mixed, 'o2', 'i3'))).toBe('Why: same amount, 1 day apart · 2 possible matches · a card cannot pay a transfer');
   });
 });
 

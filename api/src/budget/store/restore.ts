@@ -225,22 +225,13 @@ export async function insertRestoredTransaction(
   );
 }
 
-export async function linkRestoredTransferPeer(db: Queryable, transactionId: string, peerId: string): Promise<void> {
-  await db.query('UPDATE public.transactions SET transfer_transaction_id = $1 WHERE id = $2', [peerId, transactionId]);
-}
-
-/**
- * Point "Transfer : <account>" payees at their account. Both sides are scoped to
- * the budget: accounts of other budgets may share a name (budget-njc).
- */
-export async function linkRestoredTransferPayees(db: Queryable, budgetId: string): Promise<void> {
-  await db.query(
-    `UPDATE public.payees p SET transfer_account_id = a.id
-       FROM public.accounts a
-       WHERE p.budget_id = $1 AND a.budget_id = $1 AND NOT a.deleted
-         AND p.name = 'Transfer : ' || a.name`,
-    [budgetId],
-  );
+/** Point a restored leg at its peer: BOTH pointers (the peer's row and the peer's account). */
+export async function linkRestoredTransferPeer(db: Queryable, transactionId: string, peerId: string, peerAccountId: string): Promise<void> {
+  await db.query('UPDATE public.transactions SET transfer_transaction_id = $1, transfer_account_id = $2 WHERE id = $3', [
+    peerId,
+    peerAccountId,
+    transactionId,
+  ]);
 }
 
 export async function insertRestoredAssignment(

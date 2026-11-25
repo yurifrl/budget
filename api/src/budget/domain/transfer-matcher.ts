@@ -10,10 +10,17 @@
  * "treat as transfer" payee wait for their other side.
  *
  * Pairing rules:
- *  - two on-budget accounts of the same budget: cash to cash, cash to card,
- *    card to card (a card outflow into a cash account is a refund or a cash
- *    advance, never paired); exactly equal absolute amounts, opposite signs,
- *    dates at most MAX_TRANSFER_DAYS_APART apart;
+ *  - two on-budget accounts of the same budget, exactly equal absolute
+ *    amounts, opposite signs, dates at most MAX_TRANSFER_DAYS_APART apart;
+ *  - account rules (budget-zkts, see `pairViolation`): a card only receives
+ *    (a card outflow is a purchase, a refund or a cash advance, never a
+ *    transfer); cash pays a card only of the same bank; checking to checking
+ *    only across banks (savings and cash accounts are not judged). The bank
+ *    rules apply only when both banks are known (see `sameBank`); a fixed-account payee rule ('account') is the person's own
+ *    choice and skips the bank rules. Candidates that break a rule are
+ *    dropped before any tie-breaking and are never linked (whatever the
+ *    evidence or payee rule); a row left without an allowed partner offers
+ *    them as a `refused` suggestion for the person to confirm;
  *  - only uncategorized, unsplit, unlinked rows; a row marked "not a transfer"
  *    or whose payee rule says "never" is never considered;
  *  - resolution, per amount bucket: (1) each side the other's only candidate
@@ -34,7 +41,9 @@
  * on structure alone). Anything else that pairs is a suggestion.
  *
  * Bank hints come from the provider's raw transaction (Pluggy `category` and
- * `operationType`); payee text is never read.
+ * `operationType`); payee text is never read. The one exception is a stored
+ * `hintAccountId` (an import whose payee text was resolved to an account's
+ * transfer payee at import time, see `MatchRow`): strong evidence for that account unless the bank's own category contradicts a transfer.
  */
 
 export const MAX_TRANSFER_DAYS_APART = 3;
@@ -44,7 +53,7 @@ export type AccountKind = 'cash' | 'card' | 'other';
 export type Evidence = 'strong' | 'weak' | 'none' | 'against';
 export type TransferMark = 'dismissed' | 'outside' | 'manual';
 export type TransferRuleMode = 'auto' | 'account' | 'never';
-export type MatchBasis = 'unique' | 'ordinal' | 'evidence' | 'rule' | 'ambiguous' | 'unmatched';
+export type MatchBasis = 'unique' | 'ordinal' | 'evidence' | 'rule' | 'ambiguous' | 'unmatched' | 'refused';
 export type SuggestionConfidence = 'sure' | 'choose' | 'one_side';
 export type PendingTransfer = 'waiting' | 'outside';
 
@@ -77,6 +86,60 @@ export interface MatchRow {
   payeeId: string | null;
   hint: BankHint | null;
   mark: TransferMark | null;
+  /** The account's bank (`bankKey` of its institution label), when known. */
+  bank: string | null;
+  /** The account's bank connection, when linked (same connection = same bank). */
+  connectionId: string | null;
+  /** A checking account (kind 'cash' also covers savings and cash-in-hand; only checking is judged by rule 3). */
+  checking: boolean;
+  /**
+   * The account an import's payee text pointed at (`transfer_hints`: a renaming
+   * rule on that account's transfer payee, or the text "Transfer : <account>").
+   * The row stays an ordinary uncategorized row, but it counts as strong
+   * evidence of a transfer with THAT account: it only pairs with a row of it
+   * (the bank rules still apply), and alone it is a one-side suggestion.
+   */
+  hintAccountId: string | null;
+}
+
+/** What the account rules need to know about one side of a transfer. */
+export interface TransferSide {
+  accountKind: AccountKind;
+  bank: string | null;
+  connectionId: string | null;
+  checking: boolean;
+}
+
+/** Why a pair breaks the account rules. */
+export type PairViolation = 'card_outflow' | 'card_payment_other_bank' | 'cash_same_bank';
+
+/**
+ * Do two accounts belong to the same bank? Null when unknown. Two labels are
+ * compared as is. Without two labels, the same connection counts as the same
+ * bank, also when only one side carries a label (the unlabelled account is
+ * taken to share the connection's bank). Different connections with a missing
+ * label are unknown.
+ */
+export function sameBank(a: Pick<TransferSide, 'bank' | 'connectionId'>, b: Pick<TransferSide, 'bank' | 'connectionId'>): boolean | null {
+  if (a.bank && b.bank) return a.bank === b.bank;
+  if (a.connectionId && a.connectionId === b.connectionId) return true;
+  return null;
+}
+
+/**
+ * The account rule an outflow -> inflow pair breaks, if any: a card is never
+ * the outflow side; cash -> card only within one bank; checking -> checking
+ * only across banks (savings and cash-in-hand accounts are not judged: a move
+ * between a checking and a savings account of one bank is an ordinary
+ * transfer). Unknown banks pass the bank rules. Other kinds are not judged.
+ */
+export function pairViolation(o: TransferSide, i: TransferSide): PairViolation | null {
+  if (o.accountKind === 'card') return 'card_outflow';
+  if (o.accountKind !== 'cash') return null;
+  const same = sameBank(o, i);
+  if (i.accountKind === 'card' && same === false) return 'card_payment_other_bank';
+  if (i.accountKind === 'cash' && o.checking && i.checking && same === true) return 'cash_same_bank';
+  return null;
 }
 
 /** A payee's "treat as transfer" rule. */
@@ -105,6 +168,8 @@ export interface Suggestion {
   basis: MatchBasis;
   /** Proposed other side(s), closest date first; empty for one-side rows. */
   candidateIds: string[];
+  /** `refused` suggestions only: the account rule each candidate breaks (never auto-linked). */
+  violations?: Record<string, PairViolation>;
 }
 
 /** Per-row summary the register shows (both sides of a pair carry one). */
@@ -155,6 +220,17 @@ interface Node {
   rule: TransferRule | null;
 }
 
+/**
+ * The row's evidence. An import hint (the payee text named an account) counts as
+ * strong evidence, but never overrides the bank's own contradicting category
+ * ('against' stays a veto) and never touches the account or bank rules: it only
+ * narrows the candidates to the hinted account (`structurallyFits`).
+ */
+function evidenceWithHint(row: MatchRow): Evidence {
+  const own = evidenceOf(row.hint);
+  return row.hintAccountId && own !== 'against' ? 'strong' : own;
+}
+
 /** The rule covering a row (an active 'auto'/'account' rule set before the row was created). */
 function coveringRule(row: MatchRow, rules: ReadonlyMap<string, TransferRule>): TransferRule | null {
   const rule = row.payeeId ? rules.get(row.payeeId) : undefined;
@@ -175,17 +251,31 @@ const considered = (row: MatchRow, rules: ReadonlyMap<string, TransferRule>): bo
   row.mark !== 'outside' &&
   !(row.payeeId && rules.get(row.payeeId)?.mode === 'never');
 
-/** Can `o` (outflow) and `i` (inflow) be the two legs of one transfer? */
-function fits(o: Node, i: Node): boolean {
+/** Do `o` (outflow) and `i` (inflow) look like the two legs of one transfer, account rules aside? */
+function structurallyFits(o: Node, i: Node): boolean {
   if (o.row.budgetId !== i.row.budgetId || o.row.accountId === i.row.accountId) return false;
   if (-o.row.amount !== i.row.amount) return false;
   if (daysApart(o.row.date, i.row.date) > MAX_TRANSFER_DAYS_APART) return false;
+  // The pairs main matched: cash > cash, cash > card, card > card. A card outflow against a cash
+  // inflow (refund, cash advance) was never a transfer candidate and stays none, refused or not.
   const kinds = `${o.row.accountKind}>${i.row.accountKind}`;
   if (kinds !== 'cash>cash' && kinds !== 'cash>card' && kinds !== 'card>card') return false;
   if (o.rule?.mode === 'account' && o.rule.accountId !== i.row.accountId) return false;
   if (i.rule?.mode === 'account' && i.rule.accountId !== o.row.accountId) return false;
+  if (o.row.hintAccountId && o.row.hintAccountId !== i.row.accountId) return false;
+  if (i.row.hintAccountId && i.row.hintAccountId !== o.row.accountId) return false;
   return true;
 }
+
+/** Can `o` (outflow) and `i` (inflow) be the two legs of one transfer the matcher may link? */
+function fits(o: Node, i: Node): boolean {
+  if (!structurallyFits(o, i) || o.row.accountKind !== 'cash') return false;
+  const chosen = o.rule?.mode === 'account' || i.rule?.mode === 'account';
+  return chosen || pairViolation(o.row, i.row) == null;
+}
+
+/** A card row that leaves money: a purchase, never a leg of a transfer (rule 1). */
+const cardOutflow = (row: MatchRow): boolean => row.accountKind === 'card' && row.amount < 0;
 
 const order = (a: Node, b: Node): number =>
   a.row.date.localeCompare(b.row.date) ||
@@ -196,6 +286,68 @@ interface BucketResult {
   pairs: { o: Node; i: Node; basis: MatchBasis }[];
   /** Unpaired rows that still have candidates, with them. */
   open: Map<string, Set<string>>;
+}
+
+/**
+ * Pairs the account rules refuse (budget-zkts) are never linked, whatever the
+ * evidence or the payee rule, but they are still offered. Among the rows of one
+ * amount bucket that end up unlinked, an outflow and an inflow that main would
+ * have paired (card > card, cash > card at another bank, checking > checking
+ * at one bank) but a rule refuses are a refused candidate of each other. Every
+ * such row carries a suggestion listing it, which never changes what is linked:
+ *  - an outflow without a suggestion gets a `refused` one (`sure` when the
+ *    pair is mutual and neither row has any other candidate, else `choose`);
+ *  - an outflow that already has a suggestion (a choose group, or a pair left
+ *    for the person) gets the refused candidates added, closest date first,
+ *    and becomes `choose`; its basis stays.
+ * `violations` names the rule each refused candidate breaks. Rows involved are
+ * not also one-side or waiting rule rows. Returns their ids.
+ */
+function addRefusedSuggestions(bucket: readonly Node[], linked: ReadonlySet<string>, own: Suggestion[]): Set<string> {
+  const outs = bucket.filter((n) => n.row.amount < 0 && !linked.has(n.row.id));
+  const ins = bucket.filter((n) => n.row.amount > 0 && !linked.has(n.row.id));
+  const byOut = new Map<string, { node: Node; violation: PairViolation }[]>();
+  const insDegree = new Map<string, number>();
+  for (const o of outs) {
+    for (const i of ins) {
+      if (!structurallyFits(o, i)) continue;
+      const violation = pairViolation(o.row, i.row);
+      if (!violation) continue;
+      byOut.set(o.row.id, [...(byOut.get(o.row.id) ?? []), { node: i, violation }]);
+      insDegree.set(i.row.id, (insDegree.get(i.row.id) ?? 0) + 1);
+    }
+  }
+  const ownById = new Map(own.map((sug) => [sug.id, sug]));
+  const offered = new Set(own.flatMap((sug) => sug.candidateIds));
+  const nodes = new Map(bucket.map((n) => [n.row.id, n]));
+  const covered = new Set<string>();
+  for (const o of outs) {
+    const list = byOut.get(o.row.id);
+    if (!list) continue;
+    const violations = Object.fromEntries(list.map((c) => [c.node.row.id, c.violation]));
+    const existing = ownById.get(o.row.id);
+    if (existing) {
+      existing.candidateIds = [...existing.candidateIds, ...list.map((c) => c.node.row.id)]
+        .map((id) => nodes.get(id)!)
+        .sort((a, b) => daysApart(a.row.date, o.row.date) - daysApart(b.row.date, o.row.date) || order(a, b))
+        .map((n) => n.row.id);
+      existing.confidence = 'choose';
+      existing.violations = { ...existing.violations, ...violations };
+    } else {
+      list.sort((a, b) => daysApart(a.node.row.date, o.row.date) - daysApart(b.node.row.date, o.row.date) || order(a.node, b.node));
+      const only = list.length === 1 && insDegree.get(list[0].node.row.id) === 1 && !offered.has(list[0].node.row.id);
+      own.push({
+        id: o.row.id,
+        confidence: only ? 'sure' : 'choose',
+        basis: 'refused',
+        candidateIds: list.map((c) => c.node.row.id),
+        violations,
+      });
+    }
+    covered.add(o.row.id);
+    for (const c of list) covered.add(c.node.row.id);
+  }
+  return covered;
 }
 
 /** Resolve one amount bucket (all rows share the absolute amount). */
@@ -355,7 +507,7 @@ export function planTransfers(
   }
   const nodes: Node[] = rows
     .filter((r) => considered(r, rules))
-    .map((row) => ({ row, evidence: evidenceOf(row.hint), rule: coveringRule(row, rules) }));
+    .map((row) => ({ row, evidence: evidenceWithHint(row), rule: coveringRule(row, rules) }));
   const buckets = new Map<number, Node[]>();
   for (const n of nodes) {
     const k = Math.abs(n.row.amount);
@@ -370,14 +522,18 @@ export function planTransfers(
     const ins = bucket.filter((n) => n.row.amount > 0);
     const { pairs, open } = resolveBucket(outs, ins);
     const pairedIds = new Set<string>();
+    const linkedIds = new Set<string>();
+    const first = plan.suggestions.length;
     for (const { o, i, basis } of pairs) {
       pairedIds.add(o.row.id);
       pairedIds.add(i.row.id);
       const manual = o.row.mark === 'manual' || i.row.mark === 'manual';
       if (!manual && (o.rule || i.rule)) {
         plan.links.push({ outflowId: o.row.id, inflowId: i.row.id, method: 'rule', basis });
+        linkedIds.add(o.row.id).add(i.row.id);
       } else if (!manual && autoLinkable(o, i, basis)) {
         plan.links.push({ outflowId: o.row.id, inflowId: i.row.id, method: 'auto', basis });
+        linkedIds.add(o.row.id).add(i.row.id);
       } else {
         plan.suggestions.push({ id: o.row.id, confidence: 'sure', basis, candidateIds: [i.row.id] });
       }
@@ -392,7 +548,10 @@ export function planTransfers(
         .map((n) => n.row.id);
       plan.suggestions.push({ id: o.row.id, confidence: 'choose', basis: 'ambiguous', candidateIds });
     }
-    for (const n of bucket) if (!pairedIds.has(n.row.id) && !open.has(n.row.id)) lone.push(n);
+    const own = plan.suggestions.splice(first);
+    const covered = addRefusedSuggestions(bucket, linkedIds, own);
+    plan.suggestions.push(...own);
+    for (const n of bucket) if (!pairedIds.has(n.row.id) && !open.has(n.row.id) && !covered.has(n.row.id)) lone.push(n);
   }
 
   for (const n of lone) {
@@ -400,8 +559,10 @@ export function planTransfers(
       const age = n.row.date > today ? 0 : daysApart(n.row.date, today);
       if (age <= n.rule.waitDays) plan.pending.set(n.row.id, 'waiting');
       else if (n.rule.noMatch === 'outside') plan.pending.set(n.row.id, 'outside');
-      else plan.suggestions.push({ id: n.row.id, confidence: 'one_side', basis: 'unmatched', candidateIds: [] });
-    } else if (n.evidence === 'strong') {
+      else if (!cardOutflow(n.row)) plan.suggestions.push({ id: n.row.id, confidence: 'one_side', basis: 'unmatched', candidateIds: [] });
+      // A card outflow with a rule can never pair (rule 1), so it is never offered as one side either.
+    } else if (n.evidence === 'strong' && !cardOutflow(n.row)) {
+      // A lone card outflow is never one side of a transfer (cards only receive).
       plan.suggestions.push({ id: n.row.id, confidence: 'one_side', basis: 'unmatched', candidateIds: [] });
     }
   }

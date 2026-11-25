@@ -241,6 +241,13 @@ describe('apiErrorMessage order', () => {
     expect(apiErrorMessage(err, 'Could not sign in')).toBe('E-mail ou senha inválidos.');
   });
 
+  test('account_name_exists shows its message with the name, in both languages, ahead of the editor fallbacks', () => {
+    const err = { status: 409, message: 'x', code: 'account_name_exists', params: { name: 'Nubank' } };
+    expect(apiErrorMessage(err, 'Could not update the account')).toBe('You already have an open account named "Nubank". Choose a different name.');
+    setLocale('pt-BR');
+    expect(apiErrorMessage(err, 'Não foi possível criar a conta')).toBe('Já existe uma conta aberta chamada "Nubank". Escolha outro nome.');
+  });
+
   test('2. the caller fallback beats a per-status code and the raw message', () => {
     const err = { status: 404, message: 'budget not found', code: 'not_found' };
     expect(apiErrorMessage(err, 'Could not open the budget')).toBe('Could not open the budget');

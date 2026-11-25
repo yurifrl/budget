@@ -17,7 +17,8 @@ import { TransferAutoLabel, TransferIcon } from '@/features/transfers';
 import { TxnMenuKebab } from './register/TxnMenuKebab';
 import { TxnMenuTrigger } from './register/TxnMenuTrigger';
 import type { RegisterDensity } from './AccountsToolbar';
-import { SelectionCheckbox } from './SelectionBar';
+import { SelectionCheckbox } from '@/ui/SelectionCheckbox';
+import { SignedAmountBox, tableStyles } from '@/ui/registerTable';
 import { t } from './i18n';
 import { displaySystemName } from '@/domain/systemNames';
 
@@ -56,18 +57,10 @@ function CategoryCell({ txn, category, onOpenTransfer }: Pick<RowBaseProps, 'txn
   );
 }
 
-/** Signed amount pill (import-style): − red / + green, single AMOUNT column. */
+/** Signed amount pill for a transaction. */
 function RowAmount({ txn }: { txn: Transaction }) {
-  const { formatMoney } = useMoneyFormat();
   const out = txn.outflow > 0;
-  return (
-    <View style={[styles.amtBox, out ? styles.amtOut : styles.amtIn]}>
-      <Text style={[styles.amtGlyph, out ? styles.amtOutGlyph : styles.amtInGlyph]}>{out ? '−' : '+'}</Text>
-      <Text style={[styles.amtValue, out ? styles.amtOutValue : styles.amtInValue]} numberOfLines={1}>
-        {formatMoney(out ? txn.outflow : txn.inflow)}
-      </Text>
-    </View>
-  );
+  return <SignedAmountBox amount={out ? txn.outflow : txn.inflow} out={out} />;
 }
 
 /** Cleared badge wiring shared by both layouts: approve first, then cleared flips; reconciled rows are locked. */
@@ -287,46 +280,10 @@ const styles = StyleSheet.create({
   regAcctFace: { width: 16, height: 16 },
   regAcctCell: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   runBal: { width: 84, textAlign: 'right', color: colors.muted },
-  reghd: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 5,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-  },
-  reghdText: { color: colors.faint, fontSize: 11, letterSpacing: 0.5 },
-  regrow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  regText: { color: colors.text, fontSize: 13, fontVariant: ['tabular-nums'] },
-  // Signed amount pill (import-style): − red / + green, single AMOUNT column.
-  amtBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    borderWidth: 1,
-    borderRadius: radius.sm,
-    paddingVertical: 1,
-    paddingHorizontal: 5,
-    maxWidth: 118,
-  },
-  amtOut: { borderColor: colors.red, backgroundColor: colors.redPillBg },
-  amtIn: { borderColor: colors.green, backgroundColor: colors.greenPillBg },
-  amtGlyph: { fontSize: 13, fontWeight: '600' },
-  amtOutGlyph: { color: colors.redFg },
-  amtInGlyph: { color: colors.greenPillFg },
-  amtValue: { color: colors.text, fontSize: 13, fontVariant: ['tabular-nums'] },
-  amtOutValue: { color: colors.redFg },
-  amtInValue: { color: colors.greenPillFg },
+  reghd: tableStyles.head,
+  reghdText: tableStyles.headText,
+  regrow: tableStyles.row,
+  regText: tableStyles.text,
   // Upcoming repeat-rule occurrence (syscd-app-pya): dimmed row + Repeat chip.
   regrowUpcoming: { opacity: 0.55 },
   upcomingPill: {

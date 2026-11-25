@@ -3,7 +3,7 @@ import { implement } from '../../core/operation';
 import { HttpError } from '../../core/validate';
 import { accountsCreate, accountsDelete, accountsList, accountsReconcile, accountsUpdate } from '@shared/contracts/budget';
 import type { AccountType } from '@shared/contracts/budget/schemas';
-import { ensureTransferPayee } from '../domain/transfers';
+import { ensureTransferPayee, renameTransferPayee, transferPayeeIdsOf } from '../domain/transfer-payees';
 import { toPersonRef } from '../../user';
 import { findUserConnection } from '../../connections';
 import { isBudgetMember } from '../ownership';
@@ -36,6 +36,30 @@ async function assertMemberOrShared(
   }
 }
 
+/**
+ * 409 `account_name_exists` when another OPEN account of the budget has this
+ * name (case- and space-insensitive). Closed and deleted accounts never block.
+ *
+ * Concurrency without a unique index (the database is shared with another
+ * app): the check runs in the caller's transaction after taking a row lock on
+ * the budget, so two creates/renames of one budget run one after the other,
+ * and the second one sees the first one's committed row.
+ */
+async function assertOpenAccountNameFree(
+  client: Queryable,
+  budgetId: string,
+  name: string,
+  exceptAccountId: string | null,
+): Promise<void> {
+  if (!(await accountsStore.lockBudgetForAccountNames(client, budgetId))) throw new HttpError(404, 'budget not found');
+  const other = await accountsStore.findOpenAccountNamed(client, budgetId, name, exceptAccountId);
+  if (other) {
+    throw new HttpError(409, `An open account named "${other.name}" already exists. Choose a different name.`, 'account_name_exists', {
+      name: other.name,
+    });
+  }
+}
+
 const accountGroupFor = (type: AccountType): 'CASH' | 'CREDIT' => (CREDIT_TYPES[type] ? 'CREDIT' : 'CASH');
 
 /**
@@ -59,6 +83,7 @@ const createAccount = implement(
       if (!(await accountsStore.budgetExists(client, budget_id))) throw new HttpError(404, 'budget not found');
 
       await assertMemberOrShared(client, budget_id, user_id);
+      await assertOpenAccountNameFree(client, budget_id, name, null);
 
       // Open accounts start with an explicit positive/negative opening transaction,
       // so keep the stored balances at 0 and let that transaction carry the amount.
@@ -120,6 +145,16 @@ const updateAccount = implement(
         throw new HttpError(409, 'account is closed — reopen it to make changes', 'account_closed_edit');
       }
 
+      // A rename, or a reopen, must not leave two open accounts with one name.
+      // An unchanged name (the editor re-sends it) and an existing duplicate
+      // that only has other fields edited or is closed are left alone.
+      const staysOpen = closed === undefined ? !isClosed : !closed;
+      const renamed = name !== undefined && name !== acc.name;
+      const reopened = isClosed && closed === false;
+      if (staysOpen && (renamed || reopened)) {
+        await assertOpenAccountNameFree(client, budget_id, name ?? acc.name, accountId);
+      }
+
       // Working-balance edit is an OVERRIDE, not a ledger operation (product
       // decision): the balance is set directly, no adjustment entry is booked.
       // The delta lands in the uncleared bucket — the balance stays unverified
@@ -145,6 +180,14 @@ const updateAccount = implement(
 
       if (name !== undefined || note !== undefined) {
         await accountsStore.setAccountNameNote(client, accountId, name ?? null, note ?? null);
+        // The account's transfer payee follows its name, in this transaction.
+        if (name !== undefined && name !== acc.name) {
+          const renamed = await renameTransferPayee(client, budget_id, accountId);
+          // Nothing else was touched; the repair script folds the colliding payee later.
+          if (renamed.collision || renamed.inconsistent) {
+            console.warn(`[transfer-payee] account ${accountId} of budget ${budget_id}: ${JSON.stringify(renamed)}`);
+          }
+        }
       }
 
       if (user_id !== undefined) {
@@ -266,7 +309,11 @@ const deleteAccount = implement(accountsDelete, async (_c, { id: accountId, budg
     // deleted account on their next tick. Retire them with it; their (already
     // soft-deleted) occurrences keep the rule reference via the FK, so rules
     // are flagged, never hard-deleted.
-    await accountsStore.retireAccountRepeatRules(client, accountId, acc.transfer_payee_id);
+    // The payees to retire are the ones that point at THIS account (and its own
+    // pointer when that payee is not another account's): with two accounts of one
+    // name, a bad pointer must never retire the other account's payee.
+    const transferPayeeIds = await transferPayeeIdsOf(client, budgetId, accountId, acc.transfer_payee_id);
+    await accountsStore.retireAccountRepeatRules(client, accountId, transferPayeeIds);
 
     await accountsStore.zeroAndDeleteAccount(client, accountId);
 
@@ -275,8 +322,10 @@ const deleteAccount = implement(accountsDelete, async (_c, { id: accountId, budg
     // then retire the transfer payee — nothing live references it anymore and
     // a dangling "Transfer : <name>" would linger in Manage Payees.
     const plain = await findOrCreatePayeeByName(client, budgetId, acc.name);
-    await repointLiveTransactionsPayee(client, acc.transfer_payee_id, plain);
-    await retireTransferPayee(client, acc.transfer_payee_id);
+    for (const payeeId of transferPayeeIds) {
+      await repointLiveTransactionsPayee(client, payeeId, plain);
+      await retireTransferPayee(client, payeeId);
+    }
   });
 });
 
