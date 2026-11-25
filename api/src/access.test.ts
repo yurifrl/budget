@@ -161,6 +161,9 @@ const samples: Record<string, Record<string, unknown>> = {
   budget_payees_rename: { id: V.payee, budget_id: A.budget, name: 'pwned' },
   budget_payees_rename_rules_add: { id: V.payee, budget_id: A.budget, match_type: 'contains', condition: 'pwned' },
   budget_payees_rename_rules_list: { id: V.payee, budget_id: A.budget },
+  // The attacker's own payee with the victim's rule id (as remove / update): the rule is re-scoped by budget AND payee.
+  budget_payees_rename_rules_apply: { id: A.payee, budget_id: A.budget, rule_id: V.renameRule },
+  budget_payees_rename_rules_apply_preview: { id: A.payee, budget_id: A.budget, rule_id: V.renameRule },
   // The attacker's own payee with the victim's rule id: the rule is re-scoped by budget AND payee.
   budget_payees_rename_rules_remove: { id: A.payee, budget_id: A.budget, rule_id: V.renameRule },
   budget_payees_rename_rules_update: { id: A.payee, budget_id: A.budget, rule_id: V.renameRule, match_type: 'is', condition: 'pwned' },
@@ -521,6 +524,13 @@ const bodyCases: BodyCase[] = [
     input: { id: A.payee, budget_id: A.budget, categorization_mode: 'fixed', default_category_id: V.category } },
   { op: 'budget_payees_merge', fields: ['target_id'], outcome: 'reject', status: 404,
     input: { id: A.payee, budget_id: A.budget, target_id: V.payee } },
+  // Undoing an apply: every id of the request is re-scoped by budget in SQL; a foreign row, payee or account changes nothing.
+  { op: 'budget_payees_rename_rules_revert', fields: ['rows[].transaction_id'], outcome: 'ignored',
+    input: { budget_id: A.budget, rows: [{ transaction_id: V.txn, previous_payee_id: null, payee_id: V.payee, previous_hint_account_id: null, hint_account_id: null }] } },
+  { op: 'budget_payees_rename_rules_revert', fields: ['rows[].previous_payee_id', 'rows[].payee_id'], outcome: 'ignored',
+    input: { budget_id: A.budget, rows: [{ transaction_id: A.txn, previous_payee_id: V.payee, payee_id: A.payee, previous_hint_account_id: null, hint_account_id: null }] } },
+  { op: 'budget_payees_rename_rules_revert', fields: ['rows[].previous_hint_account_id', 'rows[].hint_account_id'], outcome: 'ignored',
+    input: { budget_id: A.budget, rows: [{ transaction_id: A.txn, previous_payee_id: null, payee_id: A.payee, previous_hint_account_id: V.account, hint_account_id: V.account }] } },
   // repeat rules
   { op: 'budget_repeat_rules_create', fields: ['account_id'], outcome: 'reject', status: 400,
     input: ruleBase({ account_id: V.account }) },
@@ -770,6 +780,9 @@ const onVictimBudget: Record<string, Record<string, unknown>> = {
   categorize_skip: { transaction_id: V.txn },
   categorize_undo: { transaction_ids: [V.txn] },
   budget_payees_merge: { id: V.payee, target_id: V.payee },
+  budget_payees_rename_rules_apply: { id: V.payee, rule_id: V.renameRule },
+  budget_payees_rename_rules_apply_preview: { id: V.payee, rule_id: V.renameRule },
+  budget_payees_rename_rules_revert: { rows: [{ transaction_id: V.txn, previous_payee_id: null, payee_id: V.payee, previous_hint_account_id: null, hint_account_id: null }] },
   budget_plan_auto_assign: { month: MONTH, rows: [{ category_id: V.category, assigned: 1000 }] },
   budget_repeat_rules_create: ruleBase({ account_id: V.account }),
   budget_repeat_rules_generate: {},

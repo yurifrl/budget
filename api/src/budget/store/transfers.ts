@@ -36,6 +36,33 @@ export interface TransferCandidateSql {
   hint_account_id: string | null;
 }
 
+/**
+ * Is the row as it was imported (a bank-imported row whose payee the person has not changed)? SQL over `transactions t`, `payees p` (its
+ * payee) and `connection_transactions cs` (its sync shadow); the matcher and the rename-rule apply share it.
+ */
+export const UNTOUCHED_LEDGER_SQL = `
+  COALESCE(t.import_id IS NOT NULL
+   AND (t.payee_id IS NULL OR p.name IN (t.import_payee_name, t.import_payee_name_original)
+        -- the payee a renaming rule assigned at the last sync is as imported, not edited
+        OR COALESCE(p.name = cs.last_synced_payload->>'payee', false)
+        -- a STATEMENT row (no sync shadow, and an import key that is not a bank provider's '<provider>:<id>': a carried bank
+        -- row without its shadow, as after a fresh start, keeps main's answer; a statement file's own ids such as 'nubank:...' count) whose payee is the one a rule of that payee assigns for the
+        -- imported text. Main counted a rule-hit row untouched exactly when its rule-spliced payee name
+        -- equalled the imported text ('is': the payee's name; 'contains': the text with the pattern
+        -- replaced by the payee's name); that is kept, rule by rule. 'starts with' / 'ends with' never
+        -- existed on main: such a row is as imported.
+        OR (cs.transaction_id IS NULL AND NOT EXISTS (SELECT 1 FROM connections cn WHERE starts_with(t.import_id, cn.provider || ':')) AND EXISTS (
+          SELECT 1 FROM ${allRulesSql('t.budget_id', 't.payee_id')} rr
+           WHERE CASE rr.match_type
+                   WHEN 'contains' THEN
+                     strpos(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), lower(rr.condition)) > 0
+                     AND btrim(replace(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), lower(rr.condition), p.name))
+                         IN (t.import_payee_name, t.import_payee_name_original)
+                   WHEN 'starts_with' THEN starts_with(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), lower(rr.condition))
+                   WHEN 'ends_with' THEN right(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), length(rr.condition)) = lower(rr.condition)
+                   ELSE false
+                 END))), false)`;
+
 const CANDIDATE_SELECT = `
   SELECT t.id, t.budget_id, t.account_id, a.name AS account_name,
          CASE WHEN a.type = 'creditCard' OR a.account_group = 'CREDIT' THEN 'card'
@@ -46,27 +73,7 @@ const CANDIDATE_SELECT = `
          t.category_id,
          (SELECT count(*) FROM subtransactions s WHERE s.transaction_id = t.id AND NOT s.deleted)::text AS split_count,
          t.transfer_account_id, t.transfer_transaction_id, t.payee_id, p.name AS payee_name,
-         COALESCE(t.import_id IS NOT NULL
-          AND (t.payee_id IS NULL OR p.name IN (t.import_payee_name, t.import_payee_name_original)
-               -- the payee a renaming rule assigned at the last sync is as imported, not edited
-               OR COALESCE(p.name = cs.last_synced_payload->>'payee', false)
-               -- a STATEMENT row (no sync shadow, and an import key that is not a bank provider's '<provider>:<id>': a carried bank
-               -- row without its shadow, as after a fresh start, keeps main's answer; a statement file's own ids such as 'nubank:...' count) whose payee is the one a rule of that payee assigns for the
-               -- imported text. Main counted a rule-hit row untouched exactly when its rule-spliced payee name
-               -- equalled the imported text ('is': the payee's name; 'contains': the text with the pattern
-               -- replaced by the payee's name); that is kept, rule by rule. 'starts with' / 'ends with' never
-               -- existed on main: such a row is as imported.
-               OR (cs.transaction_id IS NULL AND NOT EXISTS (SELECT 1 FROM connections cn WHERE starts_with(t.import_id, cn.provider || ':')) AND EXISTS (
-                 SELECT 1 FROM ${allRulesSql('t.budget_id', 't.payee_id')} rr
-                  WHERE CASE rr.match_type
-                          WHEN 'contains' THEN
-                            strpos(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), lower(rr.condition)) > 0
-                            AND btrim(replace(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), lower(rr.condition), p.name))
-                                IN (t.import_payee_name, t.import_payee_name_original)
-                          WHEN 'starts_with' THEN starts_with(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), lower(rr.condition))
-                          WHEN 'ends_with' THEN right(lower(btrim(COALESCE(t.import_payee_name_original, t.import_payee_name))), length(rr.condition)) = lower(rr.condition)
-                          ELSE false
-                        END))), false) AS untouched_ledger,
+         ${UNTOUCHED_LEDGER_SQL} AS untouched_ledger,
          m.state AS mark,
          a.connection_id, COALESCE(NULLIF(btrim(a.institution), ''), c.institution) AS institution,
          CASE WHEN ha.id IS NOT NULL AND NOT ha.deleted THEN h.account_id END AS hint_account_id

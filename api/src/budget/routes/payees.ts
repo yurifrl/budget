@@ -8,8 +8,11 @@ import {
   payeesMerge,
   payeesRename,
   payeesRenameRulesAdd,
+  payeesRenameRulesApply,
+  payeesRenameRulesApplyPreview,
   payeesRenameRulesList,
   payeesRenameRulesRemove,
+  payeesRenameRulesRevert,
   payeesRenameRulesUpdate,
   payeesSetCategorization,
   payeesSetHidden,
@@ -18,6 +21,7 @@ import {
   payeesTransactions,
   payeesTransferRuleGet,
 } from '@shared/contracts/budget';
+import { planRuleApply, revertRuleApply, writeRuleApply } from '../domain/rename-apply';
 import { linkTransfers } from '../domain/transfer-links';
 import { assertNotTransferPayee, transferPayeeProtected } from '../domain/transfer-payees';
 import * as transferStore from '../store/transfers';
@@ -282,6 +286,41 @@ export const operations = [
       if (!(await rulesStore.deleteRule(client, budget_id, id, rule_id))) throw new HttpError(404, 'rule not found');
       await rulesStore.syncLegacyRuleColumns(client, budget_id, id);
     }),
+  ),
+
+  // Applying ONE rule to past transactions, on purpose (budget-ou8p): preview, apply, revert.
+  implement(payeesRenameRulesApplyPreview, async (_c, { id, budget_id, rule_id }) => {
+    await requirePayee(budget_id, id);
+    if (!(await rulesStore.getRule(pool, budget_id, id, rule_id))) throw new HttpError(404, 'rule not found');
+    const plan = await planRuleApply(pool, budget_id, rule_id);
+    return {
+      rule_id,
+      count: plan.changes.length,
+      sample: plan.changes.slice(0, 10).map(({ row }) => ({
+        id: row.id,
+        account_id: row.account_id,
+        date: row.date,
+        amount: Number(row.amount),
+        payee_id: row.payee_id,
+        payee_name: row.payee_name,
+        bank_text: row.bank_text,
+      })),
+      skipped: plan.skipped,
+    };
+  }),
+
+  implement(payeesRenameRulesApply, async (_c, { id, budget_id, rule_id }) =>
+    withTransaction(pool, async (client) => {
+      await requirePayeeIn(client, budget_id, id);
+      if (!(await rulesStore.getRule(client, budget_id, id, rule_id))) throw new HttpError(404, 'rule not found');
+      const plan = await planRuleApply(client, budget_id, rule_id, true);
+      const rows = await writeRuleApply(client, budget_id, plan);
+      return { rule_id, changed: rows.length, rows, skipped: plan.skipped };
+    }),
+  ),
+
+  implement(payeesRenameRulesRevert, async (_c, { budget_id, rows }) =>
+    withTransaction(pool, (client) => revertRuleApply(client, budget_id, rows)),
   ),
 
   // "Treat as transfer" rule (budget-mit6).

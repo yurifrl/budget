@@ -2,7 +2,17 @@ import { z } from '../../zod';
 
 import { defineOperation, EXPOSE_ALL } from '../../operation-contract';
 import { budgetId, categorizationModeSchema, matchTypeSchema, nameSchema, ruleMatchTypeSchema, uuidSchema } from './schemas';
-import { noContent, payeeAdminRowSchema, payeeMergedSchema, payeeRowSchema, payeeTxnPageSchema, renameRuleSchema } from './outputs';
+import {
+  noContent,
+  payeeAdminRowSchema,
+  payeeMergedSchema,
+  payeeRowSchema,
+  payeeTxnPageSchema,
+  renameRuleApplyPreviewSchema,
+  renameRuleApplyResultSchema,
+  renameRuleRevertResultSchema,
+  renameRuleSchema,
+} from './outputs';
 
 const scoped = z.object({ id: uuidSchema, budget_id: budgetId });
 
@@ -133,12 +143,14 @@ const ruleBody = {
   match_type: ruleMatchTypeSchema,
   condition: z.string().trim().min(1).max(200),
 };
+const FROM_NOW_ON =
+  'A rule added, changed or removed applies only to rows imported from then on (bank sync, statement import, register entries): rows already stored keep their payee and import identity, and a later sync or re-import leaves them alone. To apply a rule to past rows on purpose use budget_payees_rename_rules_apply_preview, then budget_payees_rename_rules_apply.';
 const RULE_MATCHING =
   'Matching ignores case and surrounding or repeated spaces (accents count). When several rules match one text the most specific wins: is, then starts with / ends with, then contains; then the longest pattern; then the oldest rule.';
 
 export const payeesRenameRulesList = defineOperation({
   name: 'budget_payees_rename_rules_list',
-  description: `List a payee's renaming rules, oldest first. A rule says "imported payees that <is | contains | starts with | ends with> condition are renamed to this payee": a matching imported row is assigned to the payee itself and keeps the imported text as its import name. A payee can hold several rules. ${RULE_MATCHING}`,
+  description: `List a payee's renaming rules, oldest first. A rule says "imported payees that <is | contains | starts with | ends with> condition are renamed to this payee": a matching imported row is assigned to the payee itself and keeps the imported text as its import name. A payee can hold several rules. ${RULE_MATCHING} ${FROM_NOW_ON}`,
   input: scoped,
   output: z.array(renameRuleSchema),
   method: 'GET',
@@ -150,7 +162,7 @@ export const payeesRenameRulesList = defineOperation({
 
 export const payeesRenameRulesAdd = defineOperation({
   name: 'budget_payees_rename_rules_add',
-  description: `Add a renaming rule to a payee. A transfer payee ("Transfer : <account>") can hold rules too: a row a rule assigns to it on import or bank sync stays an ordinary uncategorized row with a transfer hint for that account, and a register entry makes the transfer with its mirror. 409 when another payee already holds the same rule. ${RULE_MATCHING}`,
+  description: `Add a renaming rule to a payee. A transfer payee ("Transfer : <account>") can hold rules too: a row a rule assigns to it on import or bank sync stays an ordinary uncategorized row with a transfer hint for that account, and a register entry makes the transfer with its mirror. 409 when another payee already holds the same rule. ${RULE_MATCHING} ${FROM_NOW_ON}`,
   input: scoped.extend(ruleBody),
   output: renameRuleSchema,
   method: 'POST',
@@ -163,7 +175,7 @@ export const payeesRenameRulesAdd = defineOperation({
 
 export const payeesRenameRulesUpdate = defineOperation({
   name: 'budget_payees_rename_rules_update',
-  description: 'Change the match type and condition of one renaming rule of a payee. 404 when the rule is not that payee\'s, 409 when another rule already has these values.',
+  description: 'Change the match type and condition of one renaming rule of a payee. 404 when the rule is not that payee\'s, 409 when another rule already has these values. ' + FROM_NOW_ON,
   input: ruleScoped.extend(ruleBody),
   output: renameRuleSchema,
   method: 'PUT',
@@ -175,12 +187,66 @@ export const payeesRenameRulesUpdate = defineOperation({
 
 export const payeesRenameRulesRemove = defineOperation({
   name: 'budget_payees_rename_rules_remove',
-  description: 'Remove one renaming rule of a payee. Rows already imported keep their payee.',
+  description: 'Remove one renaming rule of a payee. Rows already imported keep their payee. ' + FROM_NOW_ON,
   input: ruleScoped,
   output: noContent,
   method: 'DELETE',
   path: '/payees/:id/rename-rules/:rule_id',
   query: ['budget_id'],
   kind: 'destructive',
+  expose: EXPOSE_ALL,
+});
+
+const APPLY_RULES =
+  'The rows: live, bank-imported rows of the budget (in open accounts) whose stored bank text this rule is the winning rule for (same matching order as an import), that nobody has edited (the transfer matcher\'s "untouched" notion: payee still as imported; a synced row whose date, amount, memo and payee are still what the last sync wrote), that are not transfers already and not reconciled. A row a person chose the payee of in an import screen counts as edited. Rows keep their import id and import text, so a later sync or statement re-import changes and duplicates nothing. Categories are never changed.';
+
+export const payeesRenameRulesApplyPreview = defineOperation({
+  name: 'budget_payees_rename_rules_apply_preview',
+  description: `Dry run of applying ONE renaming rule to past transactions: how many rows it would change, a sample of the newest (date, amount, current payee, bank text) and how many matching rows it would leave alone, by reason. Writes nothing. ${APPLY_RULES} For a rule on an account's transfer payee the rows keep an ordinary payee (the text itself, as an import stores it) and get a transfer hint for that account (no mirror rows); rows the matcher's bank rules would never pair with that account are left alone.`,
+  input: ruleScoped,
+  output: renameRuleApplyPreviewSchema,
+  method: 'GET',
+  path: '/payees/:id/rename-rules/:rule_id/apply-preview',
+  query: ['budget_id'],
+  kind: 'read',
+  expose: EXPOSE_ALL,
+});
+
+export const payeesRenameRulesApply = defineOperation({
+  name: 'budget_payees_rename_rules_apply',
+  description: `Apply ONE renaming rule to past transactions, in one database transaction: exactly the rows budget_payees_rename_rules_apply_preview counts get this rule's payee. ${APPLY_RULES} Returns every changed row with the payee and hint it had before, which budget_payees_rename_rules_revert takes back to undo it.`,
+  input: ruleScoped,
+  output: renameRuleApplyResultSchema,
+  method: 'POST',
+  path: '/payees/:id/rename-rules/:rule_id/apply',
+  query: ['budget_id'],
+  kind: 'write',
+  expose: EXPOSE_ALL,
+});
+
+export const payeesRenameRulesRevert = defineOperation({
+  name: 'budget_payees_rename_rules_revert',
+  description:
+    "Undo a budget_payees_rename_rules_apply: send back the `rows` it returned. Each row that still has the payee and hint the apply gave it gets its previous payee and hint back (and the sync shadow follows); a row the person changed since, or whose previous payee was deleted, is left as it is and reported in `skipped`. Nothing else is touched.",
+  input: z.object({
+    budget_id: budgetId,
+    rows: z
+      .array(
+        z.object({
+          transaction_id: uuidSchema,
+          previous_payee_id: uuidSchema.nullable(),
+          payee_id: uuidSchema.nullable(),
+          previous_hint_account_id: uuidSchema.nullable(),
+          hint_account_id: uuidSchema.nullable(),
+        }),
+      )
+      .min(1)
+      .max(20000),
+  }),
+  output: renameRuleRevertResultSchema,
+  method: 'POST',
+  path: '/payees/rename-rules-revert',
+  status: 200,
+  kind: 'write',
   expose: EXPOSE_ALL,
 });
