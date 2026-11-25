@@ -189,7 +189,11 @@ export async function listTransferSuggestions(db: Queryable, budgetId: string, a
       confidence: s.confidence,
       basis: s.basis,
       leg: leg(s.id),
-      candidates: s.candidateIds.map((c) => ({ ...leg(c), days_apart: daysApart(byId.get(c)!.date, byId.get(s.id)!.date) })),
+      candidates: s.candidateIds.map((c) => ({
+        ...leg(c),
+        days_apart: daysApart(byId.get(c)!.date, byId.get(s.id)!.date),
+        ...(s.violations?.[c] ? { rule: s.violations[c] } : {}),
+      })),
     }))
     .sort((a, b) => b.leg.date.localeCompare(a.leg.date) || a.id.localeCompare(b.id));
 }

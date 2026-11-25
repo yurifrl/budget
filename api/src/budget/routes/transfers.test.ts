@@ -284,11 +284,18 @@ describe.skipIf(!dbReady)('transfers between own accounts (operations)', () => {
       expect((await get(itauOut)).transfer_transaction_id).toBe(nuIn);
       expect((await get(nuOut)).transfer_transaction_id).toBe(cardIn);
 
-      // Itaú conta paying the Nubank card breaks rule 2: no suggestion, but a person may still link it.
+      // Itaú conta paying the Nubank card breaks rule 2: never linked on its own, but offered to the person.
       const a = await imported(itau, -70_000, '2026-10-14', 'PIX TRANSF SERGIO');
       const b = await imported(nucard, 70_000, '2026-10-14', 'Pagamento recebido');
       expect(await runLinker()).toBe(0);
-      expect((await list()).get(a)!.transfer_suggestion).toBeNull();
+      const listed = await list();
+      for (const id of [a, b]) {
+        expect(listed.get(id)!.transfer_suggestion).toEqual({ confidence: 'sure', candidate_count: 1, counterpart_id: id === a ? b : a });
+      }
+      const sug = await op('budget_transfer_suggestions_list', { budget_id: B });
+      expect(sug.status, JSON.stringify(sug.json)).toBe(200);
+      const offered = sug.json.find((x: { id: string }) => x.id === a);
+      expect(offered).toMatchObject({ basis: 'refused', confidence: 'sure', candidates: [{ transaction_id: b, rule: 'card_payment_other_bank' }] });
       const res = await op('budget_transfers_link', { budget_id: B, links: [{ transaction_id: a, counterpart_id: b }] });
       expect(res.status, JSON.stringify(res.json)).toBe(200);
       expect(res.json.warnings).toEqual([{ transaction_id: a, counterpart_id: b, rule: 'card_payment_other_bank' }]);
@@ -319,12 +326,13 @@ describe.skipIf(!dbReady)('transfers between own accounts (operations)', () => {
       expect((await get(toSavingsOut)).transfer_transaction_id).toBe(toSavingsIn);
       expect((await get(fromSavingsOut)).transfer_transaction_id).toBe(fromSavingsIn);
 
-      // Two checking accounts of one bank stay refused: no link, no suggestion.
+      // Two checking accounts of one bank are refused: never linked, but offered.
       await setBanks([[nubank, 'itau']]);
       const a = await imported(itau, -40_000, '2026-10-25', 'PIX TRANSF');
-      await imported(nubank, 40_000, '2026-10-25', 'Transferência recebida');
+      const c = await imported(nubank, 40_000, '2026-10-25', 'Transferência recebida');
       expect(await runLinker()).toBe(0);
-      expect((await list()).get(a)!.transfer_suggestion).toBeNull();
+      expect((await get(a)).transfer_transaction_id).toBeNull();
+      expect((await list()).get(a)!.transfer_suggestion).toEqual({ confidence: 'sure', candidate_count: 1, counterpart_id: c });
     } finally {
       await setBanks([
         [itau, null],

@@ -33,6 +33,14 @@ describe('transfer contracts', () => {
     expect(transferSuggestionsList.input.safeParse({ budget_id: b }).success).toBe(true);
   });
 
+  test('a refused suggestion names the rule each candidate breaks; the field is optional elsewhere', () => {
+    const cand = { ...leg, transaction_id: t2, amount: 3_000_000, days_apart: 1 };
+    const row = { id: t1, confidence: 'sure', basis: 'refused', leg, candidates: [{ ...cand, rule: 'cash_same_bank' }] };
+    expect(transferSuggestionsList.output!.safeParse([row]).success).toBe(true);
+    expect(transferSuggestionsList.output!.safeParse([{ ...row, candidates: [{ ...cand, rule: 'nope' }] }]).success).toBe(false);
+    expect(transferSuggestionsList.output!.safeParse([{ ...row, basis: 'unique', candidates: [cand] }]).success).toBe(true);
+  });
+
   test('link takes pairs (or an account) and an optional remember flag; ids and modes are validated', () => {
     expect(transfersLink.input.safeParse({ budget_id: b, links: [{ transaction_id: t1, counterpart_id: t2 }], remember_payee: true }).success).toBe(true);
     expect(transfersLink.input.safeParse({ budget_id: b, links: [] }).success).toBe(false);

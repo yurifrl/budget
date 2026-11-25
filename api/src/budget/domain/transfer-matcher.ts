@@ -18,7 +18,9 @@
  *    only across banks (savings and cash accounts are not judged). The bank
  *    rules apply only when both banks are known (see `sameBank`); a fixed-account payee rule ('account') is the person's own
  *    choice and skips the bank rules. Candidates that break a rule are
- *    dropped before any tie-breaking;
+ *    dropped before any tie-breaking and are never linked (whatever the
+ *    evidence or payee rule); a row left without an allowed partner offers
+ *    them as a `refused` suggestion for the person to confirm;
  *  - only uncategorized, unsplit, unlinked rows; a row marked "not a transfer"
  *    or whose payee rule says "never" is never considered;
  *  - resolution, per amount bucket: (1) each side the other's only candidate
@@ -49,7 +51,7 @@ export type AccountKind = 'cash' | 'card' | 'other';
 export type Evidence = 'strong' | 'weak' | 'none' | 'against';
 export type TransferMark = 'dismissed' | 'outside' | 'manual';
 export type TransferRuleMode = 'auto' | 'account' | 'never';
-export type MatchBasis = 'unique' | 'ordinal' | 'evidence' | 'rule' | 'ambiguous' | 'unmatched';
+export type MatchBasis = 'unique' | 'ordinal' | 'evidence' | 'rule' | 'ambiguous' | 'unmatched' | 'refused';
 export type SuggestionConfidence = 'sure' | 'choose' | 'one_side';
 export type PendingTransfer = 'waiting' | 'outside';
 
@@ -156,6 +158,8 @@ export interface Suggestion {
   basis: MatchBasis;
   /** Proposed other side(s), closest date first; empty for one-side rows. */
   candidateIds: string[];
+  /** `refused` suggestions only: the account rule each candidate breaks (never auto-linked). */
+  violations?: Record<string, PairViolation>;
 }
 
 /** Per-row summary the register shows (both sides of a pair carry one). */
@@ -226,14 +230,20 @@ const considered = (row: MatchRow, rules: ReadonlyMap<string, TransferRule>): bo
   row.mark !== 'outside' &&
   !(row.payeeId && rules.get(row.payeeId)?.mode === 'never');
 
-/** Can `o` (outflow) and `i` (inflow) be the two legs of one transfer? */
-function fits(o: Node, i: Node): boolean {
+/** Do `o` (outflow) and `i` (inflow) look like the two legs of one transfer, account rules aside? */
+function structurallyFits(o: Node, i: Node): boolean {
   if (o.row.budgetId !== i.row.budgetId || o.row.accountId === i.row.accountId) return false;
   if (-o.row.amount !== i.row.amount) return false;
   if (daysApart(o.row.date, i.row.date) > MAX_TRANSFER_DAYS_APART) return false;
-  if (o.row.accountKind !== 'cash' || i.row.accountKind === 'other') return false;
+  if (o.row.accountKind === 'other' || i.row.accountKind === 'other') return false;
   if (o.rule?.mode === 'account' && o.rule.accountId !== i.row.accountId) return false;
   if (i.rule?.mode === 'account' && i.rule.accountId !== o.row.accountId) return false;
+  return true;
+}
+
+/** Can `o` (outflow) and `i` (inflow) be the two legs of one transfer the matcher may link? */
+function fits(o: Node, i: Node): boolean {
+  if (!structurallyFits(o, i) || o.row.accountKind !== 'cash') return false;
   const chosen = o.rule?.mode === 'account' || i.rule?.mode === 'account';
   return chosen || pairViolation(o.row, i.row) == null;
 }
@@ -250,6 +260,49 @@ interface BucketResult {
   pairs: { o: Node; i: Node; basis: MatchBasis }[];
   /** Unpaired rows that still have candidates, with them. */
   open: Map<string, Set<string>>;
+}
+
+/**
+ * Pairs the account rules refuse (budget-zkts) are never linked, whatever the
+ * evidence or the payee rule, but they are still offered: among the rows of one
+ * amount bucket that found no allowed partner, an outflow and an inflow that
+ * fit but for a rule become a suggestion naming the rule each candidate
+ * breaks (`basis: 'refused'`). One mutual candidate on both sides is `sure`,
+ * anything else `choose`. Rows with such a suggestion are not also one-side or
+ * waiting rule rows.
+ */
+function refusedSuggestions(unpaired: readonly Node[]): { suggestions: Suggestion[]; covered: Set<string> } {
+  const outs = unpaired.filter((n) => n.row.amount < 0);
+  const ins = unpaired.filter((n) => n.row.amount > 0);
+  const byOut = new Map<string, { node: Node; violation: PairViolation }[]>();
+  const insDegree = new Map<string, number>();
+  for (const o of outs) {
+    for (const i of ins) {
+      if (!structurallyFits(o, i)) continue;
+      const violation = pairViolation(o.row, i.row);
+      if (!violation) continue;
+      byOut.set(o.row.id, [...(byOut.get(o.row.id) ?? []), { node: i, violation }]);
+      insDegree.set(i.row.id, (insDegree.get(i.row.id) ?? 0) + 1);
+    }
+  }
+  const suggestions: Suggestion[] = [];
+  const covered = new Set<string>();
+  for (const o of outs) {
+    const list = byOut.get(o.row.id);
+    if (!list) continue;
+    list.sort((a, b) => daysApart(a.node.row.date, o.row.date) - daysApart(b.node.row.date, o.row.date) || order(a.node, b.node));
+    const sure = list.length === 1 && insDegree.get(list[0].node.row.id) === 1;
+    suggestions.push({
+      id: o.row.id,
+      confidence: sure ? 'sure' : 'choose',
+      basis: 'refused',
+      candidateIds: list.map((c) => c.node.row.id),
+      violations: Object.fromEntries(list.map((c) => [c.node.row.id, c.violation])),
+    });
+    covered.add(o.row.id);
+    for (const c of list) covered.add(c.node.row.id);
+  }
+  return { suggestions, covered };
 }
 
 /** Resolve one amount bucket (all rows share the absolute amount). */
@@ -446,7 +499,10 @@ export function planTransfers(
         .map((n) => n.row.id);
       plan.suggestions.push({ id: o.row.id, confidence: 'choose', basis: 'ambiguous', candidateIds });
     }
-    for (const n of bucket) if (!pairedIds.has(n.row.id) && !open.has(n.row.id)) lone.push(n);
+    const unpaired = bucket.filter((n) => !pairedIds.has(n.row.id) && !open.has(n.row.id));
+    const refused = refusedSuggestions(unpaired);
+    plan.suggestions.push(...refused.suggestions);
+    for (const n of unpaired) if (!refused.covered.has(n.row.id)) lone.push(n);
   }
 
   for (const n of lone) {

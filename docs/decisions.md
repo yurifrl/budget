@@ -1907,6 +1907,29 @@ app. The two now ship independently.
   different connections it is unknown. Pinned in `transfer-matcher.test.ts`.
   How "same bank" is decided (labels versus connection id) stays open until
   production data and an owner decision.
+- Owner decision (refused pairs): a pair a rule refuses is never linked
+  automatically (not by evidence, not by an `auto` payee rule), but it is not
+  hidden: when a row finds no allowed partner, the refused candidates become
+  a suggestion with `basis: 'refused'` (`sure` when mutual and unique,
+  `choose` otherwise), each candidate carrying the rule it breaks (`rule`:
+  `card_outflow` | `card_payment_other_bank` | `cash_same_bank`). It counts
+  as a suspected transfer in the register chip and the suggestions list, and
+  the row is then not also a one-side or waiting/outside rule row. Refused
+  candidates are not offered to a row that has an allowed partner. Confirming
+  goes through `POST /transfers/link` with `counterpart_id` and returns the
+  existing warning. Contract change is additive (new basis value, optional
+  `candidates[].rule`). A released client has no text for `refused`: its
+  "Why:" line falls through to "no matching row in your accounts" (wrong but
+  harmless; the link action still works), so the client should add a reason
+  per `rule` (e.g. "different banks").
+- Known limit of "same bank" (follow-up, not fixed here): bank labels come
+  from the account's institution, else the connection's, and the same
+  connection counts as one bank when labels are missing. A connection that
+  holds several banks with unlabelled accounts would be treated as one bank.
+  Production data (read by the owner) has one bank per live connection and a
+  label on every linked account, so it does not occur today. A fix would
+  store the bank per account at link/sync time and treat the MeuPluggy
+  wrapper connection as unknown.
 - Re-running the matcher never touches a link that already exists, even one
   that breaks these rules: only unlinked rows are candidates and nothing
   unlinks (tested in `budget/routes/transfers.test.ts`).

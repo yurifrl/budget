@@ -20,7 +20,7 @@ const idList = z.array(uuidSchema).min(1).max(1000);
 export const transferSuggestionsList = defineOperation({
   name: 'budget_transfer_suggestions_list',
   description:
-    'Rows that look like transfers between two of the budget\'s own accounts but were not linked automatically, with the proposed other side(s), why (`basis`) and how sure (`confidence`: sure = one match, choose = several possible, one_side = no matching row). account_id narrows to suggestions touching that account. `amount` fields are signed milliunits (1/1000 of the currency unit, 12.34 = 12340).',
+    'Rows that look like transfers between two of the budget\'s own accounts but were not linked automatically, with the proposed other side(s), why (`basis`) and how sure (`confidence`: sure = one match, choose = several possible, one_side = no matching row). A `refused` basis means the pair breaks an account rule (a card is never the paying side; checking pays a card only of its own bank; checking to checking only across banks): never linked automatically, shown for you to confirm, and each candidate\'s `rule` names the rule. account_id narrows to suggestions touching that account. `amount` fields are signed milliunits (1/1000 of the currency unit, 12.34 = 12340).',
   input: z.object({ budget_id: budgetId, account_id: uuidSchema.optional() }),
   output: z.array(transferSuggestionSchema),
   method: 'GET',
