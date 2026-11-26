@@ -2697,7 +2697,6 @@ Client only (`client/src/features/payees/`); plan `.agents/plans/2026-11-24_tran
   for the owner: Reflect's past monthly totals drop, because on-budget transfers and card payments are no
   longer counted as spending. The register's "Category not needed" and the category lock look at the peer
   account only (`isBudgetTransfer`), as the register always did.
-||||||| fba921e
 
 ## Continuous api/web deploy on main (2026-11-26)
 
