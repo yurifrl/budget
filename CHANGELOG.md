@@ -1,5 +1,14 @@
 # Changelog
 
+## v2026.11.26-01 2026-11-26 release
+
+### Changed
+
+- release: v2026.11.26-01
+- feat(categorize): category suggestions with Jev
+- REMOVE WRONG AI IMPL
+
+
 ## v2026.11.26 2026-11-26 release
 
 ### Changed
