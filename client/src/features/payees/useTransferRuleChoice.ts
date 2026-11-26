@@ -11,8 +11,11 @@
 
 import { useState } from 'react';
 
+import { useAppDispatch } from '@/state/hooks';
+
 import { apiErrorCode, apiErrorMessage, apiErrorParam } from '@/platform/api/baseQuery';
 import {
+  budgetApi,
   useAddPayeeRenameRuleMutation,
   useLazyGetPayeeRenameRulesQuery,
   useRemovePayeeRenameRuleMutation,
@@ -20,6 +23,7 @@ import {
 } from '@/budget/data/api';
 import type { PayeeAdminRow } from '@/budget/data/rows';
 import { conversionMessage, runConversion, type ConvertApi } from './convertRun.logic';
+import { transferPayeeLabel } from './renameRules.logic';
 import { t } from './i18n';
 import type { ConversionPlan } from './renameRules.logic';
 
@@ -28,6 +32,9 @@ export function useTransferRuleChoice({ budgetId, payee }: { budgetId: string; p
   const [addRule] = useAddPayeeRenameRuleMutation();
   const [removeRule] = useRemovePayeeRenameRuleMutation();
   const [readRules] = useLazyGetPayeeRenameRulesQuery();
+  const dispatch = useAppDispatch();
+  // Every rule is saved but the old setting is still on: Retry only switches it off.
+  const [offPending, setOffPending] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,8 +62,27 @@ export function useTransferRuleChoice({ budgetId, payee }: { budgetId: string; p
     try {
       const result = await runConversion({ payeeId: payee.id, targetId: target.id, shown: payee.rename_rules ?? [], plan, api });
       if (result.ok) return true;
-      setError(conversionMessage(result, (cause) => apiErrorMessage(cause, t('error.convert'))));
+      const targetName = transferPayeeLabel(target);
+      setError(conversionMessage(result, (cause) => apiErrorMessage(cause, t('error.convert')), targetName));
+      if (result.failure.kind === 'offFailed') setOffPending(targetName);
+      // The payee's rules changed under the notice: refetch now instead of waiting for the window to regain focus.
+      if (result.failure.kind === 'stale') dispatch(budgetApi.util.invalidateTags([{ type: 'Payees', id: budgetId }]));
       return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Retry after the rules were saved: only switch the old setting off. */
+  const retryOff = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.turnOff();
+      setOffPending(null);
+    } catch (cause) {
+      setError(`${t('legacy.offFailed', { target: offPending ?? '' })} ${apiErrorMessage(cause, t('error.convert'))}`);
     } finally {
       setBusy(false);
     }
@@ -75,5 +101,5 @@ export function useTransferRuleChoice({ budgetId, payee }: { budgetId: string; p
     }
   };
 
-  return { busy, error, convert, setNever };
+  return { busy, error, convert, setNever, offPending, retryOff };
 }

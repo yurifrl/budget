@@ -55,13 +55,6 @@ export function ruleToCreate(on: boolean, draft: RuleDraft): { match_type: RuleM
   return { match_type: draft.matchType, condition };
 }
 
-/** The `code` of a failed request (RTK Query error or thrown API error), if it has one. */
-export function errorCode(err: unknown): string | undefined {
-  if (typeof err !== 'object' || err === null) return undefined;
-  const e = err as { code?: unknown; data?: { code?: unknown } };
-  if (typeof e.code === 'string') return e.code;
-  return typeof e.data?.code === 'string' ? e.data.code : undefined;
-}
 
 /**
  * What a 409 "rule exists" means for the popover's rule: saved only when the

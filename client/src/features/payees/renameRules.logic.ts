@@ -301,7 +301,8 @@ export interface ConversionEntry {
  */
 export function conversionEntries(payee: Pick<PayeeAdminRow, 'name' | 'rename_rules'>): ConversionEntry[] {
   const own: ConversionEntry[] = (payee.rename_rules ?? []).map((r) => ({
-    key: `rule:${r.id}`,
+    // By content, not id: a put-back gives the rule a new id and the person's edit of it must follow.
+    key: `rule:${r.match_type}:${norm(r.condition)}`,
     matchType: r.match_type,
     text: r.condition,
     moveFrom: r.id,
@@ -315,6 +316,8 @@ export interface ConversionPlan {
   rules: (ConversionEntry & { text: string })[];
   /** Keys of entries a "contains / starts with / ends with" rule of fewer than the minimum characters. */
   tooShort: string[];
+  /** Keys of entries equal to an earlier one (two rows edited into the same rule): Convert is refused until one is changed or removed. */
+  duplicates: string[];
 }
 
 /** The entries as they will be sent: blank ones dropped, duplicates merged, loose short patterns flagged. */
@@ -322,16 +325,20 @@ export function conversionPlan(entries: readonly ConversionEntry[]): ConversionP
   const seen = new Set<string>();
   const rules: ConversionPlan['rules'] = [];
   const tooShort: string[] = [];
+  const duplicates: string[] = [];
   for (const e of entries) {
     const text = e.text.trim();
     if (text === '') continue;
     const id = `${e.matchType}\u0000${norm(text)}`;
-    if (seen.has(id)) continue;
+    if (seen.has(id)) {
+      duplicates.push(e.key);
+      continue;
+    }
     seen.add(id);
     if (e.matchType !== 'is' && text.length < MIN_RULE_PATTERN_LENGTH) tooShort.push(e.key);
     rules.push({ ...e, text });
   }
-  return { rules, tooShort };
+  return { rules, tooShort, duplicates };
 }
 
 /** True when the transfer payee already holds that exact rule (a conversion that stopped half-way). */

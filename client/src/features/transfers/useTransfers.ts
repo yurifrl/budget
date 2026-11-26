@@ -19,9 +19,9 @@ import {
   type TransferLinkInput,
   type TransferSuggestion,
 } from '@/budget/data/api';
-import { apiErrorMessage, apiErrorParam } from '@/platform/api/baseQuery';
+import { apiErrorCode, apiErrorMessage, apiErrorParam } from '@/platform/api/baseQuery';
 import { t } from './i18n';
-import { errorCode, ruleExistsOutcome, type RuleDraft, ruleToCreate } from './transferRule.logic';
+import { ruleExistsOutcome, type RuleDraft, ruleToCreate } from './transferRule.logic';
 import { findSuggestion, linkedToast, scopeSuggestions } from './transfers.logic';
 
 /** The other side of a link and the rule to remember for it ("Always treat ... as a transfer"). */
@@ -95,7 +95,7 @@ export function useTransfers({ budgetId, accountId }: { budgetId: string | null 
       await addRule({ ...scope, payeeId: target.id, rule: body }).unwrap();
       return { saved: true };
     } catch (err) {
-      if (errorCode(err) === 'rename_rule_exists') {
+      if (apiErrorCode(err) === 'rename_rule_exists') {
         try {
           return ruleExistsOutcome(await readRules({ ...scope, payeeId: target.id }, false).unwrap(), body, apiErrorParam(err, 'name'));
         } catch (readErr) {

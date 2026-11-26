@@ -13,8 +13,12 @@
  *  3. a 409 "exists" counts as done ONLY when the target's own rules (read
  *     again) hold that rule; any other holder stops the conversion;
  *  4. only then the old setting is switched off.
- * On any failure the moves of this run are undone (best effort); whatever could
- * not be put back is named in the result, never swallowed.
+ * When a step stops the run, the state is put back exactly as before it: the
+ * moves are undone AND the rules this run created on the target are removed
+ * (by id; one the target held before is never touched). Whatever cannot be put
+ * back is named with where it is, never swallowed. The one exception is the
+ * last step: when only "switch the old setting off" fails, the rules stay on
+ * the target (a retry only repeats that step) and the result says so.
  */
 
 import type { RuleMatchType } from '@shared/domain/payees';
@@ -52,10 +56,21 @@ export interface ConvertApi {
 
 export type ConvertFailure =
   | { kind: 'stale' }
+  /** Every rule is saved; only switching the old setting off failed. */
+  | { kind: 'offFailed'; cause: unknown }
   | { kind: 'held'; rule: string; holder: string | null }
   | { kind: 'error'; cause: unknown };
 
-export type ConvertResult = { ok: true } | { ok: false; failure: ConvertFailure; /** Rules that could not be put back, by name. */ unrestored: string[] };
+export type ConvertResult =
+  | { ok: true }
+  | {
+      ok: false;
+      failure: ConvertFailure;
+      /** Rules on NEITHER payee now (could not be put back on the payee), by name. */
+      unrestored: string[];
+      /** Rules that are on the target and could not be taken off it, by name. */
+      onTarget: string[];
+    };
 
 const norm = (s: string) => s.trim().toLowerCase();
 const same = (r: RuleBody, type: RuleMatchType, text: string) => r.match_type === type && norm(r.condition) === norm(text);
@@ -87,17 +102,19 @@ export async function runConversion({
   api: ConvertApi;
 }): Promise<ConvertResult> {
   const moved: { added: RuleRef; original: RuleRef }[] = [];
+  const created: { added: RuleRef; name: string }[] = [];
   const unrestored: string[] = [];
+  const onTarget: string[] = [];
 
-  /** Undo this run's moves (newest first), then report the failure. */
+  /** Put everything this run changed back (moves newest first, then created rules), then report the failure. */
   const abort = async (failure: ConvertFailure): Promise<ConvertResult> => {
     for (const m of [...moved].reverse()) {
       const name = ruleLabel(m.original.match_type, m.original.condition);
       try {
         await api.removeRule(targetId, m.added.id);
       } catch {
-        // Still on the target: putting it back on the payee would clash. Name it.
-        unrestored.push(name);
+        // Still on the target: putting it back on the payee would clash.
+        onTarget.push(name);
         continue;
       }
       try {
@@ -106,7 +123,14 @@ export async function runConversion({
         unrestored.push(name);
       }
     }
-    return { ok: false, failure, unrestored };
+    for (const c of [...created].reverse()) {
+      try {
+        await api.removeRule(targetId, c.added.id);
+      } catch {
+        onTarget.push(c.name);
+      }
+    }
+    return { ok: false, failure, unrestored, onTarget };
   };
 
   let current: RuleRef[];
@@ -125,7 +149,7 @@ export async function runConversion({
 
       if (!r.moveFrom) {
         try {
-          await api.addRule(targetId, body);
+          created.push({ added: await api.addRule(targetId, body), name: label });
         } catch (err) {
           if (api.classify(err).code === 'rename_rule_exists') {
             if (holds(await api.readRules(targetId), r.matchType, r.text)) continue;
@@ -158,9 +182,8 @@ export async function runConversion({
         const info = api.classify(err);
         if (info.code === 'rename_rule_exists') {
           const now = await api.readRules(targetId).catch(() => [] as RuleRef[]);
-          const held = now.find((x) => same(x, r.matchType, r.text));
           // The target holds it: the rule is where it belongs, and not this run's to undo (it was not added here).
-          if (held) continue;
+          if (now.some((x) => same(x, r.matchType, r.text))) continue;
           await putBack();
           return abort({ kind: 'held', rule: label, holder: info.holder ?? null });
         }
@@ -175,14 +198,20 @@ export async function runConversion({
   try {
     await api.turnOff();
   } catch (cause) {
-    return abort({ kind: 'error', cause });
+    // Every rule is saved: keep them where they are; a retry only switches the setting off.
+    return { ok: false, failure: { kind: 'offFailed', cause }, unrestored: [], onTarget: [] };
   }
   return { ok: true };
 }
 
 /** The sentence for a failed conversion (translated); `describe` turns an unknown cause into a message. */
-export function conversionMessage(result: Extract<ConvertResult, { ok: false }>, describe: (cause: unknown) => string): string {
+export function conversionMessage(
+  result: Extract<ConvertResult, { ok: false }>,
+  describe: (cause: unknown) => string,
+  targetName: string,
+): string {
   const f = result.failure;
+  if (f.kind === 'offFailed') return `${t('legacy.offFailed', { target: targetName })} ${describe(f.cause)}`;
   const base =
     f.kind === 'stale'
       ? t('legacy.stale')
@@ -191,7 +220,9 @@ export function conversionMessage(result: Extract<ConvertResult, { ok: false }>,
           ? t('legacy.held', { rule: f.rule, payee: f.holder })
           : t('legacy.heldUnknown', { rule: f.rule })
         : describe(f.cause);
-  return result.unrestored.length > 0
-    ? `${base} ${t('legacy.unrestored', { rules: result.unrestored.join(', ') })}`
-    : `${base} ${t('legacy.nothingChanged')}`;
+  const parts = [base];
+  if (result.unrestored.length > 0) parts.push(t('legacy.unrestored', { rules: result.unrestored.join(', ') }));
+  if (result.onTarget.length > 0) parts.push(t('legacy.onTarget', { rules: result.onTarget.join(', '), target: targetName }));
+  if (parts.length === 1) parts.push(t('legacy.nothingChanged'));
+  return parts.join(' ');
 }

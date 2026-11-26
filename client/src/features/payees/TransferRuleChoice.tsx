@@ -46,7 +46,7 @@ export function LegacyTransferNotice({
   waiting: { count: number; cents: number };
 }) {
   const money = useMoneyFormat();
-  const { busy, error, convert } = useTransferRuleChoice({ budgetId, payee });
+  const { busy, error, convert, offPending, retryOff } = useTransferRuleChoice({ budgetId, payee });
   // An "account" rule already names its account: it starts picked.
   const [pickedId, setPickedId] = useState<string | null>(() => defaultConversionTarget(payee, targets)?.id ?? null);
   const [text, setText] = useState(() => {
@@ -64,7 +64,14 @@ export function LegacyTransferNotice({
   const edit = (key: string, patch: Partial<Pick<ConversionEntry, 'matchType' | 'text'>>) =>
     setChanges((c) => ({ ...c, edited: { ...c.edited, [key]: { ...c.edited[key], ...patch } } }));
   const targetLabel = picked ? transferPayeeLabel(picked) : null;
-  const problem = plan.tooShort.length > 0 ? t('legacy.tooShort', { min: MIN_RULE_PATTERN_LENGTH }) : plan.rules.length === 0 ? t('legacy.noRules') : null;
+  const problem =
+    plan.tooShort.length > 0
+      ? t('legacy.tooShort', { min: MIN_RULE_PATTERN_LENGTH })
+      : plan.duplicates.length > 0
+        ? t('legacy.duplicate')
+        : plan.rules.length === 0
+          ? t('legacy.noRules')
+          : null;
   return (
     <SettingsCard>
       <Text style={settingsCardText.body}>{t('legacy.notice')}</Text>
@@ -144,11 +151,11 @@ export function LegacyTransferNotice({
           />
         </View>
         <SettingsCardButton
-          label={t('legacy.convert')}
+          label={offPending ? t('legacy.retry') : t('legacy.convert')}
           primary
           busy={busy}
-          disabled={!picked || problem !== null}
-          onPress={() => picked && void convert(picked, plan.rules)}
+          disabled={offPending ? false : !picked || problem !== null}
+          onPress={() => (offPending ? void retryOff() : picked && void convert(picked, plan.rules))}
         />
       </View>
       {error ? (

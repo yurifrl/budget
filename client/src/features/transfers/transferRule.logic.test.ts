@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { setLocale } from '@shared/i18n';
 
-import { errorCode, ruleExistsOutcome, ruleToCreate, suggestRule } from './transferRule.logic';
+import { ruleExistsOutcome, ruleToCreate, suggestRule } from './transferRule.logic';
 
 describe('suggestRule', () => {
   test('text without a variable part: "is" the whole text', () => {
@@ -35,14 +35,6 @@ describe('ruleToCreate', () => {
   });
 });
 
-describe('errorCode', () => {
-  test('reads the code of an RTK Query error or an API error', () => {
-    expect(errorCode({ status: 409, data: { code: 'rename_rule_exists' } })).toBe('rename_rule_exists');
-    expect(errorCode({ code: 'rename_rule_too_short' })).toBe('rename_rule_too_short');
-    expect(errorCode(new Error('x'))).toBeUndefined();
-    expect(errorCode(null)).toBeUndefined();
-  });
-});
 
 describe('ruleExistsOutcome', () => {
   const body = { match_type: 'is' as const, condition: 'PIX MARIA' };

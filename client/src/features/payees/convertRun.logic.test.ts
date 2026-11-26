@@ -7,6 +7,7 @@ import type { ConversionPlan } from './renameRules.logic';
 
 afterEach(() => setLocale('en'));
 
+const TNAME = 'Transfer : Savings';
 const PAYEE = 'p1';
 const TARGET = 't1';
 const ref = (id: string, match_type: RuleRef['match_type'], condition: string): RuleRef => ({ id, match_type, condition });
@@ -14,7 +15,7 @@ type Plan = ConversionPlan['rules'];
 const entry = (key: string, matchType: RuleRef['match_type'], text: string, moveFrom: string | null): Plan[number] => ({ key, matchType, text, moveFrom });
 
 /** An in-memory server with the budget-wide duplicate check and scripted failures. */
-function fake(init: { payee: RuleRef[]; target?: RuleRef[]; other?: RuleRef[]; fail?: (call: string) => 'network' | '500' | 'conflict' | null }) {
+function fake(init: { payee: RuleRef[]; target?: RuleRef[]; other?: RuleRef[]; fail?: (call: string) => 'network' | '500' | 'conflict' | null; offSavedThenThrows?: boolean }) {
   const rules: Record<string, RuleRef[]> = { [PAYEE]: [...init.payee], [TARGET]: [...(init.target ?? [])], q: [...(init.other ?? [])] };
   const holder = (type: string, text: string) => Object.entries(rules).find(([, l]) => l.some((r) => r.match_type === type && r.condition.toLowerCase() === text.toLowerCase()));
   const log: string[] = [];
@@ -48,6 +49,10 @@ function fake(init: { payee: RuleRef[]; target?: RuleRef[]; other?: RuleRef[]; f
     },
     turnOff: async () => {
       log.push('off');
+      if (init.offSavedThenThrows) {
+        off = true;
+        throw { status: 'FETCH_ERROR' };
+      }
       if (init.fail?.('off')) throw { status: 500 };
       off = true;
     },
@@ -99,9 +104,9 @@ describe('runConversion', () => {
     expect(res.failure).toEqual({ kind: 'held', rule: 'Contains “UBER TRIP SP”', holder: 'Other payee' });
     expect(res.unrestored).toEqual([]);
     expect(texts(f.rules[PAYEE]!)).toEqual(['contains:UBER TRIP']); // back on the payee, original text
-    expect(texts(f.rules[TARGET]!)).not.toContain('contains:UBER TRIP SP');
+    expect(f.rules[TARGET]).toEqual([]); // the "is Uber" rule this run created is removed again: exactly as before
     expect(f.isOff()).toBe(false);
-    const msg = conversionMessage(res, () => 'x');
+    const msg = conversionMessage(res, () => 'x', TNAME);
     expect(msg).toContain('Contains “UBER TRIP SP”');
     expect(msg).toContain('“Other payee”');
     expect(msg).toContain('old setting is still on');
@@ -171,7 +176,7 @@ describe('runConversion', () => {
     const res = await run(f, [entry('rule:r1', 'contains', 'UBER TRIP', 'r1')]);
     expect(res).toMatchObject({ ok: false, failure: { kind: 'error' }, unrestored: ['Contains “UBER TRIP”'] });
     if (res.ok) return;
-    const msg = conversionMessage(res, () => 'boom');
+    const msg = conversionMessage(res, () => 'boom', TNAME);
     expect(msg).toContain('boom');
     expect(msg).toContain('Contains “UBER TRIP”');
     expect(msg).not.toContain('as they were');
@@ -188,19 +193,63 @@ describe('runConversion', () => {
     expect(f.isOff()).toBe(false);
   });
 
-  test('switching the old setting off fails: moves are undone and the message says nothing changed', async () => {
-    const f = fake({ payee: own, fail: (c) => (c === 'off' ? '500' : null) });
+  test('only "off" fails: the saved rules stay, the message says so, a retry only switches off', async () => {
+    let broken = true;
+    const f = fake({ payee: own, fail: (c) => (broken && c === 'off' ? '500' : null) });
     const res = await run(f, plan);
-    expect(res).toMatchObject({ ok: false, failure: { kind: 'error' }, unrestored: [] });
-    expect(texts(f.rules[PAYEE]!)).toEqual(['contains:UBER TRIP']);
+    expect(res).toMatchObject({ ok: false, failure: { kind: 'offFailed' }, unrestored: [], onTarget: [] });
+    if (res.ok) return;
+    expect(texts(f.rules[TARGET]!)).toEqual(['contains:UBER TRIP', 'is:Uber']);
+    expect(f.rules[PAYEE]).toEqual([]);
     expect(f.isOff()).toBe(false);
+    expect(conversionMessage(res, () => 'boom', TNAME)).toContain('saved on “Transfer : Savings”');
+    broken = false;
+    f.log.length = 0;
+    // The notice now lists only what the payee still has (the "is" entry); the plan finds it on the target.
+    expect(await run(f, [entry('name', 'is', 'Uber', null)], f.rules[PAYEE]!)).toEqual({ ok: true });
+    expect(f.log.filter((l) => l.startsWith('add') || l.startsWith('remove'))).toEqual([]);
+    expect(f.isOff()).toBe(true);
+  });
+
+  test('"off" was saved but its answer was lost: a retry ends finished, nothing moved back', async () => {
+    const f = fake({ payee: own, offSavedThenThrows: true });
+    const res = await run(f, plan);
+    expect(res).toMatchObject({ ok: false, failure: { kind: 'offFailed' } });
+    expect(f.isOff()).toBe(true);
+    expect(f.rules[PAYEE]).toEqual([]); // not put back while the setting is off
+    expect(texts(f.rules[TARGET]!)).toEqual(['contains:UBER TRIP', 'is:Uber']);
+  });
+
+  test('a rule the target held before the run is never removed by an abort', async () => {
+    const f = fake({ payee: own, target: [ref('t9', 'is', 'Uber')], other: holderQ });
+    await run(f, editedPlan);
+    expect(f.rules[TARGET]!.map((r) => r.id)).toEqual(['t9']);
+  });
+
+  test('B1: a created rule that cannot be removed is named as being on the target, not "add by hand"', async () => {
+    const f = fake({ payee: own, other: holderQ, fail: (c) => (c.startsWith('remove t1') ? '500' : null) });
+    const res = await run(f, editedPlan);
+    expect(res).toMatchObject({ ok: false, failure: { kind: 'held' }, unrestored: [], onTarget: ['Is “Uber”'] });
+    if (res.ok) return;
+    const msg = conversionMessage(res, () => 'x', TNAME);
+    expect(msg).toContain('Is “Uber”');
+    expect(msg).toContain('now on “Transfer : Savings”');
+    expect(msg).not.toContain('by hand');
+    expect(msg).not.toContain('Everything is as it was');
+  });
+
+  test('a moved rule that cannot be removed from the target on undo is named as on the target', async () => {
+    const two = [ref('r1', 'contains', 'UBER TRIP'), ref('r2', 'ends_with', 'LTDA')];
+    const f = fake({ payee: two, other: [ref('q1', 'ends_with', 'ltda sa')], fail: (c) => (c.startsWith('remove t1') ? '500' : null) });
+    const res = await run(f, [entry('k1', 'contains', 'UBER TRIP', 'r1'), entry('k2', 'ends_with', 'LTDA SA', 'r2')]);
+    expect(res).toMatchObject({ ok: false, unrestored: [], onTarget: ['Contains “UBER TRIP”'] });
   });
 
   test('undo of a move whose put-back cannot land is named', async () => {
     const two = [ref('r1', 'contains', 'UBER TRIP'), ref('r2', 'ends_with', 'LTDA')];
     const f = fake({ payee: two, other: [ref('q1', 'ends_with', 'ltda sa')], fail: (c) => (c === 'add p1 contains:UBER TRIP' ? '500' : null) });
     const res = await run(f, [entry('rule:r1', 'contains', 'UBER TRIP', 'r1'), entry('rule:r2', 'ends_with', 'LTDA SA', 'r2')]);
-    expect(res).toMatchObject({ ok: false, unrestored: ['Contains “UBER TRIP”'] }); // r1 could not go back; r2 (edited) did
+    expect(res).toMatchObject({ ok: false, unrestored: ['Contains “UBER TRIP”'], onTarget: [] }); // r1 could not go back; r2 (edited) did
   });
 
   test('reading the payee\'s rules fails: nothing is written', async () => {
@@ -219,7 +268,7 @@ describe('sameRuleSet / messages', () => {
 
   test('the held message in pt-BR, with and without the holder', () => {
     setLocale('pt-BR');
-    expect(conversionMessage({ ok: false, failure: { kind: 'held', rule: 'Contém “X”', holder: 'Ana' }, unrestored: [] }, () => '')).toContain('“Ana”');
-    expect(conversionMessage({ ok: false, failure: { kind: 'held', rule: 'Contém “X”', holder: null }, unrestored: [] }, () => '')).toContain('outro favorecido');
+    expect(conversionMessage({ ok: false, failure: { kind: 'held', rule: 'Contém “X”', holder: 'Ana' }, unrestored: [], onTarget: [] }, () => '', TNAME)).toContain('“Ana”');
+    expect(conversionMessage({ ok: false, failure: { kind: 'held', rule: 'Contém “X”', holder: null }, unrestored: [], onTarget: [] }, () => '', TNAME)).toContain('outro favorecido');
   });
 });
