@@ -1,5 +1,50 @@
 # Changelog
 
+## v2026.11.26 2026-11-26 release
+
+### Changed
+
+- release: v2026.11.26
+- test(client): content-keyed notice entries when a rule is changed in the card (budget-p8td)
+- fix(client): Convert abort restores exactly (removes created rules), off-failure keeps saved rules with Retry, honest where-it-is messages, duplicate rows refused, stable edit keys, pt-BR wording (budget-p8td)
+- docs: drop stray conflict marker from the merge
+- wip
+- fix(client): Convert cannot lose a rule (409 only done when the target holds it, put-back, retry); notice follows the payee's rules; popover rule 409; clearer notice wording; pt-BR undo agreement (budget-p8td)
+- chore(tooling): configure mcp servers and record handoff notes
+- docs(plans): add csv import and transfers refactor plans
+- fix(client): pointer-less rows resolve exactly as main; explicit convert step; undo for removed rules; review follow-ups (budget-p8td)
+- feat(transfers): Always treat X as a transfer writes a renaming rule; no outside-the-budget transfers; legacy name fallback (budget-p8td, checkpoint 3)
+- feat(client): a transfer is its payee only; category not needed on on-budget transfers; one transfer account list; payee_id on writes (budget-p8td, checkpoint 2)
+- fix(payees): lift the Undo toast above the phone's floating button (budget-p8td)
+- feat(payees): Manage Payees with a Transfer Payees group and several renaming rules per payee (budget-p8td, checkpoint 1)
+- fix(categorize): rows Done has committed are never offered to the leave prompt or restored locked; Z never passes over them; 400/403/404 leave with a note; prompt note for dropped rows; pt-BR plurals
+- fix(rename-rules): syncs take the budget lock shared, apply/revert exclusive with a 5s lock_timeout (409 bank_sync_running), JS-equal trim in the prefilter (budget-ou8p round 4)
+- fix(categorize): Done locks the rows it sends (no Undo, re-checked before each request); leave prompt locked while sending and names the budget; retry/refused handling; strip rows kept unless the queue is fully loaded; badge excludes the strip
+- wip
+- docs: real text order
+- fix(rename-rules): bank_text of the latest pull on every path, raw text preferred, revert once, per-budget lock, SQL prefilter, docs (budget-ou8p round 3)
+- wip
+- fix(categorize): leave prompt works with a page that stays mounted behind the new route (commands to a live page, restore for a gone one)
+- feat(categorize): browser leave-site question while rows wait in the strip
+- fix(rename-rules): text-based change detection, real bank text for apply, server-recorded revert, exact /bulk text (budget-ou8p review)
+- fix(categorize): the leave store is one per app (route modules are evaluated again on re-entry)
+- fix(categorize): the shell watches route and budget and asks about rows left in the strip (the navigator does not run the page's cleanup)
+- feat(categorize): skips are never sent on a timer: Leaving strip with Done, leave prompt, counts without the strip, no empty undo entry
+- docs: rules apply going forward (budget-ou8p)
+- test(rename-rules): rules apply going forward, apply/preview/revert (budget-ou8p)
+- feat(rename-rules): preview, apply and revert one rule on past transactions (budget-ou8p)
+- feat(rename-rules): sync refresh and statement re-import leave stored rows alone when a rule changes (budget-ou8p)
+- feat(categorize): keys act only on the page and never under an overlay; page state keyed by budget; pending skips visible in Bundles, dropped when their row leaves, excluded from bulk accepts; countdown, counts, toast and Escape fixes
+- fix(categorize): pending-skip line fits its countdown; Run dialog title
+- feat(categorize): undo stack in press order, each skip on its own timer with its own Undo; Escape leaves a field, no type-to-search; modal-safe keys; retried undo says already restored; unavailable header wins over an active run
+- fix(transfers): /bulk dedupes on the payee field as main keyed it, untouched for statement rows with file ids, case-insensitive edit check (budget-mkrt, round 5)
+- fix(categorize): no-key reason independent of an active run, blur after pointer press in capture phase, clear search per row
+- fix(transfers): /bulk keeps a new text under a shared key, edits never move a legacy payee, review round 4 (budget-mkrt)
+- wip round 4
+- feat(categorize): deferred, undoable skip; chunked undo with exact outcome; undo follows the last press; typing and focus safety; bundles stay reachable without a key; run confirmation; filed lines; light badge read
+- fix(transfers): legacy rows recognised under every rule form, /bulk occurrences per key, review round 3 (budget-mkrt)
+
+
 ## v2026.11.24-01 2026-11-24 release
 
 ### Changed
