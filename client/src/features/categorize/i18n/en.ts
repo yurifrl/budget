@@ -182,4 +182,54 @@ export default {
     one: '{payee} · {count} transaction → {category}',
     other: '{payee} · {count} transactions → {category}',
   },
+
+  // Run card (Jev)
+  'run.title': 'CATEGORIZE WITH JEV',
+  'run.button': 'Run Jev',
+  'run.confirmTitle': 'RUN JEV',
+  'run.confirmBody': {
+    one: 'Ask Jev about {count} transaction? The suggestions land in this queue for you to accept or skip; nothing is applied automatically.',
+    other: 'Ask Jev about {count} transactions? The suggestions land in this queue for you to accept or skip; nothing is applied automatically.',
+  },
+  'run.rest': 'One run asks about up to {batch} transactions; start another for the rest.',
+  'run.confirmStart': 'Start run',
+  'run.never': 'No run yet.',
+  'run.waiting': 'Queued…',
+  'run.running': 'Asking Jev…',
+  'run.finished': 'The last run finished.',
+  'run.finishedCount':
+    'Run finished: {done} of {total} suggested, {failures} could not be answered.',
+  'run.failed': 'The last run failed.',
+  'run.cancelled': 'The last run was cancelled.',
+  'run.progress': { one: '{done} of {total} transaction', other: '{done} of {total} transactions' },
+  'run.failures': {
+    one: '{count} could not be answered; a later run retries it.',
+    other: '{count} could not be answered; a later run retries them.',
+  },
+  'run.noKeyShared':
+    'No Jev API key yet: save your own to categorize with Jev, or ask for the shared key.',
+  'run.noKeyServer': 'No Jev API key yet: this server has no shared key, so save your own.',
+  'run.noKeyUnreadable': 'Your Jev API key cannot be read on this server. Save it again.',
+  'run.noKeyOwner': 'No Jev API key can be used: this budget has no owner to take one from.',
+  'run.failure.keyRejected': 'The run stopped: Jev refused the key. Check it in OpenRouter and save it again.',
+  'run.failure.keyRejectedMember':
+    "The run stopped: Jev refused the budget owner's key. Only the owner can check it in OpenRouter and save it again.",
+  'run.failure.noCredits': 'The run stopped: the OpenRouter account behind the key has no credits left.',
+  'run.failure.noCreditsMember':
+    "The run stopped: the OpenRouter account behind the budget owner's key has no credits left. Only the owner can top it up or use another key.",
+  'run.failure.jevUnavailable': 'The run stopped: Jev was unavailable. Try again in a little while.',
+  'run.failure.tooManyCategories':
+    'The run stopped: this budget has more categories than one Jev question can offer.',
+  'run.failure.noCategories': 'The run stopped: this budget has no category a suggestion could name.',
+  'run.failure.notConfigured': 'The run stopped: no Jev API key could be used. Save one to categorize.',
+  'run.failure.notConfiguredMember':
+    'The run stopped: no Jev API key could be used. The owner of this budget has to save one to categorize.',
+  'run.failure.internal': 'The run stopped unexpectedly. Start it again.',
+  'run.noKeyMember':
+    'No Jev API key can be used: the owner of this budget has to save one, or the shared key has to be on.',
+  'run.keyLink': 'Jev API key',
+  'run.empty':
+    'Nothing to ask about right now: no transaction that needs a category is waiting for a Jev answer.',
+  'run.startFailed': 'Could not start the run.',
+  'run.loadFailed': 'Could not read the run status.',
 } as const;

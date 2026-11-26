@@ -90,6 +90,14 @@ export const SPECIFIC_ERROR_CODES = [
   'categorize_bundle_changed',
   'categorize_bundle_too_large',
   'category_not_assignable',
+  // Categorize model (Jev) keys and runs.
+  'jev_key_rejected',
+  'jev_key_missing',
+  'jev_unavailable',
+  'jev_no_credits',
+  // A run needs between one and JEV_MAX_OPTIONS assignable categories.
+  'categorize_no_categories',
+  'categorize_too_many_categories',
   // Budget: accounts, transactions, transfers, repeats.
   'cannot_transfer_to_same_account',
   'transfer_account_not_in_budget',

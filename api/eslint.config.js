@@ -30,10 +30,11 @@ const features = fs
  *   shared plumbing `jobs/workflows/tracked.ts`.
  */
 function allowedFrom(feature, other) {
-  if (feature === 'jobs' && other === 'connections') return ['index.ts', 'workflows.ts'];
-  if (other === 'jobs' && feature === 'connections') return ['index.ts', 'workflows/tracked.ts'];
-  return ['index.ts'];
-}
+  const allowed = ['index.ts'];
+  if (feature === 'jobs') allowed.push('workflows.ts');
+  if (other === 'jobs') allowed.push('workflows/tracked.ts');
+  return allowed;
+ }
 
 /**
  * Cross-feature zones: `feature` may import `other` through its barrel plus the

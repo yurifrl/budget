@@ -30,6 +30,7 @@ describe('contracts catalog', () => {
       import('./categorize/routes'),
       import('./connections'),
       import('./features'),
+      import('./jev'),
       import('./jobs'),
       import('./oauth'),
       import('./rates'),

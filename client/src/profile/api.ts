@@ -1,9 +1,11 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 
 import { apiBaseQuery, type ApiQuery } from '@/platform/api/baseQuery';
+import { budgetApi } from '@/budget/data/api';
 import { contractRequest } from '@shared/contract-request';
 
 import { featuresMine, type MyFeatures } from '@shared/contracts/features';
+import { jevKeyDelete, jevKeyGet, jevKeySave, jevKeyTest, type JevKeyStatus } from '@shared/contracts/jev';
 import { oauthGrantsList, oauthGrantsRevoke } from '@shared/contracts/oauth';
 import { meAvatarRemove, meGet, meUpdate } from '@shared/contracts/user';
 import { withFeatureDefaults, type FeatureValues } from '@shared/features';
@@ -27,12 +29,14 @@ export const MY_FEATURES_REFETCH = { refetchOnFocus: true, refetchOnReconnect: t
  * Every mutation returns the fresh /me payload and writes it straight into
  * the getMe cache, so every `<Avatar>` of me refreshes (new image_version ⇒
  * new URL) without a refetch round-trip; the 'Me' tag lets other modules'
- * consumers (useMe) stay in sync too.
+ * consumers (useMe) stay in sync too. The key mutations also invalidate the
+ * Budget api's Categorize run status: that cache is what decides whether the
+ * card offers a run, and the saved key is what decides it on the server.
  */
 export const profileApi = createApi({
   reducerPath: 'profileApi',
   baseQuery: apiBaseQuery,
-  tagTypes: ['Me', 'Grants', 'Features'],
+  tagTypes: ['Me', 'Grants', 'Features', 'JevKey'],
   endpoints: (builder) => ({
     getMe: builder.query<Me, void>({
       query: (): ApiQuery => contractRequest(meGet, {}),
@@ -79,7 +83,39 @@ export const profileApi = createApi({
       query: (): ApiQuery => contractRequest(meAvatarRemove, {}),
       invalidatesTags: ['Me'],
     }),
+    /** The caller's own Jev key: last four characters and when it was saved. */
+    getJevKey: builder.query<JevKeyStatus, void>({
+      query: (): ApiQuery => contractRequest(jevKeyGet, {}),
+      providesTags: ['JevKey'],
+    }),
+    /**
+     * Save (or replace) the key; the API refuses one Jev rejects. Whether a run
+     * can start depends on the saved key, and the Categorize run status lives in
+     * the Budget api slice: that cache is invalidated too, so the card stops
+     * saying there is no key after a key is saved or removed here.
+     */
+    saveJevKey: builder.mutation<JevKeyStatus, { key: string }>({
+      query: ({ key }): ApiQuery => contractRequest(jevKeySave, { key }),
+      invalidatesTags: ['JevKey'],
+      onQueryStarted: async (_arg, api) => {
+        await api.queryFulfilled.catch(() => undefined);
+        api.dispatch(budgetApi.util.invalidateTags(['CategorizeRun']));
+      },
+    }),
+    /** One call with made-up data against the saved key. */
+    testJevKey: builder.mutation<{ ok: boolean }, void>({
+      query: (): ApiQuery => contractRequest(jevKeyTest, {}),
+      invalidatesTags: ['JevKey'],
+    }),
+    deleteJevKey: builder.mutation<{ ok: boolean }, void>({
+      query: (): ApiQuery => contractRequest(jevKeyDelete, {}),
+      invalidatesTags: ['JevKey'],
+      onQueryStarted: async (_arg, api) => {
+        await api.queryFulfilled.catch(() => undefined);
+        api.dispatch(budgetApi.util.invalidateTags(['CategorizeRun']));
+      },
+    }),
   }),
 });
 
-export const { useGetMyFeaturesQuery, useGetMeQuery, useUpdateMeMutation, useUploadAvatarMutation, useRemoveAvatarMutation, useListGrantsQuery, useRevokeGrantMutation } = profileApi;
+export const { useGetMyFeaturesQuery, useGetMeQuery, useUpdateMeMutation, useUploadAvatarMutation, useRemoveAvatarMutation, useListGrantsQuery, useRevokeGrantMutation, useGetJevKeyQuery, useSaveJevKeyMutation, useTestJevKeyMutation, useDeleteJevKeyMutation } = profileApi;

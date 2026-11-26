@@ -13,6 +13,8 @@ import { contractRequest } from '@shared/contract-request';
 import {
   categorizeAccept,
   categorizeQueueList,
+  categorizeRunStart,
+  categorizeRunStatus,
   categorizeSettingsGet,
   categorizeSettingsSet,
   categorizeSkip,
@@ -21,6 +23,7 @@ import {
 import type { OperationOutput } from '@shared/operation-contract';
 
 import type { BudgetScope } from './base';
+import { transfersApi } from './transfers';
 
 export type CategorizeQueue = OperationOutput<typeof categorizeQueueList>;
 export type CategorizeQueueRow = CategorizeQueue['rows'][number];
@@ -34,6 +37,7 @@ export type CategorizeAcceptResult = OperationOutput<typeof categorizeAccept>;
 export type CategorizeDecisionItem = CategorizeAcceptResult['items'][number];
 export type CategorizeUndoResult = OperationOutput<typeof categorizeUndo>;
 export type CategorizeSkipResult = OperationOutput<typeof categorizeSkip>;
+export type CategorizeRunStatus = OperationOutput<typeof categorizeRunStatus>;
 
 /**
  * The queue reads transactions, category names/visibility and payee names, so
@@ -63,7 +67,7 @@ export function queueProvidedTags(
   return (badge ? ['Categorize' as const] : CATEGORIZE_QUEUE_TAGS).map((type) => ({ type, id: budgetId })); // eslint-disable-line budget-i18n/no-untranslated-string -- RTK cache tag name, never rendered
 }
 
-export const categorizeApi = aiApi.injectEndpoints({
+export const categorizeApi = transfersApi.injectEndpoints({
   endpoints: (b) => ({
     /** One queue page; counts and bundles cover the whole queue. `bundle` pages one bundle's rows. */
     getCategorizeQueue: b.query<
@@ -123,6 +127,24 @@ export const categorizeApi = aiApi.injectEndpoints({
           confidence_threshold: confidenceThreshold,
         }),
       invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'Categorize', id: budgetId }],
+    }),
+
+    /**
+     * The run's state, the key situation and its progress. The page polls this
+     * while a run is in flight (`pollingInterval` in the hook).
+     */
+    getCategorizeRun: b.query<CategorizeRunStatus, BudgetScope>({
+      query: ({ budgetId }) => contractRequest(categorizeRunStatus, { budget_id: budgetId }),
+      providesTags: (_r, _e, { budgetId }) => [{ type: 'CategorizeRun', id: budgetId }],
+    }),
+
+    /** Queue a run; while one is in flight the server answers that same run. */
+    startCategorizeRun: b.mutation<CategorizeRunStatus, BudgetScope>({
+      query: ({ budgetId }) => contractRequest(categorizeRunStart, { budget_id: budgetId }),
+      invalidatesTags: (_r, _e, { budgetId }) => [
+        { type: 'CategorizeRun', id: budgetId },
+        { type: 'Categorize', id: budgetId },
+      ],
     }),
   }),
 });

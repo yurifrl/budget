@@ -67,6 +67,7 @@ export function SettingsRootPane() {
         label={t('root.backup')}
         onPress={() => leaveForPage(() => router.push('/backup'))}
       />
+      <MenuRow dense label={t('root.jevKey')} onPress={() => leaveForPage(() => router.push('/jev-key'))} />
       <MenuRow dense label={t('root.flags')} onPress={() => nav.open('flags')} />
       <MenuRow dense label={t('root.display')} onPress={() => nav.open('display')} />
       <MenuRow

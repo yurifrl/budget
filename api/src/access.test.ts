@@ -701,6 +701,10 @@ const notBudgetAddressed: Record<string, string> = {
   connections_settings_update: 'app-wide sync window: admin only (403 asserted below)',
   connections_sync_status: "sync state of the caller's own connections",
   connections_upstream_list: "upstream accounts of the caller's own connections",
+  jev_key_delete: "deletes the caller's own Jev key: keyed by the session user, no id to pass",
+  jev_key_get: "status of the caller's own Jev key, never the key itself",
+  jev_key_save: "saves the caller's own Jev key: keyed by the session user, no id to pass",
+  jev_key_test: "tests the caller's own Jev key",
   features_admin_clear_everyone: 'feature toggles: admin + first-party session only (403 asserted below)',
   features_admin_clear_user: 'feature toggles: admin + first-party session only (403 asserted below)',
   features_admin_list: 'feature toggles: admin + first-party session only (403 asserted below)',
@@ -770,6 +774,8 @@ const onVictimBudget: Record<string, Record<string, unknown>> = {
   categorize_settings_set: { confidence_threshold: 0.8 },
   categorize_skip: { transaction_id: V.txn },
   categorize_undo: { transaction_ids: [V.txn] },
+  categorize_run_start: {},
+  categorize_run_status: {},
   budget_payees_merge: { id: V.payee, target_id: V.payee },
   budget_payees_rename_rules_apply: { id: V.payee, rule_id: V.renameRule },
   budget_payees_rename_rules_apply_preview: { id: V.payee, rule_id: V.renameRule },
@@ -982,9 +988,9 @@ describe.skipIf(!dbReady)('D: two people, every budget operation', () => {
       acting = attacker;
       const mine = await send('features_mine', {});
       expect(mine.status).toBe(200);
-      expect(await mine.json()).toEqual({ features: { [key]: false } });
+      expect(await mine.json()).toEqual({ features: { [key]: false, 'shared-jev-key': false } });
       acting = victim;
-      expect(await (await send('features_mine', {})).json()).toEqual({ features: { [key]: true } });
+      expect(await (await send('features_mine', {})).json()).toEqual({ features: { [key]: true, 'shared-jev-key': false } });
     } finally {
       await pool.query('DELETE FROM public.feature_overrides WHERE feature_key = $1', [key]);
       configureAuth(before);

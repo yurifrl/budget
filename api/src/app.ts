@@ -18,6 +18,7 @@ import budget from './budget';
 import categorize from './categorize/router';
 import connections, { webhook as connectionsWebhook } from './connections';
 import { featuresRoutes } from './features';
+import jev from './jev';
 import { contracts } from './catalog';
 import { createMcpRouter } from './mcp/index';
 import { createOAuthRouter, grantsRoutes, type OAuthConfig } from './oauth';
@@ -134,6 +135,9 @@ export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssu
 
   // Connections routes
   app.route('/connections', connections);
+
+  // The caller's own Jev key (/jev/key, user-scoped)
+  app.route('/jev', jev);
 
   // Jobs admin routes (requireAdmin is applied by the router itself)
   app.route('/jobs', jobs);

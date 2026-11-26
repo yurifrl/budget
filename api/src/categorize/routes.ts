@@ -6,6 +6,8 @@
 import {
   categorizeAccept,
   categorizeQueueList,
+  categorizeRunStart,
+  categorizeRunStatus,
   categorizeSettingsGet,
   categorizeSettingsSet,
   categorizeSkip,
@@ -15,8 +17,13 @@ import {
 import { implement } from '../core/operation';
 import { pool } from '../core/db';
 import { HttpError } from '../core/validate';
+import { JEV_MAX_OPTIONS, jevUnavailableError } from '../jev';
+import { requireUserId } from '../user';
 import { acceptBundle, acceptCategories, skipTransaction, undoAccept } from './decision-store';
+import { enqueueCategorizeRun } from './job';
 import { decodeBundleKey, getConfidenceThreshold, listQueue, setConfidenceThreshold } from './queue-store';
+import { runStatus } from './run-status';
+import { assignableCategories } from './run-store';
 
 export const operations = [
   implement(categorizeQueueList, (_c, { budget_id: budgetId, limit, offset, bundle }) => {
@@ -65,4 +72,32 @@ export const operations = [
     budget_id: budgetId,
     confidence_threshold: await setConfidenceThreshold(pool, budgetId, confidence_threshold),
   })),
+
+  /**
+   * Start a run, or answer the one in flight. A budget with no usable Jev key
+   * never reaches the queue: the answer carries the same reason the page shows.
+   * The category count is checked here too, so a run that cannot be answered
+   * is refused before a job exists instead of failing after it starts.
+   */
+  implement(categorizeRunStart, async (c, { budget_id: budgetId }) => {
+    const userId = requireUserId(c);
+    const before = await runStatus(pool, budgetId);
+    if (before.reason !== null) throw jevUnavailableError(before.reason);
+    const categories = await assignableCategories(pool, budgetId, JEV_MAX_OPTIONS + 1);
+    if (categories.length === 0) {
+      throw new HttpError(409, 'this budget has no category to suggest', 'categorize_no_categories');
+    }
+    if (categories.length > JEV_MAX_OPTIONS) {
+      throw new HttpError(
+        409,
+        `this budget has more than ${JEV_MAX_OPTIONS} categories to suggest from, which is more than Jev accepts`,
+        'categorize_too_many_categories',
+        { max: JEV_MAX_OPTIONS },
+      );
+    }
+    await enqueueCategorizeRun(pool, budgetId, userId);
+    return runStatus(pool, budgetId);
+  }),
+
+  implement(categorizeRunStatus, (_c, { budget_id: budgetId }) => runStatus(pool, budgetId)),
 ];

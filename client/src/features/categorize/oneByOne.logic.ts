@@ -93,6 +93,16 @@ export function queueRowSubline(
   return what ? `${formattedDate} · ${what}` : formattedDate;
 }
 
+/**
+ * The explanation under "no suggestion for this one", or null when the row's
+ * state has no words of its own (its only suggestions were hidden). An empty
+ * line is not an explanation: the card leaves it out instead of reserving it.
+ */
+export function noSuggestionHint(state: CategorizeQueueRow['state']): string | null {
+  const what = manualStateLabel(state);
+  return what ? t('one.stateHint', { state: what }) : null;
+}
+
 /** A suggestion's rank as the number key that files it (1..3). */
 export function keyHint(index: number): string {
   return String(index + 1);

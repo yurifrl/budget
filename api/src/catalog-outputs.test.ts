@@ -19,6 +19,7 @@ import { httpOnError } from './core/validate';
 import budget from './budget';
 import categorize from './categorize/router';
 import connections from './connections';
+import jev from './jev';
 import { featuresRoutes } from './features';
 import { setAggregators } from './connections/registry';
 import { configureSecretBox } from './core/secret-box';
@@ -28,7 +29,12 @@ import type { AggregatedTransaction, BankAggregator, ExternalAccount } from './c
 import { authConfig, configureAuth, type IdentityUser } from './user';
 
 const covered = contracts.filter(
-  (c) => c.name.startsWith('budget_') || c.name.startsWith('connections_') || c.name.startsWith('features_'),
+  (c) =>
+    c.name.startsWith('budget_') ||
+    c.name.startsWith('categorize_') ||
+    c.name.startsWith('connections_') ||
+    c.name.startsWith('features_') ||
+    c.name.startsWith('jev_'),
 );
 const reads = covered.filter((c) => c.kind === 'read' && c.expose.api);
 
@@ -95,6 +101,7 @@ app.use('*', (c, next) => {
 app.route('/connections', connections);
 app.route('/', budget);
 app.route('/categorize', categorize);
+app.route('/jev', jev);
 app.route('/', featuresRoutes());
 const op = makeOpCaller(app, contracts);
 
@@ -242,6 +249,7 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     budget_transactions_list: { budget_id: B },
     categorize_queue_list: { budget_id: B, limit: 10 },
     categorize_settings_get: { budget_id: B },
+    categorize_run_status: { budget_id: B },
     // The bank-imported row, so the import record (raw payload included) is validated too.
     budget_transactions_get: { id: seeded.importedTxn, budget_id: B },
     budget_assignments_list: { budget_id: B },
@@ -268,6 +276,7 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     connections_transactions_list: { id: seeded.connection, accountId: seeded.card },
     features_mine: {},
     features_admin_list: {},
+    jev_key_get: {},
   };
   return samples[name];
 }

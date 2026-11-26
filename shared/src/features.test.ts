@@ -77,14 +77,15 @@ describe('resolveFeatureValue', () => {
 
 describe('client-side defaults', () => {
   test('featureDefaults lists every key at its default', () => {
-    expect(featureDefaults()).toEqual({ 'shared-pluggy-key': false });
+    expect(featureDefaults()).toEqual({ 'shared-pluggy-key': false, 'shared-jev-key': false });
   });
 
   test('withFeatureDefaults keeps known booleans, drops unknown keys, fills missing ones', () => {
-    expect(withFeatureDefaults(undefined)).toEqual({ 'shared-pluggy-key': false });
-    expect(withFeatureDefaults({ 'shared-pluggy-key': true, 'retired-feature': true })).toEqual({
+    expect(withFeatureDefaults(undefined)).toEqual({ 'shared-pluggy-key': false, 'shared-jev-key': false });
+    expect(withFeatureDefaults({ 'shared-pluggy-key': true, 'shared-jev-key': true, 'retired-feature': true })).toEqual({
       'shared-pluggy-key': true,
+      'shared-jev-key': true,
     });
-    expect(withFeatureDefaults({ 'shared-pluggy-key': 'yes' })).toEqual({ 'shared-pluggy-key': false });
+    expect(withFeatureDefaults({ 'shared-pluggy-key': 'yes' })).toEqual({ 'shared-pluggy-key': false, 'shared-jev-key': false });
   });
 });

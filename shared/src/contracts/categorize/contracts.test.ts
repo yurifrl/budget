@@ -4,6 +4,8 @@ import { inputLocations } from '../../operation-contract';
 import {
   categorizeAccept,
   categorizeQueueList,
+  categorizeRunStart,
+  categorizeRunStatus,
   categorizeSettingsGet,
   categorizeSettingsSet,
   categorizeSkip,
@@ -15,7 +17,7 @@ const b = '11111111-1111-4111-8111-111111111111';
 const t = '22222222-2222-4222-8222-222222222222';
 const c = '33333333-3333-4333-8333-333333333333';
 
-const suggestion = { category_id: c, category_name: 'Food', confidence: 0.91, reason: 'merchant', source: 'ai' as const };
+const suggestion = { category_id: c, category_name: 'Food', confidence: 0.91, reason: 'merchant', source: 'jev' as const };
 const row = {
   transaction_id: t,
   date: '2026-11-01',
@@ -32,8 +34,17 @@ const row = {
 };
 
 describe('Categorize contracts', () => {
-  test('eight operations, all under /categorize, all with a budget_id', () => {
-    expect(contracts.length).toBe(8);
+  test('the exact operation set, all under /categorize, all with a budget_id', () => {
+    expect(contracts.map((op) => op.name).sort()).toEqual([
+      'categorize_accept',
+      'categorize_queue_list',
+      'categorize_run_start',
+      'categorize_run_status',
+      'categorize_settings_get',
+      'categorize_settings_set',
+      'categorize_skip',
+      'categorize_undo',
+    ]);
     for (const op of contracts) {
       expect(op.path.startsWith('/categorize')).toBe(true);
       expect(Object.keys(op.input.shape)).toContain('budget_id');
@@ -48,6 +59,9 @@ describe('Categorize contracts', () => {
     }
     expect(categorizeUndo.expose).toEqual({ api: true, cli: true, mcp: false });
     for (const op of [categorizeAccept, categorizeSkip, categorizeSettingsSet]) expect(op.expose.mcp).toBe(true);
+    // Status is readable from an agent; starting a run is the person's call.
+    expect(categorizeRunStatus.expose).toEqual({ api: true, cli: true, mcp: true });
+    expect(categorizeRunStart.expose.mcp).toBe(false);
   });
 
   test('queue: page bounds, threshold at read time (not an input), states and bundles', () => {

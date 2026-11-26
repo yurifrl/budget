@@ -201,7 +201,9 @@ describe.skipIf(!dbReady)('POST /budgets/restore', () => {
 
     // accounts created as checking/CASH
     const accounts = await pool!.query<{ name: string; type: string; account_group: string }>(
-      'SELECT name, type, account_group::text as account_group FROM accounts WHERE budget_id = $1 ORDER BY sort_order',
+      // Restore does not set accounts.sort_order, so every row ties; name is
+      // the tiebreaker that makes this assertion deterministic.
+      'SELECT name, type, account_group::text as account_group FROM accounts WHERE budget_id = $1 ORDER BY sort_order, name',
       [budgetId],
     );
     expect(accounts.rows.map((a) => a.name)).toEqual(['Checking Alpha', 'Savings Beta']);

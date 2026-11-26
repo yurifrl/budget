@@ -107,13 +107,19 @@ export function shellGate(s: {
 }
 
 /**
- * Bank setup pages (Linked banks, a bank's page, Your Pluggy keys) and the
- * transaction page: no transaction is entered there, and on a
- * phone the floating "＋ Transaction" pill sat on their bottom actions
- * ("Connect another bank") and help text (on the transaction page: the bank
- * data).
+ * Bank setup pages (Linked banks, a bank's page, Your Pluggy keys), the
+ * person's own Jev key page and the transaction page: no transaction is entered
+ * there, and on a phone the floating "＋ Transaction" pill sat on their bottom
+ * actions ("Connect another bank", "Save key") and help text (on the
+ * transaction page: the bank data).
  */
-const NO_TRANSACTION_FAB_ROUTES: readonly string[] = ['/connect-bank', '/connection', '/pluggy-keys', '/transaction'];
+const NO_TRANSACTION_FAB_ROUTES: readonly string[] = [
+  '/connect-bank',
+  '/connection',
+  '/pluggy-keys',
+  '/jev-key',
+  '/transaction',
+];
 
 /** Whether the phone shell shows its "＋ Transaction" FAB on this route. */
 export function showsTransactionFab(pathname: string): boolean {

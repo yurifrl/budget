@@ -14,8 +14,10 @@ import { withTransaction } from '../core/db';
 import { HttpError } from '../core/validate';
 import { transferOverview } from '../budget';
 
-/** Where a suggestion came from. 'payee_rule' answers first; 'manual' records a person's choice on accept. */
-export type SuggestionSource = 'payee_rule' | 'ai' | 'manual';
+import type { CategorizeFailureKind } from '../jev';
+
+/** Where a suggestion came from. 'payee_rule' answers first; 'jev' is the Jev classifier; 'manual' records a person's choice on accept. */
+export type SuggestionSource = 'payee_rule' | 'jev' | 'manual';
 export type SuggestionStatus = 'pending' | 'accepted' | 'dismissed';
 
 /**
@@ -147,34 +149,19 @@ export function merchantPanel(
   return { raw_bank_description: facts?.description_raw ?? null, merchant: any ? panel : null };
 }
 
-/**
- * Candidate SQL: `needsCategory` (shared/src/domain/category-needs.ts) for the
- * register's rule, plus the facts a run may not act on.
- *
- * The transfer-pending half of the rule is NOT re-implemented here: the app's
- * own transfer plan (`transferOverview`, the source of the register's
- * `transferPending`) computes the pending ids and the query excludes them.
- * `candidate-rule.test.ts` runs this SQL and the shared predicate over the
- * same fixture rows and compares the sets, so the two cannot drift.
- *
- * Excluded here: inflows (money in goes to Ready to Assign), rows on
- * off-budget/tracking or closed or deleted accounts, split parents, upcoming
- * occurrences, linked transfers, rows on internal "Transfer : <account>"
- * payees, reconciliation/balance adjustments, transfer-plan pending rows
- * (payee rule waiting or kept outside the budget), after a first run rows with
- * suggestions, and rows whose recorded attempt says "no suggestion" (same
- * payee/memo) or "failed" (still backing off / out of attempts).
- *
- * Args (run query): $1 budget, $2 pending transfer ids, $3 force, $4 max
- * failed attempts.
- */
+/** A category a suggestion may name (aliases `c` and `g` for categories and groups). */
+export const ASSIGNABLE = `
+  c.deleted = false and c.hidden = false and c.internal = false
+  and g.deleted = false and g.hidden = false
+  and g.is_credit_card_payments = false and g.internal = false`;
 
 /**
- * The payee+memo fingerprint of an attempt, the SAME expression the attempts
- * table stores: a no_suggestion transaction becomes a candidate again when its
- * payee or memo changes, and only then.
+ * The facts fingerprint of an attempt, the SAME expression the attempts table
+ * stores: a transaction becomes a candidate again when its payee, memo, bank
+ * text, amount, date or account changes, and only then. Any statement that
+ * compares it must join the payee (`p`) and the bank payload (`ct`).
  */
-const ATTEMPT_FINGERPRINT = `md5(coalesce(t.payee_id::text, '') || '|' || coalesce(p.name, t.import_payee_name, '') || '|' || coalesce(t.memo, ''))`;
+export const ATTEMPT_FINGERPRINT = `md5(coalesce(t.payee_id::text, '') || '|' || coalesce(p.name, t.import_payee_name, '') || '|' || coalesce(t.memo, '') || '|' || t.amount::text || '|' || t.date::text || '|' || t.account_id::text || '|' || coalesce(ct.bank_text, ''))`;
 
 /**
  * The register's "needs a category" rule (shared with the run), WITHOUT the
@@ -186,12 +173,31 @@ export const NEEDS_CATEGORY_FROM = `
   join public.accounts a on a.id = t.account_id and a.budget_id = t.budget_id
   left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id`;
 
+/**
+ * The bank payload of a transaction, joined so a statement can read
+ * `ct.bank_text` / `ct.raw_payload` and compare `ATTEMPT_FINGERPRINT`. One
+ * fragment for every statement that needs it, so the joins cannot drift apart.
+ */
+export const BANK_FACTS_JOIN = `left join public.connection_transactions ct on ct.transaction_id = t.id and ct.budget_id = t.budget_id`;
+
 const NEEDS_CATEGORY_BODY = `
     and t.deleted = false
     and t.upcoming = false
     and t.amount <= 0
-    and t.transfer_transaction_id is null
-    and t.transfer_account_id is null
+    -- A linked transfer keeps no category when its other side is an account
+    -- still on budget: that is the register's own test (isTransferToOnBudget),
+    -- read from the pointer rather than from the payee text.
+    -- A pointer at the row's OWN account is not a transfer (the shared helper
+    -- answers false on it), and the account must be this budget's: another
+    -- budget's on-budget account leaves the money here.
+    and not exists (
+      select 1 from public.accounts ta
+       where ta.id = t.transfer_account_id
+         and ta.budget_id = t.budget_id
+         and ta.id <> t.account_id
+         and ta.deleted = false
+         and ta.on_budget = true
+    )
     and a.deleted = false
     and a.closed = false
     and a.on_budget = true
@@ -201,6 +207,8 @@ const NEEDS_CATEGORY_BODY = `
       or not exists (
         select 1 from public.accounts ta
          where ta.id = p.transfer_account_id
+           and ta.budget_id = t.budget_id
+           and ta.id <> t.account_id
            and ta.deleted = false
            and ta.on_budget = true
       )
@@ -212,7 +220,8 @@ const NEEDS_CATEGORY_BODY = `
          where pa.budget_id = t.budget_id
            and pa.deleted = false
            and pa.on_budget = true
-           and lower(pa.name) = lower(regexp_replace(coalesce(p.name, t.import_payee_name, ''), '^Transfer[[:space:]]*:[[:space:]]*', ''))
+           -- The peer is read trimmed, as the shared helper reads it.
+           and lower(pa.name) = lower(btrim(regexp_replace(coalesce(p.name, t.import_payee_name, ''), '^Transfer[[:space:]]*:[[:space:]]*', '')))
       )
     )
     and not exists (select 1 from public.subtransactions s where s.transaction_id = t.id and s.deleted = false)
@@ -265,35 +274,56 @@ export type CategorizeAttempt = {
 
 /**
  * Record one attempt for a live, still-uncategorized transaction of this
- * budget. `reset` (an explicit re-classify) restarts the attempt counter; a
- * normal attempt increments it. Returns false when the transaction is gone,
- * deleted or already categorized (nothing to record).
+ * budget, stamped with the run that made it (a redelivered run skips the rows
+ * it already answered).
  *
- * The fingerprint is computed in SQL from the SAME payee/memo expression the
- * candidate query compares, so "no suggestion" is skipped exactly while the
- * inputs are unchanged.
+ * `attempts` counts CONSECUTIVE row-level failures and nothing else: a success
+ * resets it to 0, a row-level failure adds one (or starts a fresh count at 1
+ * when the facts changed), and an answer Jev never gave — a rate limit, an
+ * outage — keeps it as it was. The row is stamped with the run even when the
+ * person categorized or deleted it meanwhile (the run did ask it); only a
+ * row of another budget, or one that no longer exists, returns false.
+ *
+ * The fingerprint is computed in SQL from the SAME expression the candidate
+ * query compares, so an answer is skipped exactly while the facts are
+ * unchanged.
  */
 export async function recordAttempt(
   db: Queryable,
   budgetId: string,
   transactionId: string,
-  attempt: { outcome: AttemptOutcome; errorKind: CategorizeFailureKind | null; model: string | null; reset: boolean },
+  runId: string,
+  attempt: {
+    outcome: AttemptOutcome;
+    errorKind: CategorizeFailureKind | null;
+    model: string | null;
+    /** What the failure does to the cap: `count` a row-level failure, `keep` a service one, `reset` a success. */
+    attempts: 'count' | 'keep' | 'reset';
+  },
 ): Promise<boolean> {
   const { rowCount } = await db.query(
     `insert into public.categorize_attempts
-       (transaction_id, budget_id, outcome, error_kind, attempts, model, input_fingerprint, last_attempt_at)
-     select t.id, t.budget_id, $3, $4, 1, $5, ${ATTEMPT_FINGERPRINT}, now()
+       (transaction_id, budget_id, outcome, error_kind, attempts, model, input_fingerprint, last_run_id, last_attempt_at)
+    select t.id, t.budget_id, $3, $4, case when $6 = 'count' then 1 else 0 end, $5, ${ATTEMPT_FINGERPRINT}, $7, now()
        from public.transactions t
        left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id
-      where t.id = $1 and t.budget_id = $2 and t.deleted = false and t.category_id is null
+       left join public.connection_transactions ct
+              on ct.transaction_id = t.id and ct.budget_id = t.budget_id
+      where t.id = $1 and t.budget_id = $2
      on conflict (transaction_id) do update
        set outcome = excluded.outcome,
            error_kind = excluded.error_kind,
-           attempts = case when $6::boolean then 1 else public.categorize_attempts.attempts + 1 end,
+          attempts = case
+            when $6 = 'reset' then 0
+            when $6 = 'keep' then public.categorize_attempts.attempts
+            when public.categorize_attempts.input_fingerprint = excluded.input_fingerprint
+              then public.categorize_attempts.attempts + 1
+            else 1 end,
            model = excluded.model,
            input_fingerprint = excluded.input_fingerprint,
+           last_run_id = excluded.last_run_id,
            last_attempt_at = now()`,
-    [transactionId, budgetId, attempt.outcome, attempt.errorKind, attempt.model, attempt.reset],
+    [transactionId, budgetId, attempt.outcome, attempt.errorKind, attempt.model, attempt.attempts, runId],
   );
   return (rowCount ?? 0) > 0;
 }
@@ -384,27 +414,33 @@ export async function restorePendingSuggestions(db: Queryable, budgetId: string,
  * hide it behind a pending row, or resurrect a category they dismissed. The
  * exception is a STALE accept (its category was cleared by hand): its
  * suggestions are restored to pending and the run may answer again. Callers
- * skip such transactions too (`CANDIDATE_WHERE`); this is the last line of
- * defence. Ranks above the new answer are dropped while pending only. Returns
- * false when nothing was written.
+ * skip such transactions too (`RUN_SKIP_WHERE`); this is the last line of
+ * defence.
+ *
+ * Each row is inserted by SELECT over the transaction and the category, so a
+ * category deleted or hidden between the call and this write is simply not
+ * stored (R9) and the fingerprint written with it is the facts it answers.
+ * Ranks above the new answer are dropped while pending only. Returns how many
+ * pending suggestions are in place afterwards (0 when the answer named no
+ * category the budget may still use).
  */
 export async function replaceSuggestions(
   pool: Pool,
   budgetId: string,
   transactionId: string,
   suggestions: readonly NewSuggestion[],
-): Promise<boolean> {
+): Promise<number> {
   return withTransaction(pool, async (client) => {
     const locked = await client.query(
       'select 1 from public.transactions where id = $1 and budget_id = $2 and category_id is null and deleted = false for update',
       [transactionId, budgetId],
     );
-    if (locked.rowCount === 0) return false;
+    if (locked.rowCount === 0) return 0;
     const decisions = await client.query<{ kind: string }>(
       'select kind from public.categorize_decisions where transaction_id = $1 and budget_id = $2 for update',
       [transactionId, budgetId],
     );
-    if (decisions.rows.some((row) => row.kind !== 'accept')) return false;
+    if (decisions.rows.some((row) => row.kind !== 'accept')) return 0;
     if (decisions.rows.length > 0) {
       await restorePendingSuggestions(client, budgetId, transactionId);
     } else {
@@ -412,22 +448,33 @@ export async function replaceSuggestions(
         'select status from public.category_suggestions where transaction_id = $1 and budget_id = $2',
         [transactionId, budgetId],
       );
-      if (existing.rows.some((row) => row.status !== 'pending')) return false;
+      if (existing.rows.some((row) => row.status !== 'pending')) return 0;
     }
-    for (const [index, suggestion] of suggestions.entries()) {
-      await client.query(
+    let written = 0;
+    // The rank counts the rows that land, so a category the budget may not use
+    // (dropped by the SQL below) never leaves a hole in the set.
+    for (const suggestion of suggestions) {
+      const inserted = await client.query(
         `insert into public.category_suggestions
-           (transaction_id, budget_id, rank, category_id, confidence, reason, source, provider, model)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           (transaction_id, budget_id, rank, category_id, confidence, reason, source, provider, model, input_fingerprint)
+         select t.id, t.budget_id, $3, c.id, $5, $6, $7, $8, $9, ${ATTEMPT_FINGERPRINT}
+           from public.transactions t
+           join public.categories c on c.id = $4 and c.budget_id = t.budget_id
+           join public.category_groups g on g.id = c.group_id and g.budget_id = t.budget_id
+           left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id
+           left join public.connection_transactions ct
+                  on ct.transaction_id = t.id and ct.budget_id = t.budget_id
+          where t.id = $1 and t.budget_id = $2 and ${ASSIGNABLE}
          on conflict (transaction_id, rank) do update
            set category_id = excluded.category_id, confidence = excluded.confidence,
                reason = excluded.reason, source = excluded.source,
-               provider = excluded.provider, model = excluded.model, updated_at = now()
+               provider = excluded.provider, model = excluded.model,
+               input_fingerprint = excluded.input_fingerprint, updated_at = now()
            where public.category_suggestions.status = 'pending'`,
         [
           transactionId,
           budgetId,
-          index + 1,
+          written + 1,
           suggestion.categoryId,
           suggestion.confidence,
           suggestion.reason,
@@ -436,13 +483,14 @@ export async function replaceSuggestions(
           suggestion.model,
         ],
       );
+      written += inserted.rowCount ?? 0;
     }
     await client.query(
       `delete from public.category_suggestions
         where transaction_id = $1 and rank > $2 and status = 'pending'`,
-      [transactionId, suggestions.length],
+      [transactionId, written],
     );
-    return true;
+    return written;
   });
 }
 

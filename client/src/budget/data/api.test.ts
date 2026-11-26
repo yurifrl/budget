@@ -310,8 +310,10 @@ describe('the split slice is still one api', () => {
   test('one reducer path, the same tag types, every endpoint reachable from budgetApi', () => {
     expect(budgetApi.reducerPath).toBe('budgetApi');
     const endpoints = Object.keys(budgetApi.endpoints);
-    expect(endpoints).toHaveLength(113);
-    for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget', 'getTransferSuggestions', 'setPayeeTransferRule', 'getCategorizeQueue', 'acceptCategorize', 'undoCategorize', 'skipCategorize', 'getCategorizeSettings', 'setCategorizeSettings']) {
+    // Every area slice injects into the one api: base → budgets → members → plan
+    // → payees → register → connections → transfers → categorize.
+    expect(endpoints).toHaveLength(107);
+    for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget', 'getTransferSuggestions', 'setPayeeTransferRule', 'getCategorizeQueue', 'acceptCategorize', 'undoCategorize', 'skipCategorize', 'getCategorizeSettings', 'setCategorizeSettings', 'getCategorizeRun', 'startCategorizeRun']) {
       expect(endpoints).toContain(name);
     }
   });

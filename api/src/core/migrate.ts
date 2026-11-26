@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
+import type { Pool } from 'pg';
+
 import { pool, withTransaction } from './db';
 
 const MIGRATIONS_DIR = join(import.meta.dir, '..', '..', 'db', 'migrations');
@@ -68,7 +70,12 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   '0106_connection_transactions_per_budget.sql': ['column:public.connection_transactions.budget_id', 'index:public.connection_transactions_budget_key'],
   '0107_connection_account_backfill.sql': 'table:public.connection_account_backfill',
   '0108_transfer_suggestions.sql': ['column:public.payees.transfer_rule', 'table:public.transfer_marks', 'table:public.transfer_links'],
-  '0109_ai_credentials.sql': 'table:public.ai_credentials',
+  // Not table:public.ai_credentials: 0127 drops that table, so the probe would
+  // fail on every boot after it and 0109 would re-run, resurrecting the table
+  // (as 0007 above). Absent = 0109's effect is superseded; a database that
+  // still has the table (before 0127) unmarks 0109, re-runs it as a no-op
+  // (`if not exists`), and 0127 then drops the table in the same boot.
+  '0109_ai_credentials.sql': 'absent:public.ai_credentials',
   '0110_category_suggestions.sql': 'table:public.category_suggestions',
   '0111_category_suggestions_category_idx.sql': 'index:public.category_suggestions_category_idx',
   '0112_categorize_attempts.sql': 'table:public.categorize_attempts',
@@ -83,6 +90,14 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   // Both probes: a development database that ran an earlier draft (no `seq`) is unmarked and the file re-runs, which heals it.
   '0121_payee_renaming_rules.sql': ['table:public.payee_renaming_rules', 'column:public.payee_renaming_rules.seq'],
   '0122_rename_rule_applies.sql': ['column:public.connection_transactions.bank_text', 'table:public.rename_rule_applies', 'table:public.rename_rule_apply_rows', 'index:public.rename_rule_apply_rows_transaction_idx'],
+  '0123_jev_keys.sql': 'table:public.jev_keys',
+  '0124_categorize_run_failures.sql': 'column:public.categorize_run_progress.failures',
+  '0125_categorize_run_resume.sql': ['column:public.categorize_attempts.last_run_id', 'column:public.categorize_run_progress.failure'],
+  '0126_category_suggestions_fingerprint.sql': 'column:public.category_suggestions.input_fingerprint',
+  // The drop's own probe: true only once the table is gone. If anything
+  // re-creates it (a previous release booting after this one re-runs its 0109),
+  // the next boot unmarks 0127 and drops the table again.
+  '0127_drop_ai_credentials.sql': 'absent:public.ai_credentials',
 };
 
 /**
@@ -92,31 +107,34 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
  *  - 0010: guarded renames + `on conflict do nothing` over the seeded Casa
  *    budget (dev-initdb.sh runs it after the seeds).
  *  - 0015: regexp rewrite of import_id that never matches its own output.
+ *  - 0128: suggestion source `ai` → `jev`; the update never matches its own
+ *    output.
  */
 export const MIGRATION_EXEMPT: Record<string, string> = {
   '0010_ynab_parity_plan_data.sql': 'data migration, on-conflict idempotent',
   '0015_import_key_payee.sql': 'data migration, rewrite never matches its own output',
+  '0128_suggestion_source_jev.sql': 'data migration, rename never matches its own output',
 };
 export { MIGRATION_SIGNATURES };
 
 /** Serializes concurrent runners (two API pods booting together). */
 const MIGRATE_LOCK_KEY = 7_204_001;
 
-async function signaturePresent(signature: string | readonly string[]): Promise<boolean> {
+async function signaturePresent(db: Pool, signature: string | readonly string[]): Promise<boolean> {
   if (typeof signature !== 'string') {
-    for (const one of signature) if (!(await signaturePresent(one))) return false;
+    for (const one of signature) if (!(await signaturePresent(db, one))) return false;
     return true;
   }
   const kindIndex = signature.indexOf(':');
   const kind = signature.slice(0, kindIndex);
   const target = signature.slice(kindIndex + 1);
   if (kind === 'table' || kind === 'index' || kind === 'absent') {
-    const { rows } = await pool.query<{ t: string | null }>('select to_regclass($1) as t', [target]);
+    const { rows } = await db.query<{ t: string | null }>('select to_regclass($1) as t', [target]);
     const exists = rows[0].t !== null;
     return kind === 'absent' ? !exists : exists;
   }
   const [schema, table, column] = target.split('.');
-  const { rowCount } = await pool.query(
+  const { rowCount } = await db.query(
     'select 1 from information_schema.columns where table_schema = $1 and table_name = $2 and column_name = $3',
     [schema, table, column],
   );
@@ -133,26 +151,27 @@ function migrationFiles(): string[] {
  * Apply any db/migrations/*.sql not yet recorded in schema_migrations, in
  * filename order, each in its own transaction. Idempotent across restarts:
  * non-idempotent statements (0004's renames) run exactly once because applied
- * files are tracked. Safe to call on every boot.
+ * files are tracked. Safe to call on every boot. `db` is the process pool;
+ * tests pass another to migrate a database of their own.
  */
-export async function runMigrations(): Promise<void> {
+export async function runMigrations(db: Pool = pool): Promise<void> {
   // Session-level advisory lock on a dedicated connection: a second runner
   // blocks here until the first finishes, then sees its tracking rows.
-  const lock = await pool.connect();
+  const lock = await db.connect();
   try {
     await lock.query('select pg_advisory_lock($1)', [MIGRATE_LOCK_KEY]);
-    await applyMigrations();
+    await applyMigrations(db);
   } finally {
     await lock.query('select pg_advisory_unlock($1)', [MIGRATE_LOCK_KEY]).catch(() => undefined);
     lock.release();
   }
 }
 
-async function applyMigrations(): Promise<void> {
-  await pool.query(
+async function applyMigrations(db: Pool): Promise<void> {
+  await db.query(
     'create table if not exists schema_migrations (filename text primary key, applied_at timestamptz not null default now())',
   );
-  const { rows } = await pool.query<{ filename: string }>('select filename from schema_migrations');
+  const { rows } = await db.query<{ filename: string }>('select filename from schema_migrations');
   const applied = new Set(rows.map((r) => r.filename));
 
   // Signature-verify tracked rows, then baseline an untracked (legacy) DB.
@@ -166,13 +185,13 @@ async function applyMigrations(): Promise<void> {
   for (const file of migrationFiles()) {
     const signature = MIGRATION_SIGNATURES[file];
     if (signature === undefined) continue;
-    const present = await signaturePresent(signature);
+    const present = await signaturePresent(db, signature);
     if (applied.has(file) && !present) {
-      await pool.query('delete from schema_migrations where filename = $1', [file]);
+      await db.query('delete from schema_migrations where filename = $1', [file]);
       applied.delete(file);
       console.log(`migration ${file}: tracked but signature absent — re-running`);
     } else if (!applied.has(file) && present) {
-      await pool.query(
+      await db.query(
         'insert into schema_migrations (filename) values ($1) on conflict do nothing',
         [file],
       );
@@ -184,7 +203,7 @@ async function applyMigrations(): Promise<void> {
     if (applied.has(file)) continue;
     const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
     try {
-      await withTransaction(pool, async (client) => {
+      await withTransaction(db, async (client) => {
         await client.query(sql);
         await client.query('insert into schema_migrations (filename) values ($1)', [file]);
       });

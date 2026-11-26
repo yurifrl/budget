@@ -10,6 +10,7 @@ export {
   newCategory,
   newGroup,
   newPayee,
+  newSuggestion,
   newTransaction,
   newUser,
   suggestionsOf,

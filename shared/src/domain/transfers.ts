@@ -30,7 +30,9 @@ export function isInternalTransferPayee(
   payee: string,
   accounts: readonly { name: string; onBudget: boolean }[],
 ): boolean {
-  const peer = TRANSFER_PAYEE_RE.exec(payee)?.[1]?.toLowerCase();
+  // Trimmed like `transferPeerAccountId` below: both helpers answer for the
+  // same payee text, so "Transfer : Savings " must mean Savings in both.
+  const peer = TRANSFER_PAYEE_RE.exec(payee)?.[1]?.trim().toLowerCase();
   return peer !== undefined && accounts.some((a) => a.onBudget && a.name.toLowerCase() === peer);
 }
 

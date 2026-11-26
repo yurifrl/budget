@@ -7,8 +7,10 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { Hono } from 'hono';
 
 import { pool } from '../core/db';
+import { configureSecretBox } from '../core/secret-box';
 import { dbReady } from '../core/test-gate';
 import { httpOnError } from '../core/validate';
+import { JEV_MAX_OPTIONS, saveOwnKey } from '../jev';
 import type { IdentityUser } from '../user';
 import router from './router';
 import { replaceSuggestions } from './store';
@@ -65,7 +67,7 @@ async function suggest(
      on conflict (transaction_id, rank) do update
        set category_id = excluded.category_id, confidence = excluded.confidence,
            reason = excluded.reason, source = excluded.source, status = excluded.status`,
-    [transactionId, a.budgetId, opts.rank ?? 1, categoryId, opts.confidence ?? 0.9, opts.reason ?? 'why', opts.source ?? 'ai', opts.status ?? 'pending'],
+    [transactionId, a.budgetId, opts.rank ?? 1, categoryId, opts.confidence ?? 0.9, opts.reason ?? 'why', opts.source ?? 'jev', opts.status ?? 'pending'],
   );
 }
 
@@ -126,7 +128,7 @@ describe.skipIf(!dbReady)('queue', () => {
     expect(byId.size).toBe(5); // decided rows (dismissed/categorized) are out
     expect(byId.get(has)).toMatchObject({ state: 'has_suggestions' });
     expect(byId.get(has).suggestions).toEqual([
-      { category_id: a.food, category_name: 'Food', confidence: 0.94, reason: 'why', source: 'ai' },
+      { category_id: a.food, category_name: 'Food', confidence: 0.94, reason: 'why', source: 'jev' },
     ]);
     expect(byId.get(below)).toMatchObject({ state: 'below_threshold', suggestions: [] });
     expect(byId.get(none)).toMatchObject({ state: 'no_suggestion' });
@@ -227,7 +229,7 @@ describe.skipIf(!dbReady)('queue', () => {
     );
     await pool.query(
       `insert into public.category_suggestions (transaction_id, budget_id, rank, category_id, confidence, source)
-       select id, $2, 1, $3, 0.9, 'ai' from public.transactions where payee_id = $1 and budget_id = $2`,
+       select id, $2, 1, $3, 0.9, 'jev' from public.transactions where payee_id = $1 and budget_id = $2`,
       [payee, a.budgetId, a.food],
     );
     const page = await queueJson(ownerUser());
@@ -371,7 +373,7 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     const rows = (await pool.query('select id, category_id from public.transactions where id = any($1) order by id', [[t1, t2]])).rows;
     expect(rows.map((r) => r.category_id).sort()).toEqual([a.food, a.dining].sort());
     const suggestions = (await pool.query('select rank, status, source from public.category_suggestions where transaction_id = $1 order by rank', [t1])).rows;
-    expect(suggestions).toEqual([{ rank: 1, status: 'accepted', source: 'ai' }, { rank: 2, status: 'dismissed', source: 'ai' }]);
+    expect(suggestions).toEqual([{ rank: 1, status: 'accepted', source: 'jev' }, { rank: 2, status: 'dismissed', source: 'jev' }]);
     const revAfter = (await pool.query('select revision from public.budgets where id = $1', [a.budgetId])).rows[0].revision;
     expect(revAfter).toBeGreaterThan(revBefore);
 
@@ -498,17 +500,17 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
 
   test('repeat accept keeps the suggestion and undo restores it to pending (no manual overwrite)', async () => {
     const t = await txn({ payeeId: await newPayee('Repeat model') });
-    await suggest(t, a.food, { rank: 1, source: 'ai' });
+    await suggest(t, a.food, { rank: 1, source: 'jev' });
     expect((await (await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }])).json()).accepted).toBe(1);
     const repeat = await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
     expect(repeat.status).toBe(200);
     expect((await repeat.json()).accepted).toBe(0);
     expect((await pool.query('select rank, status, source from public.category_suggestions where transaction_id = $1', [t])).rows)
-      .toEqual([{ rank: 1, status: 'accepted', source: 'ai' }]);
+      .toEqual([{ rank: 1, status: 'accepted', source: 'jev' }]);
     const back = await undo(ownerUser(), [t]);
     expect(await back.json()).toEqual({ restored: 1, transaction_ids: [t], skipped: [] });
     expect((await pool.query('select rank, status, source from public.category_suggestions where transaction_id = $1', [t])).rows)
-      .toEqual([{ rank: 1, status: 'pending', source: 'ai' }]);
+      .toEqual([{ rank: 1, status: 'pending', source: 'jev' }]);
   });
 
   test('an accepted row whose category was cleared by hand is back in the queue, counted and accepted again', async () => {
@@ -566,12 +568,12 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     // restored to pending and the fresh answer replaces them.
     expect(
       await replaceSuggestions(pool, a.budgetId, t, [
-        { categoryId: a.dining, confidence: 0.95, reason: 'fresh', source: 'ai', provider: null, model: null },
+        { categoryId: a.dining, confidence: 0.95, reason: 'fresh', source: 'jev', provider: null, model: null },
       ]),
-    ).toBe(true);
+    ).toBe(1);
     const page = await queueJson(ownerUser());
     expect(page.rows[0].suggestions).toEqual([
-      { category_id: a.dining, category_name: 'Dining', confidence: 0.95, reason: 'fresh', source: 'ai' },
+      { category_id: a.dining, category_name: 'Dining', confidence: 0.95, reason: 'fresh', source: 'jev' },
     ]);
 
     const skipped = await skip(ownerUser(), t);
@@ -581,9 +583,9 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     expect((await queueJson(ownerUser())).rows).toEqual([]);
     expect(
       await replaceSuggestions(pool, a.budgetId, t, [
-        { categoryId: a.food, confidence: 0.9, reason: 'late', source: 'ai', provider: null, model: null },
+        { categoryId: a.food, confidence: 0.9, reason: 'late', source: 'jev', provider: null, model: null },
       ]),
-    ).toBe(false);
+    ).toBe(0);
   });
 
   test('an accepted row whose category was changed by hand stays out of the queue and undo reports category_changed', async () => {
@@ -702,9 +704,9 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     await skip(ownerUser(), t);
     expect(
       await replaceSuggestions(pool, a.budgetId, t, [
-        { categoryId: a.food, confidence: 0.9, reason: 'late', source: 'ai', provider: null, model: null },
+        { categoryId: a.food, confidence: 0.9, reason: 'late', source: 'jev', provider: null, model: null },
       ]),
-    ).toBe(false);
+    ).toBe(0);
     expect((await pool.query('select count(*)::int as n from public.category_suggestions where transaction_id = $1', [t])).rows[0].n).toBe(0);
   });
 
@@ -829,5 +831,74 @@ describe.skipIf(!dbReady)('access', () => {
     // The member cannot see a foreign budget either.
     const foreign = await call(memberUser(), 'GET', `/categorize/queue?budget_id=${other.budgetId}`);
     expect(foreign.status).toBe(404);
+  });
+});
+
+/**
+ * The API's error body, read field by field: a test asserting on a refusal is
+ * the boundary here, so its shape is checked rather than assumed.
+ */
+async function refusal(res: Response): Promise<{ error: string; code: string; reason: unknown; max: unknown }> {
+  const raw: unknown = await res.json();
+  if (typeof raw !== 'object' || raw === null) throw new Error('the response body is not an object');
+  if (!('error' in raw) || typeof raw.error !== 'string') throw new Error('the error body has no message');
+  if (!('code' in raw) || typeof raw.code !== 'string') throw new Error('the error body has no code');
+  const params = 'params' in raw ? raw.params : undefined;
+  const param = (key: 'reason' | 'max'): unknown => {
+    if (typeof params !== 'object' || params === null) return undefined;
+    if (key === 'reason') return 'reason' in params ? params.reason : undefined;
+    return 'max' in params ? params.max : undefined;
+  };
+  return { error: raw.error, code: raw.code, reason: param('reason'), max: param('max') };
+}
+
+describe.skipIf(!dbReady)('starting a run', () => {
+  const start = (who: IdentityUser, budgetId = a.budgetId) => call(who, 'POST', '/categorize/run', { budget_id: budgetId });
+  const queued = async () =>
+    (
+      await pool.query("select 1 from jobs.job_runs where job_type = 'categorize_run' and subject_key = $1", [
+        a.budgetId,
+      ])
+    ).rowCount;
+
+  test('a run that cannot be answered is refused before a job exists, with its own reason', async () => {
+    // No key: the sentence names why (no shared key for this account), never the
+    // generic "Jev is not available", and the page can read the reason back.
+    const noKey = await start(ownerUser());
+    expect(noKey.status).toBe(503);
+    const rejected = await refusal(noKey);
+    expect(rejected.code).toBe('jev_unavailable');
+    expect(rejected.reason).toBe('flag_off');
+    expect(rejected.error).toContain('shared key');
+    expect(await queued()).toBe(0);
+
+    configureSecretBox({ current: 1, keys: new Map([[1, new Uint8Array(32).fill(7)]]) });
+    try {
+      await saveOwnKey(pool, a.userId, 'sk-or-v1-0123456789abcdef');
+
+      // A key but nothing Jev may suggest from: its own code, still no job.
+      await pool.query('update public.categories set hidden = true where budget_id = $1', [a.budgetId]);
+      const none = await start(ownerUser());
+      expect(none.status).toBe(409);
+      expect((await refusal(none)).code).toBe('categorize_no_categories');
+      expect(await queued()).toBe(0);
+
+      // More categories than one call may offer: its own code and the limit.
+      await pool.query('update public.categories set hidden = false where budget_id = $1', [a.budgetId]);
+      const groupId = await newGroup(a.budgetId, 'Bulk');
+      await pool.query(
+        `insert into public.categories (id, budget_id, group_id, name)
+         select gen_random_uuid(), $1, $2, 'Bulk ' || n from generate_series(1, $3::int) n`,
+        [a.budgetId, groupId, JEV_MAX_OPTIONS + 1],
+      );
+      const tooMany = await start(ownerUser());
+      expect(tooMany.status).toBe(409);
+      const capped = await refusal(tooMany);
+      expect(capped.code).toBe('categorize_too_many_categories');
+      expect(capped.max).toBe(JEV_MAX_OPTIONS);
+      expect(await queued()).toBe(0);
+    } finally {
+      configureSecretBox(null);
+    }
   });
 });

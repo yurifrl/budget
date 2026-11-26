@@ -185,6 +185,38 @@ export async function newTransaction(t: TransactionFixture): Promise<string> {
   return id;
 }
 
+/** One suggestion row of a transaction (rank 1 is the best one). */
+export async function newSuggestion(s: {
+  transactionId: string;
+  budgetId: string;
+  categoryId: string;
+  rank?: number;
+  confidence?: number;
+  reason?: string | null;
+  source?: string;
+  provider?: string | null;
+  model?: string | null;
+  status?: string;
+}): Promise<void> {
+  await pool.query(
+    `insert into public.category_suggestions
+       (transaction_id, rank, budget_id, category_id, confidence, reason, source, provider, model, status)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [
+      s.transactionId,
+      s.rank ?? 1,
+      s.budgetId,
+      s.categoryId,
+      s.confidence ?? 0.9,
+      s.reason ?? null,
+      s.source ?? 'jev',
+      s.provider ?? 'jev',
+      s.model ?? 'typesafe/jev-1.13',
+      s.status ?? 'pending',
+    ],
+  );
+}
+
 /** Suggestions of a transaction, ordered by rank. */
 export async function suggestionsOf(transactionId: string): Promise<
   { rank: number; category_id: string; confidence: number; reason: string | null; source: string; provider: string | null; model: string | null; status: string }[]

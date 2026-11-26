@@ -26,6 +26,7 @@ export type {
   CategorizeQueue,
   CategorizeQueueRow,
   CategorizeQueueState,
+  CategorizeRunStatus,
   CategorizeSettings,
   CategorizeSkipResult,
   CategorizeSuggestion,
@@ -168,4 +169,6 @@ export const {
   useSkipCategorizeMutation,
   useGetCategorizeSettingsQuery,
   useSetCategorizeSettingsMutation,
+  useGetCategorizeRunQuery,
+  useStartCategorizeRunMutation,
 } = budgetApi;

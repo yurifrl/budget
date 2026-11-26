@@ -30,6 +30,7 @@ export default {
   'root.payees': 'Manage Payees',
   'root.banks': 'Linked banks',
   'root.backup': 'Export / Import',
+  'root.jevKey': 'Jev API key',
   'root.flags': 'Edit Flags',
   'root.display': 'Display Options',
   'root.hideAmounts': 'Hide Amounts',

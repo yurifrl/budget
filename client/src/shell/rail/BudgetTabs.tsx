@@ -114,6 +114,16 @@ export function BudgetTabs({ isPhone }: { isPhone: boolean }) {
           tabBarItemStyle: { display: 'none' },
         }}
       />
+      {/* The person's own Jev key: opened from Settings, never a tab. Same
+          treatment as Your Pluggy keys: registered (the object stays valid) and
+          rendering no tab button at all. */}
+      <Tabs.Screen
+        name="jev-key"
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
       {/* Categorize page: reached from the rail, never a tab. */}
       <Tabs.Screen
         name="categorize"

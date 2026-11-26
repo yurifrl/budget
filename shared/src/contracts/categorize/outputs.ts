@@ -10,8 +10,10 @@ import { z } from '../../zod';
 
 import { isoDateSchema, milliunitsSchema, uuidSchema } from '../../validation';
 
-/** Where a suggestion came from. `manual` is a person's choice recorded on accept. */
-export const categorizeSuggestionSourceSchema = z.enum(['payee_rule', 'ai', 'manual']);
+import { jevKeyProblemSchema } from '../jev/outputs';
+
+/** Where a suggestion came from: `payee_rule` (the payee rule), `jev` (the Jev classifier) or `manual` (a person's choice recorded on accept). */
+export const categorizeSuggestionSourceSchema = z.enum(['payee_rule', 'jev', 'manual']);
 
 /**
  * What the queue knows about a transaction:
@@ -156,3 +158,75 @@ export const categorizeSettingsSchema = z.object({
   /** Suggestions below this confidence are hidden from the queue. 0..1. */
   confidence_threshold: z.number().min(0).max(1),
 });
+
+/**
+ * Why a run stopped before it could finish, one code per cause the page can
+ * tell apart: no key could be resolved for the budget, Jev refused the key,
+ * the account has no credits, Jev was unavailable (rate limit, outage,
+ * timeout, network), the budget has no category to suggest from or more than
+ * Jev accepts, or the run itself broke. The page shows one sentence per code.
+ */
+export const categorizeRunFailureSchema = z.enum([
+  /** Jev refused the key: check it in OpenRouter and save it again. */
+  'key_rejected',
+  /** The OpenRouter account behind the key has no credits left. */
+  'no_credits',
+  /** Jev was unreachable, rate limited, or answered 5xx/timeout repeatedly. */
+  'jev_unavailable',
+  /** The budget has more categories than one Jev question accepts. */
+  'too_many_categories',
+  /** The budget has no category a suggestion may name. */
+  'no_categories',
+  /** No key can be used for this budget (none saved, feature off, no shared key, unreadable). */
+  'not_configured',
+  /** Anything else that ended the run early. */
+  'internal',
+]);
+
+export type CategorizeRunFailure = z.infer<typeof categorizeRunFailureSchema>;
+
+/**
+ * How many transactions one run asks about. The page shows the confirmation,
+ * the disabled state and the empty state from it, so it is stated once here
+ * and the API takes it from this constant.
+ */
+export const CATEGORIZE_RUN_LIMIT = 100;
+
+/**
+ * The Categorize run, as the page shows it: whether a key is available, what a
+ * run started now would send, and the state of the run in flight (or the most
+ * recent one). `running`/`queued` come from the jobs ledger; done/total/
+ * failures from the run's own progress row.
+ */
+export const categorizeRunStatusSchema = z.object({
+  budget_id: uuidSchema,
+  /** A Jev key can be used for this budget right now (own, or the shared one). */
+  configured: z.boolean(),
+  /**
+   * Rows a run started now would ask about: the run's own candidate rule,
+   * capped at {@link CATEGORIZE_RUN_LIMIT}. This is what the confirmation
+   * counts and what the empty state means, not the queue's size (the queue
+   * also shows rows that already have suggestions).
+   */
+  candidates: z.number().int().min(0),
+  /** Why no key can be used; null when one can. */
+  reason: jevKeyProblemSchema.nullable(),
+  /** The run in flight, or the most recent one; null when this budget never ran. */
+  run: z
+    .object({
+      run_id: uuidSchema,
+      state: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
+      /** Transactions the run took in. */
+      total: z.number().int().min(0),
+      /** Transactions it answered or skipped so far. */
+      done: z.number().int().min(0),
+      /** Transactions whose call failed (they stay candidates for a later run). */
+      failures: z.number().int().min(0),
+      /** Why the run stopped, when it did not finish on its own; null otherwise. */
+      failure: categorizeRunFailureSchema.nullable(),
+      started_at: z.string(),
+    })
+    .nullable(),
+});
+
+export type CategorizeRunStatus = z.infer<typeof categorizeRunStatusSchema>;

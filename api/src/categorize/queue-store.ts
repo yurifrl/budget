@@ -9,7 +9,7 @@
  */
 import { createHash } from 'crypto';
 import type { Queryable } from '../core/db';
-import { merchantPanel, NEEDS_CATEGORY_FROM, NEEDS_CATEGORY_WHERE, pendingTransferIds, type SuggestionSource } from './store';
+import { ASSIGNABLE, merchantPanel, NEEDS_CATEGORY_FROM, NEEDS_CATEGORY_WHERE, pendingTransferIds, type SuggestionSource } from './store';
 import type { MerchantPanel } from './store';
 
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.8;
@@ -73,15 +73,8 @@ export type QueueCounts = {
 
 export type QueuePage = { rows: QueueRow[]; counts: QueueCounts; bundles: QueueBundle[] };
 
-/** A category a suggestion may name. */
-const ASSIGNABLE = `
-  c.deleted = false and c.hidden = false and c.internal = false
-  and g.deleted = false and g.hidden = false
-  and g.is_credit_card_payments = false and g.internal = false`;
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Hex md5 of a payee name (the bundle identity when the payee row is absent). */
 function payeeHash(name: string): string {
   return createHash('md5').update(name, 'utf8').digest('hex');
 }

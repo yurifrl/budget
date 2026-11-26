@@ -27,7 +27,7 @@ const suggestion = (name: string, confidence = 0.95): CategorizeSuggestion => ({
   category_name: name,
   confidence,
   reason: null,
-  source: 'ai',
+  source: 'jev',
 });
 
 const row = (over: Partial<CategorizeQueueRow> = {}): CategorizeQueueRow => ({

@@ -6,6 +6,7 @@ import {
   orderQueue,
   progressLabel,
   progressView,
+  noSuggestionHint,
   queueRowSubline,
   recordFiled,
   remainingCount,
@@ -17,7 +18,7 @@ const sugg = (confidence: number, name = 'Fuel') => ({
   category_name: name,
   confidence,
   reason: null,
-  source: 'ai' as const,
+  source: 'jev' as const,
 });
 const row = (id: string, confidences: number[], state: 'has_suggestions' | 'no_suggestion' = 'has_suggestions') => ({
   transaction_id: id,
@@ -97,6 +98,15 @@ describe('queueRowSubline', () => {
 
   test('a manual row says why it has no chips', () => {
     expect(queueRowSubline(row('a', [], 'no_suggestion'), '21/11')).toBe('21/11 · no suggestion');
+  });
+});
+
+describe('noSuggestionHint', () => {
+  test('a state with words of its own explains itself; a suggestion state draws no line', () => {
+    expect(noSuggestionHint('no_suggestion')).toBe('Why no chips: no suggestion.');
+    expect(noSuggestionHint('failed')).toBe('Why no chips: classification failed.');
+    // No words for this state: the card must not reserve an empty second line.
+    expect(noSuggestionHint('has_suggestions')).toBeNull();
   });
 });
 

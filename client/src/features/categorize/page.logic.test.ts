@@ -123,7 +123,7 @@ describe('accept helpers', () => {
       bundleToastLabel({
         payee: 'Uber',
         count: 9,
-        suggestion: { category_id: 'c1', category_name: 'Transport', confidence: 0.93, reason: null, source: 'ai' },
+        suggestion: { category_id: 'c1', category_name: 'Transport', confidence: 0.93, reason: null, source: 'jev' },
       }),
     ).toBe('Uber · 9 transactions → Transport');
   });

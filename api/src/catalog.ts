@@ -9,6 +9,7 @@ import { contracts as budgetContracts } from '@shared/contracts/budget';
 import { contracts as categorizeContracts } from '@shared/contracts/categorize';
 import { contracts as connectionsContracts } from '@shared/contracts/connections';
 import { contracts as featuresContracts } from '@shared/contracts/features';
+import { contracts as jevContracts } from '@shared/contracts/jev';
 import { contracts as jobsContracts } from '@shared/contracts/jobs';
 import { contracts as oauthContracts } from '@shared/contracts/oauth';
 import { contracts as ratesContracts } from '@shared/contracts/rates';
@@ -19,6 +20,7 @@ export const contracts: readonly OperationContract[] = [
   ...categorizeContracts,
   ...connectionsContracts,
   ...featuresContracts,
+  ...jevContracts,
   ...jobsContracts,
   ...oauthContracts,
   ...ratesContracts,

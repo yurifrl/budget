@@ -10,7 +10,7 @@ import { pool } from '../core/db';
 import { dbReady } from '../core/test-gate';
 import { HttpError } from '../core/validate';
 import { listAttempts, listSuggestions } from './store';
-import { cleanupFixtures, newAccount, newBudget, newTransaction, type BudgetFixture } from './testing';
+import { cleanupFixtures, newAccount, newBudget, newSuggestion, newTransaction, type BudgetFixture } from './testing';
 
 let fixture: BudgetFixture;
 
@@ -27,6 +27,28 @@ afterAll(async () => {
 
 const options = { minConfidence: 0, limit: 50, offset: 0 };
 
+/** What the run writes for one row: the suggestion and the attempt behind it. */
+async function seed(
+  transactionId: string,
+  categoryId: string,
+  attempt: { outcome: 'suggested' | 'no_suggestion'; confidence?: number; reason?: string | null } = { outcome: 'suggested' },
+): Promise<void> {
+  if (attempt.outcome === 'suggested') {
+    await newSuggestion({
+      transactionId,
+      budgetId: fixture.budgetId,
+      categoryId,
+      confidence: attempt.confidence ?? 0.8,
+      reason: attempt.reason === undefined ? 'market' : attempt.reason,
+    });
+  }
+  await pool.query(
+    `insert into public.categorize_attempts (transaction_id, budget_id, outcome, attempts, input_fingerprint)
+     values ($1, $2, $3, 1, 'fp')`,
+    [transactionId, fixture.budgetId, attempt.outcome],
+  );
+}
+
 describe.skipIf(!dbReady)('reading category suggestions', () => {
   test('returns pending suggestions at/above the threshold with the joined page fields', async () => {
     const txn = await newTransaction({
@@ -42,6 +64,8 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
         paymentData: { paymentMethod: 'PIX', receiver: { name: 'Mercado Central' } },
       },
     });
+
+    await seed(txn, fixture.food);
 
     const all = await listSuggestions(pool, fixture.budgetId, options);
     expect(all.total).toBe(1);
@@ -82,6 +106,7 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
 
   test('a classified-empty row is distinguishable from one never classified', async () => {
     const empty = await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-06', amount: -110 });
+    await seed(empty, fixture.food, { outcome: 'no_suggestion' });
 
     // No suggestion row to show...
     expect(await listSuggestions(pool, fixture.budgetId, options)).toEqual({ rows: [], total: 0 });
@@ -102,12 +127,14 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
   });
 
   test('another budget never sees these suggestions', async () => {
-    await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-02', amount: -100 });
+    const first = await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-02', amount: -100 });
+    await seed(first, fixture.food);
     const other = await newBudget('read-b');
     expect(await listSuggestions(pool, other.budgetId, options)).toEqual({ rows: [], total: 0 });
 
     // A hand-entered row has no bank payload: the panel fields are absent.
-    await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-07', amount: -150 });
+    const handTyped = await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-07', amount: -150 });
+    await seed(handTyped, fixture.food);
     const manual = (await listSuggestions(pool, fixture.budgetId, options)).rows.find((row) => row.amount_milliunits === -150);
     expect(manual?.bank).toBeNull();
   });
@@ -115,6 +142,8 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
   test('decided rows leave the pending queue; a categorized transaction drops out', async () => {
     const decided = await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-03', amount: -200 });
     const categorized = await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-04', amount: -300 });
+    await seed(decided, fixture.food);
+    await seed(categorized, fixture.food);
 
     await pool.query(`update public.category_suggestions set status = 'accepted' where transaction_id = $1`, [decided]);
     await pool.query('update public.transactions set category_id = $2 where id = $1', [categorized, fixture.food]);
@@ -125,6 +154,7 @@ describe.skipIf(!dbReady)('reading category suggestions', () => {
 
   test('a hidden/deleted category, group or account never reaches the queue', async () => {
     const txn = await newTransaction({ budgetId: fixture.budgetId, accountId: fixture.accountId, date: '2026-11-05', amount: -400 });
+    await seed(txn, fixture.food);
     expect((await listSuggestions(pool, fixture.budgetId, options)).total).toBe(1);
 
     // Hidden after the run: the read path filters it, not only the writer.

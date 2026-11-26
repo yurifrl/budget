@@ -16,8 +16,9 @@ import { colors, radius } from '@/ui/theme';
 import { CategoryPicker, KeyButton, KeyCap, PayeeDot } from './CategorizeBits';
 import { t } from './i18n';
 import { MerchantPanel } from './MerchantPanel';
+import { noSuggestionHint } from './oneByOne.logic';
 import { thresholdPercent, type PickedCategory } from './page.logic';
-import { confidenceBand, merchantFacts, manualStateLabel, topSuggestions, type ConfidenceBand } from './queue.logic';
+import { confidenceBand, merchantFacts, topSuggestions, type ConfidenceBand } from './queue.logic';
 
 const SHOW_KEYS = Platform.OS === 'web';
 
@@ -55,6 +56,8 @@ export function FocusPane({
   const raw = row.raw_bank_description?.trim();
   const facts = merchantFacts(row.merchant, row.payee);
   const memo = row.memo?.trim();
+  /** Why this row has no suggestion, when its state has words of its own. */
+  const hint = suggestions.length > 0 ? null : noSuggestionHint(row.state);
   const cents = milliToCents(row.amount);
 
   return (
@@ -119,18 +122,13 @@ export function FocusPane({
                     {percent}%
                   </Text>
                 </View>
-                {suggestion.reason ? (
-                  <Text style={styles.reason} numberOfLines={3}>
-                    {suggestion.reason}
-                  </Text>
-                ) : null}
               </Pressable>
             );
           })}
         </View>
-      ) : (
-        <Text style={styles.why}>{t('one.stateHint', { state: manualStateLabel(row.state) })}</Text>
-      )}
+      ) : hint ? (
+        <Text style={styles.why}>{hint}</Text>
+      ) : null}
 
       <View style={styles.searchRow}>
         <CategoryPicker
@@ -227,8 +225,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 200,
     minWidth: 180,
-    minHeight: 76,
-    gap: 6,
     padding: 12,
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -239,7 +235,6 @@ const styles = StyleSheet.create({
   suggestionHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   suggestionName: { color: colors.text, fontSize: 14.5, fontWeight: '700', flex: 1 },
   percent: { fontSize: 12.5, fontWeight: '700' },
-  reason: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   why: { color: colors.muted, fontSize: 13 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 30 },
   search: { flex: 1, minWidth: 0 },

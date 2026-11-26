@@ -14,6 +14,10 @@ import { configureDb, pool } from './core/db';
 import { runMigrations } from './core/migrate';
 import { configureSecretsFromEnv } from './secrets-env';
 import { createConnectionsActivities } from './connections/activities';
+import { createCategorizeActivities } from './categorize/activities';
+import { configureJevEnv } from './jev';
+// Registers the `categorize_run` job type so the relay resolves its workflow.
+import './categorize/job';
 import {
   configurePluggyEnv,
   CONNECTIONS_SWEEP_CRON,
@@ -38,6 +42,7 @@ const instanceId = process.env.JOBS_INSTANCE_ID || 'budget-local';
 const workerId = `${hostname()}:${process.pid}`;
 
 configurePluggyEnv(process.env);
+configureJevEnv(process.env);
 // Same master key as the API: the sync activities decrypt users' own provider secrets.
 configureSecretsFromEnv(process.env);
 await runMigrations();
@@ -51,6 +56,7 @@ const { trackedAttempt, ...ledgerActivities } = createLedgerActivities(pool, wor
 const activities = {
   ...ledgerActivities,
   ...createConnectionsActivities(pool, trackedAttempt),
+  ...createCategorizeActivities(pool, trackedAttempt),
 };
 
 const worker = startWorkerHost({

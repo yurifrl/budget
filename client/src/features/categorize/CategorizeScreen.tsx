@@ -9,6 +9,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type ViewInsta
 
 import { tCommon } from '@shared/i18n/common';
 
+import { useGetBudgetsQuery } from '@/budget/data/api';
 import { useBudgetShell } from '@/shell/context';
 import { useAppSelector } from '@/state/hooks';
 import { selectActiveBudgetId } from '@/state/ui';
@@ -19,11 +20,13 @@ import { pendingSkips, toastActionable } from './accept.logic';
 import { BundlesView } from './BundlesView';
 import { ErrorBanner } from './CategorizeBits';
 import { HeaderCard } from './HeaderCard';
+import { RunCard } from './RunCard';
 import { t } from './i18n';
 import { OneByOneView } from './OneByOneView';
 import { PendingSkipsStrip } from './PendingSkipsStrip';
 import { pageKey } from './page.logic';
 import { useBlurAfterPointerPress, useFieldFocused } from './useCategorizeKeys';
+import { useCategorizeRun } from './useCategorizeRun';
 import { useCategorizePage, type CategorizeViewMode } from './useCategorizePage';
 
 /**
@@ -44,6 +47,9 @@ function CategorizePage() {
   useBlurAfterPointerPress();
   const fieldFocused = useFieldFocused();
   const counts = page.queue.counts;
+  const run = useCategorizeRun({ budgetId: page.budgetId, onFinished: page.retryQueue });
+  // A run uses the budget owner's Jev key, so a member is told to ask them.
+  const isOwner = useGetBudgetsQuery().data?.find((row) => row.id === page.budgetId)?.is_owner ?? false;
 
   return (
     <View ref={rootRef} style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
@@ -62,6 +68,8 @@ function CategorizePage() {
           thresholdDisabled={page.savingThreshold}
           left={counts?.left_to_categorize}
         />
+
+        <RunCard run={run} isOwner={isOwner} />
 
         {page.error ? <ErrorBanner message={page.error} onDismiss={page.dismissError} /> : null}
 

@@ -70,6 +70,13 @@ export default {
   categorize_bundle_changed: 'That bundle changed from {expected} to {actual} transactions. Reload the page and try again.',
   categorize_bundle_too_large: 'That bundle has more than 1000 transactions. Fetch its rows and accept them in smaller batches.',
   category_not_assignable: 'That category cannot be used here. Choose a regular category, not a card-payment or internal one.',
+  jev_key_rejected: 'Jev refused this key. Check it in OpenRouter and save it again.',
+  jev_key_missing: 'Save your own Jev key to categorize transactions.',
+  jev_unavailable: 'Jev is not available right now. Try again later.',
+  jev_no_credits: 'The OpenRouter account behind the Jev key has no credits left. Add credits or use another key.',
+  categorize_no_categories: 'This budget has no category Jev could suggest from. Create a regular category first.',
+  categorize_too_many_categories:
+    'This budget has more than {max} categories to suggest from, which is more than Jev accepts.',
   cannot_transfer_to_same_account: 'Choose a different account: a transfer cannot go to the same account.',
   transfer_account_not_in_budget: 'The account you are transferring to is not in this budget.',
   account_closed: 'This account is closed. Reopen it to add or change transactions.',

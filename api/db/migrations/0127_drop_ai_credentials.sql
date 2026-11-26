@@ -1,0 +1,13 @@
+-- 0127 · Drop public.ai_credentials. NOT additive: the one deliberate
+--   non-additive migration, approved by the owner on 2026-11-26.
+--
+--   0109 created the table for users' own AI provider keys. The AI key feature
+--   is gone (Categorize now uses the server's Jev key, public.jev_keys), and no
+--   code reads or writes this table. The running syscd-app (sharing this
+--   database) never named it. Dropping the table drops its primary key and its
+--   foreign key to public.users with it; nothing else depends on it.
+--
+--   Idempotent (`if exists`). Its signature in core/migrate.ts is
+--   `absent:public.ai_credentials`, and so is 0109's: once the table is gone
+--   0109 counts as applied and never re-creates it (see the note there).
+drop table if exists public.ai_credentials;

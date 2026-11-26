@@ -13,6 +13,9 @@
  * Re-run rule for the page: once a person accepted or dismissed ANY suggestion
  * of a transaction, that transaction is never classified again.
  */
+
+// Registers the `categorize_run` job type (the API also enqueues it).
+import './job';
 export {
   listSuggestions as readCategorySuggestions,
   listAttempts as readCategorizeAttempts,

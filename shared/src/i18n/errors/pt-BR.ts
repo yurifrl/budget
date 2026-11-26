@@ -66,6 +66,13 @@ const m: Translation<typeof en> = {
   categorize_bundle_changed: 'Esse grupo mudou de {expected} para {actual} transações. Recarregue a página e tente de novo.',
   categorize_bundle_too_large: 'Esse grupo tem mais de 1000 transações. Busque as linhas e aceite em lotes menores.',
   category_not_assignable: 'Essa categoria não pode ser usada aqui. Escolha uma categoria comum, não uma de pagamento de cartão ou interna.',
+  jev_key_rejected: 'O Jev recusou essa chave. Confira no OpenRouter e salve de novo.',
+  jev_key_missing: 'Salve sua própria chave do Jev para categorizar transações.',
+  jev_unavailable: 'O Jev não está disponível agora. Tente mais tarde.',
+  jev_no_credits: 'A conta do OpenRouter por trás da chave do Jev está sem créditos. Adicione créditos ou use outra chave.',
+  categorize_no_categories: 'Este orçamento não tem nenhuma categoria de onde o Jev possa sugerir. Crie uma categoria comum primeiro.',
+  categorize_too_many_categories:
+    'Este orçamento tem mais de {max} categorias de onde sugerir, mais do que o Jev aceita.',
   cannot_transfer_to_same_account: 'Escolha outra conta: uma transferência não pode ir para a mesma conta.',
   transfer_account_not_in_budget: 'A conta de destino da transferência não está neste orçamento.',
   account_closed: 'Esta conta está encerrada. Reabra-a para adicionar ou alterar transações.',

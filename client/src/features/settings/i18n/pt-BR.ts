@@ -30,6 +30,7 @@ const m: Translation<typeof en> = {
   'root.payees': 'Gerenciar favorecidos',
   'root.banks': 'Bancos vinculados',
   'root.backup': 'Exportar / Importar',
+  'root.jevKey': 'Chave da API do Jev',
   'root.flags': 'Editar marcadores',
   'root.display': 'Opções de exibição',
   'root.hideAmounts': 'Ocultar valores',

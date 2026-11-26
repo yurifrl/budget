@@ -30,9 +30,16 @@ export const FEATURES = [
     description: "May connect and sync banks with the installation's shared Pluggy keys.",
     default: false,
   },
+  {
+    key: 'shared-jev-key',
+    group: 'Categorize',
+    description: "May categorize with the installation's shared Jev key (JEV_API_KEY) instead of saving an own one.",
+    default: false,
+  },
 ] as const satisfies readonly FeatureDefinition[];
 
 export type FeatureKey = (typeof FEATURES)[number]['key'];
+
 
 /** Every feature's value for one person. */
 export type FeatureValues = Record<FeatureKey, boolean>;

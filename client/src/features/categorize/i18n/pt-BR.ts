@@ -174,5 +174,55 @@ const m: Translation<typeof en> = {
     one: '{payee} · {count} transação → {category}',
     other: '{payee} · {count} transações → {category}',
   },
+
+  // Run card (Jev)
+  'run.title': 'CATEGORIZAR COM O JEV',
+  'run.button': 'Executar Jev',
+  'run.confirmTitle': 'EXECUTAR JEV',
+  'run.confirmBody': {
+    one: 'Perguntar ao Jev sobre {count} transação? As sugestões aparecem nesta fila para você aceitar ou pular; nada é aplicado automaticamente.',
+    other: 'Perguntar ao Jev sobre {count} transações? As sugestões aparecem nesta fila para você aceitar ou pular; nada é aplicado automaticamente.',
+  },
+  'run.rest': 'Cada execução pergunta sobre até {batch} transações; execute de novo para o restante.',
+  'run.confirmStart': 'Executar',
+  'run.never': 'Nenhuma execução ainda.',
+  'run.waiting': 'Na fila…',
+  'run.running': 'Perguntando ao Jev…',
+  'run.finished': 'A última execução terminou.',
+  'run.finishedCount':
+    'Execução concluída: {done} de {total} sugeridas, {failures} sem resposta.',
+  'run.failed': 'A última execução falhou.',
+  'run.cancelled': 'A última execução foi cancelada.',
+  'run.progress': { one: '{done} de {total} transação', other: '{done} de {total} transações' },
+  'run.failures': {
+    one: '{count} não pôde ser respondida; uma execução posterior tenta de novo.',
+    other: '{count} não puderam ser respondidas; uma execução posterior tenta de novo.',
+  },
+  'run.noKeyShared':
+    'Nenhuma chave da API do Jev ainda: salve a sua para categorizar com o Jev, ou peça a chave compartilhada.',
+  'run.noKeyServer': 'Nenhuma chave da API do Jev ainda: este servidor não tem chave compartilhada, então salve a sua.',
+  'run.noKeyUnreadable': 'Sua chave da API do Jev não pode ser lida neste servidor. Salve de novo.',
+  'run.noKeyOwner': 'Nenhuma chave da API do Jev pode ser usada: este orçamento não tem dono, então não há chave de onde partir.',
+  'run.failure.keyRejected': 'A execução parou: o Jev recusou a chave. Confira no OpenRouter e salve de novo.',
+  'run.failure.keyRejectedMember':
+    'A execução parou: o Jev recusou a chave do dono do orçamento. Só o dono pode conferi-la no OpenRouter e salvar de novo.',
+  'run.failure.noCredits': 'A execução parou: a conta do OpenRouter por trás da chave está sem créditos.',
+  'run.failure.noCreditsMember':
+    'A execução parou: a conta do OpenRouter por trás da chave do dono do orçamento está sem créditos. Só o dono pode adicionar créditos ou usar outra chave.',
+  'run.failure.jevUnavailable': 'A execução parou: o Jev não estava disponível. Tente de novo daqui a pouco.',
+  'run.failure.tooManyCategories':
+    'A execução parou: este orçamento tem mais categorias do que uma pergunta do Jev aceita.',
+  'run.failure.noCategories': 'A execução parou: este orçamento não tem categoria que uma sugestão possa indicar.',
+  'run.failure.notConfigured': 'A execução parou: nenhuma chave da API do Jev pôde ser usada. Salve uma para categorizar.',
+  'run.failure.notConfiguredMember':
+    'A execução parou: nenhuma chave da API do Jev pôde ser usada. O dono deste orçamento precisa salvar uma para categorizar.',
+  'run.failure.internal': 'A execução parou de forma inesperada. Inicie de novo.',
+  'run.noKeyMember':
+    'Nenhuma chave da API do Jev pode ser usada: o dono deste orçamento precisa salvar uma, ou a chave compartilhada precisa estar ligada.',
+  'run.keyLink': 'Chave da API do Jev',
+  'run.empty':
+    'Nada a perguntar agora: nenhuma transação que precisa de categoria está esperando resposta do Jev.',
+  'run.startFailed': 'Não foi possível iniciar a execução.',
+  'run.loadFailed': 'Não foi possível ler o estado da execução.',
 };
 export default m;
