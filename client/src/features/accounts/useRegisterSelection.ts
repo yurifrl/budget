@@ -30,6 +30,7 @@ import {
   unmatchTargets,
 } from '@/domain/registerSelection';
 import type { Budget, Transaction } from '@/domain/types';
+import { patchForRow } from '@/domain/transfers';
 import { downloadCsv, matchCandidates, txnsCsv } from './register/txnRowMenuShared';
 import { t } from './i18n';
 
@@ -92,12 +93,14 @@ export function useRegisterSelection({
     (patch: Partial<TransactionInput>, after?: () => void) => {
       if (!budgetId) return;
       for (const t of selectedTxns) {
-        void updateTransaction({ budgetId, id: t.id, patch });
+        // A transfer between on-budget accounts takes no category: the rest of the patch still applies.
+        const rowPatch = budget ? patchForRow(budget.accounts, t, patch) : patch;
+        if (rowPatch) void updateTransaction({ budgetId, id: t.id, patch: rowPatch });
       }
       setSelectedIds(new Set());
       after?.();
     },
-    [budgetId, selectedTxns, updateTransaction],
+    [budget, budgetId, selectedTxns, updateTransaction],
   );
 
   // Clear does NOT approve: approving repaints the row (indigoSoft =

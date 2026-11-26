@@ -54,13 +54,8 @@ export function DefaultCategoryPicker({
       bundles={budget.bundles}
       currentCategoryId={payee.default_category_id}
       bm={bm}
-      // Transfer accounts make no sense as a default category; the empty list
-      // leaves the menu's Payment/Transfer view with nothing to pick.
-      accounts={[]}
-      payeeValue={payee.name}
       onPick={(picked) => onCommit(picked)}
       onCreate={(query) => void createCategory(query, (id) => onCommit(id))}
-      onTransferPick={() => undefined}
       placeholder={placeholder}
       chevron
       accessibilityLabel={t('detail.defaultCategory')}

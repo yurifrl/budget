@@ -1,10 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { TransferSuggestion } from '@/budget/data/api';
-import type { PayeeAdminRow } from '@/budget/data/rows';
-import type { Account, Transaction } from '@/domain/types';
+import type { Transaction } from '@/domain/types';
 import {
-  accountsHint,
   allSelected,
   bulkSummary,
   chipCounts,
@@ -17,8 +15,6 @@ import {
   ruleReason,
   selectAllRows,
   scopeSuggestions,
-  transferRules,
-  transferTargets,
   whyLine,
 } from './transfers.logic';
 
@@ -216,34 +212,9 @@ describe('review list and bulk bar', () => {
     expect(s.dismissIds).toEqual(['o1', 'i1', 'o2', 'o3']);
   });
   test('toast text', () => {
-    expect(linkedToast({ linked: ['a', 'b', 'c', 'd', 'e', 'f'], rules_created: 1 })).toBe('3 linked as transfers · 1 payee rule created');
-    expect(linkedToast({ linked: ['a', 'b'], rules_created: 0 })).toBe('1 linked as transfer');
-  });
-});
-
-describe('rules and targets', () => {
-  const accounts = [
-    { id: 'itau', name: 'Itau Conta', onBudget: true, group: 'CASH' },
-    { id: 'nu', name: 'Nubank Conta', onBudget: true, group: 'CASH' },
-    { id: 'card', name: 'Nubank Cartão', onBudget: true, group: 'CREDIT' },
-    { id: 'house', name: 'House', onBudget: false, group: 'TRACKING' },
-    { id: 'old', name: 'Old', onBudget: true, group: 'CLOSED' },
-  ] as unknown as Account[];
-  test('targets are open on-budget accounts other than the row\'s', () => {
-    expect(transferTargets(accounts, 'itau').map((a) => a.id)).toEqual(['nu', 'card']);
-    expect(accountsHint(transferTargets(accounts))).toBe('Itau Conta, Nubank Conta…');
-  });
-  test('rules list: linking rules first, then never', () => {
-    const p = (id: string, name: string, rule: PayeeAdminRow['transfer_rule'], account: string | null = null) =>
-      ({ id, name, transfer_rule: rule, transfer_rule_account_id: account }) as PayeeAdminRow;
-    const rows = transferRules(
-      [p('1', 'MAY CONFEITARIA', 'never'), p('2', 'Pix enviado', 'auto'), p('3', 'Pagamento de fatura', 'account', 'card'), p('4', 'Shop', null)],
-      accounts,
-    );
-    expect(rows.map((r) => [r.name, r.target])).toEqual([
-      ['Pagamento de fatura', '→ Nubank Cartão'],
-      ['Pix enviado', '→ auto'],
-      ['MAY CONFEITARIA', 'never a transfer'],
-    ]);
+    expect(linkedToast({ linked: ['a', 'b', 'c', 'd', 'e', 'f'] }, { saved: true })).toBe('3 linked as transfers · rule saved');
+    expect(linkedToast({ linked: ['a', 'b'] })).toBe('1 linked as transfer');
+    expect(linkedToast({ linked: ['a', 'b'] }, { saved: false, message: 'Too short' })).toBe('1 linked as transfer · rule not saved: Too short');
+    expect(linkedToast({ linked: ['a', 'b'] }, { saved: false })).toContain('rule not saved');
   });
 });

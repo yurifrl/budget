@@ -1,14 +1,14 @@
 /**
  * budgetApi slice: transfers between own accounts (budget-mit6): the review
  * list of suggestions, link / unlink (Undo), "not a transfer" decisions and
- * the payee "treat as transfer" rule. Injected into the one `budgetApi`
- * (see ../api.ts). Every write refreshes the register (rows carry the
- * suggestion summary) and the payees list (it carries the rule).
+ * the old payee "treat as transfer" rule (only the convert / "Never a
+ * transfer" controls of Manage Payees still write it). Injected into the one
+ * `budgetApi` (see ../api.ts). Every write refreshes the register (rows carry
+ * the suggestion summary) and the payees list.
  */
 import { contractRequest } from '@shared/contract-request';
 import {
   payeesSetTransferRule,
-  payeesTransferRuleGet,
   transferSuggestionsList,
   transfersLink,
   transfersMark,
@@ -21,7 +21,7 @@ import { connectionsApi } from './connections';
 
 export type TransferSuggestion = OperationOutput<typeof transferSuggestionsList>[number];
 export type TransferLinkResult = OperationOutput<typeof transfersLink>;
-export type PayeeTransferRule = OperationOutput<typeof payeesTransferRuleGet>;
+export type PayeeTransferRule = OperationOutput<typeof payeesSetTransferRule>;
 export type TransferLinkInput = z.input<typeof transfersLink.input>['links'][number];
 export type TransferRuleInput = Omit<z.input<typeof payeesSetTransferRule.input>, 'id' | 'budget_id'>;
 
@@ -33,9 +33,9 @@ export const transfersApi = connectionsApi.injectEndpoints({
       providesTags: (_r, _e, { budgetId }) => [{ type: 'Transactions', id: budgetId }],
     }),
 
-    linkTransfers: b.mutation<TransferLinkResult, BudgetScope & { links: TransferLinkInput[]; rememberPayee?: boolean }>({
-      query: ({ budgetId, links, rememberPayee }) =>
-        contractRequest(transfersLink, { budget_id: budgetId, links, remember_payee: rememberPayee ?? false }),
+    linkTransfers: b.mutation<TransferLinkResult, BudgetScope & { links: TransferLinkInput[] }>({
+      // Never remember_payee: that writes the old per-payee transfer rule. "Always treat X as a transfer" is a renaming rule.
+      query: ({ budgetId, links }) => contractRequest(transfersLink, { budget_id: budgetId, links, remember_payee: false }),
       invalidatesTags: (_r, _e, { budgetId }) => [
         { type: 'Transactions', id: budgetId },
         { type: 'Accounts', id: budgetId },
@@ -52,7 +52,7 @@ export const transfersApi = connectionsApi.injectEndpoints({
       ],
     }),
 
-    markTransfers: b.mutation<{ updated: number }, BudgetScope & { transactionIds: string[]; state: 'dismissed' | 'outside' | null }>({
+    markTransfers: b.mutation<{ updated: number }, BudgetScope & { transactionIds: string[]; state: 'dismissed' | null }>({
       query: ({ budgetId, transactionIds, state }) =>
         contractRequest(transfersMark, { budget_id: budgetId, transaction_ids: transactionIds, state }),
       invalidatesTags: (_r, _e, { budgetId }) => [
@@ -60,11 +60,6 @@ export const transfersApi = connectionsApi.injectEndpoints({
         { type: 'Accounts', id: budgetId },
         { type: 'Payees', id: budgetId },
       ],
-    }),
-
-    getPayeeTransferRule: b.query<PayeeTransferRule, BudgetScope & { payeeId: string }>({
-      query: ({ budgetId, payeeId }) => contractRequest(payeesTransferRuleGet, { id: payeeId, budget_id: budgetId }),
-      providesTags: (_r, _e, { budgetId }) => [{ type: 'Payees', id: budgetId }],
     }),
 
     setPayeeTransferRule: b.mutation<PayeeTransferRule, BudgetScope & { payeeId: string; rule: TransferRuleInput }>({

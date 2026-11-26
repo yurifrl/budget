@@ -6,6 +6,7 @@
 import { transferPayeeName } from '@shared/domain/transfers';
 
 import type { PayeeAdminRow } from '@/budget/data/rows';
+import { transferChoices } from '@/domain/transfers';
 import type { Account } from '@/domain/types';
 
 import { displaySystemName, matchesSystemName } from '@/domain/systemNames';
@@ -21,6 +22,8 @@ export interface PayeeItem {
   sub?: string;
   /** The payee string committed into the field when picked. */
   commit: string;
+  /** The payee's id (a transfer payee's too): a pick sends it instead of the text. */
+  payeeId?: string;
   checked?: boolean;
 }
 
@@ -31,62 +34,66 @@ export interface PayeeSection {
 
 /**
  * Sections top to bottom: "Selected" (current payee, checkmark), "Payments
- * and Transfers" (one row per other budget account) and "Saved Payees"
- * (hidden payees excluded). Typing filters the last two by substring.
+ * and Transfers" (the transfer payee of every open account except the row's
+ * own; off-budget ones are labelled) and "Saved Payees" (hidden payees
+ * excluded). Typing filters the last two by substring. A transfer is made by
+ * picking its payee here: there is no other way in.
  */
 export function payeeSections({
   accounts,
   currentAccountId,
   payees,
   value,
+  payeeId,
 }: {
   accounts: readonly Account[];
   /** Row's transaction account — its own transfer row is omitted (no self-transfer). */
   currentAccountId?: string | null;
+  /** The payee list WITH the accounts' transfer payees. */
   payees: readonly PayeeAdminRow[];
   /** The field's text. */
   value: string;
+  /** The picked payee's id, when the field holds a picked payee (not typed text). */
+  payeeId?: string | null;
 }): PayeeSection[] {
   const query = value.trim().toLowerCase();
   const trimmedValue = value.trim();
-  const transferItems: PayeeItem[] = accounts
-    .filter((a) => a.id !== currentAccountId)
-    .map((a) => ({
-      kind: 'transfer' as const,
-      key: `transfer:${a.id}`,
-      label: displaySystemName(transferPayeeName(a.name)),
-      sub: a.group === 'CASH' ? t('payee.sub.cash') : a.group === 'CREDIT' ? t('payee.sub.credit') : t('payee.sub.account'),
-      commit: transferPayeeName(a.name),
-    }));
+  const transferItems: PayeeItem[] = transferChoices(payees, accounts, currentAccountId).map(({ payee, account }) => ({
+    kind: 'transfer' as const,
+    key: `transfer:${account.id}`,
+    label: displaySystemName(transferPayeeName(account.name)),
+    sub: !account.onBudget
+      ? t('payee.sub.offBudget')
+      : account.group === 'CASH'
+        ? t('payee.sub.cash')
+        : account.group === 'CREDIT'
+          ? t('payee.sub.credit')
+          : t('payee.sub.account'),
+    commit: payee.name,
+    payeeId: payee.id,
+  }));
   const payeeItems: PayeeItem[] = payees
-    .filter((p) => !p.hidden)
+    .filter((p) => !p.hidden && !p.deleted && p.transfer_account_id === null)
     .map((p) => ({
       kind: 'payee' as const,
       key: `payee:${p.id}`,
       label: displaySystemName(p.name),
       commit: p.name,
+      payeeId: p.id,
     }));
 
   // The typed text finds the stored name or the name as displayed (`commit` is the stored one).
   const filterItems = (list: PayeeItem[]) => (query ? list.filter((i) => matchesSystemName(i.commit, query)) : list);
 
-  const visiblePayee = payees.find((p) => !p.hidden && p.name === trimmedValue);
-  // A selected transfer (committed from Payments and Transfers, or an
-  // existing "Transfer : <account>" transaction being edited) shows under
-  // Selected too — including a transfer to the current account, which the
-  // option list omits but the field can still hold.
-  const visibleTransfer = accounts.find((a) => transferPayeeName(a.name) === trimmedValue);
-  const selectedRow: PayeeItem | null = visiblePayee
-    ? { kind: 'selected' as const, key: 'selected', label: displaySystemName(visiblePayee.name), commit: visiblePayee.name, checked: true }
-    : visibleTransfer
-      ? {
-          kind: 'selected' as const,
-          key: 'selected-transfer',
-          label: displaySystemName(transferPayeeName(visibleTransfer.name)),
-          commit: transferPayeeName(visibleTransfer.name),
-          checked: true,
-        }
-      : null;
+  // The picked payee (an ordinary one, or a transfer payee: also the row's own
+  // account's, which the option list omits but the field can still hold), else
+  // an ordinary payee whose name the text equals.
+  const held =
+    (payeeId ? payees.find((p) => p.id === payeeId && !p.deleted) : undefined) ??
+    payees.find((p) => !p.hidden && !p.deleted && p.transfer_account_id === null && p.name === trimmedValue);
+  const selectedRow: PayeeItem | null = held
+    ? { kind: 'selected' as const, key: 'selected', label: displaySystemName(held.name), commit: held.name, payeeId: held.id, checked: true }
+    : null;
   const selectedSection: PayeeSection | null = selectedRow ? { title: t('payee.section.selected'), items: [selectedRow] } : null;
 
   const transfers = filterItems(transferItems);

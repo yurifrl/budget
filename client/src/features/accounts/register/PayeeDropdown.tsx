@@ -1,9 +1,9 @@
 /**
  * PayeeDropdown — YNAB-style payee picker for the register (issue
  * syscd-app-da2). Sections top to bottom: "Selected" (current payee,
- * checkmark), "Payments and Transfers" (one row per budget account — commits
- * YNAB's "Transfer : <name>" payee naming), "Saved Payees" (GET /payees,
- * hidden payees excluded), and a pinned "Manage Payees…" row that navigates
+ * checkmark), "Payments and Transfers" (the transfer payee of each open
+ * account but the row's own: THE way to make a transfer), "Saved Payees"
+ * (GET /payees, hidden payees excluded), and a pinned "Manage Payees…" row that navigates
  * to the Manage Payees page (budget/payees).
  *
  * Search-as-you-type filters rows (a query matching nothing offers a
@@ -37,6 +37,8 @@ import { PayeeMenuBody } from './PayeeMenuBody';
 export function PayeeDropdown({
   value,
   onChangeText,
+  onPickPayee,
+  payeeId,
   payees,
   accounts,
   currentAccountId,
@@ -48,10 +50,15 @@ export function PayeeDropdown({
 }: {
   /** Controlled display text (the payee name, as in the core Combobox). */
   value: string;
+  /** Typed text (a new name, or any text): the payee is resolved by name. */
   onChangeText: (text: string) => void;
-  /** Payees from GET /payees; hidden ones vanish from Saved Payees. */
+  /** A pick from the list: an existing payee (ordinary or an account's transfer payee) by id. */
+  onPickPayee?: (payee: { id: string; name: string }) => void;
+  /** The picked payee's id while the field holds one (marks it Selected). */
+  payeeId?: string | null;
+  /** Payees WITH the accounts' transfer payees (include_transfers); hidden ones vanish from Saved Payees. */
   payees: PayeeAdminRow[];
-  /** Budget accounts driving the Payments and Transfers section. */
+  /** Budget accounts: which transfer payees "Payments and Transfers" offers. */
   accounts: Account[];
   /** Row's transaction account — its own transfer row is omitted (no self-transfer). */
   currentAccountId?: string | null;
@@ -100,8 +107,8 @@ export function PayeeDropdown({
   const trimmedValue = value.trim();
 
   const sections = useMemo(
-    () => payeeSections({ accounts, currentAccountId, payees, value }),
-    [accounts, currentAccountId, payees, value],
+    () => payeeSections({ accounts, currentAccountId, payees, value, payeeId }),
+    [accounts, currentAccountId, payees, value, payeeId],
   );
   // Flat pick list for keyboard highlight: section rows, then the create row
   // (typed queries matching no option) and Manage Payees.
@@ -124,9 +131,10 @@ export function PayeeDropdown({
     (item: PayeeItem) => {
       setOpen(false);
       setHighlight(0);
-      onChangeText(item.commit);
+      if (item.payeeId && onPickPayee) onPickPayee({ id: item.payeeId, name: item.commit });
+      else onChangeText(item.commit);
     },
-    [onChangeText],
+    [onChangeText, onPickPayee],
   );
 
   const commitTyped = () => {

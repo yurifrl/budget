@@ -9,6 +9,7 @@ import { ActivityIndicator, SectionList, StyleSheet, Text, View, Pressable } fro
 
 import { useUpdateTransactionMutation } from '@/budget/data/api';
 import { categoryLabel } from '@/domain/bundles';
+import { registerCategoryCell } from '@/domain/register';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { budgetForPerson } from '@/domain/people';
 import type { Transaction } from '@/domain/types';
@@ -18,7 +19,6 @@ import { usePersonFilter , PersonFilterBar } from '@/features/people';
 import { useBudgetShell } from '@/shell/context';
 
 import { t } from './i18n';
-import { isSystemAdjustmentPayee } from '@shared/domain/category-needs';
 
 import { displaySystemName } from '@/domain/systemNames';
 
@@ -81,12 +81,10 @@ export function SpendingScreen() {
             const c = budget.categories.find((x) => x.id === id);
             return c ? categoryLabel(c, budget.bundles) : '?';
           };
-          const cat = txn.categoryId
-            ? categoryNameFor(txn.categoryId)
-            : txn.inflow > 0 || isSystemAdjustmentPayee(txn.payee)
-              ? t('row.readyToAssign')
-              : t('row.unknown');
-          const warn = !txn.categoryId && txn.inflow === 0 && !isSystemAdjustmentPayee(txn.payee);
+          // The register's rule: a transfer between on-budget accounts needs no category and raises no warning.
+          const cell = registerCategoryCell(budget, txn);
+          const cat = txn.categoryId && !cell.notNeeded ? categoryNameFor(txn.categoryId) : cell.warn ? t('row.unknown') : cell.text;
+          const warn = cell.warn;
           const acct = budget.accounts.find((a) => a.id === txn.accountId);
           return (
             <View style={styles.txn}>

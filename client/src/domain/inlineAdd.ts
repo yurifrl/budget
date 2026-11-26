@@ -154,6 +154,10 @@ export interface InlineDraft {
   /** The resolved account's id. */
   accountId: string;
   dateText: string;
+  /** The payee's id when the person picked an existing payee (a transfer payee too); null for typed text. */
+  payeeId?: string | null;
+  /** The row's payee is a transfer between two on-budget accounts: it carries no category and no split. */
+  categoryLocked?: boolean;
   payee: string;
   categoryId: string | null;
   memo: string;
@@ -171,6 +175,8 @@ export interface InlineDraft {
 export interface InlineSaveFields {
   accountId: string;
   date: string;
+  /** The picked payee's id, else null (the text names a new or typed payee). */
+  payeeId: string | null;
   payee: string;
   categoryId: string | null;
   memo: string;
@@ -202,7 +208,9 @@ export function planInlineSave(
     rateFetching: boolean;
   },
 ): InlineSavePlan {
-  const draftSplits = d.splitsOpen ? d.splits : [];
+  // A transfer between on-budget accounts has no category and cannot be split.
+  const splitsOpen = d.splitsOpen && !d.categoryLocked;
+  const draftSplits = splitsOpen ? d.splits : [];
   if (d.outflow === 0 && d.inflow === 0 && !draftSplits.some((s) => s.outflow !== 0 || s.inflow !== 0)) {
     return { ok: false, error: t('inline.amountRequired') };
   }
@@ -218,7 +226,7 @@ export function planInlineSave(
   }
   // Legs count only while the split panel is open — a closed panel means a
   // plain categorized row (explicit un-split gesture in edit mode).
-  const liveSplits = d.splitsOpen ? d.splits.filter((s) => s.outflow !== 0 || s.inflow !== 0) : [];
+  const liveSplits = splitsOpen ? d.splits.filter((s) => s.outflow !== 0 || s.inflow !== 0) : [];
   const totals = liveSplits.length > 0 ? splitTotals(liveSplits) : null;
   // Scheduled USD draft: the ledger amount is the BRL conversion — the
   // rate-fetched value, or whatever the captain typed in the conversion
@@ -245,10 +253,11 @@ export function planInlineSave(
       accountId: d.accountId,
       date,
       payee: d.payee.trim(),
+      payeeId: d.payeeId ?? null,
       // Splits force the parent category to NULL ("Split"); the server
       // rejects a split carrying a category_id. The parent amount is the
       // leg total so account balances move by the split's real sum.
-      categoryId: totals ? null : d.categoryId,
+      categoryId: totals || d.categoryLocked ? null : d.categoryId,
       memo: d.memo.trim(),
       outflowCents,
       inflowCents,
@@ -278,4 +287,24 @@ export function repeatRuleFields(fields: InlineSaveFields, frequency: RepeatFreq
     monthLastDay: false,
     attachTransactionId,
   };
+}
+
+/**
+ * The payee part of a write. A picked payee goes by id (an edit sends nothing
+ * when it is the row's own payee; a create also carries its name, which the
+ * server ignores in favour of the id); typed text goes as text only (an edit
+ * sends nothing when it is the row's own text). So editing a row without
+ * touching its payee never resends one.
+ */
+export function payeeWrite(
+  draft: { payee: string; payeeId: string | null },
+  original: { payee: string; payeeId?: string | null } | null,
+): { payee?: string; payeeId?: string } {
+  const text = draft.payee.trim();
+  if (draft.payeeId) {
+    if (original && original.payeeId === draft.payeeId) return {};
+    return original ? { payeeId: draft.payeeId } : { payee: text, payeeId: draft.payeeId };
+  }
+  if (original && text === original.payee) return {};
+  return { payee: text };
 }

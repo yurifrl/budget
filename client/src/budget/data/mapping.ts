@@ -9,7 +9,7 @@
  */
 
 import { recomputeActivity } from '../domain/engine';
-import { transferPeerAccountId } from '@shared/domain/transfers';
+import { legacyTransferAccountByName } from '../../domain/transfers';
 import type {
   Account,
   AccountType,
@@ -143,6 +143,7 @@ export function assembleBudget(src: BudgetSource): Budget {
     target: mapCategoryTarget(c),
     notes: c.note ?? '',
     hidden: c.hidden || undefined,
+    internal: c.internal || undefined,
     userId: c.user_id ?? null,
     bundleId: c.bundle_id ?? undefined,
   }));
@@ -153,6 +154,7 @@ export function assembleBudget(src: BudgetSource): Budget {
     id: g.id,
     name: g.name,
     isCreditCardPayments: g.is_credit_card_payments || undefined,
+    internal: g.internal || undefined,
     categoryIds: src.categories.filter((c) => c.group_id === g.id).map((c) => c.id),
   }));
 
@@ -178,6 +180,7 @@ export function assembleBudget(src: BudgetSource): Budget {
       // the domain contract is YYYY-MM-DD (see Transaction.date in domain/types).
       date: t.date.slice(0, 10),
       payee,
+      payeeId: t.payee_id,
       categoryId: t.category_id,
       memo: t.memo ?? '',
       outflow: cents < 0 ? -cents : 0,
@@ -191,7 +194,13 @@ export function assembleBudget(src: BudgetSource): Budget {
       ...(t.installment ? { installment: t.installment } : {}),
       importId: t.import_id ?? null,
       matchedTransactionId: t.matched_transaction_id ?? null,
-      transferAccountId: t.transfer_account_id ?? transferPeerAccountId(payee, src.accounts, t.account_id) ?? null,
+      // The server's pointer; a row without one resolves exactly as main did: its payee's name
+      // ("Transfer : <account>") when that names exactly one other account of the budget
+      // (legacyTransferAccountByName). The payee's link is deliberately not read here: for a pointer-less
+      // row it can answer differently from the name (same-named accounts, "(2)" names, stale names, the
+      // row's own account) and so would move Ready to Assign. The server repair turns those rows into
+      // pointers, and then this line is the server's answer.
+      transferAccountId: t.transfer_account_id ?? legacyTransferAccountByName(payee, src.accounts, t.account_id),
       ...(t.transfer_suggestion
         ? {
             transferSuggestion: {
@@ -201,7 +210,9 @@ export function assembleBudget(src: BudgetSource): Budget {
             },
           }
         : {}),
-      ...(t.transfer_pending ? { transferPending: t.transfer_pending } : {}),
+      // `waiting` rows (an old per-payee rule's row with no other side yet) stay. `outside` (a transfer to an
+      // account outside the budget) is no longer a thing: such a row reads as an ordinary one needing a category.
+      ...(t.transfer_pending === 'waiting' ? { transferPending: 'waiting' as const } : {}),
       ...(t.transfer_link_method ? { transferLinkMethod: t.transfer_link_method } : {}),
       // Only real splits: the engine treats an empty `splits` array as a split
       // with no legs (the transaction would vanish from every figure).
@@ -259,8 +270,10 @@ export function assembleBudget(src: BudgetSource): Budget {
 export interface TransactionInput {
   accountId: string;
   date: string;
-  /** Payee name; upserted to a payee_id on save. Empty => no payee. */
+  /** Payee name; upserted to a payee_id on save. Empty => no payee. A picked payee goes by `payeeId` (it wins over the text). */
   payee: string;
+  /** An existing payee picked by the person (a transfer payee too). */
+  payeeId?: string | null;
   categoryId: string | null;
   memo: string;
   outflowCents: Cents;
@@ -297,6 +310,7 @@ export function snakeTxn(input: TransactionInput): Record<string, unknown> {
     account_id: input.accountId,
     date: input.date,
     payee: input.payee ?? '',
+    ...(input.payeeId ? { payee_id: input.payeeId } : {}),
     category_id: input.categoryId,
     memo: input.memo || null,
     outflow: centsToMilli(input.outflowCents ?? 0),
@@ -364,7 +378,9 @@ export function snakeTxnPatch(patch: Partial<TransactionInput>): Record<string, 
   const out: Record<string, unknown> = {};
   if (patch.accountId !== undefined) out.account_id = patch.accountId;
   if (patch.date !== undefined) out.date = patch.date;
-  if (patch.payee !== undefined) out.payee = patch.payee;
+  // A picked payee goes by id alone; typed text goes as text.
+  if (patch.payeeId) out.payee_id = patch.payeeId;
+  else if (patch.payee !== undefined) out.payee = patch.payee;
   if (patch.categoryId !== undefined) out.category_id = patch.categoryId;
   if (patch.memo !== undefined) out.memo = patch.memo;
   if (patch.outflowCents !== undefined) out.outflow = centsToMilli(patch.outflowCents);

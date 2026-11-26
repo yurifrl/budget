@@ -15,6 +15,10 @@ export default {
   'picker.payeeSearch': 'Find or add a payee',
   'picker.categorySearch': 'Search Categories',
   'picker.categorySearchLabel': 'Search categories',
+  'picker.sectionTransfers': 'Payments and Transfers',
+  'picker.sectionPayees': 'Saved Payees',
+  'picker.offBudget': 'Off budget',
+  'field.categoryNotNeeded': 'Category not needed',
   'picker.createPayee': 'Create “{query}” Payee',
   'picker.createCategory': 'New “{query}” Category',
 

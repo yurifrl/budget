@@ -20,7 +20,7 @@ const budget = {
   categories: [{ id: 'c1', name: 'Mercado' }],
 } as unknown as Pick<Budget, 'accounts' | 'categories'>;
 const row = (over: Record<string, unknown>) =>
-  ({ payee: 'Shop', categoryId: null, splits: undefined, inflow: 0, ...over }) as never;
+  ({ accountId: 'a1', payee: 'Shop', categoryId: null, splits: undefined, inflow: 0, ...over }) as never;
 
 describe('registerCategoryCell', () => {
   test('adjustments read Ready to Assign', () => {
@@ -32,13 +32,25 @@ describe('registerCategoryCell', () => {
     expect(registerCategoryCell(budget, row({ inflow: 100 }))).toEqual({ text: 'Ready to Assign', warn: false });
     expect(registerCategoryCell(budget, row({}))).toEqual({ text: 'needs category', warn: true });
   });
-  test('internal transfers read Transfer, unless the caller opts out (linked-account register)', () => {
-    expect(registerCategoryCell(budget, row({ payee: 'Transfer : Savings' }))).toEqual({ text: 'Transfer', warn: false });
-    expect(registerCategoryCell(budget, row({ payee: 'Transfer : Savings' }), { transfers: false })).toEqual({ text: 'needs category', warn: true });
+  test('a transfer between two on-budget accounts reads "Category not needed", by its pointer, not its payee text', () => {
+    const own = { accountId: 'a1', transferAccountId: 'a2' };
+    expect(registerCategoryCell(budget, row({ ...own, payee: 'Transfer : Savings' }))).toEqual({ text: 'Category not needed', warn: false, notNeeded: true });
+    // Whatever the payee text says, no pointer means an ordinary row.
+    expect(registerCategoryCell(budget, row({ accountId: 'a1', payee: 'Transfer : Savings' }))).toEqual({ text: 'needs category', warn: true });
+    expect(registerCategoryCell(budget, row({ ...own, payee: 'Poupança' }))).toEqual({ text: 'Category not needed', warn: false, notNeeded: true });
+    // A stored category on such a row is dead data: the engine ignores it.
+    expect(registerCategoryCell(budget, row({ ...own, categoryId: 'c1' }))).toEqual({ text: 'Category not needed', warn: false, notNeeded: true });
+  });
+  test('a transfer to an off-budget (or unknown) account keeps its category as today', () => {
+    const offBudget = { ...budget, accounts: [acct('a1', 'Checking'), { ...acct('a3', 'House'), onBudget: false } as Account] };
+    expect(registerCategoryCell(offBudget, row({ accountId: 'a1', transferAccountId: 'a3' }))).toEqual({ text: 'needs category', warn: true });
+    expect(registerCategoryCell(offBudget, row({ accountId: 'a1', transferAccountId: 'a3', categoryId: 'c1' }))).toEqual({ text: 'Mercado', warn: false });
+    expect(registerCategoryCell(budget, row({ accountId: 'a1', transferAccountId: 'gone' }))).toEqual({ text: 'needs category', warn: true });
   });
   test('payee-rule transfers without their other side need no category (budget-mit6)', () => {
     expect(registerCategoryCell(budget, row({ transferPending: 'waiting' }))).toEqual({ text: 'Transfer · waiting for the other side', warn: false });
-    expect(registerCategoryCell(budget, row({ transferPending: 'outside' }))).toEqual({ text: 'Transfer · outside the budget', warn: false });
+    // The old "outside the budget" mark is just a transaction now: it needs a category like any other row.
+    expect(registerCategoryCell(budget, row({ transferPending: 'outside' }))).toEqual({ text: 'needs category', warn: true });
   });
   test('categorized rows show the category name, ? when unknown', () => {
     expect(registerCategoryCell(budget, row({ categoryId: 'c1' }))).toEqual({ text: 'Mercado', warn: false });

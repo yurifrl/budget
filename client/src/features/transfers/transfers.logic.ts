@@ -1,13 +1,11 @@
 /**
  * View rules for transfers between own accounts (budget-mit6): register chips
  * and their counts, the suggestion behind a register row, the popover's two
- * sides and "why" line, the review list rows and the bulk bar totals, the
- * transfer rules list. Pure (wire types allowed); tested in transfers.logic.test.ts.
+ * sides and "why" line, the review list rows and the bulk bar totals. Pure (wire types allowed); tested in transfers.logic.test.ts.
  */
 import type { TransferLinkInput, TransferSuggestion } from '@/budget/data/api';
 import { milliToCents } from '@/budget/data/mapping';
-import type { PayeeAdminRow } from '@/budget/data/rows';
-import type { Account, Cents, Transaction } from '@/domain/types';
+import type { Cents, Transaction } from '@/domain/types';
 import { t } from './i18n';
 
 export type RegisterChip = 'all' | 'needsCategory' | 'suggested' | 'transfers';
@@ -16,7 +14,7 @@ export type CandidateLeg = TransferSuggestion['candidates'][number];
 export type MatchKind = 'sure' | 'confirm' | 'choose' | 'oneSide';
 export type TransferRule = NonNullable<CandidateLeg['rule']>;
 
-/** A linked transfer leg, or a rule row counted as a transfer (waiting / outside the budget). */
+/** A linked transfer leg, or an old payee-rule row waiting for its other side. */
 export const isTransferRow = (tx: Pick<Transaction, 'transferAccountId' | 'transferPending'>): boolean =>
   !!tx.transferAccountId || tx.transferPending != null;
 
@@ -227,40 +225,15 @@ export function allSelected(rows: readonly ReviewRow[], selected: ReadonlySet<st
   return ticks.length > 0 && ticks.every((r) => selected.has(r.id));
 }
 
-/** Toast after linking: "3 linked as transfers · 1 payee rule created". */
-export function linkedToast(result: { linked: string[]; rules_created: number }): string {
+/**
+ * Toast after linking: "3 linked as transfers", plus what happened to the
+ * renaming rule when one was asked for ("rule saved", or "rule not saved: why").
+ */
+export function linkedToast(result: { linked: string[] }, rule?: { saved: boolean; message?: string } | null): string {
   const pairs = Math.round(result.linked.length / 2);
   const linked = t('toast.linked', { count: pairs });
-  return result.rules_created > 0 ? `${linked} · ${t('toast.rules', { count: result.rules_created })}` : linked;
-}
-
-/** On-budget open accounts a transfer may go to (rule targets, "Other account…"). */
-export function transferTargets(accounts: readonly Account[], exceptId?: string): Account[] {
-  return accounts.filter((a) => a.onBudget && a.group !== 'CLOSED' && a.id !== exceptId);
-}
-
-/** "Nubank Conta, Nubank Cartão…" for the rule's automatic option. */
-export function accountsHint(accounts: readonly Account[], max = 2): string {
-  const names = accounts.map((a) => a.name);
-  return names.length > max ? `${names.slice(0, max).join(', ')}…` : names.join(', ');
-}
-
-/** The "Transfer rules" list: linking rules first, then "never", by name. */
-export function transferRules(
-  payees: readonly PayeeAdminRow[],
-  accounts: readonly Pick<Account, 'id' | 'name'>[],
-): { payeeId: string; name: string; never: boolean; target: string }[] {
-  return payees
-    .filter((p) => p.transfer_rule)
-    .map((p) => {
-      const never = p.transfer_rule === 'never';
-      const account = accounts.find((a) => a.id === p.transfer_rule_account_id);
-      const target = never
-        ? t('rules.never')
-        : p.transfer_rule === 'account' && account
-          ? t('rules.account', { account: account.name })
-          : t('rules.auto');
-      return { payeeId: p.id, name: p.name, never, target };
-    })
-    .sort((a, b) => Number(a.never) - Number(b.never) || a.name.localeCompare(b.name));
+  if (!rule) return linked;
+  if (rule.saved) return `${linked} · ${t('toast.ruleSaved')}`;
+  // The link went through; say plainly that the rule did not, and why.
+  return `${linked} · ${t('toast.ruleNotSaved', { reason: rule.message ?? t('rule.notSaved.invalid') })}`;
 }

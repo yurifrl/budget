@@ -4,6 +4,7 @@ export default {
   'field.date': 'Date',
   'field.payee': 'Payee',
   'field.category': 'Category',
+  'field.categoryNotNeeded': 'Category not needed',
   'field.memo': 'Memo',
 
   // Inline add / edit row
@@ -77,6 +78,7 @@ export default {
   'payee.sub.cash': 'Cash account',
   'payee.sub.credit': 'Credit account',
   'payee.sub.account': 'Account',
+  'payee.sub.offBudget': 'Off budget',
   'payee.create': 'Use “{name}” as payee',
   'payee.manage': 'Manage Payees…',
 } as const;

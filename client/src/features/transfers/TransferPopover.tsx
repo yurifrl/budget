@@ -11,11 +11,15 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensio
 import type { TransferSuggestion } from '@/budget/data/api';
 import { milliToCents } from '@/budget/data/mapping';
 import type { Account } from '@/domain/types';
+import { transferPayeeName } from '@shared/domain/transfers';
+import { displaySystemName } from '@/domain/systemNames';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
 import { t } from './i18n';
-import { SelectionCheckbox } from '@/ui/SelectionCheckbox';
-import { popoverSides, transferTargets, whyLine, type TransferLeg } from './transfers.logic';
+import { transferTargets } from '@/domain/transfers';
+import { RememberRule } from './RememberRule';
+import { suggestRule } from './transferRule.logic';
+import { popoverSides, whyLine, type TransferLeg } from './transfers.logic';
 import type { TransfersState } from './useTransfers';
 
 const WIDTH = 392;
@@ -76,7 +80,7 @@ export function TransferPopover({
   anchor: { x: number; y: number };
   isPhone: boolean;
   accounts: readonly Account[];
-  actions: Pick<TransfersState, 'linkMany' | 'dismiss' | 'keepOutside'>;
+  actions: Pick<TransfersState, 'linkMany' | 'dismiss' | 'bankTextOf'>;
   onClose: () => void;
 }) {
   const win = useWindowDimensions();
@@ -84,10 +88,23 @@ export function TransferPopover({
   const [remember, setRemember] = useState(true);
   const [mode, setMode] = useState<'main' | 'other'>('main');
   const sides = popoverSides(item, txnId, pick);
-  const payee = sides.row.payee_name;
-  // The bank rules still apply under a payee rule, so a refused pair cannot promise automatic links.
-  const canRemember = !!payee && item.basis !== 'refused';
+  // The text the bank sent for this row: the rule is built from it.
+  const bankText = actions.bankTextOf(sides.row.transaction_id) ?? sides.row.payee_name ?? '';
+  const [rule, setRule] = useState(() => suggestRule(bankText));
+  // The bank rules still apply under a rule, so a refused pair cannot promise automatic links.
+  const canRemember = bankText !== '' && item.basis !== 'refused';
   const rememberOn = canRemember && remember;
+  const ruleFor = (accountId: string) => (rememberOn ? { accountId, draft: rule } : null);
+  const remembered = (
+    <RememberRule
+      bankText={bankText}
+      payeeLabel={mode === 'main' && sides.other ? displaySystemName(transferPayeeName(sides.other.account_name)) : null}
+      on={remember}
+      onToggle={() => setRemember(!remember)}
+      draft={rule}
+      onChange={setRule}
+    />
+  );
 
   const done = (ok: boolean) => {
     if (ok) onClose();
@@ -124,15 +141,7 @@ export function TransferPopover({
                   </View>
                 ) : null}
                 <Text style={styles.why}>{whyLine(item, sides)}</Text>
-                {canRemember ? (
-                  <View style={styles.check}>
-                    <SelectionCheckbox marginRight={0} checked={remember} onToggle={() => setRemember(!remember)} label={t('popover.remember', { payee })} />
-                    <Pressable style={{ flex: 1 }} onPress={() => setRemember(!remember)}>
-                      <Text style={styles.checkText}>{t('popover.remember', { payee })}</Text>
-                      <Text style={styles.muted}>{t('popover.rememberSub')}</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
+                {canRemember ? remembered : null}
                 <View style={[styles.actions, isPhone && styles.actionsPhone]}>
                   <Pressable style={styles.btn} accessibilityRole="button" onPress={() => void actions.dismiss([sides.row.transaction_id]).then(done)}>
                     <Text style={styles.btnText}>{t('popover.notTransfer')}</Text>
@@ -146,7 +155,7 @@ export function TransferPopover({
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !sides.link }}
                     disabled={!sides.link}
-                    onPress={() => sides.link && void actions.linkMany([sides.link], rememberOn).then(done)}>
+                    onPress={() => sides.link && sides.other && void actions.linkMany([sides.link], ruleFor(sides.other.account_id)).then(done)}>
                     <Text style={styles.primaryText}>{t('popover.link')}</Text>
                   </Pressable>
                 </View>
@@ -154,19 +163,17 @@ export function TransferPopover({
             ) : (
               <>
                 <Text style={styles.title}>{t('other.title')}</Text>
+                {canRemember ? remembered : null}
                 {transferTargets(accounts, sides.row.account_id).map((a) => (
                   <Pressable
                     key={a.id}
                     style={styles.option}
                     accessibilityRole="button"
-                    onPress={() => void actions.linkMany([{ transaction_id: sides.row.transaction_id, account_id: a.id }], rememberOn).then(done)}>
+                    onPress={() => void actions.linkMany([{ transaction_id: sides.row.transaction_id, account_id: a.id }], ruleFor(a.id)).then(done)}>
                     <Text style={styles.checkText}>{a.name}</Text>
+                    {!a.onBudget ? <Text style={styles.muted}>{t('other.offBudget')}</Text> : null}
                   </Pressable>
                 ))}
-                <Pressable style={styles.option} accessibilityRole="button" onPress={() => void actions.keepOutside([sides.row.transaction_id]).then(done)}>
-                  <Text style={styles.checkText}>{t('other.outside')}</Text>
-                  <Text style={styles.muted}>{t('other.outsideSub')}</Text>
-                </Pressable>
                 <View style={styles.actions}>
                   <Pressable style={styles.btn} accessibilityRole="button" onPress={() => setMode('main')}>
                     <Text style={styles.btnText}>{t('other.back')}</Text>
@@ -221,7 +228,6 @@ const styles = StyleSheet.create({
   choice: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' },
   choiceOn: { borderColor: colors.blue, backgroundColor: colors.blueSoft },
   why: { color: colors.muted, fontSize: 11, marginVertical: 6 },
-  check: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginVertical: 8 },
   checkText: { color: colors.text, fontSize: 12 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   actionsPhone: { flexWrap: 'wrap', rowGap: 8 },

@@ -18,11 +18,13 @@ import {
   useUpdateTransactionMutation,
 } from '@/budget/data/api';
 import type { TransactionInput } from '@/budget/data/mapping';
+import type { PayeeAdminRow } from '@/budget/data/rows';
 import { todayIso } from '@/domain/format';
 import {
   emptySplit,
   initialRepeatFreq,
   inlineRowDraft,
+  payeeWrite,
   planInlineSave,
   repeatRuleFields,
   resolveDraftDate,
@@ -31,6 +33,7 @@ import {
   type UsdDraft,
 } from '@/domain/inlineAdd';
 import { editDirty, newDraftDirty } from '@/domain/rowEdit';
+import { draftTransferAccount, isBudgetTransferTo, transferAccountOfPayee } from '@/domain/transfers';
 import type { Budget, Cents, RepeatFrequency, Transaction, TransactionSplit } from '@/domain/types';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { t } from './i18n';
@@ -38,12 +41,15 @@ import { t } from './i18n';
 export function useInlineAdd({
   budget,
   budgetId,
+  payees,
   defaultAccountId,
   transaction,
   onClose,
 }: {
   budget: Budget;
   budgetId: string;
+  /** The payee list WITH the accounts' transfer payees (to know whether the picked payee is a transfer). */
+  payees: readonly PayeeAdminRow[];
   defaultAccountId?: string | null;
   transaction?: Transaction;
   onClose: () => void;
@@ -54,7 +60,9 @@ export function useInlineAdd({
     transaction?.accountId ?? defaultAccountId ?? budget.accounts[0]?.id ?? '',
   );
   const [dateText, setDateText] = useState(() => formatDate(transaction?.date ?? todayIso()));
-  const [payee, setPayee] = useState(transaction?.payee ?? '');
+  const [payee, setPayeeText] = useState(transaction?.payee ?? '');
+  // The picked payee's id (an existing payee, a transfer payee too); null once the text is typed.
+  const [payeeId, setPayeeId] = useState<string | null>(transaction?.payeeId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(transaction?.categoryId ?? null);
   const [memo, setMemo] = useState(transaction?.memo ?? '');
   const [outflow, setOutflow] = useState(transaction?.outflow ?? 0);
@@ -107,6 +115,10 @@ export function useInlineAdd({
 
   const account = budget.accounts.find((a) => a.id === accountId) ?? budget.accounts[0];
 
+  // A picked transfer payee between two on-budget accounts: no category, no split, nothing to edit there.
+  const transferAccountId = draftTransferAccount(transaction, { payee, payeeId }, payees);
+  const categoryLocked = !!account && isBudgetTransferTo(budget.accounts, account.id, transferAccountId);
+
   // Latest dirty/commit — the outside-press listener reads through refs so it
   // stays mounted with stable deps while the draft state moves.
   const dirtyRef = useRef<() => boolean>(() => false);
@@ -117,7 +129,7 @@ export function useInlineAdd({
       todayIso(),
     );
     return editing && transaction
-      ? editDirty(transaction, d, splitsOpen ? splits : undefined)
+      ? editDirty(transaction, d, splitsOpen && !categoryLocked ? splits : undefined)
       : newDraftDirty(
           d,
           defaultAccountId ?? budget.accounts[0]?.id ?? '',
@@ -148,7 +160,8 @@ export function useInlineAdd({
 
   const resetForNext = () => {
     setDateText(formatDate(todayIso()));
-    setPayee('');
+    setPayeeText('');
+    setPayeeId(null);
     setCategoryId(null);
     setMemo('');
     setOutflow(0);
@@ -206,7 +219,7 @@ export function useInlineAdd({
       return;
     setError(null);
     const plan = planInlineSave(
-      { accountId: account.id, dateText, payee, categoryId, memo, outflow, inflow, splitsOpen, splits, repeatFreq, usd, convEdited },
+      { accountId: account.id, dateText, payee, payeeId, categoryLocked, categoryId, memo, outflow, inflow, splitsOpen, splits, repeatFreq, usd, convEdited },
       { parseDateInput, today: todayIso(), dateFormat: fmtPrefs.dateFormat, rate: rateData?.rate, rateFetching },
     );
     if (!plan.ok) {
@@ -219,10 +232,12 @@ export function useInlineAdd({
         // Closed panel = no splits. Editing a split transaction auto-opens
         // the panel, so a closed panel in edit mode is the user's explicit
         // un-split: the picked single category replaces the legs.
+        // The payee goes only when it changed: a picked one by id, typed text as text.
+        const { payee: _text, payeeId: _id, ...rest } = fields;
         await updateTransaction({
           budgetId,
           id: transaction.id,
-          patch: fields,
+          patch: { ...rest, ...payeeWrite({ payee, payeeId }, { payee: transaction.payee, payeeId: transaction.payeeId }) },
           // Splits save the full leg list (server replaces, never diffs).
           subtransactions,
         }).unwrap();
@@ -294,8 +309,23 @@ export function useInlineAdd({
     /** Null while the typed date is unparseable. */
     dateIso: resolveDraftDate(dateText, parseDateInput, todayIso()),
     payee,
-    setPayee,
-    categoryId,
+    payeeId,
+    /** Typed text: the payee is resolved by name. */
+    setPayee: (text: string) => {
+      setPayeeText(text);
+      setPayeeId(null);
+    },
+    /** A pick from the payee list: by id. A transfer payee clears the category and any split. */
+    pickPayee: (picked: { id: string; name: string }) => {
+      setPayeeText(picked.name);
+      setPayeeId(picked.id);
+      if (transferAccountOfPayee(payees, picked.id)) {
+        setCategoryId(null);
+        setSplitsOpen(false);
+      }
+    },
+    categoryLocked,
+    categoryId: categoryLocked ? null : categoryId,
     setCategoryId,
     memo,
     setMemo,

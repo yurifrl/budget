@@ -8,16 +8,17 @@
  * Two-pane layout: searchable payee list (with live usage counts and an
  * inline add row) on the left, detail pane on the right — rename, a
  * paginated transactions table, categorization radio (auto / fixed / never)
- * with a default-category picker, renaming rules editor (Contains X →
- * rename to Y), hide, merge, and delete (routes to a merge prompt when the
- * payee still has transactions).
+ * with a default-category picker, "Never a transfer", the Renaming card
+ * (several rules, each applicable to past transactions with undo), hide,
+ * merge, and delete (routes to a merge prompt when the payee still has
+ * transactions). The list has two groups: the payees and the accounts'
+ * transfer payees; a transfer payee shows only its name and Renaming card.
  *
  * Data comes straight from the payee endpoints added by syscd-app-7pa;
  * mutations live in data/api.ts.
  */
 
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Pressable, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { tCommon } from '@shared/i18n/common';
 
@@ -28,7 +29,7 @@ import { PayeeListPane } from './PayeeListPane';
 import { styles } from './styles';
 import { usePayeeAdmin } from './usePayeeAdmin';
 import { useBudgetShell } from '@/shell/context';
-import { TransferRulesList } from '@/features/transfers';
+import { useApplyUndo } from './useApplyUndo';
 
 export function ManagePayeesBody({
   /** Native top inset — page only; the modal sheet floats with its own padding. */
@@ -41,8 +42,8 @@ export function ManagePayeesBody({
 }) {
   const admin = usePayeeAdmin();
   const { search, setSearch, error } = admin;
-  // Payees › Rules (budget-mit6): the transfer rules list; a row opens its payee.
-  const [tab, setTab] = useState<'payees' | 'rules'>('payees');
+  // "Apply to past transactions" toast with Undo: lives here so it outlasts picking another payee.
+  const undo = useApplyUndo(admin.budgetId);
   // Phone width: one pane at a time (the list, or the selected payee with a back link).
   const narrow = useWindowDimensions().width < 700;
 
@@ -57,32 +58,6 @@ export function ManagePayeesBody({
         ) : null}
       </View>
 
-      <View style={styles.tabs}>
-        {(['payees', 'rules'] as const).map((k) => (
-          <Pressable
-            key={k}
-            onPress={() => setTab(k)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === k }}
-            style={[styles.tab, tab === k && styles.tabOn]}>
-            <Text style={[styles.tabText, tab === k && styles.tabTextOn]}>{k === 'payees' ? t('tabs.payees') : t('tabs.rules')}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {tab === 'rules' ? (
-        <ScrollView>
-          <TransferRulesList
-            payees={admin.all}
-            accounts={admin.pickerBudget?.accounts ?? []}
-            onOpen={(id) => {
-              admin.selectById(id);
-              setTab('payees');
-            }}
-          />
-        </ScrollView>
-      ) : (
-      <>
       <View style={styles.searchWrap}>
         <Text style={styles.searchIcon}>⌕</Text>
         <TextInput
@@ -107,10 +82,9 @@ export function ManagePayeesBody({
       ) : null}
       <View style={styles.body}>
         {!narrow || !admin.selected ? <PayeeListPane admin={admin} fill={narrow} /> : null}
-        {!narrow || admin.selected ? <PayeeDetailPane admin={admin} /> : null}
+        {!narrow || admin.selected ? <PayeeDetailPane admin={admin} onApplied={undo.show} onRemoved={undo.showRemoved} /> : null}
       </View>
-      </>
-      )}
+      {undo.node}
     </View>
   );
 }

@@ -4,34 +4,35 @@
  */
 
 import { categoryNeed } from '@shared/domain/category-needs';
-import { isInternalTransferPayee } from '@shared/domain/transfers';
 
 import { computeRunningBalances, workingBalance } from './engine';
 import { t as tr } from './i18n';
 import { matchesSystemName } from './systemNames';
+import { isBudgetTransfer } from './transfers';
 import type { Account, Budget, Cents, Transaction } from './types';
 
 /**
  * Category cell text for a register row. YNAB shows every auto-booked
  * adjustment (reconcile or working-balance edit, including close zeroing)
- * categorized to Inflow: Ready to Assign. On-budget <-> on-budget transfers
- * carry no category by design and read "Transfer" (`transfers: false` skips
- * that check, as the linked-account register always did).
+ * categorized to Inflow: Ready to Assign. A transfer between two on-budget
+ * accounts (the row's transfer pointer, see `isBudgetTransfer`) reads
+ * "Category not needed": it has no category and can take none.
  */
 export function registerCategoryCell(
   budget: Pick<Budget, 'accounts' | 'categories'>,
-  t: Pick<Transaction, 'payee' | 'categoryId' | 'splits' | 'inflow' | 'transferPending'>,
-  { transfers = true }: { transfers?: boolean } = {},
-): { text: string; warn: boolean } {
+  t: Pick<Transaction, 'accountId' | 'payee' | 'categoryId' | 'splits' | 'inflow' | 'transferPending' | 'transferAccountId'>,
+): { text: string; warn: boolean; /** Greyed: the row carries no category and takes none. */ notNeeded?: boolean } {
   // The rule itself lives in @shared/domain/category-needs; the API's
   // categorizer is tested against the same function.
+  const transfer = isBudgetTransfer(budget.accounts, t);
   const need = categoryNeed({
     payee: t.payee,
-    categoryId: t.categoryId,
+    // Money that stays inside the budget carries no category, whatever a stored row still holds.
+    categoryId: transfer ? null : t.categoryId,
     splitCount: t.splits?.length ?? 0,
     amount: t.inflow,
     transferPending: t.transferPending ?? null,
-    transferPayee: transfers && isInternalTransferPayee(t.payee, budget.accounts),
+    transferPayee: transfer,
   });
   switch (need) {
     case 'reconciliation':
@@ -44,12 +45,12 @@ export function registerCategoryCell(
       return { text: tr('register.split', { count: t.splits?.length ?? 0 }), warn: false };
     case 'transfer_waiting':
       return { text: tr('register.transferWaiting'), warn: false };
-    case 'transfer_outside':
-      return { text: tr('register.transferOutside'), warn: false };
     case 'transfer':
-      return { text: tr('register.transfer'), warn: false };
+      return { text: tr('register.notNeeded'), warn: false, notNeeded: true };
     case 'inflow':
       return { text: tr('register.readyToAssign'), warn: false };
+    // `transfer_outside` is no longer produced by the client (see the mapping); it reads like any uncategorized row.
+    case 'transfer_outside':
     case 'needs_category':
       return { text: tr('register.needsCategory'), warn: true };
   }

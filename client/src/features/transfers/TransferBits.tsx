@@ -1,7 +1,7 @@
 /**
- * Small transfer widgets shared by the register, the review list and the
- * payee screen: the ⇄ suggestion icon, the "auto · payee rule" label, the
- * match pill and the toast with Undo.
+ * Small transfer widgets shared by the register and the review list: the
+ * ⇄ suggestion icon, the "auto · payee rule" label (a leg an old per-payee
+ * rule linked), the match pill and the toast with Undo.
  */
 import { Pressable, StyleSheet, Text } from 'react-native';
 

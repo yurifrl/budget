@@ -15,6 +15,10 @@ const m: Translation<typeof en> = {
   'picker.payeeSearch': 'Buscar ou adicionar um favorecido',
   'picker.categorySearch': 'Buscar categorias',
   'picker.categorySearchLabel': 'Buscar categorias',
+  'picker.sectionTransfers': 'Pagamentos e transferências',
+  'picker.sectionPayees': 'Favorecidos salvos',
+  'picker.offBudget': 'Fora do orçamento',
+  'field.categoryNotNeeded': 'Categoria não necessária',
   'picker.createPayee': 'Criar favorecido “{query}”',
   'picker.createCategory': 'Criar categoria “{query}”',
 

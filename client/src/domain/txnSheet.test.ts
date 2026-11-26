@@ -81,7 +81,7 @@ describe('accounts', () => {
 });
 
 describe('save', () => {
-  const form: SheetForm = { accountId: 'a', date: '2026-02-03', payee: '  Padaria ', categoryId: 'c1', isIncome: false, amount: 1234 };
+  const form: SheetForm = { accountId: 'a', date: '2026-02-03', payee: '  Padaria ', payeeId: null, categoryId: 'c1', isIncome: false, amount: 1234 };
 
   test('only a positive amount can be saved', () => {
     expect(canSaveAmount(1)).toBe(true);
@@ -89,8 +89,10 @@ describe('save', () => {
     expect(canSaveAmount(-400)).toBe(false);
   });
 
-  test('an edit patch: spending is an outflow, payee trimmed', () => {
-    expect(sheetEditPatch(form)).toEqual({
+  const stored = { payee: 'Mercado', payeeId: 'p0' };
+
+  test('an edit patch: spending is an outflow, a typed payee sent trimmed as text', () => {
+    expect(sheetEditPatch(form, stored)).toEqual({
       accountId: 'a',
       date: '2026-02-03',
       payee: 'Padaria',
@@ -101,7 +103,15 @@ describe('save', () => {
   });
 
   test('income is an inflow', () => {
-    expect(sheetEditPatch({ ...form, isIncome: true, categoryId: null })).toMatchObject({ outflowCents: 0, inflowCents: 1234, categoryId: null });
+    expect(sheetEditPatch({ ...form, isIncome: true, categoryId: null }, stored)).toMatchObject({ outflowCents: 0, inflowCents: 1234, categoryId: null });
+  });
+
+  test('an edit that leaves the payee alone sends none; a picked payee goes by id only', () => {
+    const same = sheetEditPatch({ ...form, payee: 'Mercado', payeeId: 'p0' }, stored);
+    expect('payee' in same || 'payeeId' in same).toBe(false);
+    const picked = sheetEditPatch({ ...form, payee: 'Transfer : Itau', payeeId: 'tp1' }, stored);
+    expect(picked).toMatchObject({ payeeId: 'tp1' });
+    expect('payee' in picked).toBe(false);
   });
 
   test('a new transaction is uncleared, approved, memo-less and never repeats', () => {
@@ -109,6 +119,7 @@ describe('save', () => {
       accountId: 'a',
       date: '2026-02-03',
       payee: 'Padaria',
+      payeeId: null,
       categoryId: 'c1',
       memo: '',
       outflowCents: 1234,
@@ -119,5 +130,6 @@ describe('save', () => {
       repeat: 'never',
     });
     expect(sheetNewTransaction({ ...form, isIncome: true })).toMatchObject({ outflowCents: 0, inflowCents: 1234 });
+    expect(sheetNewTransaction({ ...form, payee: 'Transfer : Itau', payeeId: 'tp1' })).toMatchObject({ payee: 'Transfer : Itau', payeeId: 'tp1' });
   });
 });
