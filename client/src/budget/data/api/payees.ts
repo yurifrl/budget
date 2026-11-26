@@ -13,6 +13,7 @@ import {
   payeesRenameRulesAdd,
   payeesRenameRulesApply,
   payeesRenameRulesApplyPreview,
+  payeesRenameRulesList,
   payeesRenameRulesRemove,
   payeesRenameRulesRevert,
   payeesRenameRulesUpdate,
@@ -136,6 +137,12 @@ export const payeesApi = planApi.injectEndpoints({
       query: ({ payeeId, budgetId, matchType, condition }) =>
         contractRequest(payeesSetRenameRule, { id: payeeId, budget_id: budgetId, match_type: matchType, condition }),
       invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'Payees', id: budgetId }],
+    }),
+
+    /** A payee's renaming rules, read fresh from the server (never a cached answer): what a multi-step change checks before it writes. */
+    getPayeeRenameRules: b.query<RenameRuleRow[], BudgetScope & { payeeId: string }>({
+      query: ({ payeeId, budgetId }) => contractRequest(payeesRenameRulesList, { id: payeeId, budget_id: budgetId }),
+      keepUnusedDataFor: 0,
     }),
 
     /** Add a renaming rule to a payee (a transfer payee too): applies to rows imported from now on. */

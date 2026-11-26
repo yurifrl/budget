@@ -12,6 +12,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { MIN_RULE_PATTERN_LENGTH, type RuleMatchType } from '@shared/domain/payees';
 
 import type { PayeeAdminRow } from '@/budget/data/rows';
+import { useMoneyFormat } from '@/ui/moneyFormat';
 import { Combobox } from '@/ui/combobox';
 import { SettingsCard, SettingsCardButton, settingsCardText } from '@/ui/primitives/settingsCard';
 import { SelectionCheckbox } from '@/ui/SelectionCheckbox';
@@ -20,12 +21,13 @@ import { t } from './i18n';
 import {
   RULE_MATCH_LABEL,
   RULE_MATCH_ORDER,
-  conversionEntries,
   conversionPlan,
   defaultConversionTarget,
   ruleMatchFromLabel,
   transferPayeeLabel,
+  visibleEntries,
   type ConversionEntry,
+  type EntryEdits,
 } from './renameRules.logic';
 import { styles } from './styles';
 import { useTransferRuleChoice } from './useTransferRuleChoice';
@@ -40,9 +42,10 @@ export function LegacyTransferNotice({
   payee: PayeeAdminRow;
   /** Transfer payees to choose from: open, on-budget accounts only. */
   targets: PayeeAdminRow[];
-  /** How many of the payee's transactions are held as transfers still waiting for their other side. */
-  waiting: number;
+  /** The payee's transactions held as transfers still waiting for their other side: how many, and their total effect on Ready to Assign. */
+  waiting: { count: number; cents: number };
 }) {
+  const money = useMoneyFormat();
   const { busy, error, convert } = useTransferRuleChoice({ budgetId, payee });
   // An "account" rule already names its account: it starts picked.
   const [pickedId, setPickedId] = useState<string | null>(() => defaultConversionTarget(payee, targets)?.id ?? null);
@@ -50,17 +53,26 @@ export function LegacyTransferNotice({
     const first = defaultConversionTarget(payee, targets);
     return first ? transferPayeeLabel(first) : '';
   });
-  // The rules the conversion will create: shown, editable, removable. Nothing happens until Convert.
-  const [entries, setEntries] = useState<ConversionEntry[]>(() => conversionEntries(payee));
+  // The rules the conversion will create: shown, editable, removable. They follow the payee's CURRENT rules
+  // (the Renaming card below can change them); only the person's own edits and removals made here are kept, by key.
+  // Nothing happens until Convert.
+  const [changes, setChanges] = useState<EntryEdits>({ edited: {}, removed: [] });
+  const entries = useMemo(() => visibleEntries(payee, changes), [payee, changes]);
   const options = useMemo(() => targets.map((p) => ({ key: p.id, label: transferPayeeLabel(p) })), [targets]);
   const picked = targets.find((p) => p.id === pickedId) ?? null;
   const plan = useMemo(() => conversionPlan(entries), [entries]);
-  const edit = (key: string, patch: Partial<ConversionEntry>) => setEntries((list) => list.map((e) => (e.key === key ? { ...e, ...patch } : e)));
+  const edit = (key: string, patch: Partial<Pick<ConversionEntry, 'matchType' | 'text'>>) =>
+    setChanges((c) => ({ ...c, edited: { ...c.edited, [key]: { ...c.edited[key], ...patch } } }));
+  const targetLabel = picked ? transferPayeeLabel(picked) : null;
   const problem = plan.tooShort.length > 0 ? t('legacy.tooShort', { min: MIN_RULE_PATTERN_LENGTH }) : plan.rules.length === 0 ? t('legacy.noRules') : null;
   return (
     <SettingsCard>
       <Text style={settingsCardText.body}>{t('legacy.notice')}</Text>
+      <Text style={settingsCardText.body}>
+        {t('legacy.effect', { payee: payee.name, account: targetLabel ? `“${targetLabel}”` : t('legacy.effectNoAccount') })}
+      </Text>
       <Text style={styles.sectionLabel}>{t('legacy.rulesTitle')}</Text>
+      <Text style={settingsCardText.muted}>{targetLabel ? t('legacy.rulesOn', { target: `“${targetLabel}”` }) : t('legacy.rulesOnNone')}</Text>
       {entries.map((e) => (
         <View key={e.key} style={styles.ruleForm}>
           <Combobox
@@ -86,7 +98,7 @@ export function LegacyTransferNotice({
             accessibilityLabel={t('rule.conditionLabel')}
           />
           <Pressable
-            onPress={() => setEntries((list) => list.filter((x) => x.key !== e.key))}
+            onPress={() => setChanges((c) => ({ ...c, removed: [...c.removed, e.key] }))}
             accessibilityRole="button"
             accessibilityLabel={t('legacy.removeEntry')}
             hitSlop={8}>
@@ -95,7 +107,16 @@ export function LegacyTransferNotice({
         </View>
       ))}
       {entries.some((e) => e.moveFrom) ? <Text style={settingsCardText.muted}>{t('legacy.moved')}</Text> : null}
-      {waiting > 0 ? <Text style={settingsCardText.muted}>{t('legacy.waiting', { count: waiting })}</Text> : null}
+      {entries.some((e) => e.matchType === 'is') ? <Text style={settingsCardText.muted}>{t('legacy.isName')}</Text> : null}
+      {waiting.count > 0 ? (
+        <Text style={settingsCardText.muted}>
+          {waiting.cents > 0
+            ? t('legacy.waiting', { count: waiting.count, total: money.formatMoney(waiting.cents) })
+            : waiting.cents < 0
+              ? t('legacy.waitingUp', { count: waiting.count, total: money.formatMoney(-waiting.cents) })
+              : t('legacy.waitingNoMoney', { count: waiting.count })}
+        </Text>
+      ) : null}
       {problem ? (
         <Text style={settingsCardText.error} accessibilityRole="alert">
           {problem}

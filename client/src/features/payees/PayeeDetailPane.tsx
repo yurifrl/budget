@@ -15,7 +15,7 @@ import { styles } from './styles';
 import type { PayeeAdmin } from './usePayeeAdmin';
 import type { RenameRuleApplyResult } from '@/budget/data/api';
 import { RenamingCard } from './RenamingCard';
-import { hasLegacyTransferRule, waitingCount } from './renameRules.logic';
+import { hasLegacyTransferRule, waitingSummary } from './renameRules.logic';
 import { LegacyTransferNotice, NeverTransferRow } from './TransferRuleChoice';
 import { TransferPayeeDetail } from './TransferPayeeDetail';
 
@@ -174,7 +174,7 @@ export function PayeeDetailPane({
 
           <Text style={styles.sectionLabel}>{t('detail.transfer')}</Text>
           {hasLegacyTransferRule(selected) ? (
-            <LegacyTransferNotice key={`legacy-${selected.id}`} budgetId={budgetId} payee={selected} targets={transferTargets} waiting={waitingCount(pickerBudget?.transactions ?? [], selected.id)} />
+            <LegacyTransferNotice key={`legacy-${selected.id}`} budgetId={budgetId} payee={selected} targets={transferTargets} waiting={waitingSummary(pickerBudget?.accounts ?? [], pickerBudget?.transactions ?? [], selected.id)} />
           ) : (
             <NeverTransferRow budgetId={budgetId} payee={selected} />
           )}

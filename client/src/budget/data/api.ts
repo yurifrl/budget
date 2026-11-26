@@ -123,6 +123,7 @@ export const {
   useUpdatePayeeRenameRuleMutation,
   useRemovePayeeRenameRuleMutation,
   useLazyPreviewRenameRuleApplyQuery,
+  useLazyGetPayeeRenameRulesQuery,
   useApplyRenameRuleMutation,
   useRevertRenameRuleApplyMutation,
   useSetMonthNoteMutation,

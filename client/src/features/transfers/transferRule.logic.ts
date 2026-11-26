@@ -9,6 +9,8 @@
 
 import { MIN_RULE_PATTERN_LENGTH, type RuleMatchType } from '@shared/domain/payees';
 
+import { t } from './i18n';
+
 /** What the popover's rule editor holds. */
 export interface RuleDraft {
   matchType: RuleMatchType;
@@ -59,4 +61,20 @@ export function errorCode(err: unknown): string | undefined {
   const e = err as { code?: unknown; data?: { code?: unknown } };
   if (typeof e.code === 'string') return e.code;
   return typeof e.data?.code === 'string' ? e.data.code : undefined;
+}
+
+/**
+ * What a 409 "rule exists" means for the popover's rule: saved only when the
+ * transfer payee ITSELF holds that rule (read again from the server); when an
+ * ordinary payee holds it, the rule was not saved and the message names that
+ * payee (the error's `name`), when the server said who.
+ */
+export function ruleExistsOutcome(
+  targetRules: readonly { match_type: RuleMatchType; condition: string }[],
+  body: { match_type: RuleMatchType; condition: string },
+  holder: string | undefined,
+): { saved: boolean; message?: string } {
+  const norm = (x: string) => x.trim().toLowerCase();
+  if (targetRules.some((r) => r.match_type === body.match_type && norm(r.condition) === norm(body.condition))) return { saved: true };
+  return { saved: false, message: holder ? t('rule.notSaved.held', { payee: holder }) : t('rule.notSaved.heldUnknown') };
 }

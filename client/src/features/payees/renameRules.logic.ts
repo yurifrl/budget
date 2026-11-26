@@ -13,7 +13,8 @@ import { transferPayeeName } from '@shared/domain/transfers';
 import type { RenameRulePreview, RenameRuleRevertResult, RenameRuleRow } from '@/budget/data/api';
 import type { PayeeAdminRow } from '@/budget/data/rows';
 import { displaySystemName, matchesSystemName } from '@/domain/systemNames';
-import type { Account, Transaction } from '@/domain/types';
+import { isCardAccount } from '@/domain/payments';
+import type { Account, Cents, Transaction } from '@/domain/types';
 import { t } from './i18n';
 
 /** Display labels of the four match types in the active language. */
@@ -199,7 +200,7 @@ export function revertedMessage(result: RenameRuleRevertResult): string {
   const left = result.skipped.length;
   if (result.skipped.some((s) => s.reason === 'already_reverted')) return t('apply.undone.already');
   return left > 0
-    ? t('apply.undone.partial', { count: result.reverted, left })
+    ? t('apply.undone.partial', { restored: t('apply.undone.restored', { count: result.reverted }), left: t('apply.undone.left', { count: left }) })
     : t('apply.undone', { count: result.reverted });
 }
 
@@ -338,9 +339,45 @@ export function targetHasRule(target: Pick<PayeeAdminRow, 'rename_rules'>, rule:
   return (target.rename_rules ?? []).some((r) => r.match_type === rule.matchType && norm(r.condition) === norm(rule.text));
 }
 
-/** How many of the payee's transactions are held as transfers waiting for their other side (they need a category or a link once the old rule is off). */
-export function waitingCount(transactions: readonly Pick<Transaction, 'payeeId' | 'transferPending'>[], payeeId: string): number {
-  return transactions.filter((t) => t.payeeId === payeeId && t.transferPending === 'waiting').length;
+/** The user's own changes in the notice, by entry key; everything else follows the payee's current rules. */
+export interface EntryEdits {
+  edited: Record<string, Partial<Pick<ConversionEntry, 'matchType' | 'text'>>>;
+  removed: readonly string[];
+}
+
+/**
+ * The list the notice shows: derived from the payee's CURRENT rules every time
+ * (a rule removed or changed in the Renaming card follows, a rule added there
+ * appears), with only the person's own edits and removals made in the notice
+ * laid over it, by key. An edit of a rule that no longer exists is simply gone.
+ */
+export function visibleEntries(payee: Pick<PayeeAdminRow, 'name' | 'rename_rules'>, changes: EntryEdits): ConversionEntry[] {
+  return conversionEntries(payee)
+    .filter((e) => !changes.removed.includes(e.key))
+    .map((e) => ({ ...e, ...(changes.edited[e.key] ?? {}) }));
+}
+
+/**
+ * The payee's transactions held as transfers still waiting for their other
+ * side: how many, and how far Ready to Assign goes down once the old rule is
+ * off and they are ordinary uncategorized rows (outflow minus inflow, on
+ * on-budget accounts that are not cards: a card's uncategorized rows do not
+ * move it, as in the engine).
+ */
+export function waitingSummary(
+  accounts: readonly Pick<Account, 'id' | 'onBudget' | 'group'>[],
+  transactions: readonly Pick<Transaction, 'payeeId' | 'transferPending' | 'accountId' | 'outflow' | 'inflow' | 'upcoming'>[],
+  payeeId: string,
+): { count: number; cents: Cents } {
+  let count = 0;
+  let cents = 0;
+  for (const t of transactions) {
+    if (t.payeeId !== payeeId || t.transferPending !== 'waiting' || t.upcoming) continue;
+    count += 1;
+    const account = accounts.find((a) => a.id === t.accountId);
+    if (account?.onBudget && !isCardAccount(account)) cents += t.outflow - t.inflow;
+  }
+  return { count, cents };
 }
 
 // --- keeping the payee list in step with a saved rule ----------------------------

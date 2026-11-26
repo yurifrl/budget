@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { errorCode, ruleToCreate, suggestRule } from './transferRule.logic';
+import { setLocale } from '@shared/i18n';
+
+import { errorCode, ruleExistsOutcome, ruleToCreate, suggestRule } from './transferRule.logic';
 
 describe('suggestRule', () => {
   test('text without a variable part: "is" the whole text', () => {
@@ -39,5 +41,26 @@ describe('errorCode', () => {
     expect(errorCode({ code: 'rename_rule_too_short' })).toBe('rename_rule_too_short');
     expect(errorCode(new Error('x'))).toBeUndefined();
     expect(errorCode(null)).toBeUndefined();
+  });
+});
+
+describe('ruleExistsOutcome', () => {
+  const body = { match_type: 'is' as const, condition: 'PIX MARIA' };
+  test('the transfer payee itself holds the rule: saved', () => {
+    expect(ruleExistsOutcome([{ match_type: 'is', condition: 'pix maria ' }], body, 'Transfer : Savings')).toEqual({ saved: true });
+  });
+  test('another payee holds it: not saved, names the payee', () => {
+    expect(ruleExistsOutcome([{ match_type: 'contains', condition: 'PIX MARIA' }], body, 'Maria')).toEqual({
+      saved: false,
+      message: 'the payee “Maria” already has that rule',
+    });
+  });
+  test('holder unknown: not saved, says another payee', () => {
+    expect(ruleExistsOutcome([], body, undefined)).toEqual({ saved: false, message: 'another payee already has that rule' });
+  });
+  test('pt-BR', () => {
+    setLocale('pt-BR');
+    expect(ruleExistsOutcome([], body, 'Maria').message).toBe('o favorecido “Maria” já tem essa regra');
+    setLocale('en');
   });
 });

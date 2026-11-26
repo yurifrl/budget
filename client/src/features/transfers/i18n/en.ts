@@ -80,6 +80,8 @@ export default {
   'toast.ruleSaved': 'rule saved',
   'toast.ruleNotSaved': 'rule not saved: {reason}',
   'rule.notSaved.invalid': 'the text of the rule is empty or too short',
+  'rule.notSaved.held': 'the payee “{payee}” already has that rule',
+  'rule.notSaved.heldUnknown': 'another payee already has that rule',
   'rule.notSaved.noPayee': 'the account’s transfer payee is not loaded',
   'toast.dismissed': { one: '{count} marked as not a transfer', other: '{count} marked as not transfers' },
   'toast.undo': 'Undo',

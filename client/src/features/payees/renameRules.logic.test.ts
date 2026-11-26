@@ -22,7 +22,8 @@ import {
   ruleMatchFromLabel,
   skippedLines,
   targetHasRule,
-  waitingCount,
+  waitingSummary,
+  visibleEntries,
   transferPayeeLabel,
   withRule,
   withoutRule,
@@ -186,9 +187,18 @@ describe('apply messages', () => {
   test('the toast after an undo says what was put back and what was left', () => {
     const r = (reverted: number, skippedRows: RenameRuleRevertResult['skipped']): RenameRuleRevertResult => ({ reverted, skipped: skippedRows });
     expect(revertedMessage(r(3, []))).toBe('3 transactions put back.');
-    expect(revertedMessage(r(2, [{ transaction_id: 'a', reason: 'changed_since' }]))).toBe('2 transactions put back, 1 left as they are.');
-    expect(revertedMessage(r(1, [{ transaction_id: 'a', reason: 'changed_since' }]))).toBe('1 transaction put back, 1 left as they are.');
+    expect(revertedMessage(r(2, [{ transaction_id: 'a', reason: 'changed_since' }]))).toBe('2 transactions put back, 1 left as it is.');
+    expect(revertedMessage(r(1, [{ transaction_id: 'a', reason: 'changed_since' }]))).toBe('1 transaction put back, 1 left as it is.');
+    expect(revertedMessage(r(1, [{ transaction_id: 'a', reason: 'changed_since' }, { transaction_id: 'b', reason: 'changed_since' }]))).toBe('1 transaction put back, 2 left as they are.');
     expect(revertedMessage(r(0, [{ transaction_id: 'a', reason: 'already_reverted' }]))).toBe('That change was already undone.');
+  });
+
+  test('pt-BR agrees in number on both halves', () => {
+    setLocale('pt-BR');
+    const sk = (n: number): RenameRuleRevertResult['skipped'] => Array.from({ length: n }, (_, i) => ({ transaction_id: `t${i}`, reason: 'changed_since' as const }));
+    expect(revertedMessage({ reverted: 1, skipped: sk(1) })).toBe('1 transação restaurada, 1 mantida como está.');
+    expect(revertedMessage({ reverted: 2, skipped: sk(1) })).toBe('2 transações restauradas, 1 mantida como está.');
+    expect(revertedMessage({ reverted: 1, skipped: sk(3) })).toBe('1 transação restaurada, 3 mantidas como estão.');
   });
 });
 
@@ -315,16 +325,53 @@ describe('conversion entries and plan', () => {
     expect(targetHasRule(transfer('t2', 'B', 'acc2'), { matchType: 'is', text: 'x' })).toBe(false);
   });
 
-  test('waiting rows of the payee are counted from the transactions the client has', () => {
-    const txns = [
-      { payeeId: 'p1', transferPending: 'waiting' as const },
-      { payeeId: 'p1', transferPending: 'waiting' as const },
-      { payeeId: 'p1', transferPending: undefined },
-      { payeeId: 'p2', transferPending: 'waiting' as const },
-      { payeeId: null, transferPending: 'waiting' as const },
+  test('waiting rows: how many, and how far Ready to Assign goes down (cards and off-budget accounts do not move it)', () => {
+    const accounts = [
+      { id: 'chk', onBudget: true, group: 'CASH' as const },
+      { id: 'card', onBudget: true, group: 'CREDIT' as const },
+      { id: 'off', onBudget: false, group: 'CASH' as const },
     ];
-    expect(waitingCount(txns, 'p1')).toBe(2);
-    expect(waitingCount(txns, 'none')).toBe(0);
+    const w = (accountId: string, outflow: number, inflow = 0, over = {}) => ({ payeeId: 'p1', transferPending: 'waiting' as const, accountId, outflow, inflow, upcoming: false, ...over });
+    const txns = [
+      w('chk', 4500),
+      w('chk', 0, 1000),
+      w('card', 9000),
+      w('off', 7000),
+      w('chk', 100, 0, { upcoming: true }),
+      w('chk', 100, 0, { payeeId: 'p2' }),
+      w('chk', 100, 0, { transferPending: undefined }),
+    ];
+    expect(waitingSummary(accounts, txns as never, 'p1')).toEqual({ count: 4, cents: 3500 });
+    expect(waitingSummary(accounts, txns as never, 'none')).toEqual({ count: 0, cents: 0 });
+  });
+});
+
+describe('visibleEntries follows the payee\'s current rules', () => {
+  const base = payee({ name: 'Uber', rename_rules: [rule('r1', 'contains', 'UBER *TRIP'), rule('r2', 'starts_with', 'UBER EATS')] });
+  const none = { edited: {}, removed: [] as string[] };
+
+  test('no changes: the derived list', () => {
+    expect(visibleEntries(base, none).map((e) => e.key)).toEqual(['name', 'rule:r1', 'rule:r2']);
+  });
+
+  test('the person\'s removals and edits in the notice are kept, by key', () => {
+    const list = visibleEntries(base, { edited: { 'rule:r1': { text: 'UBER *TRIP SP' } }, removed: ['name'] });
+    expect(list.map((e) => [e.key, e.text])).toEqual([['rule:r1', 'UBER *TRIP SP'], ['rule:r2', 'UBER EATS']]);
+  });
+
+  test('a rule removed in the Renaming card disappears from the list, even with an edit made on it', () => {
+    const after = payee({ name: 'Uber', rename_rules: [rule('r2', 'starts_with', 'UBER EATS')] });
+    const list = visibleEntries(after, { edited: { 'rule:r1': { text: 'x' } }, removed: [] });
+    expect(list.map((e) => e.key)).toEqual(['name', 'rule:r2']);
+  });
+
+  test('a rule changed in the card shows its new value; one added there appears and is moved', () => {
+    const after = payee({ name: 'Uber', rename_rules: [rule('r1', 'is', 'UBER *TRIP'), rule('r3', 'ends_with', 'LTDA')] });
+    expect(visibleEntries(after, none).map((e) => [e.key, e.matchType, e.moveFrom])).toEqual([
+      ['name', 'is', null],
+      ['rule:r1', 'is', 'r1'],
+      ['rule:r3', 'ends_with', 'r3'],
+    ]);
   });
 });
 

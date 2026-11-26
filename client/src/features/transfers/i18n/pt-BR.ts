@@ -83,6 +83,8 @@ const m: Translation<typeof en> = {
   'toast.ruleSaved': 'regra salva',
   'toast.ruleNotSaved': 'regra não salva: {reason}',
   'rule.notSaved.invalid': 'o texto da regra está vazio ou curto demais',
+  'rule.notSaved.held': 'o favorecido “{payee}” já tem essa regra',
+  'rule.notSaved.heldUnknown': 'outro favorecido já tem essa regra',
   'rule.notSaved.noPayee': 'o favorecido de transferência da conta não foi carregado',
   'toast.dismissed': { one: '{count} marcada como não transferência', other: '{count} marcadas como não transferências' },
   'toast.undo': 'Desfazer',

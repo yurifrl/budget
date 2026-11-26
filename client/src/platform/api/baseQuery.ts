@@ -122,6 +122,21 @@ export const apiBaseQuery: BaseQueryFn<ApiQuery, unknown, ApiQueryError> = async
 
 const SPECIFIC_CODES: readonly string[] = SPECIFIC_ERROR_CODES;
 
+/** The API `code` of a thrown request error, if it has one. */
+export function apiErrorCode(error: unknown): string | undefined {
+  const e = error as { code?: unknown; data?: { code?: unknown } } | null;
+  if (typeof e !== 'object' || e === null) return undefined;
+  return typeof e.code === 'string' ? e.code : typeof e.data?.code === 'string' ? e.data.code : undefined;
+}
+
+/** One `params` value of a thrown request error (a 409's holder name, say), if it has one. */
+export function apiErrorParam(error: unknown, name: string): string | undefined {
+  const e = error as { params?: unknown; data?: { params?: unknown } } | null;
+  if (typeof e !== 'object' || e === null) return undefined;
+  const value = (readParams(e.params) ?? readParams(e.data?.params))?.[name];
+  return value === undefined || value === '' ? undefined : String(value);
+}
+
 /**
  * Message to show for a thrown RTK Query error (`mutation.unwrap()`), in the
  * active language. Understands our {@link ApiQueryError} shape, RTKQ's

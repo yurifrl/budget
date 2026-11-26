@@ -12,15 +12,16 @@ import {
   useGetPayeesWithTransfersQuery,
   useGetTransactionsQuery,
   useGetTransferSuggestionsQuery,
+  useLazyGetPayeeRenameRulesQuery,
   useLinkTransfersMutation,
   useMarkTransfersMutation,
   useUnlinkTransfersMutation,
   type TransferLinkInput,
   type TransferSuggestion,
 } from '@/budget/data/api';
-import { apiErrorMessage } from '@/platform/api/baseQuery';
+import { apiErrorMessage, apiErrorParam } from '@/platform/api/baseQuery';
 import { t } from './i18n';
-import { errorCode, type RuleDraft, ruleToCreate } from './transferRule.logic';
+import { errorCode, ruleExistsOutcome, type RuleDraft, ruleToCreate } from './transferRule.logic';
 import { findSuggestion, linkedToast, scopeSuggestions } from './transfers.logic';
 
 /** The other side of a link and the rule to remember for it ("Always treat ... as a transfer"). */
@@ -45,6 +46,7 @@ export function useTransfers({ budgetId, accountId }: { budgetId: string | null 
   const [unlink] = useUnlinkTransfersMutation();
   const [mark] = useMarkTransfersMutation();
   const [addRule] = useAddPayeeRenameRuleMutation();
+  const [readRules] = useLazyGetPayeeRenameRulesQuery();
   // The row's own bank text (for the rule) and the accounts' transfer payees (where the rule goes).
   const rows = useGetTransactionsQuery(scope, { skip: !budgetId });
   const payees = useGetPayeesWithTransfersQuery(scope, { skip: !budgetId });
@@ -80,7 +82,9 @@ export function useTransfers({ budgetId, accountId }: { budgetId: string | null 
 
   /**
    * Add the renaming rule on the account's transfer payee. "Already there" is
-   * not a failure; any other refusal comes back as the message to show.
+   * saved only when the transfer payee itself holds it (read again); when
+   * another payee holds it, the rule was NOT saved and the message says so.
+   * Any other refusal comes back as the message to show.
    */
   const saveRule = async (rule: LinkRule): Promise<{ saved: boolean; message?: string }> => {
     const body = ruleToCreate(true, rule.draft);
@@ -91,7 +95,13 @@ export function useTransfers({ budgetId, accountId }: { budgetId: string | null 
       await addRule({ ...scope, payeeId: target.id, rule: body }).unwrap();
       return { saved: true };
     } catch (err) {
-      if (errorCode(err) === 'rename_rule_exists') return { saved: true };
+      if (errorCode(err) === 'rename_rule_exists') {
+        try {
+          return ruleExistsOutcome(await readRules({ ...scope, payeeId: target.id }, false).unwrap(), body, apiErrorParam(err, 'name'));
+        } catch (readErr) {
+          return { saved: false, message: apiErrorMessage(readErr, t('error.rule')) };
+        }
+      }
       return { saved: false, message: apiErrorMessage(err, t('error.rule')) };
     }
   };
