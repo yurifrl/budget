@@ -4,7 +4,7 @@
 #   docker build -f docker/Dockerfile.web --build-arg EXPO_PUBLIC_API_URL=https://... -t budget-web .
 
 # ---- Build stage --------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.4-alpine AS build
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.5-alpine AS build
 WORKDIR /app
 
 # The expo CLI is a node program (shebang `#!/usr/bin/env node`) and loads
