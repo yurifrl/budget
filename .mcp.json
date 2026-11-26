@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "budget-prod": {
+      "command": "bun",
+      "args": ["run", "--cwd", "/Users/yuri/Workdir/Yuri/budget/api", "src/mcp.ts"],
+      "env": {
+        "BUDGET_API_URL": "https://budget-api.syscd.live"
+      }
+    }
+  }
+}
