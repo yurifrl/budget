@@ -1,0 +1,605 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-vah5",
+  "title": "Transfers T-WIP: incorporate the uncommitted transfer UI edits from the main checkout (review list removed, selection checkbox, register table) and make them work",
+  "description": "Owner decision 2026-11-24: 'incorporate them, make them work'. Another session left uncommitted client edits in the main checkout: 12 tracked files (-477/+17: TransferReviewList.tsx deleted, bulk review removed from AccountsScreen/RegisterRow/SelectionBar/TransferBits/transfers.logic + tests + i18n) and two new files client/src/ui/SelectionCheckbox.tsx and client/src/ui/registerTable.tsx. Saved as scratchpad/wip-transfers-ui/{tracked.patch,SelectionCheckbox.tsx,registerTable.tsx}. Apply on a task branch from main, work out what the author was doing, finish it so the app builds and behaves, without touching the main checkout.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-25T02:39:20.654Z",
+  "updated_at": "2026-11-25T10:49:59.016Z",
+  "started_at": null,
+  "closed_at": "2026-11-25T10:49:45.273Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-e67y",
+  "sprint": null,
+  "labels": [],
+  "notes": "landed outside tk close at 6027e7c (branch tk/budget-vah5 merged into main by hand)\nMerged to local main (not pushed); owner approved in the Inbox thread 'Transfers refactor' on 2026-11-25. Independent reviews attached to the task (nq2f: four rounds, last found no blockers; vah5: two rounds, no blockers). Orchestrator reran before merging: nq2f full api suite 1666 pass / 0 fail on 74f10ae; vah5 client tsc, eslint clean and 1326 tests pass on the branch merged with main. vah5: the other session's uncommitted edits were removed from the main checkout with the owner's approval; the original patch and two files are kept as evidence on budget-vah5.",
+  "design": null,
+  "acceptance_criteria": "client tsc, eslint, bun test green; screenshots at 1400 and 375 of the register with the Looks like a transfer chip and the popover; a written account of what the edits intended and what was completed; nothing left half-wired (no dead imports, strings or tests).",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-vah5",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-vah5",
+    "changeset": {
+      "base": "30a14e53c82ed3fcf3a38d3b4b047811d2d5e6d2",
+      "head": "74d2589f59d32845c5b6683d5eb66287c694421f",
+      "commits": [
+        {
+          "sha": "74d2589",
+          "subject": "Merge branch 'main' into tk/budget-vah5"
+        },
+        {
+          "sha": "37faad9",
+          "subject": "Merge tk/budget-nq2f: transfer integrity (restore the other leg, bounded re-link, complete pairs, import hints)"
+        },
+        {
+          "sha": "74f10ae",
+          "subject": "fix(transfers): review round 4: one resolution for a refreshed row and its shadow, re-link record keeps the leg's payee, statement import writes payees only for inserted rows with main's keys, budget copy writes nothing new, hints FK, stale text"
+        },
+        {
+          "sha": "32b8628",
+          "subject": "wip round 4"
+        },
+        {
+          "sha": "6df7a75",
+          "subject": "fix(transfers): cut automatic adoption; relink only the row this leg released; no payee created on re-sync; hint keeps the against veto; payee-only legs untouched"
+        },
+        {
+          "sha": "5add061",
+          "subject": "wip: round 3"
+        },
+        {
+          "sha": "cdc6dcb",
+          "subject": "fix(transfers): review round: sync keeps stored rows, adoption through the matcher's gates and merged with undo, budget copy and pending occurrences as on main, ensureTransferPayee read-only, hint lifetime"
+        },
+        {
+          "sha": "1dcb1ea",
+          "subject": "Merge branch 'main' into tk/budget-nq2f"
+        },
+        {
+          "sha": "4b85467",
+          "subject": "chore(transfers): scope repointPeerLeg by budget"
+        },
+        {
+          "sha": "85b6546",
+          "subject": "feat(transfers): integrity on the server (T3): release not delete linked bank rows, adopt hand-made mirrors, complete repeat/restore/copy transfers, import hints, half-link repair, carry-overs"
+        },
+        {
+          "sha": "af194cb",
+          "subject": "wip(transfers): release not delete linked bank rows, adopt hand-made mirrors, complete repeat/restore/copy transfers, import hints"
+        },
+        {
+          "sha": "578e36a",
+          "subject": "fix(transfers): refused pairs need a deliberate tick, honest reasons, no remember rule"
+        },
+        {
+          "sha": "aec0843",
+          "subject": "Merge branch 'main' into tk/budget-vah5"
+        },
+        {
+          "sha": "e45d40b",
+          "subject": "feat(transfers): bring the Looks like a transfer review list back, with refused-pair reasons"
+        },
+        {
+          "sha": "5e847a6",
+          "subject": "Merge tk/budget-n94s: a transaction whose accepted category is later cleared returns to the Categorize queue"
+        },
+        {
+          "sha": "2318bde",
+          "subject": "Merge branch 'main' into tk/budget-n94s"
+        },
+        {
+          "sha": "abf8329",
+          "subject": "Merge branch 'main' into tk/budget-vah5"
+        },
+        {
+          "sha": "574d92c",
+          "subject": "Merge tk/budget-upgg: one system transfer payee per account (lifecycle, protection, former names, repair script)"
+        },
+        {
+          "sha": "ddbd40f",
+          "subject": "Merge branch 'main' into tk/budget-upgg"
+        },
+        {
+          "sha": "5b991e5",
+          "subject": "Merge tk/budget-zkts: transfer matcher bank rules; refused pairs stay suggestions"
+        },
+        {
+          "sha": "5603daf",
+          "subject": "fix(transfers): every unlinked row carries its refused candidates; savings->card text; more tests"
+        },
+        {
+          "sha": "af4b479",
+          "subject": "fix(transfers): former names, one resolution order, rule targets, foreign references"
+        },
+        {
+          "sha": "3f0e8e0",
+          "subject": "feat(transfers): looks-like-a-transfer chip filters the register rows"
+        },
+        {
+          "sha": "a833f09",
+          "subject": "fix(transfers): refused suggestions only for pairs main already matched"
+        },
+        {
+          "sha": "1df7ddb",
+          "subject": "feat(transfers): offer rule-refused pairs as suggestions, never link them"
+        },
+        {
+          "sha": "36346b6",
+          "subject": "fix(transfers): stale payee text never changes an edit, ordinary requests never repair"
+        },
+        {
+          "sha": "031cd8e",
+          "subject": "feat(transfers): one transfer payee per account, renamed with it, protected, repairable"
+        },
+        {
+          "sha": "aa31e97",
+          "subject": "fix(transfers): judge rule 3 on checking accounts only, drop unreachable one-side rule suggestions"
+        },
+        {
+          "sha": "6e7165d",
+          "subject": "Merge branch 'main' into tk/budget-zkts"
+        },
+        {
+          "sha": "29ce310",
+          "subject": "fix(categorize): return hand-cleared accepted rows to the queue"
+        },
+        {
+          "sha": "84aa070",
+          "subject": "feat(transfers): account rules by bank in the matcher (cards only receive; checking->card same bank; checking->checking across banks)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0117_transfer_payee_account_idx.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0118_transfer_payee_former_names.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0119_transfer_hints.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0120_transfer_mark_release.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/scripts/repair-transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/bank-key.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/bank-key.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/edited-payee.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/repeat-generation.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transaction-update.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-link-repair.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-links.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payee-repair.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payees.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfer-payees.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.complete-links.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/repeat-rules.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/decision-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/queue-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/routes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/transfer-integrity.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/RegisterRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/SelectionBar.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/TransferBits.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/TransferPopover.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/TransferReviewList.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/transfers.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/transfers.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/SelectionCheckbox.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/registerTable.tsx",
+          "status": "A"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/runbooks/transfer-payee-repair.md",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/schemas.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/decisions.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/queue.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 6500,
+        "deletions": 462
+      }
+    },
+    "agent_session": "011e3c6b-8148-4a11-8593-8d1e761197c6",
+    "finished_at": "2026-11-25T03:36:43.761Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 20,
+        "files": 59,
+        "additions": 3957,
+        "deletions": 403
+      },
+      "head": "578e36a62594d262fe1e0844c66d29645a31834f",
+      "at": "2026-11-25T03:36:43.761Z"
+    },
+    "landedOutside": {
+      "commit": "6027e7c22756402db85fc1ecd7022faf803f9a4c",
+      "branchHead": "74d2589f59d32845c5b6683d5eb66287c694421f",
+      "baseBranch": "main",
+      "at": "2026-11-25T10:49:45.242Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-8381b6",
+      "name": "vah5-1400-popover.png",
+      "mime": "image/png",
+      "size": 137119,
+      "sha256": "49e99c63e59299fdfae893e1ebe174897831c71bee8fd182b5efcce465637e4e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-fdaaa2",
+      "name": "vah5-375-filter.png",
+      "mime": "image/png",
+      "size": 59800,
+      "sha256": "a62776ed821310fbde72ee12ff06fcda1f739439a4b4cc107dd369cfe518029e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a6bea8",
+      "name": "vah5-375-popover.png",
+      "mime": "image/png",
+      "size": 65523,
+      "sha256": "507cfdeee0d59e827c060e14ef3b7fa881ed96138d97d9ab36f42f04083dfa07",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-5ba860",
+      "name": "review-vah5.md",
+      "mime": "text/markdown",
+      "size": 8053,
+      "sha256": "ec0cb749c3f9885e43e1392151e4b1266156855091f27b0fabdc1aa5ca6e30c2",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c12956",
+      "name": "vah5b-1400-review-bulk.png",
+      "mime": "image/png",
+      "size": 103145,
+      "sha256": "f161beaf7fe574e356ecf9187c7ef4e53b8f8fdccd3bc0cb7ee23a8de1ec199b",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-57d264",
+      "name": "vah5b-375-review-bulk.png",
+      "mime": "image/png",
+      "size": 66041,
+      "sha256": "156186a0973e1891fe41b51fcb711238f19e635013d87ce4130ee2e1d54ca943",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a38e14",
+      "name": "vah5b-1400-popover-refused.png",
+      "mime": "image/png",
+      "size": 231003,
+      "sha256": "3ae7c16e0217cea9565df8490b9eb00a42969c984b0dadbf9dede05822b0d089",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-7e7566",
+      "name": "vah5c-1400-selectall.png",
+      "mime": "image/png",
+      "size": 102468,
+      "sha256": "df0909789b9901e02eb9c74b12679860202399e53d44145775e4f5aa481c2a6e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-28a8db",
+      "name": "vah5c-1400-handticked-note.png",
+      "mime": "image/png",
+      "size": 105434,
+      "sha256": "0b4e860e6755f0fc144f175fbc65533392c5efaad474228ba7edb52502d8137c",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-5b8faf",
+      "name": "vah5c-1400-popover-refused.png",
+      "mime": "image/png",
+      "size": 223179,
+      "sha256": "ef18f80dd39e5e1152b7e601f40a2566647cc4f51e695f564dada9cfbf719afe",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-3649d8",
+      "name": "review-vah5-2.md",
+      "mime": "text/markdown",
+      "size": 6527,
+      "sha256": "3e0b267d10da4f19bac039e1b1b7364c83d93171a19cbf81afaef4c3f7cf3f34",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-416901",
+      "name": "other-session-transfer-ui.patch",
+      "mime": "application/octet-stream",
+      "size": 30940,
+      "sha256": "46a0d5f5fc24c37412fdbf9fd4c2fe0c428ebd708143d08ebb85b04c707fdb21",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-48eb34",
+      "name": "SelectionCheckbox.tsx",
+      "mime": "application/octet-stream",
+      "size": 1484,
+      "sha256": "45b900f910d1fd66e996d724e9f05cecae620b6d7639c09ad5bd88e51182006d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f033d1",
+      "name": "registerTable.tsx",
+      "mime": "application/octet-stream",
+      "size": 2185,
+      "sha256": "52d6c1c382bc91e06d37b31309d52dfe53640da07531a22176caba01647a5494",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

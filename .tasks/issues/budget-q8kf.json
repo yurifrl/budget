@@ -4,22 +4,22 @@
   "id": "budget-q8kf",
   "title": "AI provider layer (api): shared-ai-key flag, own keys, 5 provider adapters, model listing",
   "description": "New feature api/src/ai/. Feature 'shared-ai-key' (default off) in shared/src/features. Table ai_credentials (user, provider, sealed secret, chosen model) via core/secret-box, copying api/src/connections/keys.ts and migration 0104. Own keys are stored on the server for every platform. Resolution: own key wins, else shared env key when the flag is on, else error own_ai_key_required; no paused state. AiProvider interface (chat with tool calls + structured output, list models) with adapters for OpenRouter, Anthropic, OpenAI, Z.ai, DeepSeek. Detect provider from the key format, caller may override. Shared key: provider/model from env + app_settings. Contracts in shared/src/contracts/ai/: credentials status, save, delete, test, detect provider, list models. Plan, decisions and owner answers: handoff.md at the repo root. Mock: tk show budget-seoa (evidence ev-c96ced overview, PNGs). Follow AGENTS.md (contracts, migrations additive only + MIGRATION_SIGNATURES, i18n, ports, test DB rules).",
-  "status": "ready-to-review",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-24T14:36:41.887Z",
-  "updated_at": "2026-11-24T15:20:33.419Z",
+  "updated_at": "2026-11-24T16:02:35.392Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-24T16:02:34.773Z",
   "due_at": null,
   "defer_until": null,
   "parent": "budget-v2xe",
   "sprint": null,
   "labels": [],
-  "notes": "Implemented api/src/ai (feature shared-ai-key; ai_credentials migration 0107; sealed own key; shared env key + app_settings.aiSharedModel; 5 adapters; /ai contracts+handlers; catalog). Evidence: ev q8kf verification — typecheck+lint green, shared 176, client 1246, admin 20, api 1263 pass.\nIndependent review of 9eff45c found 8 problems (attached review-q8kf.md); sent back to the omp session for fixes. Not approved.\nReview fixes applied: Anthropic sampling/thinking/max_input_tokens, authenticated verifyKey (OpenRouter /key), Z.ai manual-choice, /ai/models provider guard, fixed error messages + Retry-After, provider bound in AAD, shared-model consistency, OpenAI chat filter. ai tests 57 pass/0 skip/0 fail on :55432; full api 1275 pass.",
+  "notes": "Implemented api/src/ai (feature shared-ai-key; ai_credentials migration 0107; sealed own key; shared env key + app_settings.aiSharedModel; 5 adapters; /ai contracts+handlers; catalog). Evidence: ev q8kf verification — typecheck+lint green, shared 176, client 1246, admin 20, api 1263 pass.\nIndependent review of 9eff45c found 8 problems (attached review-q8kf.md); sent back to the omp session for fixes. Not approved.\nReview fixes applied: Anthropic sampling/thinking/max_input_tokens, authenticated verifyKey (OpenRouter /key), Z.ai manual-choice, /ai/models provider guard, fixed error messages + Retry-After, provider bound in AAD, shared-model consistency, OpenAI chat filter. ai tests 57 pass/0 skip/0 fail on :55432; full api 1275 pass.\nMerged main (3cbf4b3) into tk/budget-q8kf as merge commit 0d3d27c, no rebase. Renumbered 0107_ai_credentials.sql -> 0109_ai_credentials.sql (commit 2ed8baf) because main released 0107_connection_account_backfill and 0108_transfer_suggestions; updated the file header, MIGRATION_SIGNATURES, ai/store.ts comment and docs/architecture.md. Resolved the migrate.ts conflict keeping 0107, 0108 and 0109 signatures in order. Checked auto-merges: access.test.ts (AI ops + main's transfer ops in notBudgetAddressed), catalog-outputs.test.ts (AI samples + transfer suggestion seed/samples), shared/src/errors.ts + en/pt-BR (AI and transfer_* codes/strings all present), client profile features test. Verification in the worktree: task typecheck ok; task lint ok; shared 203 pass/0 skip/0 fail; client 1267 pass/0 skip/0 fail; admin 20 pass/0 skip/0 fail; api (BUDGET_REQUIRE_TEST_DB=1, BUDGET_TEST_PG_BASE=:55432) 1332 pass/0 skip/0 fail; migrate.test.ts 4 pass and schema_migrations on budgetnew_test_c85f2ef6 holds 0107, 0108, 0109 with public.ai_credentials present.\nAI provider layer merged to main as 05e3267 (local, not pushed); owner approved in chat on 2026-11-24. api/src/ai: feature shared-ai-key, ai_credentials (migration 0109), sealed own key, shared env key, adapters for OpenRouter/Anthropic/OpenAI/Z.ai/DeepSeek, /ai contracts and handlers. Two independent reviews attached (review-q8kf.md, review-q8kf-fixes.md); 8 findings fixed in db50606; remaining risks filed as budget-ucyr. After merging main: typecheck and lint green, shared 203, client 1267, admin 20, api 1332 pass, 0 skipped (compose Postgres :55432).",
   "design": null,
   "acceptance_criteria": "Contracts + handlers + catalog entry; tests for key resolution, provider detection, sealing, and each adapter against a stubbed HTTP server (no real provider calls in tests); task typecheck, lint, test:api green.",
   "estimated_minutes": null,
@@ -30,20 +30,934 @@
     "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-q8kf",
     "changeset": {
       "base": "6d92eab2b5113e59e7cc6e1c9d8f8291c195d3eb",
-      "baseBranch": "main"
+      "head": "0d3d27c184563ae35c7231b48896f5a2487a48c8",
+      "commits": [
+        {
+          "sha": "0d3d27c",
+          "subject": "Merge branch 'main' into tk/budget-q8kf"
+        },
+        {
+          "sha": "2ed8baf",
+          "subject": "chore(ai): renumber the AI credentials migration to 0109"
+        },
+        {
+          "sha": "3cbf4b3",
+          "subject": "release: v2026.11.24"
+        },
+        {
+          "sha": "8f069de",
+          "subject": "tasks: close budget-u5yt, budget-lubt, budget-mit6"
+        },
+        {
+          "sha": "db50606",
+          "subject": "fix(ai): harden key checks, Anthropic tool loops and provider isolation (budget-q8kf)"
+        },
+        {
+          "sha": "a824f81",
+          "subject": "Merge tk/budget-mit6: transfers, future installments, full vs daily pulls"
+        },
+        {
+          "sha": "9eff45c",
+          "subject": "feat(ai): AI provider layer for category suggestions (budget-q8kf)"
+        },
+        {
+          "sha": "062c751",
+          "subject": "docs: transfer matcher decisions (budget-mit6)"
+        },
+        {
+          "sha": "7d77ffc",
+          "subject": "feat(transfers): phone layouts for the popover and payees, review polish"
+        },
+        {
+          "sha": "f6ff8cd",
+          "subject": "feat(transfers): register suggestions, popover, review list with bulk link, payee transfer rules (client)"
+        },
+        {
+          "sha": "276d331",
+          "subject": "feat(transfers): match transfers between own accounts, suggestions, payee transfer rules (api + contracts)"
+        },
+        {
+          "sha": "86a78b2",
+          "subject": "fix(installments): no selection checkbox on derived installment rows in Scheduled"
+        },
+        {
+          "sha": "8f36a94",
+          "subject": "fix(installments): phone Scheduled row stacks the purchase name over fraction and date"
+        },
+        {
+          "sha": "6d8fe4b",
+          "subject": "feat(installments): derive upcoming card installments; skip phantom pending after anticipation"
+        },
+        {
+          "sha": "6af9897",
+          "subject": "connections: full history import with resume, 30-day daily pulls (budget-u5yt)"
+        },
+        {
+          "sha": "d9036ad",
+          "subject": "deploy: images 2026.11.23-04"
+        },
+        {
+          "sha": "6232ded",
+          "subject": "docs: release notes v2026.11.23-04"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.schema",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/attachments/ev-03d060-bulk-1400.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-03d060.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-06c595-mobile-one-by-one.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-06c595.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2d1715-linked-toast-1400.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2d1715.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2d6f08-web-bundles.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2d6f08.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-30a08a-popover-choose-375.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-30a08a.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-54b97e-bulk-375.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-54b97e.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-639989-register-1400.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-639989.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-87fa75-transfers-mock.html.html",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-87fa75.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-8f0160-payee-1400.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-8f0160.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-90b59a-transfers.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-90b59a.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-93c76b-q8kf-review-evidence.txt.txt",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-93c76b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9784fa-empty-no-key.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9784fa.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a9b3e2-register-375.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a9b3e2.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a9d26e-q8kf-evidence.txt.txt",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a9d26e.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b2073b-web-one-by-one.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b2073b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c585e6-mobile-bundles.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c585e6.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c96ced-categorize-mock.html.html",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c96ced.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d8d6a2-popover-1400.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d8d6a2.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-df55f1-payee-375.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-df55f1.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e3aab5-rules-1400.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e3aab5.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f30145-popover-375.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f30145.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f66358-rules-375.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f66358.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-feacd9-review-q8kf.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-feacd9.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/cursors.json",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/events.jsonl",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/history/budget-3t4z.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-dcxr.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-edxg.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-fvtx.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-lubt.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-mit6.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-mjug.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-q8kf.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-seoa.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-smts.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-u5yt.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-v2xe.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-3t4z.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-dcxr.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-edxg.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-fvtx.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-lubt.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-mit6.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-mjug.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-q8kf.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-seoa.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-smts.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-u5yt.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-v2xe.json",
+          "status": "A"
+        },
+        {
+          "path": "CHANGELOG.md",
+          "status": "M"
+        },
+        {
+          "path": "api/VERSION",
+          "status": "M"
+        },
+        {
+          "path": "api/db/migrations/0107_connection_account_backfill.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0108_transfer_suggestions.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0109_ai_credentials.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/ai/detect.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/detect.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/env.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/errors.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/http.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/keys.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/keys.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/anthropic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/anthropic.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/openai-compatible.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/openai-compatible.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/routes.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/settings.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/types.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/card-payments.test.ts",
+          "status": "D"
+        },
+        {
+          "path": "api/src/budget/domain/card-payments.ts",
+          "status": "D"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-links.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/upcoming-installments.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/operations.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/client.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/installments.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/ledger-reads.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-history.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-installments.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-transfers.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/test-op.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/features/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/worker.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/transfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/mapping.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/mapping.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/zeroSum.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/zeroSum.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountHeader.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/AccountsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/RegisterList.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/RegisterRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/ScheduledSection.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/useRegisterFilter.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/ConnectionSettingsScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/LinkedAccountDetailScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/ConnectionRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/connect-bank/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/model/syncRun.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/flow/importFlow.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/ManagePayeesScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/PayeeDetailPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/PayeeListPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/payees.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/styles.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/usePayeeAdmin.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/TransferBits.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferChips.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferPopover.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferReviewList.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferRuleSection.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/transfers.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/transfers.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/useTransfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/profile/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/theme.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "k8s/values.yaml",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/ai/credentials.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/credentials.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/outputs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/connections/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/contracts.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/domain/installments.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/domain/installments.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/features.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 10673,
+        "deletions": 588
+      }
     },
-    "agent_session": "01a20dfc-f608-74bd-a3b9-be35d1452cb4",
-    "finished_at": "2026-11-24T15:20:32.569Z",
+    "agent_session": "01a20e45-e0c1-74ad-ac06-b387173d7803",
+    "finished_at": "2026-11-24T16:01:17.944Z",
     "agent_harness": "omp",
     "report": {
       "changes": {
-        "commits": 2,
-        "files": 42,
-        "additions": 2723,
-        "deletions": 25
+        "commits": 17,
+        "files": 208,
+        "additions": 10673,
+        "deletions": 588
       },
-      "head": "db50606632c07946926668b2c2a1fd2bdfacebef",
-      "at": "2026-11-24T15:20:32.569Z"
+      "head": "0d3d27c184563ae35c7231b48896f5a2487a48c8",
+      "at": "2026-11-24T16:01:17.944Z"
+    },
+    "worktreePruned": {
+      "pruned": false,
+      "removedWorktree": false,
+      "removedBranch": false,
+      "reason": "branch tk/budget-q8kf is not fully merged into 6d92eab2b5113e59e7cc6e1c9d8f8291c195d3eb"
     }
   },
   "attachments": [
@@ -72,6 +986,15 @@
       "mime": "text/plain",
       "size": 3026,
       "sha256": "efd3b066ce7753a935fccb10b270ec8e85ae63f58d360c6022ad3823c5b41e5d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-fdf115",
+      "name": "review-q8kf-fixes.md",
+      "mime": "text/markdown",
+      "size": 11302,
+      "sha256": "dcc5360bea4b0cbfa0713f6bf9eef99955fe397022795df991cfeaa38ab63597",
       "metadata": {}
     }
   ],

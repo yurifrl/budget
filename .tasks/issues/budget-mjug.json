@@ -4,30 +4,1025 @@
   "id": "budget-mjug",
   "title": "Categorize page (web): bundles view + one-by-one view per the mock",
   "description": "client/src/features/categorize + route + rail item with count. Bundles: cards, expand, per-row change, Accept bundle, Accept all above threshold with undo. One by one: queue left, detail right, keys 1/2/3 file at once, Enter files the top suggestion, S skip, / search, Z undo; optimistic, auto-advance. Threshold slider, Run classification with live progress, empty state with Add an AI key and Categorize by hand. Map panel only if task 3 found a location in the bank data. Plan, decisions and owner answers: handoff.md at the repo root. Mock: tk show budget-seoa (evidence ev-c96ced overview, PNGs). Follow AGENTS.md (contracts, migrations additive only + MIGRATION_SIGNATURES, i18n, ports, test DB rules).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-24T14:36:44.120Z",
-  "updated_at": "2026-11-24T14:36:44.123Z",
+  "updated_at": "2026-11-25T13:47:51.425Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-25T13:47:40.166Z",
   "due_at": null,
   "defer_until": null,
   "parent": "budget-v2xe",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Owner decision 2026-11-24 (Inbox thread): the bank data has no location, so NO map panel. In its place in the one-by-one view: a merchant panel with legal name, CNPJ, business category, operation type and the other party on a PIX, shown when the bank sent them.\nCheckpoint 1 (commit bb6cb335af): eight categorize operations in the RTK Query slice + data/api.ts exports; /categorize route and rail item with whole-queue count (queue read limit 1, no count-only endpoint); pure tested queue/bundle view-model, keyboard map and optimistic accept/undo reducer; placeholder screen only. client tsc/eslint green, bun test 1348 pass.\nFinished web Categorize: One by one view (queue pane, focus pane, merchant panel, 1/2/3/Enter/S/Z keys ignored while typing, / focuses search, optimistic advance, progress counter, skip=server skip), short-date formatter (formatDateShort), one shared ActionToast in ui/primitives for transfers and Categorize, last accept stays undoable after toast timeout, bundle rows follow the re-read, bundle-changed message says the list is refreshed, header dims without AI. Verified in browser: accept bundle, undo, accept all + undo, per-row pick, 409 path, threshold set, keys 1/2/3/Enter/S/Z, / search, empty state buttons, freshness (register edit via API refreshes page+rail within the revision poll). Checks in client/: tsc 0, eslint 0, bun test 1403 pass 0 fail. Demo data: seeded connection_transactions raw_payload for Posto Ipiranga/PIX Mariana/Uber and rank 2-3 suggestions (Transport .86, Travel .81) for Posto Ipiranga in budgetnew_dev (Categorize demo).\nReview round 1 fixes: B1 (blur after pointer press, type-to-search for printable keys, skip deferred 10s with Undo/Z, skip copy 'Leave uncategorized' + hint; leaving the page CANCELS a pending skip), B2 (undo in 1000-id chunks, exact outcome, remainder stays undoable), follow-ups 1-10. client: tsc 0, eslint 0, bun test 1428 pass 0 fail.\nReview round 2 fixes: undo stack in press order, each skip on its own 10s timer with its own Undo (strip + toast), no action flushes a skip, leaving the page cancels pending skips; type-to-search removed, only / focuses search, Escape leaves a field, Z cap hidden while a field is focused; keys off while the Run dialog is open; failed B keeps A's toast; already-restored wording; unavailable header wins over an active run; dialog title + last-run line fixed. client: tsc 0, eslint 0, bun test 1430 pass 0 fail.\nReview round 3 fixes: keys act only on body/inside the page root and never with an overlay open (mayKeyAct); page keyed by budget (switch cancels pending skips, fresh state); pending skips visible + Z in Bundles view; skip dropped when its row leaves the queue; bulk accepts leave pending skips out; countdown clamped, queue pane shows N leaving, no check on pending toast, Escape clears search; failed undo keeps press order. client: tsc 0, eslint 0, bun test 1443 pass 0 fail.\nlanded outside tk close at 2c5c3d8 (branch tk/budget-mjug merged into main by hand)\nMerged to local main as 2c5c3d8 (not pushed); owner approved in the Categorize Inbox thread on 2026-11-25. Categorize page for web: bundles, one by one with merchant panel, keys, undo stack, guarded skip, key gate under overlays, state keyed by budget. Four independent reviews attached; the fourth found no blockers. Orchestrator reran on the branch merged with main: client tsc and eslint clean, 1443 tests pass. Follow-ups: budget-eqp2, budget-3fli, budget-8vnk (skip never on a timer).",
   "design": null,
   "acceptance_criteria": "Matches mock ev-2d6f08 / ev-b2073b / ev-9784fa; screenshots at 1400 attached; logic in tested *.logic.ts/domain files; client tsc, eslint, bun test green.",
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
-  "attachments": [],
+  "branch": "tk/budget-mjug",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-mjug",
+    "changeset": {
+      "base": "30a14e53c82ed3fcf3a38d3b4b047811d2d5e6d2",
+      "head": "dbd419c6888eb629a7cccaa7bebeb21c149bafdb",
+      "commits": [
+        {
+          "sha": "dbd419c",
+          "subject": "Merge branch 'main' into tk/budget-mjug"
+        },
+        {
+          "sha": "4de8744",
+          "subject": "Merge tk/budget-mkrt: renaming rules assign the payee, several rules per payee"
+        },
+        {
+          "sha": "81f1a69",
+          "subject": "feat(categorize): keys act only on the page and never under an overlay; page state keyed by budget; pending skips visible in Bundles, dropped when their row leaves, excluded from bulk accepts; countdown, counts, toast and Escape fixes"
+        },
+        {
+          "sha": "0a8ee08",
+          "subject": "fix(categorize): pending-skip line fits its countdown; Run dialog title"
+        },
+        {
+          "sha": "1ae6167",
+          "subject": "feat(categorize): undo stack in press order, each skip on its own timer with its own Undo; Escape leaves a field, no type-to-search; modal-safe keys; retried undo says already restored; unavailable header wins over an active run"
+        },
+        {
+          "sha": "9ab4cc7",
+          "subject": "fix(transfers): /bulk dedupes on the payee field as main keyed it, untouched for statement rows with file ids, case-insensitive edit check (budget-mkrt, round 5)"
+        },
+        {
+          "sha": "1274634",
+          "subject": "fix(categorize): no-key reason independent of an active run, blur after pointer press in capture phase, clear search per row"
+        },
+        {
+          "sha": "e9b6f51",
+          "subject": "fix(transfers): /bulk keeps a new text under a shared key, edits never move a legacy payee, review round 4 (budget-mkrt)"
+        },
+        {
+          "sha": "d5b2c59",
+          "subject": "wip round 4"
+        },
+        {
+          "sha": "9731b39",
+          "subject": "feat(categorize): deferred, undoable skip; chunked undo with exact outcome; undo follows the last press; typing and focus safety; bundles stay reachable without a key; run confirmation; filed lines; light badge read"
+        },
+        {
+          "sha": "03f1457",
+          "subject": "fix(transfers): legacy rows recognised under every rule form, /bulk occurrences per key, review round 3 (budget-mkrt)"
+        },
+        {
+          "sha": "b1c5712",
+          "subject": "wip round 3"
+        },
+        {
+          "sha": "4a3e513",
+          "subject": "docs: Categorize page in the client architecture notes"
+        },
+        {
+          "sha": "d76f66b",
+          "subject": "feat(categorize): dim the header without AI, room for the toast under the page"
+        },
+        {
+          "sha": "dbc3bb1",
+          "subject": "fix(categorize): stacked One by one layout and legend on narrow widths"
+        },
+        {
+          "sha": "081ee0c",
+          "subject": "fix(categorize): bundle rows follow the re-read, bundle-changed message, hide empty bundles header"
+        },
+        {
+          "sha": "5665981",
+          "subject": "fix(transfers): renaming rules keep main's comparison, never drop or erase a rule, review fixes (budget-mkrt)"
+        },
+        {
+          "sha": "379662b",
+          "subject": "wip round 2"
+        },
+        {
+          "sha": "2c3e362",
+          "subject": "feat(categorize): the last accept stays undoable after its toast times out; key cap on the primary button"
+        },
+        {
+          "sha": "40e1382",
+          "subject": "feat(categorize): One by one view (queue, focus pane, merchant panel, keys, skip, undo); overlapping single-row filings"
+        },
+        {
+          "sha": "d86a38c",
+          "subject": "Merge branch 'main' into tk/budget-mkrt"
+        },
+        {
+          "sha": "0d392d3",
+          "subject": "feat(client): short-date formatter; bundle ranges drop the year within one year"
+        },
+        {
+          "sha": "5403ab1",
+          "subject": "feat(transfers): renaming rules assign the payee, several rules per payee (budget-mkrt, T3b)"
+        },
+        {
+          "sha": "06d213b",
+          "subject": "Merge main into tk/budget-mjug: one ActionToast for transfers and Categorize"
+        },
+        {
+          "sha": "f6a806f",
+          "subject": "wip(categorize): header, empty state, bundles view, toast primitives"
+        },
+        {
+          "sha": "f538f3f",
+          "subject": "Merge tk/budget-csqv: refuse two open accounts with the same name"
+        },
+        {
+          "sha": "a5cf728",
+          "subject": "Merge branch 'main' into tk/budget-csqv"
+        },
+        {
+          "sha": "6027e7c",
+          "subject": "Merge tk/budget-vah5: review list kept, shared selection checkbox and register table, refused pairs shown for confirmation"
+        },
+        {
+          "sha": "74d2589",
+          "subject": "Merge branch 'main' into tk/budget-vah5"
+        },
+        {
+          "sha": "37faad9",
+          "subject": "Merge tk/budget-nq2f: transfer integrity (restore the other leg, bounded re-link, complete pairs, import hints)"
+        },
+        {
+          "sha": "74f10ae",
+          "subject": "fix(transfers): review round 4: one resolution for a refreshed row and its shadow, re-link record keeps the leg's payee, statement import writes payees only for inserted rows with main's keys, budget copy writes nothing new, hints FK, stale text"
+        },
+        {
+          "sha": "32b8628",
+          "subject": "wip round 4"
+        },
+        {
+          "sha": "6df7a75",
+          "subject": "fix(transfers): cut automatic adoption; relink only the row this leg released; no payee created on re-sync; hint keeps the against veto; payee-only legs untouched"
+        },
+        {
+          "sha": "5add061",
+          "subject": "wip: round 3"
+        },
+        {
+          "sha": "cdc6dcb",
+          "subject": "fix(transfers): review round: sync keeps stored rows, adoption through the matcher's gates and merged with undo, budget copy and pending occurrences as on main, ensureTransferPayee read-only, hint lifetime"
+        },
+        {
+          "sha": "1dcb1ea",
+          "subject": "Merge branch 'main' into tk/budget-nq2f"
+        },
+        {
+          "sha": "4b85467",
+          "subject": "chore(transfers): scope repointPeerLeg by budget"
+        },
+        {
+          "sha": "85b6546",
+          "subject": "feat(transfers): integrity on the server (T3): release not delete linked bank rows, adopt hand-made mirrors, complete repeat/restore/copy transfers, import hints, half-link repair, carry-overs"
+        },
+        {
+          "sha": "af194cb",
+          "subject": "wip(transfers): release not delete linked bank rows, adopt hand-made mirrors, complete repeat/restore/copy transfers, import hints"
+        },
+        {
+          "sha": "578e36a",
+          "subject": "fix(transfers): refused pairs need a deliberate tick, honest reasons, no remember rule"
+        },
+        {
+          "sha": "aec0843",
+          "subject": "Merge branch 'main' into tk/budget-vah5"
+        },
+        {
+          "sha": "e45d40b",
+          "subject": "feat(transfers): bring the Looks like a transfer review list back, with refused-pair reasons"
+        },
+        {
+          "sha": "cecc13c",
+          "subject": "Merge branch 'main' into tk/budget-csqv"
+        },
+        {
+          "sha": "4e6549b",
+          "subject": "feat(accounts): refuse two open accounts with the same name (create, rename, reopen)"
+        },
+        {
+          "sha": "5e847a6",
+          "subject": "Merge tk/budget-n94s: a transaction whose accepted category is later cleared returns to the Categorize queue"
+        },
+        {
+          "sha": "2318bde",
+          "subject": "Merge branch 'main' into tk/budget-n94s"
+        },
+        {
+          "sha": "abf8329",
+          "subject": "Merge branch 'main' into tk/budget-vah5"
+        },
+        {
+          "sha": "574d92c",
+          "subject": "Merge tk/budget-upgg: one system transfer payee per account (lifecycle, protection, former names, repair script)"
+        },
+        {
+          "sha": "ddbd40f",
+          "subject": "Merge branch 'main' into tk/budget-upgg"
+        },
+        {
+          "sha": "5b991e5",
+          "subject": "Merge tk/budget-zkts: transfer matcher bank rules; refused pairs stay suggestions"
+        },
+        {
+          "sha": "5603daf",
+          "subject": "fix(transfers): every unlinked row carries its refused candidates; savings->card text; more tests"
+        },
+        {
+          "sha": "af4b479",
+          "subject": "fix(transfers): former names, one resolution order, rule targets, foreign references"
+        },
+        {
+          "sha": "3f0e8e0",
+          "subject": "feat(transfers): looks-like-a-transfer chip filters the register rows"
+        },
+        {
+          "sha": "a833f09",
+          "subject": "fix(transfers): refused suggestions only for pairs main already matched"
+        },
+        {
+          "sha": "1df7ddb",
+          "subject": "feat(transfers): offer rule-refused pairs as suggestions, never link them"
+        },
+        {
+          "sha": "36346b6",
+          "subject": "fix(transfers): stale payee text never changes an edit, ordinary requests never repair"
+        },
+        {
+          "sha": "031cd8e",
+          "subject": "feat(transfers): one transfer payee per account, renamed with it, protected, repairable"
+        },
+        {
+          "sha": "aa31e97",
+          "subject": "fix(transfers): judge rule 3 on checking accounts only, drop unreachable one-side rule suggestions"
+        },
+        {
+          "sha": "6e7165d",
+          "subject": "Merge branch 'main' into tk/budget-zkts"
+        },
+        {
+          "sha": "29ce310",
+          "subject": "fix(categorize): return hand-cleared accepted rows to the queue"
+        },
+        {
+          "sha": "bb6cb33",
+          "subject": "feat(categorize): data slice, route, rail item and pure logic"
+        },
+        {
+          "sha": "84aa070",
+          "subject": "feat(transfers): account rules by bank in the matcher (cards only receive; checking->card same bank; checking->checking across banks)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0117_transfer_payee_account_idx.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0118_transfer_payee_former_names.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0119_transfer_hints.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0120_transfer_mark_release.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0121_payee_renaming_rules.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/scripts/repair-transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/bank-key.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/bank-key.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/edited-payee.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/legacy-rename.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/repeat-generation.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transaction-update.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-link-repair.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-links.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payee-repair.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payees.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/operations.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts-name.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/rename-rules.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfer-payees.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.complete-links.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/rename-rules.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/repeat-rules.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/decision-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/queue-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/routes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/rename-rules-legacy.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/rename-rules-tied.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-payees.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/testdata/capture-main-rename.ts.txt",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/testdata/capture-main-tied.ts.txt",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/testdata/main-rename-capture.json",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/testdata/main-rename-tied-capture.json",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/transfer-integrity.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/(budget)/categorize.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/base.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/categorize.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/format.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/format.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/revision.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/revision.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/RegisterRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/SelectionBar.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/BundleCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/BundlesView.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/CategorizeBits.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/CategorizeScreen.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/EmptyState.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/FocusPane.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/HeaderCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/MerchantPanel.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/OneByOneView.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/PendingSkipsStrip.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/QueuePane.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/QueueRowView.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/accept.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/accept.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/keys.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/keys.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/oneByOne.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/oneByOne.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/page.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/page.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/queue.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/queue.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/undo.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/undo.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useBundleRows.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorize.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizeAccept.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizeKeys.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizePage.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useNow.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useOneByOne.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferBits.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/TransferPopover.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/TransferReviewList.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/transfers.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/transfers.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetRail.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/SelectionCheckbox.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/bits.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/combobox.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/icon-symbol.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/ActionToast.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/primitives/TagPill.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/registerTable.tsx",
+          "status": "A"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/runbooks/transfer-payee-repair.md",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/schemas.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/decisions.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/queue.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/domain/payees.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/domain/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 17517,
+        "deletions": 643
+      }
+    },
+    "agent_session": "011e3c6b-8148-4a11-8593-8d1e761197c6",
+    "finished_at": "2026-11-25T13:25:04.136Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 51,
+        "files": 126,
+        "additions": 12999,
+        "deletions": 513
+      },
+      "head": "81f1a6990109f3cf7e406a893f78825da96dfda6",
+      "at": "2026-11-25T13:25:04.136Z"
+    },
+    "landedOutside": {
+      "commit": "2c5c3d8d7b8e26bfc8a45a402c4a53ad17106a2d",
+      "branchHead": "dbd419c6888eb629a7cccaa7bebeb21c149bafdb",
+      "baseBranch": "main",
+      "at": "2026-11-25T13:47:40.131Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-647f08",
+      "name": "mjug-1400-bundles-expanded.png",
+      "mime": "image/png",
+      "size": 226820,
+      "sha256": "61fd27cce70d5e2db2ae32f64701e4caff5211150fa8945f3f1a9ba0eb2fc927",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-61f20c",
+      "name": "mjug-1400-bundles-accepted-undo-toast.png",
+      "mime": "image/png",
+      "size": 212053,
+      "sha256": "793b823bcd8528f520de865e8105215fc8660d5b6c3e4703051754cb36b62eff",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ed487d",
+      "name": "mjug-1400-bundle-changed-message.png",
+      "mime": "image/png",
+      "size": 224056,
+      "sha256": "f34fc4eb455f34b6cf3d2068bfa6c667001d1408807500742c13caa0887b7d70",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-9f964d",
+      "name": "mjug-1400-one-by-one-merchant-chips.png",
+      "mime": "image/png",
+      "size": 198776,
+      "sha256": "af1932b6afe2642473b379b2b608da6be05e814450532d67732e4d87a0bc9226",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-6fb857",
+      "name": "mjug-1400-one-by-one-after-key-1.png",
+      "mime": "image/png",
+      "size": 204292,
+      "sha256": "9188b0840dd63a1a7bf0ff6e8b2ee7e2c2df492691e225ce5321c87ee4ac32d2",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ab2ebf",
+      "name": "mjug-1400-empty-no-ai-key.png",
+      "mime": "image/png",
+      "size": 97803,
+      "sha256": "797a96cf809f7c9ba6c77b1fe74087631d2da27c89121e06dc11a0cd5977e7ef",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-14a018",
+      "name": "review-mjug.md",
+      "mime": "text/markdown",
+      "size": 10165,
+      "sha256": "943b0c87edb94106c189bf9f2ff48a37f51403d142b14eea8faf5d5fc9997e91",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ba1e7d",
+      "name": "mjug2-1400-one-by-one-filed-row.png",
+      "mime": "image/png",
+      "size": 193460,
+      "sha256": "82c0e09f96d5d66493fba18ccdda84f915aeb15211e246b482dedf071649daa1",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-93be58",
+      "name": "mjug2-1400-one-by-one-pending-skip.png",
+      "mime": "image/png",
+      "size": 196887,
+      "sha256": "141f7ac88fec2c11f9fd330e71403317d854d72f72ea3fe856edc362ab46c8ed",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-6165fd",
+      "name": "mjug2-1400-run-confirmation.png",
+      "mime": "image/png",
+      "size": 206743,
+      "sha256": "e5ccfe808a1236e6ebdd00b4c5cf96c443782aa36f02e11752b0135139369b14",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-55e49e",
+      "name": "mjug2-1400-bundles-no-key-banner.png",
+      "mime": "image/png",
+      "size": 211189,
+      "sha256": "ef99c82b4ec331e9b1412d4c1a9fc781b5eaaf6a07c264b395ede4581f730677",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-27b097",
+      "name": "review-mjug-2.md",
+      "mime": "text/markdown",
+      "size": 11081,
+      "sha256": "c883e8aa5534688313455ff2e6e0b8cace787614dbe4210699b9f1fb1f00ebee",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-9f5709",
+      "name": "mjug3-1400-two-pending-skips.png",
+      "mime": "image/png",
+      "size": 200923,
+      "sha256": "7c15c6064a0158989b03456cef249ca782377933f0e4a7ad380c25a9ceb8edbc",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-1d88a0",
+      "name": "review-mjug-3.md",
+      "mime": "text/markdown",
+      "size": 11603,
+      "sha256": "5f93f2a73f5f2820e3036bf146a46becb3f343e6c37b3881ca4ec2c1779165c5",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-85060d",
+      "name": "mjug4-1400-bundles-pending-skips-strip.png",
+      "mime": "image/png",
+      "size": 200806,
+      "sha256": "bee79e8deac8e26b36a7caf0183e0d2e578e37b33e43120b6ab541bd9e2d6458",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-6bf922",
+      "name": "review-mjug-4.md",
+      "mime": "text/markdown",
+      "size": 11028,
+      "sha256": "a9406aa508ee64dd37f8121f7f610e4adad27d727362295146fe89b9f0f21d11",
+      "metadata": {}
+    }
+  ],
   "dependencies": [
     {
       "issue_id": "budget-mjug",
@@ -39,7 +1034,7 @@
     }
   ],
   "dependency_count": 1,
-  "dependent_count": 0,
+  "dependent_count": 1,
   "comments": [],
   "comment_count": 0
 }

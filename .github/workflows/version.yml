@@ -1,6 +1,7 @@
 # Server release marker: validate `api/VERSION` and cut the `v<VERSION>` tag
-# the Release workflow builds and deploys from (web, api, admin images + k8s
-# pin). The iOS app is released separately from client/VERSION by
+# the Release workflow builds from (versioned web, api and admin images, the
+# admin k8s pin; api and web themselves deploy on every main push, deploy.yml).
+# The iOS app is released separately from client/VERSION by
 # app-release.yml (tag app-v<VERSION>); nothing here reads client/VERSION.
 #
 # `task release` bumps api/VERSION and pushes main; this workflow validates the

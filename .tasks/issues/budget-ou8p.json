@@ -1,0 +1,522 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-ou8p",
+  "title": "Renaming rules: a new or changed rule applies only to transactions imported from then on; add 'Apply to past transactions' on the rule",
+  "description": "Owner decision 2026-11-25 (Inbox thread 'Transfers refactor'): 'No by default, with an Apply to past transactions button on the rule'. Today (main and after budget-mkrt) adding or editing a rule re-points untouched bank-synced rows at the next sync and makes a statement re-import duplicate them (see review-mkrt.md 'RULE ADDED OR EDITED LATER' and review-mkrt-3.md F8 on budget-mkrt). Server: a rule carries the time it was created or last changed; a sync or re-import never changes the payee of a row imported before that time because of the rule (rows inserted afterwards, and rows whose bank text really changes, take it). New operation to apply one rule to past rows on purpose: a dry run that returns how many rows would change and a sample, then apply in one transaction, budget-scoped, only rows whose stored bank text matches and that the user has not edited, keeping import keys so re-import still dedupes, undoable or at least reported; a rule on a transfer payee creates hints for the matcher, never mirrors. Client: the button on the rule row comes with the Manage Payees task.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-25T13:42:31.073Z",
+  "updated_at": "2026-11-25T15:06:54.498Z",
+  "started_at": null,
+  "closed_at": "2026-11-25T15:06:40.448Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-e67y",
+  "sprint": null,
+  "labels": [],
+  "notes": "Server done: sync/bulk leave stored rows alone on rule change; preview/apply/revert ops; docs/decisions.md section; tests rename-rules-forward.test.ts. api 1799 pass 0 fail 0 skip.\nReview fixes B1-B4 + F1/F2/F6; api 1823 pass 0 fail.\nlanded outside tk close at e597970 (branch tk/budget-ou8p merged into main by hand)\nMerged to local main (not pushed); owner approved in the Inbox thread 'Transfers refactor' on 2026-11-25. A rule add/edit/remove no longer changes stored rows (sync compares the bank text, recorded in connection_transactions.bank_text; /bulk recognises rows by amount, date and text); preview/apply/revert of one rule to past rows, server-recorded (0122), not on MCP; shared advisory lock for sync, exclusive for apply/revert with a 5 s lock_timeout. Three independent reviews attached; orchestrator read the last round and reran on 6bd2863: api tsc and eslint clean, shared 222, full api 1834 pass / 0 fail.",
+  "design": null,
+  "acceptance_criteria": "Tests built from main's behaviour: add a rule then sync twice and re-import: 0 rows changed, 0 duplicates; new rows after the rule take it; apply-to-past changes exactly the reported rows and a re-import afterwards imports 0; full api suite green, no skips.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-ou8p",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-ou8p",
+    "changeset": {
+      "base": "4de874449a69f574589b2453650396f4122b824f",
+      "head": "6bd286386ada2831bec925b6f47ab15877fe760f",
+      "commits": [
+        {
+          "sha": "6bd2863",
+          "subject": "fix(rename-rules): syncs take the budget lock shared, apply/revert exclusive with a 5s lock_timeout (409 bank_sync_running), JS-equal trim in the prefilter (budget-ou8p round 4)"
+        },
+        {
+          "sha": "b3e4968",
+          "subject": "wip"
+        },
+        {
+          "sha": "269e1a9",
+          "subject": "docs: real text order"
+        },
+        {
+          "sha": "1f35904",
+          "subject": "fix(rename-rules): bank_text of the latest pull on every path, raw text preferred, revert once, per-budget lock, SQL prefilter, docs (budget-ou8p round 3)"
+        },
+        {
+          "sha": "d4f1f61",
+          "subject": "wip"
+        },
+        {
+          "sha": "939c800",
+          "subject": "fix(rename-rules): text-based change detection, real bank text for apply, server-recorded revert, exact /bulk text (budget-ou8p review)"
+        },
+        {
+          "sha": "7bfcfcf",
+          "subject": "Merge branch 'main' into tk/budget-ou8p"
+        },
+        {
+          "sha": "da81e58",
+          "subject": "docs: rules apply going forward (budget-ou8p)"
+        },
+        {
+          "sha": "d7cce45",
+          "subject": "test(rename-rules): rules apply going forward, apply/preview/revert (budget-ou8p)"
+        },
+        {
+          "sha": "eec6beb",
+          "subject": "feat(rename-rules): preview, apply and revert one rule on past transactions (budget-ou8p)"
+        },
+        {
+          "sha": "5414892",
+          "subject": "feat(rename-rules): sync refresh and statement re-import leave stored rows alone when a rule changes (budget-ou8p)"
+        },
+        {
+          "sha": "2c5c3d8",
+          "subject": "Merge tk/budget-mjug: Categorize page for web (bundles, one by one, undo stack, guarded skip)"
+        },
+        {
+          "sha": "dbd419c",
+          "subject": "Merge branch 'main' into tk/budget-mjug"
+        },
+        {
+          "sha": "81f1a69",
+          "subject": "feat(categorize): keys act only on the page and never under an overlay; page state keyed by budget; pending skips visible in Bundles, dropped when their row leaves, excluded from bulk accepts; countdown, counts, toast and Escape fixes"
+        },
+        {
+          "sha": "0a8ee08",
+          "subject": "fix(categorize): pending-skip line fits its countdown; Run dialog title"
+        },
+        {
+          "sha": "1ae6167",
+          "subject": "feat(categorize): undo stack in press order, each skip on its own timer with its own Undo; Escape leaves a field, no type-to-search; modal-safe keys; retried undo says already restored; unavailable header wins over an active run"
+        },
+        {
+          "sha": "1274634",
+          "subject": "fix(categorize): no-key reason independent of an active run, blur after pointer press in capture phase, clear search per row"
+        },
+        {
+          "sha": "9731b39",
+          "subject": "feat(categorize): deferred, undoable skip; chunked undo with exact outcome; undo follows the last press; typing and focus safety; bundles stay reachable without a key; run confirmation; filed lines; light badge read"
+        },
+        {
+          "sha": "4a3e513",
+          "subject": "docs: Categorize page in the client architecture notes"
+        },
+        {
+          "sha": "d76f66b",
+          "subject": "feat(categorize): dim the header without AI, room for the toast under the page"
+        },
+        {
+          "sha": "dbc3bb1",
+          "subject": "fix(categorize): stacked One by one layout and legend on narrow widths"
+        },
+        {
+          "sha": "081ee0c",
+          "subject": "fix(categorize): bundle rows follow the re-read, bundle-changed message, hide empty bundles header"
+        },
+        {
+          "sha": "2c3e362",
+          "subject": "feat(categorize): the last accept stays undoable after its toast times out; key cap on the primary button"
+        },
+        {
+          "sha": "40e1382",
+          "subject": "feat(categorize): One by one view (queue, focus pane, merchant panel, keys, skip, undo); overlapping single-row filings"
+        },
+        {
+          "sha": "0d392d3",
+          "subject": "feat(client): short-date formatter; bundle ranges drop the year within one year"
+        },
+        {
+          "sha": "06d213b",
+          "subject": "Merge main into tk/budget-mjug: one ActionToast for transfers and Categorize"
+        },
+        {
+          "sha": "f6a806f",
+          "subject": "wip(categorize): header, empty state, bundles view, toast primitives"
+        },
+        {
+          "sha": "bb6cb33",
+          "subject": "feat(categorize): data slice, route, rail item and pure logic"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0122_rename_rule_applies.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/rename-apply.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/rename-apply.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/bank-text.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/rename-rules-forward.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/rename-rules-legacy.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/(budget)/categorize.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/base.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/categorize.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/format.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/format.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/revision.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/revision.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/BundleCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/BundlesView.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/CategorizeBits.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/CategorizeScreen.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/EmptyState.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/FocusPane.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/HeaderCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/MerchantPanel.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/OneByOneView.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/PendingSkipsStrip.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/QueuePane.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/QueueRowView.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/accept.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/accept.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/keys.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/keys.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/oneByOne.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/oneByOne.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/page.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/page.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/queue.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/queue.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/undo.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/undo.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useBundleRows.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorize.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizeAccept.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizeKeys.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizePage.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useNow.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useOneByOne.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferBits.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetRail.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/bits.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/combobox.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/icon-symbol.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/ActionToast.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/ui/primitives/TagPill.tsx",
+          "status": "A"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 8087,
+        "deletions": 104
+      }
+    },
+    "agent_session": "011e3c6b-8148-4a11-8593-8d1e761197c6",
+    "finished_at": "2026-11-25T15:02:13.898Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 28,
+        "files": 77,
+        "additions": 8087,
+        "deletions": 104
+      },
+      "head": "6bd286386ada2831bec925b6f47ab15877fe760f",
+      "at": "2026-11-25T15:02:13.898Z"
+    },
+    "landedOutside": {
+      "commit": "e5979700a4e30c058af7c3100208ce81f0a7b8db",
+      "branchHead": "6bd286386ada2831bec925b6f47ab15877fe760f",
+      "baseBranch": "main",
+      "at": "2026-11-25T15:06:40.421Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-2bccbb",
+      "name": "review-ou8p.md",
+      "mime": "text/markdown",
+      "size": 13908,
+      "sha256": "f6d497000415c50dbad1d34d58487b05b87cdb4035de1b1dceed17a590593cfb",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a32356",
+      "name": "review-ou8p-2.md",
+      "mime": "text/markdown",
+      "size": 13634,
+      "sha256": "190069e7560fbdf1c2a180915fdcf2171776ffa5f42e5d547e140336b0da9be4",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-07f9e7",
+      "name": "review-ou8p-3.md",
+      "mime": "text/markdown",
+      "size": 12283,
+      "sha256": "27b28543e73587b903ce45c0d76a847beabb927559589a7188e4752ae7e33b64",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

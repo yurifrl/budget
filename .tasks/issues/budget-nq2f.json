@@ -1,0 +1,328 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-nq2f",
+  "title": "Transfers T3: integrity on the server (no row lost on unlink, mirror adoption, complete links on repeat/restore/copy, no category on on-budget pairs)",
+  "description": "Plan .agents/plans/2026-11-24_transfers-refactor.md, task T3. Map: transfers-map-api.md on the epic budget-e67y (point 8: R1, R2, R4, R5, R6). R1: editing the payee of one leg of a matcher-linked transfer to a normal payee, or deleting that leg, must restore the other bank-imported leg to what it was (as /transfers/unlink does via transfer_links.prev_*), never soft-delete it; later syncs must still see its bank id. R2: when the bank later imports the other side of a hand-made transfer, the matcher adopts the hand-made mirror instead of leaving two rows. R4/R5: repeat rules, restore and budget copy write both pointers and the transfer payee. Category is forced null on an on-budget pair on every write path.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-25T01:55:53.319Z",
+  "updated_at": "2026-11-25T10:49:44.396Z",
+  "started_at": null,
+  "closed_at": "2026-11-25T10:49:37.565Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-e67y",
+  "sprint": null,
+  "labels": [],
+  "notes": "Carry-overs from the budget-upgg reviews (review-upgg-3.md on budget-upgg): (2) absorb in the repair drops the folded payee's name and former names: record them on the kept payee so a stale edit after a repair cannot move a mirror; (3) a transfer row edited to rule text that produces an ordinary 'Transfer : X' payee stays a transfer (edited-payee.ts:63-66); (4) bulk import and bank sync rows that resolve to a transfer payee get the payee but NO mirror and no link (same as main): in scope here, they must become complete transfers or go through the matcher; (5) a kept unlinked payee keeps its transfer_rule; pre-existing: ensureTransferPayee uses an inconsistent pointer as-is, so insertMirror can use another account's payee and deleting the older of two same-named accounts can retire the newer one's payee.\nWIP committed: R1 removeMirror, R2 adoption, hints for imports, repeat/restore/copy complete, repair half-links; tests still to add\nDone: R1 removeMirror (restore like unlink), R2 adoption in linkTransfers, imports -> transfer_hints (0119) + matcher hint, repeat/restore/copy complete, half_linked repair (+--create-mirrors), category null on pair writes, carry-overs. api 1641 pass 0 fail 0 skip; shared 218 pass; tsc+eslint clean. Decisions in docs/decisions.md.\nIndependent review of 4b85467 (review-nq2f.md attached): 3 blockers (B1 sync rewrites existing payee-only transfer rows; B2 adoption ignores never/outside decisions and the matcher's rules; B3 budget copy invents balances), 8 follow-ups. Sent back. Not approved.\nReview round: B1-B3, C1, C2, follow-ups 1,2,4,5 done. api 1663 pass 0 fail 0 skip, shared 218.\nRound 3: adoption cut, relink bounded to releasing leg (transfer_marks.released), no payee on resync, hint keeps against veto, payee-only legs untouched. api 1659 pass 0 fail; shared 218.\nRound 4 done\nlanded outside tk close at 37faad9 (branch tk/budget-nq2f merged into main by hand)\nMerged to local main (not pushed); owner approved in the Inbox thread 'Transfers refactor' on 2026-11-25. Independent reviews attached to the task (nq2f: four rounds, last found no blockers; vah5: two rounds, no blockers). Orchestrator reran before merging: nq2f full api suite 1666 pass / 0 fail on 74f10ae; vah5 client tsc, eslint clean and 1326 tests pass on the branch merged with main. vah5: the other session's uncommitted edits were removed from the main checkout with the owner's approval; the original patch and two files are kept as evidence on budget-vah5.",
+  "design": null,
+  "acceptance_criteria": "The test that pins the deletion (transactions.transfers.test.ts) is replaced by tests proving the row survives and a re-sync does not duplicate or skip it; one test per path for R2, R4, R5; balances unchanged in each. Full api suite green, no skips.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-nq2f",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-nq2f",
+    "changeset": {
+      "base": "574d92c4ae949b9ecd25387c0d593f3a155a75a2",
+      "head": "74f10ae0a4ebd59fb525f15c82d425b00100de5c",
+      "commits": [
+        {
+          "sha": "74f10ae",
+          "subject": "fix(transfers): review round 4: one resolution for a refreshed row and its shadow, re-link record keeps the leg's payee, statement import writes payees only for inserted rows with main's keys, budget copy writes nothing new, hints FK, stale text"
+        },
+        {
+          "sha": "32b8628",
+          "subject": "wip round 4"
+        },
+        {
+          "sha": "6df7a75",
+          "subject": "fix(transfers): cut automatic adoption; relink only the row this leg released; no payee created on re-sync; hint keeps the against veto; payee-only legs untouched"
+        },
+        {
+          "sha": "5add061",
+          "subject": "wip: round 3"
+        },
+        {
+          "sha": "cdc6dcb",
+          "subject": "fix(transfers): review round: sync keeps stored rows, adoption through the matcher's gates and merged with undo, budget copy and pending occurrences as on main, ensureTransferPayee read-only, hint lifetime"
+        },
+        {
+          "sha": "1dcb1ea",
+          "subject": "Merge branch 'main' into tk/budget-nq2f"
+        },
+        {
+          "sha": "4b85467",
+          "subject": "chore(transfers): scope repointPeerLeg by budget"
+        },
+        {
+          "sha": "85b6546",
+          "subject": "feat(transfers): integrity on the server (T3): release not delete linked bank rows, adopt hand-made mirrors, complete repeat/restore/copy transfers, import hints, half-link repair, carry-overs"
+        },
+        {
+          "sha": "af194cb",
+          "subject": "wip(transfers): release not delete linked bank rows, adopt hand-made mirrors, complete repeat/restore/copy transfers, import hints"
+        },
+        {
+          "sha": "5e847a6",
+          "subject": "Merge tk/budget-n94s: a transaction whose accepted category is later cleared returns to the Categorize queue"
+        },
+        {
+          "sha": "2318bde",
+          "subject": "Merge branch 'main' into tk/budget-n94s"
+        },
+        {
+          "sha": "29ce310",
+          "subject": "fix(categorize): return hand-cleared accepted rows to the queue"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0119_transfer_hints.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0120_transfer_mark_release.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/scripts/repair-transfer-payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/edited-payee.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/repeat-generation.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transaction-update.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-link-repair.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-links.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payee-repair.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfer-payees.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.complete-links.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/repeat-rules.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transfer-payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/decision-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/queue-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/routes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/transfer-integrity.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/decisions.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/queue.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 2804,
+        "deletions": 163
+      }
+    },
+    "agent_session": "011e3c6b-8148-4a11-8593-8d1e761197c6",
+    "finished_at": "2026-11-25T04:48:29.744Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 12,
+        "files": 40,
+        "additions": 2804,
+        "deletions": 163
+      },
+      "head": "74f10ae0a4ebd59fb525f15c82d425b00100de5c",
+      "at": "2026-11-25T04:48:29.744Z"
+    },
+    "landedOutside": {
+      "commit": "37faad902dcd84a9ea093b7df01ede11322dc72e",
+      "branchHead": "74f10ae0a4ebd59fb525f15c82d425b00100de5c",
+      "baseBranch": "main",
+      "at": "2026-11-25T10:49:37.540Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-e48790",
+      "name": "review-nq2f.md",
+      "mime": "text/markdown",
+      "size": 11242,
+      "sha256": "d3ed3847e5e55c5aa7194dc5016d5d6e453d9ca66edc065801a2343adf0d9540",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-b78e4c",
+      "name": "review-nq2f-2.md",
+      "mime": "text/markdown",
+      "size": 13105,
+      "sha256": "aa5bd65f04d167aa78ac27ad668a3724edc60d53270562ee284aaa62ed0ef452",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-3110e4",
+      "name": "review-nq2f-3.md",
+      "mime": "text/markdown",
+      "size": 12822,
+      "sha256": "71d1a6040c364c62141c8d2c38f65cf498d71ca27f651d3fe5786189a940c85b",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-45562c",
+      "name": "review-nq2f-4.md",
+      "mime": "text/markdown",
+      "size": 11820,
+      "sha256": "50b2ee91e7b1d1b6ce47bd80bf3c3d204d4ae96e1658c3bd672426776f3a7b0e",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [
+    {
+      "issue_id": "budget-nq2f",
+      "depends_on_id": "budget-upgg",
+      "type": "blocks",
+      "created_at": "2026-11-25T01:55:53.319Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 1,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

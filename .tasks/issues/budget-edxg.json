@@ -4,30 +4,255 @@
   "id": "budget-edxg",
   "title": "Categorize contracts + handlers: queue with bundles, run start/status, accept batch, skip, threshold settings",
   "description": "shared/src/contracts/categorize/: categorize_queue_list (uncategorized transactions with suggestions, grouped into bundles = same payee + same top suggestion, paged; threshold applied at read time), categorize_run_start, categorize_run_status, categorize_accept (batch of {transaction_id, category_id}; goes through the existing transaction update path), categorize_skip, categorize_settings_get/set (per-budget threshold). Nothing is ever applied without an explicit accept. Queue must work with no AI key (rows with no suggestions). Plan, decisions and owner answers: handoff.md at the repo root. Mock: tk show budget-seoa (evidence ev-c96ced overview, PNGs). Follow AGENTS.md (contracts, migrations additive only + MIGRATION_SIGNATURES, i18n, ports, test DB rules).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-24T14:36:43.582Z",
-  "updated_at": "2026-11-24T14:36:43.586Z",
+  "updated_at": "2026-11-25T00:10:56.000Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-25T00:10:42.527Z",
   "due_at": null,
   "defer_until": null,
   "parent": "budget-v2xe",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Owner decision 2026-11-24 (Inbox thread): in a shared budget a run uses the budget OWNER's AI key (or shared AI if the owner has it), whoever starts the run. Any member may start a run. The queue output must carry the merchant fields for the merchant panel (legal name, CNPJ, business category, operation type, PIX counterparty).\nFrom review-fvtx-3: readCategorySuggestions currently masks and truncates (200/80 chars) the user's OWN memo, payee and bank text, because it reuses the model-facing shape. For the queue endpoint the user must see their own data unmasked and untruncated; masking and caps apply only to what is sent to the model. Also: a transaction with any accepted or dismissed suggestion is never re-classified; the queue must distinguish 'not classified yet' from 'classified, no suggestion' (readCategorizeAttempts). No caller passes force today: decide whether Run classification offers an explicit re-classify.\nCheckpoint 2 at HEAD 3bd2c7e.\n\nOperations (all /categorize, behind budgetAccess): GET /queue (API+CLI+MCP), POST /run (API+CLI, no MCP), GET /run (API+CLI+MCP), POST /accept (API+CLI+MCP, same exposure as budget_transactions_update), POST /undo (API+CLI, no MCP), POST /skip (API+CLI+MCP), GET /settings and PUT /settings (API+CLI+MCP).\nQueue: own text unmasked/untruncated, merchant panel, five states, suggestions at threshold, whole-queue bundles/counts; threshold from 0113 read at read time; default 0.8.\nRun: no force flag (a capped forced run would re-bill the newest 100 each click); any member starts, tenant is the owner, no-key start is 409 categorize_ai_unavailable; status reads done/total from 0114 progress (written by prepare/chunk activities), last run and the AI reason.\nAccept: batch through updateTransactionInClient inside one transaction, assignable category, still needs a category, refuses decided rows, marks the matching suggestion accepted (manual row when not among them) and dismisses the rest; repeat of the same pair is idempotent; concurrent different categories: one wins, the other 409 (test).\nUndo: one round trip; clears category and restores non-manual suggestions to pending (deletes the manual row); changed-category items are skipped and listed in ; batch atomic.\nSkip: dismisses all pending suggestions (budget-wide freeze, leaves queue), idempotent, 409 categorize_nothing_to_skip when there are none.\nNew codes: categorize_ai_unavailable (409), categorize_already_categorized (409), categorize_not_needing_category (409), categorize_nothing_to_skip (409), category_not_assignable (400). Reused category_not_in_budget and AI key 503 codes.\nChecks: task typecheck clean; task lint clean; shared 217 pass/0 fail/0 skip; full api 1507 pass/0 fail/0 skip (101 files, BUDGET_REQUIRE_TEST_DB=1 on :55432). Main had not moved (4a62461), no merge needed.\nCorrection to the previous note: undo's skipped items are listed in the response field 'skipped' (array of transaction ids).\nIndependent review of 3bd2c7e (attached review-edxg.md): 1 blocker (undo acts as a general uncategorize endpoint), follow-ups F0-F10; sent back. Not approved.\nB1 + accept idempotency checkpoint at 77a97b6 (in progress; F items not started).\n\nDesign: new table public.categorize_decisions (0115) stores transaction_id, budget_id, category_id accepted, accepting user_id, created_at. Accept requires an uncategorized row with no decided suggestion, so previous category is null and every previous suggestion status is pending by construction; it writes the row in the same transaction as the category and suggestion updates. Undo takes only transaction ids, reads the record for update, and reverses only a live, non-upcoming row whose current category still equals the recorded one; it clears via updateTransactionInClient, restores non-manual suggestions to pending, deletes the manual row and the decision. Everything else is skipped with reason no_decision | category_changed | upcoming | not_found. Repeat accept is a no-op only when that decision record matches; any other categorized row is 409 categorize_already_categorized.\nTests: repeat accept keeps the model suggestion and undo restores it to pending; P1 hand-set category; P2 uncategorized inflow; P3 upcoming occurrence (no record and with a record); P4 skipped row; P7 hand-categorized accept refused; undo changed-category and mixed batch.\nChecks at 77a97b6: task typecheck clean; task lint clean; shared 217 pass/0 fail; full api 1513 pass/0 fail/0 skip (101 files, BUDGET_REQUIRE_TEST_DB=1 on :55432).\nF0-F9 done at 6064bf3 (F4 owner decision left as is). F0: categorize row amount / bundle total. F1: accept/undo lock transactions in one ordered statement, then decisions in one ordered statement; accept-accept and accept-undo opposite-order tests. F2: duplicate ids are invalid input in accept and undo. F3 kept; repeat accept is a no-op against the decision record and keeps the model suggestion. F5: migration 0116 adds revision triggers on category_suggestions and categorize_decisions; skip and undo bump. F6: skip records kind='skip' for any queue state; queue excludes decisions; undo reports reason 'skipped' and never touches it. F7: bundles have bundle_key/count/total/date-range/suggestion and no ids; queue bundle filter pages rows; accept takes items or bundle_key, resolves it in-transaction, 409 empty and 400 above 1000. F8: counts per state; hidden-only pending suggestion is no_suggestion. F9: prepare progress write is catch(). Tests: 31 routes tests incl. P1-P4/P7, deadlock, duplicates, bundle paging/cap, any-state skip, revision; new activities-progress test. Checks: typecheck/lint clean, shared 217/0/0, api 1522/0/0 (102 files). Measured queue page with 20k rows / 100 bundles: 69,896 bytes for 50 rows; bundles carry no ids. Main unchanged at 4a62461.\nReview 2 fixes at 71958f3. F1: 0116 drops the category_suggestions trigger, keeps categorize_decisions; test proves a suggestion write does not bump and skip/accept/undo do. F2: CANDIDATE_WHERE and replaceSuggestions exclude decisions; test skips a no-suggestion row, candidate count 0 and replace returns false. F5: undo re-checks NEEDS_CATEGORY_WHERE_IGNORING_CATEGORY; inflow/transfer after accept report category_changed and keep the category. F7: sum(amount)::bigint mapped to number; test passes -4,000,000,000. F9: bundle key is payee_id/category_id plus md5 of an unlinked payee name; long non-ASCII name filter and accept test. F8: expected_count required with bundle_key, 409 categorize_bundle_changed with params {expected,actual}, nothing written; tests. Contract text updated for accepted-then-cleared (category_changed) and no time limit. Checks: typecheck/lint clean; shared 217/0/0; api 1528/0/0 (102 files). Main unchanged at 4a62461.\nlanded outside tk close at 30a14e5 (branch tk/budget-edxg merged into main by hand)\nMerged to local main (not pushed); owner approved in the Inbox thread on 2026-11-24. Eight operations in shared/src/contracts/categorize + api/src/categorize/{routes,queue-store,decision-store}.ts; migrations 0113-0116; transaction update extracted to budget/domain/transaction-update.ts. Two independent reviews attached (review-edxg.md with blocker B1 on undo, fixed; review-edxg-2.md no blockers). Orchestrator reran on 71958f3: tsc shared/api clean, api eslint clean, shared 217 pass, full api 1528 pass / 0 fail with BUDGET_REQUIRE_TEST_DB=1. Open owner question: whether decided rows return to the queue.",
   "design": null,
   "acceptance_criteria": "Samples in access.test.ts and catalog-outputs.test.ts; ids re-scoped by budget_id; test:api green.",
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
-  "attachments": [],
+  "branch": "tk/budget-edxg",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-edxg",
+    "changeset": {
+      "base": "4a6246117cb98752975c63088ba474ad39fedd2f",
+      "head": "71958f300b70c61b1c69772ef6354f7d71b72ec8",
+      "commits": [
+        {
+          "sha": "71958f3",
+          "subject": "fix(categorize): freeze skipped rows, id-based bundle keys and stale bundles"
+        },
+        {
+          "sha": "6064bf3",
+          "subject": "feat(categorize): bundles by key, queue states and decision hardening"
+        },
+        {
+          "sha": "77a97b6",
+          "subject": "fix(categorize): record accepts and make undo reverse only them"
+        },
+        {
+          "sha": "3bd2c7e",
+          "subject": "fix(categorize): safe undo, concurrency test and endpoint docs"
+        },
+        {
+          "sha": "30338f4",
+          "subject": "feat(categorize): page contracts and handlers (budget-edxg)"
+        },
+        {
+          "sha": "816ae58",
+          "subject": "wip(categorize): contracts, queue/accept/skip handlers, run status, settings"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0113_categorize_settings.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0114_categorize_run_progress.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0115_categorize_decisions.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0116_categorize_decision_kind.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/ai/keys.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transaction-update.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/categories.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/activities-progress.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/activities.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/decision-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/queue-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/router.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/routes.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/ai/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/contracts.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/decisions.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/outputs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/queue.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/runs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/settings.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/contracts.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 3047,
+        "deletions": 197
+      }
+    },
+    "agent_session": "01a20e9f-f777-7397-8ba4-ce1e43a9b6f6",
+    "finished_at": "2026-11-25T00:06:39.920Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 6,
+        "files": 36,
+        "additions": 3047,
+        "deletions": 197
+      },
+      "head": "71958f300b70c61b1c69772ef6354f7d71b72ec8",
+      "at": "2026-11-25T00:06:39.920Z"
+    },
+    "landedOutside": {
+      "commit": "30a14e53c82ed3fcf3a38d3b4b047811d2d5e6d2",
+      "branchHead": "71958f300b70c61b1c69772ef6354f7d71b72ec8",
+      "baseBranch": "main",
+      "at": "2026-11-25T00:10:42.503Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-1fdb90",
+      "name": "review-edxg.md",
+      "mime": "text/markdown",
+      "size": 11761,
+      "sha256": "fbad7e1afc8f0ce02a3c8af909d6fb4a7b8ab5b9bd9788ec0e063ceb6f534187",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-94693d",
+      "name": "review-edxg-2.md",
+      "mime": "text/markdown",
+      "size": 12091,
+      "sha256": "77e46d389fe6f343ed457c833968ce645101090d2d37f31737cb9b9f8d907d72",
+      "metadata": {}
+    }
+  ],
   "dependencies": [
     {
       "issue_id": "budget-edxg",
@@ -39,7 +264,7 @@
     }
   ],
   "dependency_count": 1,
-  "dependent_count": 0,
+  "dependent_count": 1,
   "comments": [],
   "comment_count": 0
 }

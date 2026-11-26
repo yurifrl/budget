@@ -1,0 +1,308 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-ucyr",
+  "title": "AI provider layer hardening before the categorizer: chat timeout vs 16k max_tokens, providerFor(resolved) helper, OpenAI model filter, restricted-key 403, log redaction",
+  "description": "From the second review of budget-q8kf (attached). 1) Anthropic default max_tokens 16000 runs non-streaming under the 60s chat timeout in api/src/ai/http.ts: long thinking turns time out, are retried and billed; raise the chat timeout or stream. 2) The provider-match rule lives only in routes; export one helper (providerFor(resolved)) from api/src/ai/index.ts so callers cannot send a resolved key to another provider, and stop exporting the raw pair. 3) OpenAI chat-model filter drops ft:gpt-* and search-preview models and keeps non-chat-completions models (gpt-3.5-turbo-instruct, o1/o3/gpt-5-pro: verify against OpenAI docs). 4) OpenAI restricted key without models:read gets 403 on /models and is reported as a bad key; verify with a call such keys can make. 5) Log redaction only masks the exact key and sk-*; mask other provider key shapes and do not log upstream account/quota text at a level any user can trigger. 6) Save with a model and every test call /models twice. 7) A row whose secret no longer opens reports effective 'own' while resolveAiKey says unreadable. 8) Z.ai: confirm /api/paas/v4/models with a real key or fall back to a chat ping.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-24T15:59:59.034Z",
+  "updated_at": "2026-11-24T17:58:13.275Z",
+  "started_at": null,
+  "closed_at": "2026-11-24T17:34:33.911Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-v2xe",
+  "sprint": null,
+  "labels": [],
+  "notes": "All eight review items addressed in 378984ac, each with a test that fails without the fix. Docs verified first: Anthropic Claude 5+ has thinking on by default (16k cap stands); OpenAI gpt-5-pro/o1-pro/o3-pro are Responses-only while ft: and *-search-preview are Chat Completions; OpenAI /models needs the separate api.model.read scope (403 on a chat-only restricted key); Z.ai's docs/OpenAPI list no /models endpoint. Fixes: (1) chat deadline = max(60s, cap/25 tok/s) and a timeout is kind permanent/not retried, so an aborted generation cannot be billed twice; (2) providerFor(resolvedKey) exported, createProvider removed from the ai barrel (lint forces other features through it); (3) OpenAI filter keeps ft:*-search-preview, drops *-pro and gpt-3.5-turbo-instruct; (4) 403 is a forbidden kind -> 403 ai_key_forbidden (new additive code + en/pt-BR), OpenAI verify accepts a 403 from /models as authenticated; (5) log redaction covers key fragments, masked sk-* echoes and Z.ai id.secret keys; (6) Z.ai verifies via documented /tokenizer and lists the documented chat models offline; (7) verifyKey returns the models it fetched so save/test make one /models call; (8) status effective is null when the stored secret no longer opens. Verification: task typecheck exit 0; task lint exit 0; shared 203 pass/0 fail; api with BUDGET_REQUIRE_TEST_DB=1 on :55432 1342 pass/0 fail/0 skip (90 files, 8458 expects).\nIndependent review of 378984a (attached review-ucyr.md): 11 findings; sent back for a second round. Not approved.\nSecond review round in f34eb55 (amends a partial commit; worktree clean). A: added kind timeout (chat deadline/caller abort); non-chat deadlines stay transient; AiChatRequest.signal wired through requestJson to fetch; caller-signal listeners released after each request; chat sets Bun fetch timeout:false because Bun docs give a 5-minute socket idle default below 640 s (probes: 320 s delayed response and 330 s silent connect did not hit it before our own signals, but it is disabled explicitly); chatTimeoutMs uses a 16k assumed cap when maxTokens is unset; adapter-level Anthropic test spies AbortSignal.timeout and requires 640000 for 16k and unset. B: OpenAI docs make missing endpoint scope 401 (Invalid Authentication), 403 is country/region only, so the 403-accepted path and ai_key_forbidden are removed; a key that cannot verify is not saved; any 403 is auth and the message is generic. C: Z.ai tokenizer cost is not documented, so verification is now POST /paas/v4/chat/completions on api.z.ai with max_tokens 1 on the chosen model or GLM-5.3-Flash (docs pricing: 0.15/M input, 0.50/M output); /ai/models verifies a candidate key before returning the suggestion list; a typed model outside the list is accepted on save; list comment fixed (text + FLASH/FLASHX/LEGAL, no vision claim). D: ResolvedAiKey is a class with a private secret and module-token constructor, public provider/model/source; providerFor rejects non-instances; createProvider is gone; makeResolvedAiKey is not on the barrel. E: redactSecrets exported; provider logs now only provider/kind/status; sk- pattern has a word boundary and dotted-key pattern requires a 32-hex id and 16+ secret, so desk-lamp/task-force/timestamps survive. F: OpenAI filter drops ft:babbage-002/davinci-002 and tool-less gpt-4o*-search-preview/chatgpt-4o-latest, keeps chat fine-tunes whose org/suffix has -pro-/-image-. G: Anthropic verifyKey returns the Models list so save/test use one list call. Docs: developers.openai.com/api/docs/guides/error-codes, /models/gpt-4o-search-preview, /gpt-4o-mini-search-preview, /chatgpt-4o-latest, /babbage-002, /davinci-002; docs.z.ai/api-reference/llm/chat-completion, /guides/overview/pricing; bun.com/reference/globals/BunFetchRequestInit/timeout; platform.claude.com/docs/en/api/models/list. Unconfirmed: no live provider calls (Z.ai max_tokens 1 acceptance, OpenAI statuses from docs); aborted-generation billing; Z.ai tokenizer cost. Verification: task typecheck exit 0; task lint exit 0; shared 203 pass/0 fail; api BUDGET_REQUIRE_TEST_DB=1 on :55432 1352 pass/0 fail/0 skip (91 files, 8483 expects). Client: ai_key_forbidden removed (403 on AI routes is only own_ai_key_required); ai_key_rejected 400 now covers provider 401/403; Z.ai /ai/models and /ai/credentials/test now contact the provider and can 400 ai_key_rejected; Z.ai save accepts a model outside the suggestion list; own non-null with effective null still possible for an unreadable secret. No schema changes.\nThird round in 28f3f4e (worktree clean, parent f34eb55). M1: OpenAiCompatibleProvider and AnthropicProvider hold the key in a private #apiKey; new providers/index.test.ts asserts JSON.stringify, util.inspect(showHidden) and Bun.inspect of both adapters contain no key. M2: redactSecrets adds the whole key value (any length) and runs the shape patterns before fragments; test with a 164-char sk-proj key asserts the exact redaction and no surviving 8-char run, plus a long shapeless key. 3: ResolvedAiKey freezes itself after construction; Reflect.set(provider/model) is refused and tested. 4: providerFor and adapter() take no options; tests build a stub table from the deep builtinProviders export via setProviders, and a test proves a caller-supplied option never reaches the table. 5: ai_credentials_test and the saved-key branch of /ai/models pass key.model; ZAI_KEY_CHECK_MODEL remains the only fallback and is used only when no model is chosen; route test covers save/list/test with glm-4.7. 6: chatTimeoutMs is capped at 15 min (900000 ms); tests 128k and 1M. 7: types.ts says most checks are side-effect-free but Z.ai is a small paid chat call; architecture.md describes the key as accidental-disclosure/public-factory protection (private field, frozen fields, no options, frozen table test seam) and explicitly not a sandbox for deliberate deep code; docs also note the 15-min cap and saved-model use. No shared/ changes (git diff f34eb55..28f3f4e -- shared/ empty). Verification: task typecheck exit 0; task lint exit 0; api full suite BUDGET_REQUIRE_TEST_DB=1 on :55432: 1361 pass, 0 skip, 0 fail, 92 files, 8669 expects. Live provider behavior (Z.ai statuses/model acceptance) remains unconfirmed from docs.\nMerged to local main (not pushed); owner approved in the Inbox thread on 2026-11-24. Three review rounds (review-ucyr.md, review-ucyr-2.md attached): timeout kind + abort signal + 15 min cap, opaque frozen resolved key with one providerFor, key hidden in adapters, redaction fixed for long keys, OpenAI 403 path removed per OpenAI docs, Z.ai verified by a 1-token chat on the saved model, provider text no longer logged or returned. api suite 1361 pass / 0 skip reported by the agent; orchestrator verified redaction and private key fields. Leftovers: budget-vnar.\nx\nThe note 'x' above was added by mistake by the orchestrator session; it carries no meaning.",
+  "design": null,
+  "acceptance_criteria": "Each item fixed with a test that fails without the fix, or shown from provider docs not to apply; api suite green with no skips.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-ucyr",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-ucyr",
+    "changeset": {
+      "base": "3cbf4b3d67f5a42bf6fd7ee5fcdc6f9c1247b1ab",
+      "head": "28f3f4eb1fa06efe9fd998cd1fea49e52946cdad",
+      "commits": [
+        {
+          "sha": "28f3f4e",
+          "subject": "fix(ai): third review round for the provider layer (budget-ucyr)"
+        },
+        {
+          "sha": "f34eb55",
+          "subject": "fix(ai): second review round for the provider layer (budget-ucyr)"
+        },
+        {
+          "sha": "378984a",
+          "subject": "fix(ai): harden the provider layer before the categorizer (budget-ucyr)"
+        },
+        {
+          "sha": "05e3267",
+          "subject": "Merge tk/budget-q8kf: AI provider layer (shared-ai-key flag, own keys, five provider adapters)"
+        },
+        {
+          "sha": "0d3d27c",
+          "subject": "Merge branch 'main' into tk/budget-q8kf"
+        },
+        {
+          "sha": "2ed8baf",
+          "subject": "chore(ai): renumber the AI credentials migration to 0109"
+        },
+        {
+          "sha": "db50606",
+          "subject": "fix(ai): harden key checks, Anthropic tool loops and provider isolation (budget-q8kf)"
+        },
+        {
+          "sha": "9eff45c",
+          "subject": "feat(ai): AI provider layer for category suggestions (budget-q8kf)"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.schema",
+          "status": "M"
+        },
+        {
+          "path": "api/db/migrations/0109_ai_credentials.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/ai/detect.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/detect.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/env.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/errors.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/http.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/http.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/keys.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/keys.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/anthropic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/anthropic.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/index.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/openai-compatible.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/openai-compatible.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/redact.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/redact.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/routes.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/settings.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/types.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/test-op.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/features/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/worker.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/profile/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/ai/credentials.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/credentials.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/outputs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/contracts.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/features.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 3651,
+        "deletions": 25
+      }
+    },
+    "agent_session": "01a20e45-e0c1-74ad-ac06-b387173d7803",
+    "finished_at": "2026-11-24T17:14:22.924Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 8,
+        "files": 46,
+        "additions": 3651,
+        "deletions": 25
+      },
+      "head": "28f3f4eb1fa06efe9fd998cd1fea49e52946cdad",
+      "at": "2026-11-24T17:14:22.924Z"
+    },
+    "worktreePruned": {
+      "pruned": false,
+      "removedWorktree": false,
+      "removedBranch": false,
+      "reason": "branch tk/budget-ucyr is not fully merged into 3cbf4b3d67f5a42bf6fd7ee5fcdc6f9c1247b1ab"
+    }
+  },
+  "attachments": [
+    {
+      "path": "/private/tmp/claude-501/-Users-yuri-Workdir-Yuri-budget/011e3c6b-8148-4a11-8593-8d1e761197c6/scratchpad/review-q8kf-fixes.md",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-837dd0",
+      "name": "review-ucyr.md",
+      "mime": "text/markdown",
+      "size": 21870,
+      "sha256": "23a0dc8f9315fb0dc1b66498cdb5d349fda362073052d95db825190757273de0",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a3cc38",
+      "name": "review-ucyr-2.md",
+      "mime": "text/markdown",
+      "size": 18380,
+      "sha256": "da8e34588fba8aedb531bbb451170b21a0cd86ce3d83110fab56c0ef5343de70",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 1,
+  "comments": [],
+  "comment_count": 0
+}

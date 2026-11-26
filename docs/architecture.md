@@ -10,10 +10,10 @@ budget/
   api/      Bun + Hono API, worker, CLI, MCP (lifted from syscd, unchanged behaviour)
   client/   Expo SDK 58 app, iOS + web
   admin/    Vite + React SPA, jobs ledger    (copy of syscd's admin)
-  deploy/   Dockerfile.{web,api,admin}, httpd.conf
+  docker/   Dockerfile.{web,api,admin}, httpd.conf
   k8s/      values.yaml: image tags ArgoCD deploys
   scripts/  release-bump, release-changelog, db-init, e2e-api
-  .github/workflows/  ci, version, release, app-release
+  .github/workflows/  ci, deploy, version, release, app-release
 ```
 
 No root `package.json`; each package installs and runs on its own. Code is
@@ -402,6 +402,12 @@ Requests are built with `@shared/contract-request` (the copy is gone).
 - `ci.yml`: one job per package plus Docker build checks. The api job runs
   against a Postgres 18 service container, then `scripts/e2e-api.sh` (OAuth
   consent + MCP over HTTP; no Temporal).
+- Continuous deploy (`deploy.yml`): a push to main that can change the api or
+  web image (`api/**`, `client/**`, `shared/**`, `docker/**`, `.dockerignore`)
+  builds both for amd64 + arm64 tagged `sha-<commit>` and commits that tag for
+  `budget-web`, `budget-api` and `budget-worker` into `k8s/values.yaml`, so
+  ArgoCD rolls them. Newest push wins: a running deploy is cancelled when a
+  newer push lands. A docs-only push changes no image and deploys nothing.
 - Two independent releases (decision 2026-11-23), each with its own version
   file, tag and workflow. Both versions are `YYYY.MM.DD[-NN]`
   (`scripts/release-bump.ts api|client`), but the sequences are separate.
@@ -409,12 +415,14 @@ Requests are built with `@shared/contract-request` (the copy is gone).
   `version.yml` writes the changelog section (OpenRouter notes if
   `OPENROUTER_API_KEY` is set, else the commit list), tags `v<VERSION>` and
   dispatches `release.yml`: push `ghcr.io/<owner>/budget-{web,api,admin}`
-  (amd64 + arm64; tags version, sha, latest), then commit the version into
-  `k8s/values.yaml` (`budget-worker` follows `budget-api`) and create the
-  GitHub release `v<VERSION>`. ArgoCD rolls the Deployments from that file.
-  The web image is part of this release: `Dockerfile.web` passes
-  `api/VERSION` as `WEB_RELEASE_VERSION`, so the web menu shows the server
-  version, not `client/VERSION`.
+  (amd64 + arm64; tags version, sha, latest), then pin the admin version in
+  `k8s/values.yaml` and create the GitHub release `v<VERSION>`. ArgoCD rolls
+  the admin Deployment from that file; api and web are deployed per commit by
+  `deploy.yml`, not per release.
+  The web image embeds `api/VERSION` as `WEB_RELEASE_VERSION`
+  (`Dockerfile.web`), so the menu shows the server version, not
+  `client/VERSION`; every continuous deploy rebuilds it from that commit's
+  `api/VERSION`.
 - iOS app release: `task release:app` bumps only `client/VERSION` and pushes
   main. `app-release.yml` tags `app-v<VERSION>`, then (only when the repo
   variable `EAS_ENABLED` is `true`) runs the EAS production iOS build, submits

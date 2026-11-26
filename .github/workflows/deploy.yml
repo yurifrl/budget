@@ -1,0 +1,122 @@
+# Continuous deploy: every push to main that can change the api or web image
+# builds it as `sha-<commit>` and pins that tag in k8s/values.yaml, where
+# ArgoCD rolls the Deployments from. No version bump or tag needed. The admin
+# image is not here: it ships with the server release (release.yml pins it).
+# See docs/decisions.md 2026-11-26.
+#
+# A docs-only push changes no image and deploys nothing (paths filter), so it
+# does not restart the cluster.
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/**'
+      - 'client/**'
+      - 'shared/**'
+      - 'docker/**'
+      - '.dockerignore'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+# One deploy at a time, newest wins: a push that lands while an older build
+# runs cancels it, so the cluster never rolls to stale code.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: Build ${{ matrix.name }} image
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: web
+            dockerfile: docker/Dockerfile.web
+            image: budget-web
+          - name: api
+            dockerfile: docker/Dockerfile.api
+            image: budget-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/${{ matrix.image }}
+      TAG: sha-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+          provenance: false
+          sbom: false
+
+  deploy:
+    name: Deploy (ArgoCD rollout)
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TAG: sha-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Pin image tags (ArgoCD rolls the deployments from this)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # budget-worker runs the budget-api image, so it takes the same tag.
+          # Commit on top of current main: a push that landed during the build
+          # must not be rolled back to this sha. A concurrent pin (this
+          # workflow or release.yml) can move main between the fetch and the
+          # push, so retry from the new tip. budget-admin is not touched here:
+          # it is pinned by release.yml.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git checkout -B deploy-pin origin/main
+            sed -i "s/^  budget-web: .*/  budget-web: ${TAG}/; s/^  budget-api: .*/  budget-api: ${TAG}/; s/^  budget-worker: .*/  budget-worker: ${TAG}/" k8s/values.yaml
+            if git diff --quiet -- k8s/values.yaml; then
+              echo "k8s/values.yaml already pins ${TAG}, nothing to commit (idempotent re-run)"
+              exit 0
+            fi
+            git add k8s/values.yaml
+            git commit -m "deploy: images ${TAG}"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "push lost a race with another k8s/values.yaml commit, retrying (${attempt}/3)"
+            sleep 5
+          done
+          echo "::error::could not pin ${TAG} after 3 attempts"
+          exit 1
