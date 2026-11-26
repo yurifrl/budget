@@ -365,6 +365,16 @@ describe('conversionPlan duplicates and keys', () => {
   });
 });
 
+describe('visibleEntries when a rule is changed in the card', () => {
+  test('an edit typed in the notice is dropped when the same rule is then changed in the card (the card\'s new rule is shown as it is; a removal of the old content does not hide it)', () => {
+    const before = payee({ name: 'U', rename_rules: [rule('r1', 'contains', 'PIX JOAO')] });
+    const changes = { edited: { 'rule:contains:pix joao': { text: 'PIX JOAO SP' } }, removed: ['rule:contains:pix joao'] };
+    expect(visibleEntries(before, { edited: changes.edited, removed: [] }).map((e) => e.text)).toContain('PIX JOAO SP');
+    const after = payee({ name: 'U', rename_rules: [rule('r1', 'contains', 'PIX JOAO LTDA')] });
+    expect(visibleEntries(after, changes).map((e) => [e.text, e.moveFrom])).toEqual([['U', null], ['PIX JOAO LTDA', 'r1']]);
+  });
+});
+
 describe('visibleEntries follows the payee\'s current rules', () => {
   const base = payee({ name: 'Uber', rename_rules: [rule('r1', 'contains', 'UBER *TRIP'), rule('r2', 'starts_with', 'UBER EATS')] });
   const none = { edited: {}, removed: [] as string[] };
@@ -388,7 +398,7 @@ describe('visibleEntries follows the payee\'s current rules', () => {
     const after = payee({ name: 'Uber', rename_rules: [rule('r1', 'is', 'UBER *TRIP'), rule('r3', 'ends_with', 'LTDA')] });
     expect(visibleEntries(after, none).map((e) => [e.key, e.matchType, e.moveFrom])).toEqual([
       ['name', 'is', null],
-      ['rule:contains:uber *trip', 'is', 'r1'],
+      ['rule:is:uber *trip', 'is', 'r1'],
       ['rule:ends_with:ltda', 'ends_with', 'r3'],
     ]);
   });
