@@ -54,14 +54,14 @@ describe('my features (profile api)', () => {
     const calls = stubFeatures({ features: { 'shared-pluggy-key': true, 'retired-feature': true } });
     const store = makeStore();
     const sub = store.dispatch(profileApi.endpoints.getMyFeatures.initiate());
-    expect((await sub).data).toEqual({ 'shared-pluggy-key': true, 'shared-ai-key': false });
+    expect((await sub).data).toEqual({ 'shared-pluggy-key': true });
     expect(calls).toEqual([`${BASE}/features`]);
     sub.unsubscribe();
 
     stubFeatures({ features: {} });
     const other = makeStore();
     const sub2 = other.dispatch(profileApi.endpoints.getMyFeatures.initiate());
-    expect((await sub2).data).toEqual({ 'shared-pluggy-key': false, 'shared-ai-key': false });
+    expect((await sub2).data).toEqual({ 'shared-pluggy-key': false });
     sub2.unsubscribe();
   });
 
@@ -70,7 +70,7 @@ describe('my features (profile api)', () => {
     const store = makeStore();
     const sub = store.dispatch(profileApi.endpoints.getMyFeatures.initiate(undefined, { subscriptionOptions: MY_FEATURES_REFETCH }));
     await sub;
-    expect(selectFeatures(store.getState()).data).toEqual({ 'shared-pluggy-key': false, 'shared-ai-key': false });
+    expect(selectFeatures(store.getState()).data).toEqual({ 'shared-pluggy-key': false });
     expect(calls.length).toBe(1);
 
     // Nothing polls while the app just sits there.
@@ -80,7 +80,7 @@ describe('my features (profile api)', () => {
     store.dispatch(profileApi.internalActions.onFocus());
     await settle();
     expect(calls.length).toBe(2);
-    expect(selectFeatures(store.getState()).data).toEqual({ 'shared-pluggy-key': true, 'shared-ai-key': false });
+    expect(selectFeatures(store.getState()).data).toEqual({ 'shared-pluggy-key': true });
 
     store.dispatch(profileApi.internalActions.onOnline());
     await settle();

@@ -1,20 +1,16 @@
 /**
- * Pure view logic of the Categorize page: the threshold control, the run
- * header states, the category search options and the small labels shared by
+ * Pure view logic of the Categorize page: the threshold control, the
+ * category search options and the small labels shared by
  * the accept flow. Wire-typed (feature-local); money formatting comes from the
  * caller's `useMoneyFormat()`.
  */
 
 import type {
   CategorizeBundle,
-  CategorizeCounts,
   CategorizeQueueRow,
-  CategorizeRunStatus,
 } from '@/budget/data/api';
 import type { BundleRow, CategoryRow, GroupRow } from '@/budget/data/rows';
 import { milliToCents } from '@/budget/data/mapping';
-import { localToday } from '@/domain/date';
-import type { MoneyFormat } from '@/domain/format';
 
 import { t } from './i18n';
 
@@ -32,92 +28,6 @@ export function thresholdFromX(x: number, width: number): number {
 
 export function thresholdLabel(value: number): string {
   return t('header.thresholdValue', { percent: thresholdPercent(value) });
-}
-
-export type RunHeaderKind = 'active' | 'unavailable' | 'all_classified' | 'finished' | 'never';
-
-export interface RunHeaderView {
-  kind: RunHeaderKind;
-  title: string;
-  detail: string;
-  /** Active run progress, 0..1 (0 while queued or idle). */
-  fraction: number;
-}
-
-/** The calendar day of an instant in the person's own time zone (not the UTC day the server wrote). */
-function runDate(iso: string): string {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? iso.slice(0, 10) : localToday(at);
-}
-
-function lastRunLine(run: CategorizeRunStatus['last_finished'], format: Pick<MoneyFormat, 'formatDate'>): string | null {
-  if (!run) return null;
-  const date = run.finished_at ?? run.created_at;
-  return t('run.lastShort', { date: format.formatDate(runDate(date)), suggested: run.suggested ?? 0 });
-}
-
-/** The header's run block: live progress, why AI is off, or the last run. */
-export function runHeaderView(
-  status: CategorizeRunStatus,
-  counts: Pick<CategorizeCounts, 'left_to_categorize' | 'not_classified'>,
-  format: Pick<MoneyFormat, 'formatDate'>,
-): RunHeaderView {
-  // No AI means no run can make progress: say so before anything about a run
-  // in progress, so the header never calls a dead run healthy.
-  if (!status.ai.available) {
-    return { kind: 'unavailable', title: t('run.unavailable'), detail: aiReasonMessage(status.ai.reason), fraction: 0 };
-  }
-  const active = status.active;
-  if (active) {
-    return {
-      kind: 'active',
-      title: active.total > 0 ? t('run.classifying', { done: active.done, total: active.total }) : t('run.starting'),
-      detail: t('run.activeHint'),
-      fraction: active.total > 0 ? Math.max(0, Math.min(1, active.done / active.total)) : 0,
-    };
-  }
-  const last = lastRunLine(status.last_finished, format);
-  if (counts.left_to_categorize === 0) {
-    return { kind: 'all_classified', title: t('run.nothingLeft'), detail: last ?? t('run.neverHint'), fraction: 0 };
-  }
-  if (counts.not_classified === 0) {
-    return {
-      kind: 'all_classified',
-      title: t('run.allClassified', { count: counts.left_to_categorize }),
-      detail: last ?? t('run.nextRun'),
-      fraction: 0,
-    };
-  }
-  if (status.last_finished) {
-    // Title and detail on their own lines: the one-line "Last run … · N suggestions" wrapped in the header.
-    return {
-      kind: 'finished',
-      title: t('run.lastDate', { date: format.formatDate(runDate(status.last_finished.finished_at ?? status.last_finished.created_at)) }),
-      detail: `${t('run.lastSuggestions', { count: status.last_finished.suggested ?? 0 })} ${t('run.nextRun')}`,
-      fraction: 0,
-    };
-  }
-  return { kind: 'never', title: t('run.never'), detail: t('run.neverHint'), fraction: 0 };
-}
-
-/** One sentence for every reason a run cannot start (the status carries it). */
-export function aiReasonMessage(reason: CategorizeRunStatus['ai']['reason']): string {
-  switch (reason) {
-    case 'own_key_required':
-      return t('run.reason.ownKey');
-    case 'shared_key_missing':
-      return t('run.reason.sharedKey');
-    case 'shared_model_missing':
-      return t('run.reason.sharedModel');
-    case 'encryption_missing':
-      return t('run.reason.encryption');
-    case 'unreadable':
-      return t('run.reason.unreadable');
-    case 'no_model':
-      return t('run.reason.noModel');
-    default:
-      return t('run.reason.unknown');
-  }
 }
 
 export interface CategoryOption {

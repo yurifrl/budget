@@ -1,8 +1,7 @@
 /**
  * Wire schemas of the Categorize page operations. These are the USER-facing
  * shapes: the transaction's own text is returned as stored (no masking, no
- * length cap). Masking and caps exist only on the model-facing reads in
- * api/src/categorize/store.ts.
+ * length cap).
  *
  * Money is integer milliunits (12.34 = 12340), outflows negative. Dates are
  * YYYY-MM-DD strings; timestamps are ISO strings.
@@ -10,7 +9,6 @@
 import { z } from '../../zod';
 
 import { isoDateSchema, milliunitsSchema, uuidSchema } from '../../validation';
-import { AI_KEY_PROBLEMS, aiProviderSchema } from '../ai/outputs';
 
 /** Where a suggestion came from. `manual` is a person's choice recorded on accept. */
 export const categorizeSuggestionSourceSchema = z.enum(['payee_rule', 'ai', 'manual']);
@@ -35,7 +33,7 @@ export const categorizeQueueStateSchema = z.enum([
 export const categorizeSuggestionSchema = z.object({
   category_id: uuidSchema,
   category_name: z.string(),
-  /** The model's self-report (the payee rule records 1), 0..1. */
+  /** 0..1 (the payee rule records 1). */
   confidence: z.number().min(0).max(1),
   reason: z.string().nullable(),
   source: categorizeSuggestionSourceSchema,
@@ -115,70 +113,6 @@ export const categorizeQueueSchema = z.object({
   rows: z.array(categorizeQueueRowSchema),
   counts: categorizeQueueCountsSchema,
   bundles: z.array(categorizeBundleSchema),
-});
-
-export const categorizeRunStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']);
-
-/** An active run: progress is what the worker last recorded (0/0 while queued). */
-export const categorizeActiveRunSchema = z.object({
-  id: uuidSchema,
-  status: categorizeRunStatusSchema,
-  created_at: z.string(),
-  started_at: z.string().nullable(),
-  requested_by: z.string().nullable(),
-  done: z.number().int().min(0),
-  total: z.number().int().min(0),
-});
-
-/** The last finished run; counts are null when the run produced no result. */
-export const categorizeFinishedRunSchema = z.object({
-  id: uuidSchema,
-  status: categorizeRunStatusSchema,
-  created_at: z.string(),
-  started_at: z.string().nullable(),
-  finished_at: z.string().nullable(),
-  total: z.number().int().min(0).nullable(),
-  done: z.number().int().min(0).nullable(),
-  suggested: z.number().int().min(0).nullable(),
-  rule: z.number().int().min(0).nullable(),
-  empty: z.number().int().min(0).nullable(),
-  skipped: z.number().int().min(0).nullable(),
-  failed: z.number().int().min(0).nullable(),
-  /** Candidates left for the next run because of the per-run cap. */
-  remaining: z.number().int().min(0).nullable(),
-  /** User-safe sentence written by the workflow; never provider text. */
-  user_message: z.string().nullable(),
-});
-
-/**
- * Why a run cannot start. The first five are the AI-key problems; `no_model`
- * is a resolved key that names no model (an own key saved without choosing
- * one).
- */
-export const categorizeAiReasonSchema = z.enum([...AI_KEY_PROBLEMS, 'no_model']);
-
-/**
- * Whether a run could start right now, and why not. `reason` is null exactly
- * when `available` is true.
- */
-export const categorizeAiStatusSchema = z.object({
-  available: z.boolean(),
-  reason: categorizeAiReasonSchema.nullable(),
-  provider: aiProviderSchema.nullable(),
-  model: z.string().nullable(),
-  source: z.enum(['own', 'shared']).nullable(),
-});
-
-export const categorizeRunStatusOutputSchema = z.object({
-  active: categorizeActiveRunSchema.nullable(),
-  last_finished: categorizeFinishedRunSchema.nullable(),
-  ai: categorizeAiStatusSchema,
-});
-
-export const categorizeRunStartResultSchema = z.object({
-  run: categorizeActiveRunSchema,
-  /** False when a queued/running run already existed and was joined. */
-  created: z.boolean(),
 });
 
 /** One accepted category; the same pair undoes it. */

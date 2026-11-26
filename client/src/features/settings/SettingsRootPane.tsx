@@ -64,11 +64,6 @@ export function SettingsRootPane() {
       />
       <MenuRow
         dense
-        label={t('root.aiKey')}
-        onPress={() => leaveForPage(() => router.push('/ai-keys'))}
-      />
-      <MenuRow
-        dense
         label={t('root.backup')}
         onPress={() => leaveForPage(() => router.push('/backup'))}
       />

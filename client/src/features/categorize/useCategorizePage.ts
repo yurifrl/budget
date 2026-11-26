@@ -1,62 +1,48 @@
 /**
- * Wiring of the Categorize page: the queue page, settings threshold, run
- * status (polled only while a run is active) and the accept flow. The views
- * receive plain data and callbacks; this hook owns effects, mutations and the
- * optimistic state. Run completion refreshes the queue once, so suggestions
- * appear without waiting for the next revision poll.
+ * Wiring of the Categorize page: the queue page, settings threshold and the
+ * accept flow. The views receive plain data and callbacks; this hook owns
+ * effects, mutations and the optimistic state.
  */
 
 import { skipToken } from '@reduxjs/toolkit/query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
-  budgetApi,
   useGetCategorizeQueueQuery,
-  useGetCategorizeRunStatusQuery,
   useGetCategorizeSettingsQuery,
   useSetCategorizeSettingsMutation,
-  useStartCategorizeRunMutation,
 } from '@/budget/data/api';
 import { apiErrorMessage } from '@/platform/api/baseQuery';
-import { useAppDispatch, useAppSelector } from '@/state/hooks';
+import { useAppSelector } from '@/state/hooks';
 import { selectActiveBudgetId } from '@/state/ui';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 
 import { hiddenIdSet, pendingSkips, visibleRows } from './accept.logic';
 import { t } from './i18n';
-import { aiReasonMessage, runHeaderView, thresholdReloading, type RunHeaderView } from './page.logic';
+import { thresholdReloading } from './page.logic';
 import { bundleView, countsWithoutLeaving, queueSubtitle, type BundleView } from './queue.logic';
 import { useCategorizeAccept } from './useCategorizeAccept';
 import { useOneByOne } from './useOneByOne';
 
 /** The page holds one page of rows; the bundles cover the whole queue. */
 const QUEUE_PAGE = 200;
-const RUN_POLL_MS = 2000;
 
 export type CategorizeViewMode = 'bundles' | 'one';
 
 export function useCategorizePage(rootRef: { current: unknown }) {
   const budgetId = useAppSelector(selectActiveBudgetId);
-  const dispatch = useAppDispatch();
   const format = useMoneyFormat();
   const scope = budgetId ? { budgetId } : skipToken;
 
   const queue = useGetCategorizeQueueQuery(budgetId ? { budgetId, limit: QUEUE_PAGE } : skipToken);
   const settings = useGetCategorizeSettingsQuery(scope);
-  const [pollMs, setPollMs] = useState(0);
-  const status = useGetCategorizeRunStatusQuery(scope, { pollingInterval: pollMs });
   const [setSettings] = useSetCategorizeSettingsMutation();
-  const [startRunMutation] = useStartCategorizeRunMutation();
 
   const [view, setView] = useState<CategorizeViewMode>('bundles');
   const [threshold, setThreshold] = useState(0.8);
   const [savingThreshold, setSavingThreshold] = useState(false);
   const [thresholdError, setThresholdError] = useState<string | null>(null);
-  /** A modal (the Run confirmation) is open: the page's key shortcuts must not act behind it. */
-  const [modalOpen, setModalOpen] = useState(false);
   const [thresholdStamp, setThresholdStamp] = useState<number | null>(null);
-  const [runStarting, setRunStarting] = useState(false);
-  const [runError, setRunError] = useState<string | null>(null);
 
   const queueRowIds = useMemo(() => queue.data?.rows.map((row) => row.transaction_id) ?? [], [queue.data]);
   const accept = useCategorizeAccept({
@@ -67,29 +53,6 @@ export function useCategorizePage(rootRef: { current: unknown }) {
     queueRowIds,
     queueSize: queue.data?.counts.left_to_categorize ?? 0,
   });
-
-  const active = status.data?.active;
-  useEffect(() => {
-    setPollMs(active ? RUN_POLL_MS : 0);
-  }, [active]);
-
-  // A run that just finished produced suggestions: refresh the queue once.
-  const finishedId = status.data?.last_finished?.id ?? null;
-  const seenFinished = useRef<string | null>(null);
-  const sawActive = useRef(false);
-  useEffect(() => {
-    if (!budgetId) return;
-    if (active) {
-      sawActive.current = true;
-      return;
-    }
-    const changed = finishedId !== null && finishedId !== seenFinished.current;
-    if (finishedId && (sawActive.current || (seenFinished.current !== null && changed))) {
-      dispatch(budgetApi.util.invalidateTags([{ type: 'Categorize', id: budgetId }]));
-    }
-    sawActive.current = false;
-    seenFinished.current = finishedId;
-  }, [active, budgetId, dispatch, finishedId]);
 
   const serverThreshold = settings.data?.confidence_threshold;
   useEffect(() => {
@@ -110,19 +73,6 @@ export function useCategorizePage(rootRef: { current: unknown }) {
       setThresholdError(apiErrorMessage(err, t('error.threshold')));
     } finally {
       setSavingThreshold(false);
-    }
-  };
-
-  const startRun = async () => {
-    if (!budgetId || runStarting || active) return;
-    setRunStarting(true);
-    setRunError(null);
-    try {
-      await startRunMutation({ budgetId }).unwrap();
-    } catch (err) {
-      setRunError(apiErrorMessage(err, t('run.startedFailed')));
-    } finally {
-      setRunStarting(false);
     }
   };
 
@@ -158,7 +108,7 @@ export function useCategorizePage(rootRef: { current: unknown }) {
     if (!reloading && thresholdStamp !== null) setThresholdStamp(null);
   }, [reloading, thresholdStamp]);
   const oneByOne = useOneByOne({
-    enabled: !reloading && !modalOpen,
+    enabled: !reloading,
     rowKeys: view === 'one',
     rootRef,
     rows: visibleQueueRows,
@@ -166,17 +116,7 @@ export function useCategorizePage(rootRef: { current: unknown }) {
     counts,
     accept,
   });
-  const runView: RunHeaderView | null = status.data
-    ? runHeaderView(
-        status.data,
-        counts ?? { left_to_categorize: 0, not_classified: 0 },
-        format,
-      )
-    : null;
-  const aiAvailable = status.data?.ai.available ?? false;
-  /** Why classification is off, whatever else the header shows (an active run wins there). */
-  const aiReason = aiReasonMessage(status.data?.ai.reason ?? null);
-  const error = thresholdError ?? runError ?? accept.state.error;
+  const error = thresholdError ?? accept.state.error;
 
   return {
     budgetId,
@@ -196,15 +136,8 @@ export function useCategorizePage(rootRef: { current: unknown }) {
     oneByOne,
     threshold,
     reloading,
-    setModalOpen,
     savingThreshold,
     commitThreshold,
-    runView,
-    aiAvailable,
-    aiReason,
-    runStarting,
-    startRun,
-    statusLoaded: status.data !== undefined,
     accept,
     /** Undo the last action and bring its rows back into the One by one lines. */
     undoLast: oneByOne.undo,
@@ -212,7 +145,6 @@ export function useCategorizePage(rootRef: { current: unknown }) {
     error,
     dismissError: () => {
       setThresholdError(null);
-      setRunError(null);
       accept.dismissError();
     },
     retryQueue: () => void queue.refetch(),

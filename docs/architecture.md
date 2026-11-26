@@ -149,51 +149,6 @@ start at `0100`). One image runs both the API and the worker
   follows the feature with no hook on the admin toggle. Own-key connections
   get no webhooks (sweep and manual sync only); the webhook route and its
   shared secret are unchanged.
-- **AI keys.** Category suggestions run on an AI provider key: the person's own
-  (`public.ai_credentials`, migration 0109, one row per user, the secret is
-  AES-256-GCM ciphertext sealed by `core/secret-box.ts` like bank keys) or the
-  installation's shared key when feature `shared-ai-key` is on for them
-  (`AI_SHARED_API_KEY` + `AI_SHARED_PROVIDER`; the model is the
-  `app_settings.aiSharedModel` admin setting, falling back to
-  `AI_SHARED_MODEL`). Own wins; with neither, 403 `own_ai_key_required` (no
-  paused state). `api/src/ai/` is the provider port (`chat` with tool calls and
-  structured output, authenticated `verifyKey`, `listModels`) plus five
-  adapters — OpenRouter, Anthropic, OpenAI, Z.ai, DeepSeek — with the provider
-  guessed from the key shape and overridable (Z.ai keys have no documented
-  shape, so that provider is chosen by hand). Saving checks the key with an
-  authenticated call (OpenRouter's `/key`; OpenAI and DeepSeek's `/models`;
-  Anthropic's Models list, returned so save/test use one call; Z.ai's cheapest
-  documented chat completion with `max_tokens: 1` on the saved or chosen
-  model, falling back to GLM-5.3-Flash only when none is chosen, because its
-  API documents neither a model list nor a tokenizer price) and never sends a
-  stored key to another provider's host. `resolveAiKey` returns a
-  `ResolvedAiKey` whose secret is a private field and whose public fields are
-  frozen: JSON, `util.inspect` and `Bun.inspect` see only
-  source/provider/model/updatedAt, and a structural object is rejected. The
-  adapters also keep the secret in a private field. `providerFor(resolvedKey)`
-  is the only adapter factory on the barrel and takes no options, so a caller
-  cannot re-point a stored key or send it to another host; the provider table
-  is the test seam and `createProvider` is not exported. This guards
-  accidental disclosure and the public factory, not deliberate code: a deep
-  import of `makeResolvedAiKey` can still build a key for any provider.
-  `POST /ai/models` with a candidate key verifies it before listing. OpenAI
-  documents 401, not a permission-specific 403, when a key lacks an endpoint's
-  scope (`/models` needs `api.model.read`), so a chat-only restricted key
-  cannot be verified and is not saved; its 403 is a country/region block.
-  Z.ai's model list is the documented suggestion list (text models plus the
-  FLASH/FLASHX/LEGAL variants); a typed id outside it is accepted, since the
-  real list cannot be fetched. A chat deadline is the 60 s floor or enough for
-  the requested token cap at 25 output tokens/s (16k, assumed when unset →
-  640 s), capped at 15 minutes. A deadline or a caller `AbortSignal` rejects
-  as kind `timeout`; the caller (the categorizer) decides whether to retry,
-  because a non-streaming generation may already be billed. Non-chat
-  deadlines stay `transient`. Bun's 5-minute socket idle timer is disabled on
-  chat calls so the deadline governs. Provider failures are logged as
-  provider/kind/status only (no upstream account text); the barrel exports
-  `redactSecrets` for callers that record error text.
-  Operations:
-  `GET|PUT|DELETE /ai/credentials`, `GET /ai/credentials/test`,
-  `POST /ai/provider-detect`, `POST /ai/models`; the key is never returned.
 - **Category suggestions.** `api/src/categorize/` owns the engine and the
   Categorize page's HTTP surface (`/categorize`, behind budgetAccess; contracts
   in `shared/src/contracts/categorize/`): `GET /queue` (the owner's own text
@@ -201,9 +156,7 @@ start at `0100`). One image runs both the API and the worker
   per-state counts that sum to the queue, and whole-queue bundles carrying a
   `bundle_key`, count, total, date range and suggestion but no transaction ids;
   the key is built from payee/category ids (an unlinked payee is hashed, never
-  embedded), and `bundle=<key>` pages one bundle's rows), `POST /run` + `GET
-  /run` (any member starts the owner-key run; status gives done/total from
-  `categorize_run_progress` (0114), the last run, and why AI is unavailable),
+  embedded), and `bundle=<key>` pages one bundle's rows),
   `POST /accept` (explicit pairs or one server-resolved `bundle_key` with the
   page's `expected_count`; a changed count is refused with
   `categorize_bundle_changed`, capped at 1000 rows, atomic through the
@@ -213,64 +166,15 @@ start at `0100`). One image runs both the API and the worker
   everything else is skipped with a reason), `POST /skip` (a skip decision for
   any queued state, freezing the row for the engine), and `GET|PUT /settings`
   (confidence threshold, read at queue time; 0113). Decisions do not expire.
-  A `categorize_run` job (one per budget: subject key = budget id, so triggers
-  coalesce; `force` re-asks rows that already have suggestions) has a prepare
-  activity resolve the run's key through one `runActorForBudget` function
-  (today the budget owner: own key, else the shared key when the flag is on;
-  none → the run succeeds with a fixed sentence, no retries) and take a
-  keyset snapshot of candidates, then chunk activities on the `<queue>-ai`
-  task queue (1 activity start/s across pods, one at a time per worker) walk
-  the window below the last processed `(date, id)`. Candidates are the app's
-  "needs a category" rows (outflows, on-budget open accounts, no splits, no
-  transfer link/mark/rule, no adjustment payee; `candidates.test.ts` checks
-  the SQL against the client's `registerCategoryCell`). A chunk asks the
-  existing `suggestedCategoryForPayee` rule first (source `payee_rule`, no
-  model call, visible categories only) and sends only the rest to a bounded
-  tool loop (`get_transaction`, `list_categories`, `payee_history`,
-  `search_similar_transactions`; every query scopes `budget_id` in SQL, tool
-  ids must be uuids and no tool error escapes into the loop). Answers are
-  zod-validated, filtered to visible category ids, sanitized (reason ≤200
-  chars, no control/bidi), confidence capped below the rule's 1, deduped and
-  capped at three; pending rows are upserted by `(transaction_id, rank)` into
-  `public.category_suggestions` (0110, plus the 0111 category index), only
-  while the transaction is still uncategorized, and every attempt is recorded
-  in `public.categorize_attempts` (0112: outcome suggested/no_suggestion/
-  failed, failure kind, counter, model, payee+memo fingerprint) so a normal
-  run skips rows already classified empty (until payee/memo change) or failed
-  (backoff, 3 attempts) and the 100-row cap walks the backlog across runs. A
-  transaction with any decided suggestion is never re-asked or overwritten,
-  even by a forced run; an all-unknown-id answer writes nothing. The job never
-  writes `transactions.category_id`. Cost caps: 4000 output tokens per turn
-  (thinking included; adapters ask for `low` reasoning effort where
-  documented), 6 calls and 80k tokens per transaction, 5 transactions per
-  chunk, 100 per run (remainder next run), and the chunk activity deadline is
-  derived from those (81 min); calls are serialized per key and a retried
-  chunk resumes from its heartbeat cursor and token totals. Retry policy by
-  provider kind lives in the chunk: `timeout` once per transaction,
-  `bad_response`, `truncated` (stop_reason max_tokens / finish_reason length)
-  and request-scoped 4xx (400/413/422) count that transaction failed, one
-  failure never fails the run, and 3 consecutive request failures stop the run
-  with a user-safe systematic failure; `auth`/account-level `permanent` stop
-  the run non-retryably, one 429 retries the transaction after a short wait
-  and a second is retried by Temporal with the provider's retry-after,
-  `transient` retries the activity. Untrusted text is capped (200 chars per
-  string, 40k per tool result) and free bank text has CPF/CNPJ/account-shaped
-  digit runs masked; card-payment/internal categories are never offered.
-  The final structured-output turn keeps the tools declared (Anthropic's
-  tool-use rule) and disables tool choice where documented. Activity results
-  and logs carry counts, ids, cursor and Postgres codes only; no provider
-  text or key is kept. `AiChatResult.usage` (provider-reported input/output
-  tokens) was added to the AI port so the ledger reports token usage per run.
   `SuggestionRow.bank` (`BankFacts`, optional fields, null for hand-entered
   rows) carries the merchant panel facts from `raw_payload` — merchant trade
   and legal name, CNPJ, business category/CNAE, operation type and the PIX
-  counterparty — to `readCategorySuggestions` and `get_transaction`; there is
+  counterparty — to `readCategorySuggestions`; there is
   no map panel and no location data. The candidate rule is the shared
   `needsCategory` (`shared/src/domain/category-needs.ts`), used by the
   register cell too; transfer-pending comes from `transferOverview` and the
   equivalence test compares the SQL with the shared predicate. Imports for
-  the next task: `startCategorizeRun`, `categorizeRunStatus`,
-  `readCategorySuggestions`, `readCategorizeAttempts` (threshold at read
+  the next task: `readCategorySuggestions`, `readCategorizeAttempts` (threshold at read
   time; caller checks budget access; attempts distinguish "not classified"
   from "classified, none").
 - **Repeat-rule tick.** Still an in-process interval in the API

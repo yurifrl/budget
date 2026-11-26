@@ -26,7 +26,6 @@ describe('contracts catalog', () => {
 
   test('lists exactly the contracts of every feature operation, names unique', async () => {
     const features = await Promise.all([
-      import('./ai'),
       import('./budget'),
       import('./categorize/routes'),
       import('./connections'),

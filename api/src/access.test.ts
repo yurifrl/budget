@@ -689,12 +689,6 @@ const byBudgetId = budgetScopedContracts.filter((c) => c.expose.api && hasBudget
  * passes.
  */
 const notBudgetAddressed: Record<string, string> = {
-  ai_credentials_delete: "deletes the caller's own AI key: keyed by the session user, no id to pass",
-  ai_credentials_get: "status of the caller's own AI key; never the secret",
-  ai_credentials_save: "saves the caller's own AI key: keyed by the session user, no id to pass",
-  ai_credentials_test: "checks the caller's own AI key (or the shared one), no budget data",
-  ai_models_list: "lists models for the caller's own/shared AI key; no budget data",
-  ai_provider_detect: 'shape-only provider guess; reads no stored data',
   budget_list: "lists only budgets the caller owns or is a member of (asserted below)",
   budget_create: 'creates a new budget owned by the caller',
   connections_connect_token: "mints a widget token bound to the caller's own user id",
@@ -772,8 +766,6 @@ const onVictimBudget: Record<string, Record<string, unknown>> = {
   budget_payees_list: {},
   categorize_accept: { items: [{ transaction_id: V.txn, category_id: V.category }] },
   categorize_queue_list: { limit: 10 },
-  categorize_run_start: {},
-  categorize_run_status: {},
   categorize_settings_get: {},
   categorize_settings_set: { confidence_threshold: 0.8 },
   categorize_skip: { transaction_id: V.txn },
@@ -990,9 +982,9 @@ describe.skipIf(!dbReady)('D: two people, every budget operation', () => {
       acting = attacker;
       const mine = await send('features_mine', {});
       expect(mine.status).toBe(200);
-      expect(await mine.json()).toEqual({ features: { [key]: false, 'shared-ai-key': false } });
+      expect(await mine.json()).toEqual({ features: { [key]: false } });
       acting = victim;
-      expect(await (await send('features_mine', {})).json()).toEqual({ features: { [key]: true, 'shared-ai-key': false } });
+      expect(await (await send('features_mine', {})).json()).toEqual({ features: { [key]: true } });
     } finally {
       await pool.query('DELETE FROM public.feature_overrides WHERE feature_key = $1', [key]);
       configureAuth(before);

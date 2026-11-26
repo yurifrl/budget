@@ -171,7 +171,7 @@ async function acceptItems(
     if (!staleAccept && decision) {
       // Idempotent only for a pair accept itself applied; another value (or a
       // skip) means a person (or another tab) changed it after this queue was
-      // read. A repeat never rewrites the model's suggestion.
+      // read. A repeat never rewrites the suggestion.
       if (decision.kind === 'accept' && decision.category_id === item.category_id) continue;
       throw new HttpError(409, 'transaction already has a decision', 'categorize_already_categorized');
     }

@@ -4,53 +4,13 @@ export default {
   'view.bundles': 'Bundles',
   'view.oneByOne': 'One by one',
 
-  // Header: threshold + run
+  // Header: threshold
   'header.threshold': 'CONFIDENCE THRESHOLD',
   'header.thresholdLabel': 'Confidence threshold',
   'header.thresholdValue': '{percent}%',
   'header.thresholdHint':
     'Suggestions below {percent}% are hidden for everyone in this budget. Those rows land in “No suggestion”.',
   'header.left': 'left to categorize',
-  'header.run': 'Run classification',
-  'header.running': 'Running…',
-  'header.progressLabel': 'Classification progress',
-  'run.classifying': 'Classifying {done} of {total}…',
-  'run.starting': 'Starting the classification…',
-  'run.activeHint': 'Runs in the background. Suggestions appear here as they are ready; you can start accepting now.',
-  'run.unavailable': 'Classification unavailable',
-  'run.allClassified': 'All {count} classified',
-  'run.nothingLeft': 'Nothing left to categorize',
-  'run.lastShort': 'Last run {date} · {suggested} suggestions',
-  'run.lastDate': 'Last run {date}',
-  'run.lastSuggestions': { one: '{count} suggestion.', other: '{count} suggestions.' },
-  'run.nextRun': 'New imports are classified on the next run.',
-  'run.never': 'No classification run yet.',
-  'run.neverHint': 'Run it to get category suggestions for the queue.',
-  'run.reason.ownKey': 'No AI key is set up for this budget.',
-  'run.reason.sharedKey': 'The shared AI key is turned on, but this server has none configured.',
-  'run.reason.sharedModel': 'The shared AI key is turned on, but this server has no model chosen for it.',
-  'run.reason.encryption': 'This server cannot store AI keys right now.',
-  'run.reason.unreadable': 'The budget owner’s AI key cannot be read on this server.',
-  'run.reason.noModel': 'The budget owner’s AI key has no model chosen.',
-  'run.reason.unknown': 'Category suggestions are unavailable right now.',
-  'run.confirmTitle': 'Run classification?',
-  'run.confirmBody':
-    'This reads the uncategorized transactions with the budget owner’s AI key and uses AI credit on that account. It only suggests: nothing is filed until you accept it.',
-  'run.confirmGo': 'Run classification',
-  'run.startedFailed': 'Could not start the classification.',
-
-  // Empty state: AI unavailable
-  'empty.title': 'Add an AI key to get suggestions',
-  'empty.body':
-    'Categorize asks an AI model to read each uncategorized transaction and propose up to three categories. Right now nothing new can be classified, so there are no suggestions to show.',
-  'banner.noKeyTitle': 'Classification is unavailable',
-  'banner.noKeyBody': 'Suggestions already made stay below; new transactions get none until a key is added.',
-  'empty.addKey': 'Add an AI key',
-  'empty.byHand': 'Categorize by hand',
-  'empty.footnote': {
-    one: 'The key is stored on the server and used only for classification runs. {count} transaction is waiting.',
-    other: 'The key is stored on the server and used only for classification runs. {count} transactions are waiting.',
-  },
 
   // Header subtitle: the queue size and how many rows already have a suggestion
   'queue.subtitle': {

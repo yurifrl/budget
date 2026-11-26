@@ -30,24 +30,23 @@ const features = fs
  *   shared plumbing `jobs/workflows/tracked.ts`.
  */
 function allowedFrom(feature, other) {
-  if (feature === 'jobs' && (other === 'connections' || other === 'categorize')) return ['index.ts', 'workflows.ts'];
-  if (other === 'jobs' && (feature === 'connections' || feature === 'categorize')) return ['index.ts', 'workflows/tracked.ts'];
+  if (feature === 'jobs' && other === 'connections') return ['index.ts', 'workflows.ts'];
+  if (other === 'jobs' && feature === 'connections') return ['index.ts', 'workflows/tracked.ts'];
   return ['index.ts'];
 }
 
 /**
  * Cross-feature zones: `feature` may import `other` through its barrel plus the
- * documented seams. Tests and testing helpers add ONE exception on top: the
- * ai/providers registry seam (deliberate deep import for setProviders).
+ * documented seams.
  */
-function crossFeatureZones({ providersSeam }) {
+function crossFeatureZones() {
   return features.flatMap((feature) =>
     features
       .filter((other) => other !== feature)
       .map((other) => ({
         target: `./src/${feature}`,
         from: `./src/${other}`,
-        except: [...allowedFrom(feature, other), ...(providersSeam && other === 'ai' ? ['providers', 'providers/**'] : [])],
+        except: allowedFrom(feature, other),
         message: 'Features may only import another feature via its public barrel (src/<name>/index.ts), never its internals.',
       })),
   );
@@ -120,16 +119,7 @@ export default defineConfig([
   {
     files: features.map((f) => `src/${f}/**/*.ts`),
     rules: {
-      'import/no-restricted-paths': ['error', { zones: crossFeatureZones({ providersSeam: false }) }],
+      'import/no-restricted-paths': ['error', { zones: crossFeatureZones() }],
     },
-  },
-  // Tests and the helpers themselves may deep-import ONE dependency internal:
-  // the AI registry seam (src/ai/providers, deliberately off the barrel for
-  // setProviders). Every other cross-feature internal import stays banned —
-  // the rule is re-enabled with the same zones plus that one exception.
-  // This block comes last: import/no-restricted-paths is re-enabled above it.
-  {
-    files: ['src/**/*.test.ts', 'src/*/testing/**/*.ts'],
-    rules: { 'import/no-restricted-paths': ['error', { zones: crossFeatureZones({ providersSeam: true }) }] },
   },
 ]);

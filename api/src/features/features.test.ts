@@ -24,7 +24,7 @@ const ADMIN_ORIGIN = 'https://admin.test';
 const SVC_TOKEN = 'svc-token-for-features-tests-0123456789';
 const D = '@featurestest.test';
 const KEY: FeatureKey = 'shared-pluggy-key'; // default off
-const DEFAULTS = { 'shared-pluggy-key': false, 'shared-ai-key': false } as const;
+const DEFAULTS = { 'shared-pluggy-key': false } as const;
 const RETIRED = 'features-test-retired-key';
 
 const dbTest = test.skipIf(!dbReady);

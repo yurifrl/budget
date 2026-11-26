@@ -4,22 +4,22 @@
   "id": "budget-p8td",
   "title": "Transfers T4-T6 screens: Manage Payees 'Transfer Payees' group with renaming rules (several per payee), remove 'Treat as transfer' and 'Transfer rules' tab, category menu without Payment/Transfer, popover 'always' writes a renaming rule",
   "description": "Plan .agents/plans/2026-11-24_transfers-refactor.md tasks T4, T5, T6 and the owner decisions in it. Owner's reference: YNAB's Manage Payees with a 'Transfer Payees' group, one per account, each with Renaming rules ('Imported payees that match these rules will be renamed'), and the note that transfer payees are created by the app and cannot be edited or deleted. Server is ready on main: GET /payees?include_transfers=true (transfer_account_id, transfer_account_name), payee_id on transaction create/update, rename-rule operations list/add/update/remove, 409 transfer_payee_protected, account_name_exists.",
-  "status": "ready-to-review",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-25T13:43:10.893Z",
-  "updated_at": "2026-11-25T17:10:41.980Z",
+  "updated_at": "2026-11-26T12:01:47.111Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-26T12:01:36.743Z",
   "due_at": null,
   "defer_until": null,
   "parent": "budget-e67y",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "landed outside tk close at 4a25a9f (branch tk/budget-p8td merged into main by hand)\nMerged to local main as 4a25a9f; owner asked to finish and review the screens, then release once (Inbox thread 'Transfers refactor', 2026-11-25). Manage Payees with Transfer Payees and several renaming rules, Apply to past with preview and undo, explicit Convert step for old transfer rules, register and pickers by payee (Category not needed, no Payment/Transfer button, payee_id on writes), popover writes a renaming rule, no outside-the-budget transfer. Three independent reviews attached; engine numbers identical to main on the reviewers' probes. Orchestrator reran on 4bab45f: client 1564 pass, shared 224, tsc and eslint clean; and the full suite on main after the merge.",
   "design": null,
   "acceptance_criteria": "Screenshots at 1400 and 375 of each changed screen from the running app; client tsc, eslint, tests green; a transfer can be made by picking a transfer payee, remembered by a renaming rule, and undone, on web and at phone width.",
   "estimated_minutes": null,
@@ -30,20 +30,2135 @@
     "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-p8td",
     "changeset": {
       "base": "e5979700a4e30c058af7c3100208ce81f0a7b8db",
-      "baseBranch": "main"
+      "head": "4bab45f7625ef21fe4f85e768c25e8aa43f17f3a",
+      "commits": [
+        {
+          "sha": "4bab45f",
+          "subject": "test(client): content-keyed notice entries when a rule is changed in the card (budget-p8td)"
+        },
+        {
+          "sha": "e80eaef",
+          "subject": "fix(client): Convert abort restores exactly (removes created rules), off-failure keeps saved rules with Retry, honest where-it-is messages, duplicate rows refused, stable edit keys, pt-BR wording (budget-p8td)"
+        },
+        {
+          "sha": "acbda96",
+          "subject": "docs: drop stray conflict marker from the merge"
+        },
+        {
+          "sha": "2d1c8d9",
+          "subject": "Merge main into tk/budget-p8td"
+        },
+        {
+          "sha": "5d8e116",
+          "subject": "wip"
+        },
+        {
+          "sha": "ce519f9",
+          "subject": "fix(client): Convert cannot lose a rule (409 only done when the target holds it, put-back, retry); notice follows the payee's rules; popover rule 409; clearer notice wording; pt-BR undo agreement (budget-p8td)"
+        },
+        {
+          "sha": "84cc652",
+          "subject": "chore(tooling): configure mcp servers and record handoff notes"
+        },
+        {
+          "sha": "fc97f50",
+          "subject": "docs(plans): add csv import and transfers refactor plans"
+        },
+        {
+          "sha": "3276291",
+          "subject": "fix(client): pointer-less rows resolve exactly as main; explicit convert step; undo for removed rules; review follow-ups (budget-p8td)"
+        },
+        {
+          "sha": "9471aa6",
+          "subject": "feat(transfers): Always treat X as a transfer writes a renaming rule; no outside-the-budget transfers; legacy name fallback (budget-p8td, checkpoint 3)"
+        },
+        {
+          "sha": "b8f4a15",
+          "subject": "Merge branch 'main' into tk/budget-p8td"
+        },
+        {
+          "sha": "b8377b7",
+          "subject": "feat(client): a transfer is its payee only; category not needed on on-budget transfers; one transfer account list; payee_id on writes (budget-p8td, checkpoint 2)"
+        },
+        {
+          "sha": "fba921e",
+          "subject": "Merge tk/budget-8vnk: Leave uncategorized waits for Done (strip, leave prompt, no timer)"
+        },
+        {
+          "sha": "3ea903c",
+          "subject": "fix(payees): lift the Undo toast above the phone's floating button (budget-p8td)"
+        },
+        {
+          "sha": "4d186d5",
+          "subject": "feat(payees): Manage Payees with a Transfer Payees group and several renaming rules per payee (budget-p8td, checkpoint 1)"
+        },
+        {
+          "sha": "83d6d95",
+          "subject": "Merge branch 'main' into tk/budget-8vnk"
+        },
+        {
+          "sha": "e4e9223",
+          "subject": "fix(categorize): rows Done has committed are never offered to the leave prompt or restored locked; Z never passes over them; 400/403/404 leave with a note; prompt note for dropped rows; pt-BR plurals"
+        },
+        {
+          "sha": "c34f3e7",
+          "subject": "fix(categorize): Done locks the rows it sends (no Undo, re-checked before each request); leave prompt locked while sending and names the budget; retry/refused handling; strip rows kept unless the queue is fully loaded; badge excludes the strip"
+        },
+        {
+          "sha": "51e09cc",
+          "subject": "fix(categorize): leave prompt works with a page that stays mounted behind the new route (commands to a live page, restore for a gone one)"
+        },
+        {
+          "sha": "9091e2b",
+          "subject": "feat(categorize): browser leave-site question while rows wait in the strip"
+        },
+        {
+          "sha": "16ad3f7",
+          "subject": "fix(categorize): the leave store is one per app (route modules are evaluated again on re-entry)"
+        },
+        {
+          "sha": "c438dab",
+          "subject": "fix(categorize): the shell watches route and budget and asks about rows left in the strip (the navigator does not run the page's cleanup)"
+        },
+        {
+          "sha": "6680ac6",
+          "subject": "feat(categorize): skips are never sent on a timer: Leaving strip with Done, leave prompt, counts without the strip, no empty undo entry"
+        }
+      ],
+      "files": [
+        {
+          "path": ".agents/plans/2026-11-24_contabilizei-csv-import.md",
+          "status": "A"
+        },
+        {
+          "path": ".agents/plans/2026-11-24_transfers-refactor.md",
+          "status": "A"
+        },
+        {
+          "path": ".agents/plans/2026-11-25_categorization.md",
+          "status": "A"
+        },
+        {
+          "path": ".dockerignore",
+          "status": "M"
+        },
+        {
+          "path": ".github/workflows/ci.yml",
+          "status": "M"
+        },
+        {
+          "path": ".github/workflows/deploy.yml",
+          "status": "A"
+        },
+        {
+          "path": ".github/workflows/release.yml",
+          "status": "M"
+        },
+        {
+          "path": ".github/workflows/version.yml",
+          "status": "M"
+        },
+        {
+          "path": ".mcp.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-00603f-review-zkts-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-00603f.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-009ed7-p8td-1400-transfer-apply-confirm.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-009ed7.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-039a1e-p8td-1400-apply-confirm.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-039a1e.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-05e32b-p8td3-375-review-list.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-05e32b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-07f9e7-review-ou8p-3.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-07f9e7.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-0c6d84-375-remove-confirm.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-0c6d84.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-0ed4ac-review-dcxr-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-0ed4ac.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-0f547b-p8td-engine-legacy-before-after.txt.txt",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-0f547b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-107179-375-shared.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-107179.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-122b4b-review-mkrt-5.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-122b4b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-122c7f-p8td-engine-before-after.txt.txt",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-122c7f.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-14a018-review-mjug.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-14a018.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-1c7600-p8td3-1400-popover-rule.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-1c7600.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-1d88a0-review-mjug-3.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-1d88a0.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-1de3d6-1400-empty.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-1de3d6.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-1f0fdf-375-pluggy-typed-before-leave.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-1f0fdf.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-1fdb90-review-edxg.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-1fdb90.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2144f0-2-after-import.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2144f0.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-27b097-review-mjug-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-27b097.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-27fe6d-375-key-empty-after-return.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-27fe6d.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-28a8db-vah5c-1400-handticked-note.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-28a8db.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2bccbb-review-ou8p.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2bccbb.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2f6b80-375-pluggy-empty-after-return.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2f6b80.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-3110e4-review-nq2f-3.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-3110e4.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-32ca47-p8td-probe-after-fix.txt.txt",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-32ca47.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-330b2c-4-reimport-after-confirm.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-330b2c.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-354d98-p8td3-375-payees-rule.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-354d98.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-35ef2b-p8td3-375-popover-rule.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-35ef2b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-3649d8-review-vah5-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-3649d8.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-390463-1400-unreadable.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-390463.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-39f058-p8td-1400-legacy-account.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-39f058.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-3a92a9-2026-11-24_transfers-refactor.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-3a92a9.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-3f447f-375-removed.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-3f447f.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-416901-other-session-transfer-ui.patch.patch",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-416901.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-445b55-375-unreadable.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-445b55.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-45562c-review-nq2f-4.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-45562c.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-48eb34-SelectionCheckbox.tsx.tsx",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-48eb34.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-491de1-p8td3-1400-payees-rule.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-491de1.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-492f4c-e2e-categorize-proof.log.log",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-492f4c.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-4b0ece-1-review-list.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-4b0ece.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-4c1b75-p8td-375-toast-undo.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-4c1b75.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-4f3c26-review-fvtx-3.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-4f3c26.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-50ac52-1400-save-disabled-loading.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-50ac52.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-50d75c-p8td2-1400-register-transfer.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-50d75c.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-55ba0a-review-dcxr.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-55ba0a.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-55e49e-mjug2-1400-bundles-no-key-banner.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-55e49e.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-57d264-vah5b-375-review-bulk.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-57d264.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5b8faf-vah5c-1400-popover-refused.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5b8faf.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5ba860-review-vah5.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5ba860.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5e3b08-p8td2-375-register-transfer.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5e3b08.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5f61da-p8td2-1400-category-dropdown.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5f61da.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5f7614-1400-error.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5f7614.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5fdeda-review-upgg-3.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-5fdeda.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6165fd-mjug2-1400-run-confirmation.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6165fd.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-61f20c-mjug-1400-bundles-accepted-undo-toast.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-61f20c.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-642042-review-mkrt.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-642042.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-647f08-mjug-1400-bundles-expanded.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-647f08.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6611cc-p8td-1400-ordinary-payee.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6611cc.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-67bd92-p8td3-375-other-account.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-67bd92.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6bf922-review-mjug-4.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6bf922.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6d8f8f-review-p8td-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6d8f8f.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6fb857-mjug-1400-one-by-one-after-key-1.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6fb857.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-707d6a-review-fvtx.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-707d6a.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-72a521-375-zai-typed-saved.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-72a521.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-773a49-p8td-375-undone.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-773a49.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7a60bf-1400-choose-provider.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7a60bf.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7afa71-p8td2-1400-transfer-picked.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7afa71.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7de515-review-upgg-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7de515.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7e7566-vah5c-1400-selectall.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7e7566.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7f4bda-p8td4-1400-convert-notice.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7f4bda.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7f7570-p8td-375-legacy-auto.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7f7570.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-809fac-375-blocked.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-809fac.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-813737-p8td2-375-transfer-picked.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-813737.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-81646b-p8td-375-ordinary-payee.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-81646b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-837dd0-review-ucyr.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-837dd0.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-8381b6-vah5-1400-popover.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-8381b6.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-83d659-p8td4-1400-convert-targets.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-83d659.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-83dbc6-review-p8td.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-83dbc6.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-85060d-mjug4-1400-bundles-pending-skips-strip.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-85060d.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-865cd4-pluggy-before-375.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-865cd4.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-88e25b-p8td4-375-rule-removed-undo.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-88e25b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-89084b-review-upgg.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-89084b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-89fbd1-e2e-categorize-decisions.log.log",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-89fbd1.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-8b8207-pluggy-before-1400.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-8b8207.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-8bc6e1-1400-blocked.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-8bc6e1.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-8c7538-p8td2-375-category-picker.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-8c7538.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-90ddc5-p8td-1400-transfer-payee.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-90ddc5.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-93be58-mjug2-1400-one-by-one-pending-skip.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-93be58.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-94693d-review-edxg-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-94693d.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-95c5ca-375-list-unavailable.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-95c5ca.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-987f6b-375-save-disabled-loading.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-987f6b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9b3d13-review-mkrt-3.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9b3d13.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9b4558-p8td4-375-convert-notice.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9b4558.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9b4b95-1400-removed.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9b4b95.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9f5709-mjug3-1400-two-pending-skips.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9f5709.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9f964d-mjug-1400-one-by-one-merchant-chips.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-9f964d.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a32356-review-ou8p-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a32356.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a38e14-vah5b-1400-popover-refused.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a38e14.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a3cc38-review-ucyr-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a3cc38.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a6bea8-vah5-375-popover.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a6bea8.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a716f0-review-zkts.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a716f0.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a7dea9-1400-zai-typed.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-a7dea9.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-aa8c05-p8td-375-groups.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-aa8c05.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ab2ebf-mjug-1400-empty-no-ai-key.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ab2ebf.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-aed5e8-1400-remove-confirm.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-aed5e8.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-aed863-p8td3-375-after-link.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-aed863.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b0a610-review-8vnk-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b0a610.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b1d96b-1400-key-and-models.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b1d96b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b48f5b-pluggy-after-1400.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b48f5b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b5414a-375-key-and-models.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b5414a.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b78e4c-review-nq2f-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b78e4c.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ba1e7d-mjug2-1400-one-by-one-filed-row.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ba1e7d.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-bb096e-375-saved-test.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-bb096e.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-be0171-1400-zai-typed-saved.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-be0171.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-bebdce-375-zai-typed.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-bebdce.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c03029-1400-settings-entry.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c03029.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c10ea2-1400-list-unavailable.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c10ea2.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c12956-vah5b-1400-review-bulk.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c12956.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c1e2d8-3-reimport-result.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c1e2d8.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c55766-p8td3-1400-review-list.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c55766.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c87ada-mjug5-1400-leaving-strip-done.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c87ada.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-cbf3c5-transfers-map-client.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-cbf3c5.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ccc66a-375-error.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ccc66a.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d08231-review-mkrt-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d08231.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d4daa6-review-fvtx-2.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d4daa6.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d742cb-p8td3-1400-other-account.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d742cb.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d7a964-review-8vnk.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d7a964.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d85918-p8td-375-apply-confirm.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-d85918.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-db737c-e2e-categorize-review2.log.log",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-db737c.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e2163b-1400-saved-test.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e2163b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e4234e-375-key-typed-before-leave.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e4234e.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e48790-review-nq2f.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e48790.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e8c897-p8td3-1400-after-link.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e8c897.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e91223-p8td2-1400-payee-picker.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-e91223.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-eab84c-p8td-375-legacy-account.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-eab84c.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-eb4c9c-p8td-1400-legacy-auto.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-eb4c9c.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ed487d-mjug-1400-bundle-changed-message.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ed487d.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ef6c3d-p8td2-375-payee-picker.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ef6c3d.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f033d1-registerTable.tsx.tsx",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f033d1.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f18edb-375-empty.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f18edb.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f3ec9b-p8td2-1400-category-no-card-payment.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f3ec9b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f5027a-1400-shared.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f5027a.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f54c59-mjug5-1400-leave-prompt.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f54c59.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f6b8a6-375-choose-provider.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f6b8a6.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f73b52-p8td-1400-toast-undo.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f73b52.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f7db43-review-mkrt-4.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f7db43.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-fb54b8-pluggy-after-375.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-fb54b8.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-fdaaa2-vah5-375-filter.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-fdaaa2.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-fdbba3-p8td-375-transfer-payee.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-fdbba3.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-fdf115-review-q8kf-fixes.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-fdf115.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/cursors.json",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/events.jsonl",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/history/budget-3fli.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-5g9o.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-8vnk.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-cdvr.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-csqv.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-dcxr.jsonl",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/history/budget-dt00.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-e67y.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-edxg.jsonl",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/history/budget-eqp2.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-fvtx.jsonl",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/history/budget-ihlr.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-jss7.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-kzof.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-mjug.jsonl",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/history/budget-mkrt.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-n94s.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-nq2f.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-otkr.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-ou8p.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-p8td.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-pcva.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-q8kf.jsonl",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/history/budget-smts.jsonl",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/history/budget-ucyr.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-ujno.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-upgg.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-vah5.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-vnar.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-xlng.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-zkts.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-3fli.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-5g9o.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-8vnk.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-cdvr.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-csqv.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-dcxr.json",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/issues/budget-dt00.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-e67y.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-edxg.json",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/issues/budget-eqp2.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-fvtx.json",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/issues/budget-ihlr.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-jss7.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-kzof.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-mjug.json",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/issues/budget-mkrt.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-n94s.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-nq2f.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-otkr.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-ou8p.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-p8td.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-pcva.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-q8kf.json",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/issues/budget-smts.json",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/issues/budget-ucyr.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-ujno.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-upgg.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-vah5.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-vnar.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-xlng.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-zkts.json",
+          "status": "A"
+        },
+        {
+          "path": "AGENTS.md",
+          "status": "M"
+        },
+        {
+          "path": "README.md",
+          "status": "M"
+        },
+        {
+          "path": "Taskfile.yml",
+          "status": "M"
+        },
+        {
+          "path": "client/app.config.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/mapping.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/mapping.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/inlineAdd.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/inlineAdd.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/pickable.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/pickable.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/register.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/transfers.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/transfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/domain/txnSheet.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/txnSheet.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/RegisterRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/SelectionBar.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/SheetFields.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/SheetPicker.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/styles.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/addTransaction/useAddTransaction.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/InlineAddRow.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/InlineSplitPanel.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/PayeeDropdown.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/payeeDropdown.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/payeeDropdown.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/payeeDropdown.systemNames.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/register/useInlineAdd.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/accounts/useRegisterSelection.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/LinkedAccountDetailScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/BundleCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/BundlesView.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/CategorizeScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/LeavePrompt.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/OneByOneView.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/PendingSkipsStrip.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/QueuePane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/accept.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/accept.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/leave.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/leave.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/leave.store.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/leave.store.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/oneByOne.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/oneByOne.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/page.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/page.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/queue.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/queue.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useBundleRows.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizeAccept.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizePage.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useNow.ts",
+          "status": "D"
+        },
+        {
+          "path": "client/src/features/categorize/useUnloadGuard.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/ApplyPastConfirm.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/DefaultCategoryPicker.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/ManagePayeesScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/PayeeDetailPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/PayeeListPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/RenamingCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/TransferPayeeDetail.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/TransferRuleChoice.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/convertRun.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/convertRun.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/i18n/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/payees.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/payees.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/payees.systemNames.test.ts",
+          "status": "D"
+        },
+        {
+          "path": "client/src/features/payees/renameRules.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/renameRules.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/styles.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/useApplyUndo.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/usePayeeAdmin.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/payees/useRenameRules.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/payees/useTransferRuleChoice.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/reflect/ReflectScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/spending/SpendingScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/spending/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/spending/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/RememberRule.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/TransferBits.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/TransferPopover.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/TransferRuleSection.tsx",
+          "status": "D"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/transferRule.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/transferRule.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/transfers/transfers.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/transfers.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/useTransfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/platform/api/baseQuery.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/BudgetLayout.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/state/useBudgetModel.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/combobox.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/dropdown/CategoryDropdown.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/buttons.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/text/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/text/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "docker/Dockerfile.admin",
+          "status": "R097"
+        },
+        {
+          "path": "docker/Dockerfile.api",
+          "status": "R095"
+        },
+        {
+          "path": "docker/Dockerfile.web",
+          "status": "R091"
+        },
+        {
+          "path": "docker/httpd.conf",
+          "status": "R100"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/migration-plan.md",
+          "status": "M"
+        },
+        {
+          "path": "k8s/values.yaml",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/domain/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/domain/transfers.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 17154,
+        "deletions": 1380
+      }
     },
     "agent_session": "011e3c6b-8148-4a11-8593-8d1e761197c6",
-    "finished_at": "2026-11-25T17:03:07.361Z",
+    "finished_at": "2026-11-26T11:47:46.775Z",
     "agent_harness": "omp",
     "report": {
       "changes": {
-        "commits": 15,
-        "files": 114,
-        "additions": 4499,
-        "deletions": 1275
+        "commits": 23,
+        "files": 501,
+        "additions": 17154,
+        "deletions": 1380
       },
-      "head": "3276291c48b429603ceebcfdaac8cf91cd62197b",
-      "at": "2026-11-25T17:03:07.361Z"
+      "head": "4bab45f7625ef21fe4f85e768c25e8aa43f17f3a",
+      "at": "2026-11-26T11:47:46.775Z"
+    },
+    "landedOutside": {
+      "commit": "4a25a9f5f5d51fe72af514798084ad7a2fb22bf8",
+      "branchHead": "4bab45f7625ef21fe4f85e768c25e8aa43f17f3a",
+      "baseBranch": "main",
+      "at": "2026-11-26T12:01:36.712Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
     }
   },
   "attachments": [
@@ -432,6 +2547,42 @@
       "mime": "text/markdown",
       "size": 12534,
       "sha256": "6c576befe99986d4513bc40f7f1f15d879f08f2a55fa6d8d90ef40026f147592",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d995fe",
+      "name": "s1-1400-notice.png",
+      "mime": "image/png",
+      "size": 157622,
+      "sha256": "5854191e69b29f96779b503bdafb9589095c1616f5d0e4a2dbd45454a1a84752",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-40fcc6",
+      "name": "s2-1400-after-card-remove.png",
+      "mime": "image/png",
+      "size": 165863,
+      "sha256": "0e5d053a6b18eb7a39e4ac93f5a915ae0e07f4c75994721eaf7ace3266b13a7c",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-0c5a7f",
+      "name": "s3-1400-collision.png",
+      "mime": "image/png",
+      "size": 169733,
+      "sha256": "91904377a106f7d6486c252495f8f31f53ae3e50a046135731710c5d8759c044",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-78c26f",
+      "name": "s5-375-notice-b.png",
+      "mime": "image/png",
+      "size": 59733,
+      "sha256": "76ac001fa8cad772c0c2cb3ff829f93da5c78b31225149919999bcf9b486ba38",
       "metadata": {}
     }
   ],

@@ -1,10 +1,9 @@
 /**
  * "Categorize" (`/categorize`, mock ev-2d6f08 / ev-9784fa): the header with
- * the confidence threshold and the classification run, the Bundles view, and
+ * the confidence threshold, the Bundles view, and
  * the manual queue behind "One by one" / "Categorize by hand".
  */
 
-import { useRouter } from 'expo-router';
 import { useRef } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
@@ -19,7 +18,6 @@ import { colors, radius } from '@/ui/theme';
 import { pendingSkips, toastActionable } from './accept.logic';
 import { BundlesView } from './BundlesView';
 import { ErrorBanner } from './CategorizeBits';
-import { EmptyState, NoKeyBanner } from './EmptyState';
 import { HeaderCard } from './HeaderCard';
 import { t } from './i18n';
 import { OneByOneView } from './OneByOneView';
@@ -41,17 +39,11 @@ export function CategorizeScreen() {
 
 function CategorizePage() {
   const shell = useBudgetShell();
-  const router = useRouter();
   const rootRef = useRef<ViewInstance>(null);
   const page = useCategorizePage(rootRef);
   useBlurAfterPointerPress();
   const fieldFocused = useFieldFocused();
   const counts = page.queue.counts;
-  const hasBundles = (page.viewModel?.acceptAllCount ?? 0) > 0;
-  const noKey = page.statusLoaded && !page.aiAvailable;
-  // The empty state is for "no key AND nothing to show": existing suggestions stay reachable.
-  const empty = noKey && page.view === 'bundles' && page.queue.data !== undefined && !hasBundles;
-  const showNoKeyBanner = noKey && page.view === 'bundles' && hasBundles;
 
   return (
     <View ref={rootRef} style={[styles.screen, !shell.isDesktop && { paddingTop: shell.contentTopPad }]}>
@@ -68,11 +60,6 @@ function CategorizePage() {
           threshold={page.threshold}
           onThreshold={(value) => void page.commitThreshold(value)}
           thresholdDisabled={page.savingThreshold}
-          run={page.runView}
-          aiAvailable={page.aiAvailable}
-          runStarting={page.runStarting}
-          onRun={() => void page.startRun()}
-          onModalChange={page.setModalOpen}
           left={counts?.left_to_categorize}
         />
 
@@ -87,19 +74,6 @@ function CategorizePage() {
           />
         ) : null}
 
-        {empty ? (
-          <EmptyState
-            reason={page.aiReason}
-            count={counts?.left_to_categorize}
-            onAddKey={() => router.push('/ai-keys')}
-            onByHand={() => page.setView('one')}
-          />
-        ) : null}
-
-        {showNoKeyBanner ? (
-          <NoKeyBanner reason={page.aiReason} onAddKey={() => router.push('/ai-keys')} />
-        ) : null}
-
         <PendingSkipsStrip
           skips={pendingSkips(page.accept.state)}
           onCancel={page.cancelSkip}
@@ -110,7 +84,7 @@ function CategorizePage() {
         {page.reloading ? <Text style={styles.note}>{t('queue.updating')}</Text> : null}
         <View pointerEvents={page.reloading ? 'none' : 'auto'} style={page.reloading ? styles.reloading : undefined}>
 
-        {!empty && page.viewModel && page.view === 'bundles' ? (
+        {page.viewModel && page.view === 'bundles' ? (
           <BundlesView
             budgetId={page.budgetId}
             view={page.viewModel}
@@ -128,7 +102,7 @@ function CategorizePage() {
           />
         ) : null}
 
-        {!empty && page.view === 'one' && page.queue.data ? (
+        {page.view === 'one' && page.queue.data ? (
           <OneByOneView
             budgetId={page.budgetId}
             flow={page.oneByOne}
@@ -139,7 +113,7 @@ function CategorizePage() {
 
         </View>
 
-        {page.view === 'bundles' && page.aiAvailable && page.viewModel && page.viewModel.acceptAllCount === 0 && counts?.left_to_categorize === 0 ? (
+        {page.view === 'bundles' && page.viewModel && page.viewModel.acceptAllCount === 0 && counts?.left_to_categorize === 0 ? (
           <Text style={styles.note}>{t('queue.empty')}</Text>
         ) : null}
       </ScrollView>

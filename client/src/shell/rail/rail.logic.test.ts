@@ -124,8 +124,8 @@ describe('showsTransactionFab', () => {
     }
   });
 
-  test('bank setup pages, the AI key page and the transaction page hide it (it covered "Connect another bank")', () => {
-    for (const p of ['/connect-bank', '/connection', '/pluggy-keys', '/pluggy-keys/', '/pluggy-keys?reason=connect', '/ai-keys', '/transaction?id=x']) {
+  test('bank setup pages and the transaction page hide it (it covered "Connect another bank")', () => {
+    for (const p of ['/connect-bank', '/connection', '/pluggy-keys', '/pluggy-keys/', '/pluggy-keys?reason=connect', '/transaction?id=x']) {
       expect(showsTransactionFab(p)).toBe(false);
     }
   });

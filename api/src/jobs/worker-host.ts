@@ -16,8 +16,7 @@ export interface WorkerHostOptions {
    * queue for provider calls). `maxTaskQueueActivitiesPerSecond` is enforced by
    * the server per queue, so it holds across all pods;
    * `maxConcurrentActivityTaskExecutions` bounds how many of that queue's
-   * activities ONE worker runs at once (the `-ai` queue uses 1 so a provider
-   * key never sees two calls from this process in parallel).
+   * activities ONE worker runs at once.
    */
   activityQueues?: Array<{
     taskQueue: string;

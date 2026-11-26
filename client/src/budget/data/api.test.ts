@@ -278,38 +278,6 @@ describe('formerly hand-written URLs now come from contracts (same routes)', () 
       '/connections/c-1/settings',
       { syncWindowDays: null },
     ],
-    ['getAiCredentials', () => budgetApi.endpoints.getAiCredentials.initiate(), 'GET', '/ai/credentials', null],
-    [
-      'saveAiCredentials',
-      () => budgetApi.endpoints.saveAiCredentials.initiate({ apiKey: 'sk-or-secret-1', provider: 'openrouter', model: 'openai/gpt-4o-mini' }),
-      'PUT',
-      '/ai/credentials',
-      { api_key: 'sk-or-secret-1', provider: 'openrouter', model: 'openai/gpt-4o-mini' },
-    ],
-    [
-      // The model is optional (a key the provider forbids listing models with can still be saved).
-      'saveAiCredentialsWithoutModel',
-      () => budgetApi.endpoints.saveAiCredentials.initiate({ apiKey: 'sk-or-secret-1', provider: 'openrouter' }),
-      'PUT',
-      '/ai/credentials',
-      { api_key: 'sk-or-secret-1', provider: 'openrouter' },
-    ],
-    ['deleteAiCredentials', () => budgetApi.endpoints.deleteAiCredentials.initiate(), 'DELETE', '/ai/credentials', null],
-    ['testAiCredentials', () => budgetApi.endpoints.testAiCredentials.initiate(), 'GET', '/ai/credentials/test', null],
-    [
-      'detectAiProvider',
-      () => budgetApi.endpoints.detectAiProvider.initiate({ apiKey: 'sk-ant-secret-1' }),
-      'POST',
-      '/ai/provider-detect',
-      { api_key: 'sk-ant-secret-1' },
-    ],
-    [
-      'listAiModels',
-      () => budgetApi.endpoints.listAiModels.initiate({ apiKey: 'sk-or-secret-1', provider: 'openrouter' }),
-      'POST',
-      '/ai/models',
-      { api_key: 'sk-or-secret-1', provider: 'openrouter' },
-    ],
   ];
   // Endpoints with a transformResponse need a body to transform.
   const replies: Record<string, unknown> = { registerConnection: { connection: {}, accounts: [] }, getUpstreamAccounts: [] };
@@ -343,7 +311,7 @@ describe('the split slice is still one api', () => {
     expect(budgetApi.reducerPath).toBe('budgetApi');
     const endpoints = Object.keys(budgetApi.endpoints);
     expect(endpoints).toHaveLength(113);
-    for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget', 'getTransferSuggestions', 'setPayeeTransferRule', 'getCategorizeQueue', 'acceptCategorize', 'undoCategorize', 'skipCategorize', 'startCategorizeRun', 'getCategorizeRunStatus', 'getCategorizeSettings', 'setCategorizeSettings']) {
+    for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget', 'getTransferSuggestions', 'setPayeeTransferRule', 'getCategorizeQueue', 'acceptCategorize', 'undoCategorize', 'skipCategorize', 'getCategorizeSettings', 'setCategorizeSettings']) {
       expect(endpoints).toContain(name);
     }
   });

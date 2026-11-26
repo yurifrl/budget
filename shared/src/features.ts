@@ -30,12 +30,6 @@ export const FEATURES = [
     description: "May connect and sync banks with the installation's shared Pluggy keys.",
     default: false,
   },
-  {
-    key: 'shared-ai-key',
-    group: 'AI',
-    description: "May run AI category suggestions with the installation's shared AI key.",
-    default: false,
-  },
 ] as const satisfies readonly FeatureDefinition[];
 
 export type FeatureKey = (typeof FEATURES)[number]['key'];

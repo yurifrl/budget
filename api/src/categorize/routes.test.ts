@@ -1,19 +1,17 @@
 /**
  * HTTP tests of the Categorize page: the queue's states/bundles/threshold,
- * accept/undo/skip, run start/status and the settings. Every handler's result
+ * accept/undo/skip and the settings. Every handler's result
  * is validated against its contract output by the test preload.
  */
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { Hono } from 'hono';
 
-import { storeOwnKey } from '../ai';
-import { configureSecretBox } from '../core/secret-box';
 import { pool } from '../core/db';
 import { dbReady } from '../core/test-gate';
 import { httpOnError } from '../core/validate';
 import type { IdentityUser } from '../user';
 import router from './router';
-import { candidateWindow, replaceSuggestions } from './store';
+import { replaceSuggestions } from './store';
 import { cleanupFixtures, newAccount, newBudget, newCategory, newGroup, newTransaction, newUser, type BudgetFixture } from './testing';
 
 let acting: IdentityUser;
@@ -46,7 +44,6 @@ async function call(who: IdentityUser, method: string, path: string, body?: unkn
 }
 const queue = (who: IdentityUser, extra = '') =>
   call(who, 'GET', `/categorize/queue?budget_id=${a.budgetId}&limit=50${extra}`);
-const status = (who: IdentityUser, budgetId = a.budgetId) => call(who, 'GET', `/categorize/run?budget_id=${budgetId}`);
 const accept = (who: IdentityUser, items: unknown[], budgetId = a.budgetId) =>
   call(who, 'POST', '/categorize/accept', { budget_id: budgetId, items });
 const acceptBundle = (who: IdentityUser, bundleKey: string, expectedCount: number, budgetId = a.budgetId) =>
@@ -102,14 +99,12 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  configureSecretBox(null);
   if (!dbReady) return;
-  for (const id of budgetIds) await pool.query('delete from jobs.job_runs where subject_key = $1', [id]);
   await cleanupFixtures();
 });
 
 describe.skipIf(!dbReady)('queue', () => {
-  test('distinguishes every state, newest first, without needing an AI key', async () => {
+  test('distinguishes every state, newest first', async () => {
     const has = await txn({ payeeId: await newPayee('Bakery') });
     const below = await txn({ payeeId: await newPayee('Below') });
     const none = await txn({ payeeId: await newPayee('Nothing') });
@@ -501,7 +496,7 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
   });
 
 
-  test('repeat accept keeps the model suggestion and undo restores it to pending (no manual overwrite)', async () => {
+  test('repeat accept keeps the suggestion and undo restores it to pending (no manual overwrite)', async () => {
     const t = await txn({ payeeId: await newPayee('Repeat model') });
     await suggest(t, a.food, { rank: 1, source: 'ai' });
     expect((await (await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }])).json()).accepted).toBe(1);
@@ -567,7 +562,6 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     await accept(ownerUser(), [{ transaction_id: t, category_id: a.food }]);
     await pool.query('update public.transactions set category_id = null where id = $1', [t]);
 
-    expect((await candidateWindow(pool, a.budgetId, false)).count).toBe(1);
     // The run's write is not blocked by the accepted/dismissed rows: they are
     // restored to pending and the fresh answer replaces them.
     expect(
@@ -585,7 +579,6 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     expect((await pool.query('select kind, category_id from public.categorize_decisions where transaction_id = $1', [t])).rows)
       .toEqual([{ kind: 'skip', category_id: null }]);
     expect((await queueJson(ownerUser())).rows).toEqual([]);
-    expect((await candidateWindow(pool, a.budgetId, false)).count).toBe(0);
     expect(
       await replaceSuggestions(pool, a.budgetId, t, [
         { categoryId: a.food, confidence: 0.9, reason: 'late', source: 'ai', provider: null, model: null },
@@ -600,7 +593,6 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     await pool.query('update public.transactions set category_id = $2 where id = $1', [t, a.dining]);
 
     expect((await queueJson(ownerUser())).rows).toEqual([]);
-    expect((await candidateWindow(pool, a.budgetId, false)).count).toBe(0);
     const back = await undo(ownerUser(), [t]);
     expect(await back.json()).toEqual({ restored: 0, transaction_ids: [], skipped: [{ transaction_id: t, reason: 'category_changed' }] });
     expect((await pool.query('select category_id from public.transactions where id = $1', [t])).rows[0].category_id).toBe(a.dining);
@@ -707,9 +699,7 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
 
   test('a skipped row is frozen for the engine: not a candidate and no suggestion write', async () => {
     const t = await txn({ payeeId: await newPayee('Frozen') });
-    expect((await candidateWindow(pool, a.budgetId, true)).count).toBe(1);
     await skip(ownerUser(), t);
-    expect((await candidateWindow(pool, a.budgetId, true)).count).toBe(0);
     expect(
       await replaceSuggestions(pool, a.budgetId, t, [
         { categoryId: a.food, confidence: 0.9, reason: 'late', source: 'ai', provider: null, model: null },
@@ -809,89 +799,12 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
   });
 });
 
-describe.skipIf(!dbReady)('run start and status', () => {
-  test('start without a usable key is a clear 409, and status says why', async () => {
-    const before = await call(memberUser(), 'POST', '/categorize/run', { budget_id: a.budgetId });
-    expect(before.status).toBe(409);
-    expect((await before.json()).code).toBe('categorize_ai_unavailable');
-    expect((await pool.query('select 1 from jobs.job_runs where subject_key = $1', [a.budgetId])).rowCount).toBe(0);
-
-    const st = await status(memberUser());
-    expect(st.status).toBe(200);
-    expect(await st.json()).toMatchObject({
-      active: null,
-      last_finished: null,
-      ai: { available: false, reason: 'own_key_required', provider: null, model: null, source: null },
-    });
-  });
-
-  test('any member may start, the run uses the owner\'s key, and starts coalesce', async () => {
-    configureSecretBox({ current: 1, keys: new Map([[1, crypto.getRandomValues(new Uint8Array(32))]]) });
-    try {
-      await storeOwnKey(pool, a.userId, 'openrouter', 'sk-or-v1-test-key-123456', 'test-model');
-      const first = await call(memberUser(), 'POST', '/categorize/run', { budget_id: a.budgetId });
-      expect(first.status).toBe(200);
-      const started = await first.json();
-      expect(started.created).toBe(true);
-      expect(started.run).toMatchObject({ status: 'queued', done: 0, total: 0, requested_by: memberId });
-
-      const row = (await pool.query('select tenant_id, requested_by from jobs.job_runs where id = $1', [started.run.id])).rows[0];
-      expect(row).toEqual({ tenant_id: a.userId, requested_by: memberId });
-
-      const second = await call(ownerUser(), 'POST', '/categorize/run', { budget_id: a.budgetId });
-      expect(second.status).toBe(200);
-      const joined = await second.json();
-      expect(joined.created).toBe(false);
-      expect(joined.run.id).toBe(started.run.id);
-
-      const st = await (await status(memberUser())).json();
-      expect(st.ai).toEqual({ available: true, reason: null, provider: 'openrouter', model: 'test-model', source: 'own' });
-      expect(st.active.id).toBe(started.run.id);
-      expect(st.active.status).toBe('queued');
-    } finally {
-      configureSecretBox(null);
-    }
-  });
-
-  test('status reports active progress and the last finished run', async () => {
-    const progressBudget = a.budgetId;
-    // Active: a queued run plus a worker-written progress row.
-    const activeId = crypto.randomUUID();
-    await pool.query(
-      `insert into jobs.job_runs (id, job_type, subject_key, tenant_id, instance_id, input, requested_by)
-       values ($1, 'categorize_run', $2, $3, 'test', '{}'::jsonb, $4)`,
-      [activeId, progressBudget, a.userId, a.userId],
-    );
-    await pool.query(
-      `insert into public.categorize_run_progress (run_id, budget_id, done, total) values ($1, $2, 7, 20)`,
-      [activeId, progressBudget],
-    );
-    let st = await (await status(memberUser())).json();
-    expect(st.active).toMatchObject({ id: activeId, status: 'queued', done: 7, total: 20 });
-
-    // Finish it with a result; a second run is now the "last finished" one.
-    await pool.query(
-      `update jobs.job_runs set status = 'succeeded', started_at = now(), finished_at = now(),
-              result = $2::jsonb, user_message = null where id = $1`,
-      [activeId, JSON.stringify({ total: 20, remaining: 3, done: 20, suggested: 17, rule: 1, empty: 1, skipped: 1, failed: 0, input_tokens: 1, output_tokens: 1, stopped: null })],
-    );
-    st = await (await status(memberUser())).json();
-    expect(st.active).toBeNull();
-    expect(st.last_finished).toMatchObject({
-      id: activeId, status: 'succeeded', total: 20, done: 20, remaining: 3,
-      suggested: 17, rule: 1, empty: 1, skipped: 1, failed: 0, user_message: null,
-    });
-  });
-});
-
 describe.skipIf(!dbReady)('access', () => {
   test('a non-member gets 404 on every operation and nothing changes', async () => {
     const t = await txn({ payeeId: await newPayee('Private') });
     await suggest(t, a.food);
     const requests: [string, string, unknown?][] = [
       ['GET', `/categorize/queue?budget_id=${a.budgetId}`],
-      ['GET', `/categorize/run?budget_id=${a.budgetId}`],
-      ['POST', '/categorize/run', { budget_id: a.budgetId }],
       ['POST', '/categorize/accept', { budget_id: a.budgetId, items: [{ transaction_id: t, category_id: a.food }] }],
       ['POST', '/categorize/undo', { budget_id: a.budgetId, items: [{ transaction_id: t, category_id: a.food }] }],
       ['POST', '/categorize/skip', { budget_id: a.budgetId, transaction_id: t }],
@@ -907,12 +820,11 @@ describe.skipIf(!dbReady)('access', () => {
     expect((await pool.query('select 1 from public.categorize_settings where budget_id = $1', [a.budgetId])).rowCount).toBe(0);
   });
 
-  test('a member who is not the owner reads the page and can start the owner-key run', async () => {
+  test('a member who is not the owner reads the page', async () => {
     const t = await txn({ payeeId: await newPayee('Member Read') });
     await suggest(t, a.food);
     const page = await queueJson(memberUser());
     expect(page.rows.length).toBe(1);
-    expect((await status(memberUser())).status).toBe(200);
 
     // The member cannot see a foreign budget either.
     const foreign = await call(memberUser(), 'GET', `/categorize/queue?budget_id=${other.budgetId}`);

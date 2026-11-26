@@ -1,6 +1,6 @@
 /**
  * budgetApi slice: Categorize — the uncategorized queue with its suggestions
- * and bundles, accept/undo/skip decisions, the classification run and the
+ * and bundles, accept/undo/skip decisions and the
  * confidence threshold. Injected into the one `budgetApi` (see ../api.ts).
  *
  * Every amount on the wire is integer milliunits, dates are YYYY-MM-DD; the
@@ -13,8 +13,6 @@ import { contractRequest } from '@shared/contract-request';
 import {
   categorizeAccept,
   categorizeQueueList,
-  categorizeRunStart,
-  categorizeRunStatus,
   categorizeSettingsGet,
   categorizeSettingsSet,
   categorizeSkip,
@@ -22,7 +20,6 @@ import {
 } from '@shared/contracts/categorize';
 import type { OperationOutput } from '@shared/operation-contract';
 
-import { aiApi } from './ai';
 import type { BudgetScope } from './base';
 
 export type CategorizeQueue = OperationOutput<typeof categorizeQueueList>;
@@ -32,16 +29,11 @@ export type CategorizeCounts = CategorizeQueue['counts'];
 export type CategorizeQueueState = CategorizeQueueRow['state'];
 export type CategorizeSuggestion = CategorizeQueueRow['suggestions'][number];
 export type CategorizeMerchantPanel = NonNullable<CategorizeQueueRow['merchant']>;
-export type CategorizeRunStatus = OperationOutput<typeof categorizeRunStatus>;
-export type CategorizeActiveRun = NonNullable<CategorizeRunStatus['active']>;
-export type CategorizeFinishedRun = NonNullable<CategorizeRunStatus['last_finished']>;
-export type CategorizeAiStatus = CategorizeRunStatus['ai'];
 export type CategorizeSettings = OperationOutput<typeof categorizeSettingsGet>;
 export type CategorizeAcceptResult = OperationOutput<typeof categorizeAccept>;
 export type CategorizeDecisionItem = CategorizeAcceptResult['items'][number];
 export type CategorizeUndoResult = OperationOutput<typeof categorizeUndo>;
 export type CategorizeSkipResult = OperationOutput<typeof categorizeSkip>;
-export type CategorizeRunStartResult = OperationOutput<typeof categorizeRunStart>;
 
 /**
  * The queue reads transactions, category names/visibility and payee names, so
@@ -116,18 +108,6 @@ export const categorizeApi = aiApi.injectEndpoints({
       query: ({ budgetId, transactionId }) =>
         contractRequest(categorizeSkip, { budget_id: budgetId, transaction_id: transactionId }),
       invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'Categorize', id: budgetId }],
-    }),
-
-    /** Start or join the budget's run (coalesced; uses the budget owner's key). */
-    startCategorizeRun: b.mutation<CategorizeRunStartResult, BudgetScope>({
-      query: ({ budgetId }) => contractRequest(categorizeRunStart, { budget_id: budgetId }),
-      invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'CategorizeRun', id: budgetId }],
-    }),
-
-    /** Active progress, the last finished run, and whether AI is available (safe to poll). */
-    getCategorizeRunStatus: b.query<CategorizeRunStatus, BudgetScope>({
-      query: ({ budgetId }) => contractRequest(categorizeRunStatus, { budget_id: budgetId }),
-      providesTags: (_r, _e, { budgetId }) => [{ type: 'CategorizeRun', id: budgetId }],
     }),
 
     getCategorizeSettings: b.query<CategorizeSettings, BudgetScope>({

@@ -1,10 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { CategorizeRunStatus } from '@/budget/data/api';
 import type { BundleRow, CategoryRow, GroupRow } from '@/budget/data/rows';
 
 import {
-  aiReasonMessage,
   bundleToastLabel,
   categoryOptions,
   bundleChangedMessage,
@@ -13,40 +11,11 @@ import {
   rowsGoneFromQueue,
   skipFailureKind,
   rowSubject,
-  runHeaderView,
   thresholdFromX,
   thresholdLabel,
   thresholdPercent,
   thresholdReloading,
 } from './page.logic';
-
-const format = { formatDate: (iso: string) => iso.split('-').reverse().join('/') };
-
-const activeAi = { available: true, reason: null, provider: 'openrouter' as const, model: 'model/x', source: 'own' as const };
-
-const finishedRun = {
-  id: 'run-1',
-  status: 'succeeded' as const,
-  created_at: '2026-11-21T13:59:00Z',
-  started_at: '2026-11-21T14:00:00Z',
-  finished_at: '2026-11-21T14:02:00Z',
-  total: 480,
-  done: 480,
-  suggested: 120,
-  rule: 3,
-  empty: 2,
-  skipped: 0,
-  failed: 1,
-  remaining: 0,
-  user_message: null,
-};
-
-const status = (over: Partial<CategorizeRunStatus> = {}): CategorizeRunStatus => ({
-  active: null,
-  last_finished: null,
-  ai: activeAi,
-  ...over,
-});
 
 const group = (over: Partial<GroupRow> = {}): GroupRow => ({
   id: 'g1',
@@ -99,125 +68,6 @@ describe('threshold control', () => {
 
   test('the control label is the percent', () => {
     expect(thresholdLabel(0.8)).toBe('80%');
-  });
-});
-
-describe('runHeaderView', () => {
-  test('an active run shows live progress and its fraction', () => {
-    const view = runHeaderView(
-      status({
-        active: {
-          id: 'r1',
-          status: 'running',
-          created_at: '2026-11-21T14:00:00Z',
-          started_at: '2026-11-21T14:00:01Z',
-          requested_by: null,
-          done: 120,
-          total: 480,
-        },
-      }),
-      { left_to_categorize: 480, not_classified: 300 },
-      format,
-    );
-    expect(view).toEqual({
-      kind: 'active',
-      title: 'Classifying 120 of 480…',
-      detail: 'Runs in the background. Suggestions appear here as they are ready; you can start accepting now.',
-      fraction: 0.25,
-    });
-  });
-
-  test('a queued run (no total yet) says it is starting', () => {
-    const view = runHeaderView(
-      status({
-        active: {
-          id: 'r1',
-          status: 'queued',
-          created_at: '2026-11-21T14:00:00Z',
-          started_at: null,
-          requested_by: null,
-          done: 0,
-          total: 0,
-        },
-      }),
-      { left_to_categorize: 10, not_classified: 10 },
-      format,
-    );
-    expect(view.title).toBe('Starting the classification…');
-    expect(view.fraction).toBe(0);
-  });
-
-  test('AI unavailable explains the precise reason', () => {
-    const view = runHeaderView(
-      status({ ai: { available: false, reason: 'own_key_required', provider: null, model: null, source: null } }),
-      { left_to_categorize: 480, not_classified: 480 },
-      format,
-    );
-    expect(view).toEqual({
-      kind: 'unavailable',
-      title: 'Classification unavailable',
-      detail: 'No AI key is set up for this budget.',
-      fraction: 0,
-    });
-  });
-
-  test('all rows classified shows the queue size and the last run', () => {
-    const view = runHeaderView(
-      status({ last_finished: finishedRun }),
-      { left_to_categorize: 480, not_classified: 0 },
-      format,
-    );
-    expect(view.kind).toBe('all_classified');
-    expect(view.title).toBe('All 480 classified');
-    expect(view.detail).toBe('Last run 21/11/2026 · 120 suggestions');
-  });
-
-  test('a partially classified queue shows the last run as the title', () => {
-    const view = runHeaderView(
-      status({ last_finished: finishedRun }),
-      { left_to_categorize: 480, not_classified: 40 },
-      format,
-    );
-    expect(view.kind).toBe('finished');
-    expect(view.title).toBe('Last run 21/11/2026');
-    expect(view.detail).toBe('120 suggestions. New imports are classified on the next run.');
-  });
-
-  test('an active run is not shown as healthy when AI is unavailable', () => {
-    const view = runHeaderView(
-      status({
-        active: {
-          id: 'r1',
-          status: 'running',
-          created_at: '2026-11-21T14:00:00Z',
-          started_at: '2026-11-21T14:00:00Z',
-          requested_by: null,
-          done: 25,
-          total: 57,
-        },
-        ai: { available: false, reason: 'shared_key_missing', provider: null, model: null, source: null },
-      }),
-      { left_to_categorize: 57, not_classified: 30 },
-      format,
-    );
-    expect(view.kind).toBe('unavailable');
-    expect(view.fraction).toBe(0);
-    expect(view.detail).toContain('this server has none configured');
-  });
-
-  test('no run yet invites one; an empty queue says so', () => {
-    expect(runHeaderView(status(), { left_to_categorize: 5, not_classified: 5 }, format).kind).toBe('never');
-    expect(runHeaderView(status(), { left_to_categorize: 0, not_classified: 0 }, format).title).toBe(
-      'Nothing left to categorize',
-    );
-  });
-});
-
-describe('aiReasonMessage', () => {
-  test('one sentence per reason, with a fallback', () => {
-    expect(aiReasonMessage('own_key_required')).toBe('No AI key is set up for this budget.');
-    expect(aiReasonMessage('shared_model_missing')).toContain('no model chosen');
-    expect(aiReasonMessage(null)).toBe('Category suggestions are unavailable right now.');
   });
 });
 
@@ -290,19 +140,6 @@ describe('bundleChangedMessage', () => {
     expect(bundleChangedMessage({ status: 409, code: 'categorize_bundle_changed' })).toBe(
       'That bundle changed. The list is updated: check it and accept again.',
     );
-  });
-});
-
-describe('last run date', () => {
-  test('is the local calendar day of the instant, not the UTC day', () => {
-    // 23:30 local on 24 Nov: in UTC this is the 25th in zones behind UTC, the 24th elsewhere.
-    const lateEvening = new Date(2026, 10, 24, 23, 30).toISOString();
-    const view = runHeaderView(
-      status({ last_finished: { ...finishedRun, finished_at: lateEvening } }),
-      { left_to_categorize: 0, not_classified: 0 },
-      format,
-    );
-    expect(view.detail).toBe('Last run 24/11/2026 · 120 suggestions');
   });
 });
 

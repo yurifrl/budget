@@ -24,15 +24,6 @@ describe('feature list', () => {
     expect(featureDefinition('shared-pluggy-key')).toBe(feature!);
   });
 
-  test("registers 'shared-ai-key', off by default", () => {
-    const feature = FEATURES.find((f) => f.key === 'shared-ai-key');
-    expect(feature).toBeDefined();
-    expect(feature!.default).toBe(false);
-    expect(feature!.group).toBe('AI');
-    expect(feature!.description).toContain('shared AI key');
-    expect(featureDefinition('shared-ai-key')).toBe(feature!);
-  });
-
   test('every feature has a unique kebab-case key, a short group, a description and a boolean default', () => {
     expect(new Set(FEATURE_KEYS).size).toBe(FEATURES.length);
     for (const f of FEATURES) {
@@ -86,15 +77,14 @@ describe('resolveFeatureValue', () => {
 
 describe('client-side defaults', () => {
   test('featureDefaults lists every key at its default', () => {
-    expect(featureDefaults()).toEqual({ 'shared-pluggy-key': false, 'shared-ai-key': false });
+    expect(featureDefaults()).toEqual({ 'shared-pluggy-key': false });
   });
 
   test('withFeatureDefaults keeps known booleans, drops unknown keys, fills missing ones', () => {
-    expect(withFeatureDefaults(undefined)).toEqual({ 'shared-pluggy-key': false, 'shared-ai-key': false });
+    expect(withFeatureDefaults(undefined)).toEqual({ 'shared-pluggy-key': false });
     expect(withFeatureDefaults({ 'shared-pluggy-key': true, 'retired-feature': true })).toEqual({
       'shared-pluggy-key': true,
-      'shared-ai-key': false,
     });
-    expect(withFeatureDefaults({ 'shared-pluggy-key': 'yes' })).toEqual({ 'shared-pluggy-key': false, 'shared-ai-key': false });
+    expect(withFeatureDefaults({ 'shared-pluggy-key': 'yes' })).toEqual({ 'shared-pluggy-key': false });
   });
 });

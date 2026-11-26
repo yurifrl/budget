@@ -1,5 +1,5 @@
 /**
- * Contract outputs (G9), catalog-level: every ai, budget, connections and
+ * Contract outputs (G9), catalog-level: every budget, connections and
  * features operation declares an `output` schema, and every READ operation,
  * called over HTTP on seeded data, answers 200 with a body that parses with it.
  * Lists are seeded so each one validates real rows, never just `[]`.
@@ -18,12 +18,9 @@ import { makeOpCaller } from './core/test-op';
 import { httpOnError } from './core/validate';
 import budget from './budget';
 import categorize from './categorize/router';
-import ai from './ai';
 import connections from './connections';
 import { featuresRoutes } from './features';
 import { setAggregators } from './connections/registry';
-import { setProviders, type ProviderEntry } from './ai/providers';
-import type { AiProviderId } from '@shared/contracts/ai';
 import { configureSecretBox } from './core/secret-box';
 import * as connStore from './connections/store';
 import { syncConnectionTransactions } from './connections/sync';
@@ -31,7 +28,7 @@ import type { AggregatedTransaction, BankAggregator, ExternalAccount } from './c
 import { authConfig, configureAuth, type IdentityUser } from './user';
 
 const covered = contracts.filter(
-  (c) => c.name.startsWith('ai_') || c.name.startsWith('budget_') || c.name.startsWith('connections_') || c.name.startsWith('features_'),
+  (c) => c.name.startsWith('budget_') || c.name.startsWith('connections_') || c.name.startsWith('features_'),
 );
 const reads = covered.filter((c) => c.kind === 'read' && c.expose.api);
 
@@ -89,27 +86,6 @@ const aggregator = {
   verifyWebhookHeaders: () => false,
 } as unknown as BankAggregator;
 
-/** Fake AI providers: the key routes only need listModels; no provider is called. */
-const aiModels = [{ id: 'catalog-model', name: 'Catalog Model', contextLength: 128_000 }];
-const fakeAiEntry = (id: AiProviderId): ProviderEntry => ({
-  baseUrl: `https://${id}.test`,
-  create: () => ({
-    id,
-    chat: async () => {
-      throw new Error('chat is not used by the catalog outputs test');
-    },
-    verifyKey: async () => null,
-    listModels: async () => aiModels,
-  }),
-});
-const aiProviders: Record<AiProviderId, ProviderEntry> = {
-  openrouter: fakeAiEntry('openrouter'),
-  anthropic: fakeAiEntry('anthropic'),
-  openai: fakeAiEntry('openai'),
-  zai: fakeAiEntry('zai'),
-  deepseek: fakeAiEntry('deepseek'),
-};
-
 const app = new Hono();
 app.onError(httpOnError);
 app.use('*', (c, next) => {
@@ -117,7 +93,6 @@ app.use('*', (c, next) => {
   return next();
 });
 app.route('/connections', connections);
-app.route('/ai', ai);
 app.route('/', budget);
 app.route('/categorize', categorize);
 app.route('/', featuresRoutes());
@@ -145,7 +120,6 @@ beforeAll(async () => {
   if (!dbReady) return;
   await cleanup();
   setAggregators({ pluggy: { create: () => aggregator, configured: () => true } });
-  setProviders(aiProviders);
   // The harness sets the user with no session principal: the first-party guard of /admin/features passes only with auth off.
   authBefore = authConfig();
   configureAuth({ ...authBefore, authDisabled: true });
@@ -242,16 +216,14 @@ await ok('budget_payees_rename_rules_revert', { budget_id: B, apply_id: applied.
   await ok('features_admin_set_everyone', { key: 'shared-pluggy-key', value: false });
   await ok('features_admin_set_user', { key: 'shared-pluggy-key', user_id: user.id, value: true });
 
-  // The user's own key set, saved through the operation (checked with the fake provider, stored encrypted).
+  // The user's own key set, saved through the operation (stored encrypted).
   configureSecretBox({ current: 1, keys: new Map([[1, crypto.getRandomValues(new Uint8Array(32))]]) });
   await ok('connections_credentials_save', { clientId: 'catalog-client-id', clientSecret: 'catalog-client-secret' });
-  await ok('ai_credentials_save', { api_key: 'sk-or-v1-catalogoutputs0123456789', model: 'catalog-model' });
 });
 
 afterAll(async () => {
   if (!dbReady) return;
   setAggregators(null);
-  setProviders(null);
   configureSecretBox(null);
   await cleanup();
   if (authBefore) configureAuth(authBefore);
@@ -261,9 +233,6 @@ afterAll(async () => {
 function sampleInput(name: string): Record<string, unknown> | undefined {
   const month = `${today.slice(0, 7)}-01`;
   const samples: Record<string, Record<string, unknown>> = {
-    ai_credentials_get: {},
-    ai_credentials_test: {},
-    ai_models_list: {},
     budget_list: {},
     budget_revision_get: { budget_id: B },
     budget_groups_list: { budget_id: B },
@@ -272,7 +241,6 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     budget_accounts_list: { budget_id: B },
     budget_transactions_list: { budget_id: B },
     categorize_queue_list: { budget_id: B, limit: 10 },
-    categorize_run_status: { budget_id: B },
     categorize_settings_get: { budget_id: B },
     // The bank-imported row, so the import record (raw payload included) is validated too.
     budget_transactions_get: { id: seeded.importedTxn, budget_id: B },

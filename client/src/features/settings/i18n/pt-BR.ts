@@ -29,7 +29,6 @@ const m: Translation<typeof en> = {
   'root.freshStart': 'Fazer um recomeço',
   'root.payees': 'Gerenciar favorecidos',
   'root.banks': 'Bancos vinculados',
-  'root.aiKey': 'Chave de IA',
   'root.backup': 'Exportar / Importar',
   'root.flags': 'Editar marcadores',
   'root.display': 'Opções de exibição',

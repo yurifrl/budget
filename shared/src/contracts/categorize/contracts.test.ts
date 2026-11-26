@@ -4,8 +4,6 @@ import { inputLocations } from '../../operation-contract';
 import {
   categorizeAccept,
   categorizeQueueList,
-  categorizeRunStart,
-  categorizeRunStatus,
   categorizeSettingsGet,
   categorizeSettingsSet,
   categorizeSkip,
@@ -43,18 +41,13 @@ describe('Categorize contracts', () => {
     }
   });
 
-  test('reads are GET; the run trigger and undo are not MCP tools (budget writes are)', () => {
-    for (const op of [categorizeQueueList, categorizeRunStatus, categorizeSettingsGet]) {
+  test('reads are GET; undo is not an MCP tool (budget writes are)', () => {
+    for (const op of [categorizeQueueList, categorizeSettingsGet]) {
       expect(op.method).toBe('GET');
       expect(op.expose).toEqual({ api: true, cli: true, mcp: true });
     }
-    expect(categorizeRunStart.expose).toEqual({ api: true, cli: true, mcp: false });
     expect(categorizeUndo.expose).toEqual({ api: true, cli: true, mcp: false });
     for (const op of [categorizeAccept, categorizeSkip, categorizeSettingsSet]) expect(op.expose.mcp).toBe(true);
-  });
-
-  test('there is no re-classify flag', () => {
-    expect(Object.keys(categorizeRunStart.input.shape)).toEqual(['budget_id']);
   });
 
   test('queue: page bounds, threshold at read time (not an input), states and bundles', () => {
@@ -92,38 +85,6 @@ describe('Categorize contracts', () => {
     expect(categorizeQueueList.output!.safeParse({ ...output, rows: [{ ...row, suggestions: [{ ...suggestion, confidence: 1.1 }] }] }).success).toBe(false);
     expect(categorizeQueueList.output!.safeParse({ ...output, bundles: [{ ...bundle, total: 'x' }] }).success).toBe(false);
     expect(categorizeQueueList.input.parse({ budget_id: b, bundle: 'key' })).toMatchObject({ bundle: 'key' });
-  });
-
-  test('run start and status: no forced flag, progress shape, AI reason', () => {
-    expect(categorizeRunStart.input.safeParse({ budget_id: b, force: true }).success).toBe(true); // extra keys are stripped
-    expect(Object.keys(categorizeRunStart.input.parse({ budget_id: b }))).toEqual(['budget_id']);
-    const active = { id: b, status: 'running', created_at: '2026-11-24T10:00:00.000Z', started_at: '2026-11-24T10:00:01.000Z', requested_by: t, done: 5, total: 100 };
-    expect(categorizeRunStart.output!.safeParse({ run: active, created: true }).success).toBe(true);
-
-    const finished = {
-      id: b,
-      status: 'succeeded',
-      created_at: '2026-11-24T10:00:00.000Z',
-      started_at: '2026-11-24T10:00:01.000Z',
-      finished_at: '2026-11-24T10:10:00.000Z',
-      total: 100,
-      done: 98,
-      suggested: 90,
-      rule: 2,
-      empty: 5,
-      skipped: 1,
-      failed: 2,
-      remaining: 20,
-      user_message: null,
-    };
-    const status = {
-      active: null,
-      last_finished: finished,
-      ai: { available: true, reason: null, provider: 'openrouter', model: 'm', source: 'own' },
-    };
-    expect(categorizeRunStatus.output!.safeParse(status).success).toBe(true);
-    expect(categorizeRunStatus.output!.safeParse({ ...status, ai: { ...status.ai, reason: 'no_idea' } }).success).toBe(false);
-    expect(categorizeRunStatus.output!.safeParse({ ...status, last_finished: { ...finished, total: -1 } }).success).toBe(false);
   });
 
   test('accept takes pairs or a bundle; duplicates are invalid; undo lists skip reasons', () => {

@@ -15,8 +15,7 @@ describe('decideRevision', () => {
 });
 
 describe('BUDGET_DATA_TAGS', () => {
-  it('refreshes the Categorize queue and run on a revision change', () => {
+  it('refreshes the Categorize queue on a revision change', () => {
     expect(BUDGET_DATA_TAGS).toContain('Categorize');
-    expect(BUDGET_DATA_TAGS).toContain('CategorizeRun');
   });
 });

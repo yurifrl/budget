@@ -2,7 +2,7 @@
  * budgetApi — the Budget app's RTK Query api, assembled from per-area slices
  * under `./api/` (phase 5c, G9): `base` creates the api (reducer path
  * `budgetApi`, base query, tags, refetch policy) and `budgets`, `members`,
- * `plan`, `payees`, `register`, `connections`, `transfers`, `ai` and
+ * `plan`, `payees`, `register`, `connections`, `transfers` and
  * `categorize` inject their endpoints, in that order. This file is the only
  * import path the app uses: the api, every
  * hook and the endpoint types are re-exported here under their original
@@ -16,22 +16,16 @@ import { categorizeApi } from './api/categorize';
 
 export { CATEGORIZE_COUNT_LIMIT, CATEGORIZE_QUEUE_TAGS, queueProvidedTags } from './api/categorize';
 
-export type { AiCredentialStatus, AiModel } from './api/ai';
 export type { BudgetScope } from './api/base';
 export type {
-  CategorizeActiveRun,
-  CategorizeAiStatus,
   CategorizeAcceptResult,
   CategorizeBundle,
   CategorizeCounts,
   CategorizeDecisionItem,
-  CategorizeFinishedRun,
   CategorizeMerchantPanel,
   CategorizeQueue,
   CategorizeQueueRow,
   CategorizeQueueState,
-  CategorizeRunStartResult,
-  CategorizeRunStatus,
   CategorizeSettings,
   CategorizeSkipResult,
   CategorizeSuggestion,
@@ -163,12 +157,6 @@ export const {
   useSyncConnectionMutation,
   useDisconnectConnectionMutation,
   useLinkAccountMutation,
-  useGetAiCredentialsQuery,
-  useSaveAiCredentialsMutation,
-  useDeleteAiCredentialsMutation,
-  useTestAiCredentialsMutation,
-  useDetectAiProviderMutation,
-  useListAiModelsMutation,
   useGetTransferSuggestionsQuery,
   useLinkTransfersMutation,
   useUnlinkTransfersMutation,
@@ -178,9 +166,6 @@ export const {
   useAcceptCategorizeMutation,
   useUndoCategorizeMutation,
   useSkipCategorizeMutation,
-  useStartCategorizeRunMutation,
-  useGetCategorizeRunStatusQuery,
-  useLazyGetCategorizeRunStatusQuery,
   useGetCategorizeSettingsQuery,
   useSetCategorizeSettingsMutation,
 } = budgetApi;

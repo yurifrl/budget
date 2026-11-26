@@ -10,7 +10,7 @@ interface Props extends TextInputProps {
   label: string;
   invalid?: boolean;
   /**
-   * A stored credential secret (Pluggy secret, AI API key), never a login
+   * A stored credential secret (Pluggy secret), never a login
    * password: web browsers get autocomplete="new-password" so they do not
    * offer to save or fill it as the site's password.
    */

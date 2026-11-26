@@ -16,8 +16,7 @@ export type CategoryAssignability = 'ok' | 'not_in_budget' | 'not_assignable';
  * May a categorization name this category? `not_in_budget` covers a missing,
  * deleted or foreign-budget row; `not_assignable` covers a live row that is
  * hidden/internal or in a hidden/internal/credit-card-payment group (the card
- * setup writes those). This is the same rule the categorize engine offers its
- * model (listCategoryChoices) and the one accept enforces; categoryInBudget
+ * setup writes those). This is the rule accept enforces; categoryInBudget
  * above is deliberately more permissive because the register may keep old
  * values.
  */

@@ -114,14 +114,6 @@ export function BudgetTabs({ isPhone }: { isPhone: boolean }) {
           tabBarItemStyle: { display: 'none' },
         }}
       />
-      {/* Own AI key: opened from Settings, never a tab. */}
-      <Tabs.Screen
-        name="ai-keys"
-        options={{
-          tabBarButton: () => null,
-          tabBarItemStyle: { display: 'none' },
-        }}
-      />
       {/* Categorize page: reached from the rail, never a tab. */}
       <Tabs.Screen
         name="categorize"

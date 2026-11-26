@@ -1,8 +1,8 @@
 /**
- * Card shell and rows shared by the credential screens ("Your Pluggy keys",
- * "AI key"): the card surface, its section label, key/value rows, action
+ * Card shell and rows shared by the credential screens ("Your Pluggy keys"):
+ * the card surface, its section label, key/value rows, action
  * buttons, the inline danger confirm, and the loading / failed cards. The
- * styles are the Pluggy card's original values, extracted unchanged so both
+ * styles are the Pluggy card's original values, extracted unchanged so the
  * screens look and behave the same. Labels are passed in by the feature (its
  * own catalog), never translated here.
  */

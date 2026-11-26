@@ -12,7 +12,6 @@ import { startBudgetRepeatTick } from './budget';
 import { assertAuthEnv, authConfigFromEnv } from './auth-env';
 import { configureSecretsFromEnv } from './secrets-env';
 import { configurePluggyEnv } from './connections';
-import { configureAiEnv } from './ai';
 import { apiBaseUrl, authDisabled, configureAuth, DEV_EMAIL, oauthResourceUrl } from './user';
 import { defaultOAuthTtls } from './oauth';
 import { runMigrations } from './core/migrate';
@@ -34,7 +33,6 @@ configureDb({ connectionString: process.env.DATABASE_URL ?? '' });
 assertAuthEnv(process.env);
 const auth = configureAuth(authConfigFromEnv(process.env));
 configurePluggyEnv(process.env);
-configureAiEnv(process.env);
 // Master key for users' own bank-provider secrets: required in a cluster.
 configureSecretsFromEnv(process.env);
 // Dev-only response checking against the contracts' output schemas (G9):

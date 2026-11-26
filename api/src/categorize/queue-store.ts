@@ -1,11 +1,10 @@
 /**
- * SQL for the Categorize PAGE (queue, bundles, threshold). Separate from
- * store.ts, which is model-facing: these reads return the owner's own text and
- * bank data exactly as stored, because the person is looking at their own
- * transactions. Masking/length caps exist only on the prompt side.
+ * SQL for the Categorize PAGE (queue, bundles, threshold). These reads return
+ * the owner's own text and bank data exactly as stored, because the person is
+ * looking at their own transactions.
  *
  * Every query is scoped by budget_id in SQL and shares the register's
- * "needs a category" rule with the run (NEEDS_CATEGORY_FROM/WHERE in store.ts,
+ * "needs a category" rule (NEEDS_CATEGORY_FROM/WHERE in store.ts,
  * plus the transfer-plan ids) — the queue does not re-state that rule.
  */
 import { createHash } from 'crypto';
@@ -74,7 +73,7 @@ export type QueueCounts = {
 
 export type QueuePage = { rows: QueueRow[]; counts: QueueCounts; bundles: QueueBundle[] };
 
-/** A category a suggestion may name (same rule as store.listCategoryChoices). */
+/** A category a suggestion may name. */
 const ASSIGNABLE = `
   c.deleted = false and c.hidden = false and c.internal = false
   and g.deleted = false and g.hidden = false
@@ -155,7 +154,7 @@ const QUEUE_CTE = `with q as (
 
 /**
  * What the queue shows as a pending suggestion: a pending row, or — for a
- * stale accept, whose earlier rows are accepted/dismissed — the model's rows
+ * stale accept, whose earlier rows are accepted/dismissed — the suggested rows
  * again (a manual row is the person's removed choice, not a suggestion).
  */
 const QUEUE_PENDING = (alias: string): string =>
