@@ -1,0 +1,914 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-zkts",
+  "title": "Transfer matcher: bank/account-kind rules (cards only receive; checking->card only same bank; checking->checking only across banks)",
+  "description": "User rule 2026-11-24. Applied by hand via MCP on prod: of 171 suggestions, 53 pairs fit the rules and were linked, 2 broke them (card outflow 'Dpen'; Itaú checking -> Nubank card 'PIX TRANSF SERGIO') and were dismissed. Existing 269 auto transfers already comply. Encode in api/src/budget/domain/transfer-matcher.ts: a card is never the outflow side of a transfer; checking -> card only when both accounts belong to the same institution (accounts.institution / connection institution; fall back to connection_id equality); checking -> checking only when institutions differ. Use the rule to break ties (chains like Itaú conta -> Nubank conta -> Nubank card same day) and to drop impossible candidates. Accounts without a known institution: keep current behaviour. Tests for each rule and the chain case.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-24T16:05:43.380Z",
+  "updated_at": "2026-11-25T03:15:40.384Z",
+  "started_at": null,
+  "closed_at": "2026-11-25T03:15:39.543Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-e67y",
+  "sprint": null,
+  "labels": [],
+  "notes": "landed outside tk close at 318de4a (branch tk/budget-zkts merged into main by hand)\nImplemented on tk/budget-zkts (84aa070, based on origin/main 318de4a). shared 194 pass; api 1287 pass / 0 fail (BUDGET_REQUIRE_TEST_DB=1, compose :55432); client 1267 pass; tsc+eslint clean.\nMerged to local main (not pushed); owner approved in the Inbox thread 'Transfers refactor' on 2026-11-25. Matcher bank rules (card never pays; cash->card same bank; checking->checking across banks, checking only), refused pairs kept as suggestions with basis 'refused' and the rule, never auto-linked. Two independent reviews (review-zkts.md, review-zkts-2.md attached). Orchestrator reran on 5603daf: tsc shared/api/client clean, api eslint clean, shared 218, full api 1558 pass / 0 fail. Production accounts read 2026-11-24: one bank per connection, labels present.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-zkts",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-zkts",
+    "changeset": {
+      "base": "3cbf4b3d67f5a42bf6fd7ee5fcdc6f9c1247b1ab",
+      "head": "5603daf700ac12072a5aec6afaf66828642d847e",
+      "commits": [
+        {
+          "sha": "5603daf",
+          "subject": "fix(transfers): every unlinked row carries its refused candidates; savings->card text; more tests"
+        },
+        {
+          "sha": "a833f09",
+          "subject": "fix(transfers): refused suggestions only for pairs main already matched"
+        },
+        {
+          "sha": "1df7ddb",
+          "subject": "feat(transfers): offer rule-refused pairs as suggestions, never link them"
+        },
+        {
+          "sha": "aa31e97",
+          "subject": "fix(transfers): judge rule 3 on checking accounts only, drop unreachable one-side rule suggestions"
+        },
+        {
+          "sha": "6e7165d",
+          "subject": "Merge branch 'main' into tk/budget-zkts"
+        },
+        {
+          "sha": "30a14e5",
+          "subject": "Merge tk/budget-edxg: Categorize endpoints (queue, bundles, run, accept, undo, skip, threshold)"
+        },
+        {
+          "sha": "71958f3",
+          "subject": "fix(categorize): freeze skipped rows, id-based bundle keys and stale bundles"
+        },
+        {
+          "sha": "6064bf3",
+          "subject": "feat(categorize): bundles by key, queue states and decision hardening"
+        },
+        {
+          "sha": "77a97b6",
+          "subject": "fix(categorize): record accepts and make undo reverse only them"
+        },
+        {
+          "sha": "3bd2c7e",
+          "subject": "fix(categorize): safe undo, concurrency test and endpoint docs"
+        },
+        {
+          "sha": "30338f4",
+          "subject": "feat(categorize): page contracts and handlers (budget-edxg)"
+        },
+        {
+          "sha": "816ae58",
+          "subject": "wip(categorize): contracts, queue/accept/skip handlers, run status, settings"
+        },
+        {
+          "sha": "4a62461",
+          "subject": "Merge tk/budget-fvtx: categorizer engine, category_suggestions, categorize_run job"
+        },
+        {
+          "sha": "f98340e",
+          "subject": "Merge branch 'main' into tk/budget-fvtx"
+        },
+        {
+          "sha": "26dc6b7",
+          "subject": "deploy: images 2026.11.24-01"
+        },
+        {
+          "sha": "6c266d0",
+          "subject": "docs: release notes v2026.11.24-01"
+        },
+        {
+          "sha": "62fed99",
+          "subject": "release: v2026.11.24-01"
+        },
+        {
+          "sha": "ed02cce",
+          "subject": "Merge remote-tracking branch 'origin/main'"
+        },
+        {
+          "sha": "744d849",
+          "subject": "Merge tk/budget-xlng: import Contabilizei statement CSV"
+        },
+        {
+          "sha": "48e32cd",
+          "subject": "fix(categorize): address the second budget-fvtx review (MF1, MF2, FU1-FU9)"
+        },
+        {
+          "sha": "c080a0c",
+          "subject": "refactor(client): Contabilizei rows rely on server import ids"
+        },
+        {
+          "sha": "14e6c57",
+          "subject": "fix(client): Contabilizei import ids unique across payees"
+        },
+        {
+          "sha": "08a3725",
+          "subject": "feat(client): import Contabilizei statement CSV"
+        },
+        {
+          "sha": "b2448a2",
+          "subject": "feat(categorize): merchant panel facts and the owner-key decision (budget-fvtx)"
+        },
+        {
+          "sha": "20cd7ba",
+          "subject": "Merge branch 'main' into tk/budget-fvtx"
+        },
+        {
+          "sha": "36e950d",
+          "subject": "fix(categorize): address the budget-fvtx review (M1-M6, F1-F13) (budget-fvtx)"
+        },
+        {
+          "sha": "4e29221",
+          "subject": "Merge tk/budget-dcxr: AI key screen (client), shared settings card and PasswordField in ui/"
+        },
+        {
+          "sha": "3561109",
+          "subject": "fix(client): close review 2 on the AI key screen"
+        },
+        {
+          "sha": "e3cc1cc",
+          "subject": "feat(categorize): categorizer engine, category_suggestions and categorize_run job (budget-fvtx)"
+        },
+        {
+          "sha": "d83ca18",
+          "subject": "test(client): gate the AI model list on settled detection"
+        },
+        {
+          "sha": "a48b23b",
+          "subject": "refactor(client): AI keys review fixes (sequencing, reducer, shared cards)"
+        },
+        {
+          "sha": "fac9c98",
+          "subject": "refactor(client): align AI key screen with the final ai contracts"
+        },
+        {
+          "sha": "5c1f0a6",
+          "subject": "fix(client): handle ai_key_forbidden and keys saved without a model"
+        },
+        {
+          "sha": "f72a951",
+          "subject": "fix(client): keep AI key detection from restarting mid-request; show removal notice"
+        },
+        {
+          "sha": "50b76fc",
+          "subject": "feat(client): AI key screen (save, detect provider, pick model, test, remove)"
+        },
+        {
+          "sha": "0919ddb",
+          "subject": "Merge tk/budget-ucyr: harden the AI provider layer before the categorizer"
+        },
+        {
+          "sha": "28f3f4e",
+          "subject": "fix(ai): third review round for the provider layer (budget-ucyr)"
+        },
+        {
+          "sha": "f34eb55",
+          "subject": "fix(ai): second review round for the provider layer (budget-ucyr)"
+        },
+        {
+          "sha": "378984a",
+          "subject": "fix(ai): harden the provider layer before the categorizer (budget-ucyr)"
+        },
+        {
+          "sha": "84aa070",
+          "subject": "feat(transfers): account rules by bank in the matcher (cards only receive; checking->card same bank; checking->checking across banks)"
+        },
+        {
+          "sha": "05e3267",
+          "subject": "Merge tk/budget-q8kf: AI provider layer (shared-ai-key flag, own keys, five provider adapters)"
+        },
+        {
+          "sha": "0d3d27c",
+          "subject": "Merge branch 'main' into tk/budget-q8kf"
+        },
+        {
+          "sha": "2ed8baf",
+          "subject": "chore(ai): renumber the AI credentials migration to 0109"
+        },
+        {
+          "sha": "318de4a",
+          "subject": "deploy: images 2026.11.24"
+        },
+        {
+          "sha": "de17b0b",
+          "subject": "docs: release notes v2026.11.24"
+        },
+        {
+          "sha": "db50606",
+          "subject": "fix(ai): harden key checks, Anthropic tool loops and provider isolation (budget-q8kf)"
+        },
+        {
+          "sha": "9eff45c",
+          "subject": "feat(ai): AI provider layer for category suggestions (budget-q8kf)"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.schema",
+          "status": "M"
+        },
+        {
+          "path": "CHANGELOG.md",
+          "status": "M"
+        },
+        {
+          "path": "api/VERSION",
+          "status": "M"
+        },
+        {
+          "path": "api/db/migrations/0109_ai_credentials.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0110_category_suggestions.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0111_category_suggestions_category_idx.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0112_categorize_attempts.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0113_categorize_settings.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0114_categorize_run_progress.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0115_categorize_decisions.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0116_categorize_decision_kind.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/eslint.config.js",
+          "status": "M"
+        },
+        {
+          "path": "api/scripts/e2e-categorize.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/ai/detect.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/detect.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/env.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/errors.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/http.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/http.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/keys.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/keys.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/anthropic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/anthropic.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/index.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/openai-compatible.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/openai-compatible.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/usage.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/redact.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/redact.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/routes.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/settings.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/types.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/bank-key.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/bank-key.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transaction-update.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-links.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/categories.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/activities-progress.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/activities.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/activities.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/agent.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/agent.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/candidates.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/categorize.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/chunk.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/decision-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/errors.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/job.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/jobspec.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/jobspec.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/key-lock.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/key-lock.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/messages.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/queue-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/router.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/routes.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/suggestions.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/testing/fake-provider.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/testing/fixtures.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/testing/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/tools.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/tools.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/workflows.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/sync-transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/test-op.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/features/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/worker-host.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/workflows/bundle.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/workflows/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/worker.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/(budget)/ai-keys.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/ai.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/base.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/systemNames.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeyForm.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeySavedCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeysScreen.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeyForm.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeyForm.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeys.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeys.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/useAiKeys.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/PasswordForms.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/PluggyKeysCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/usePluggyKeys.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/ImportScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/parsers/import.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/parsers/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/parsers/sources/contabilizei.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/import/parsers/sources/statement.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/ChangePasswordCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/SettingsRootPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/spending/SpendingScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/profile/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/PasswordField.tsx",
+          "status": "R077"
+        },
+        {
+          "path": "client/src/ui/bits.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/buttons.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/settingsCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "k8s/values.yaml",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/ai/credentials.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/credentials.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/outputs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/contracts.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/decisions.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/outputs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/queue.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/runs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/categorize/settings.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/contracts.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/domain/category-needs.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/domain/category-needs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/features.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 15829,
+        "deletions": 387
+      }
+    },
+    "landedOutside": {
+      "commit": "318de4a19f0044fc793ee9fb8e5d2549a110d9c2",
+      "branchHead": "318de4a19f0044fc793ee9fb8e5d2549a110d9c2",
+      "baseBranch": "main",
+      "at": "2026-11-24T16:06:25.373Z"
+    },
+    "agent_session": "budget-zkts-transfer-rules",
+    "finished_at": "2026-11-24T16:15:22.293Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 3,
+        "files": 13,
+        "additions": 381,
+        "deletions": 24
+      },
+      "head": "84aa070082a206c07dde573f1ab1755903daf383",
+      "at": "2026-11-24T16:15:22.293Z"
+    },
+    "worktreePruned": {
+      "pruned": false,
+      "removedWorktree": false,
+      "removedBranch": false,
+      "reason": "branch tk/budget-zkts is not fully merged into 3cbf4b3d67f5a42bf6fd7ee5fcdc6f9c1247b1ab"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-a716f0",
+      "name": "review-zkts.md",
+      "mime": "text/markdown",
+      "size": 11237,
+      "sha256": "f80afd3b247eea379fa52cfe57a6b4ea106df723b28e4c76fa9d687c4e8178a4",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-00603f",
+      "name": "review-zkts-2.md",
+      "mime": "text/markdown",
+      "size": 12351,
+      "sha256": "322c1952e97347bb953ca7fc682c60cf84ec923df2b12ecb949c7a613a620aad",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

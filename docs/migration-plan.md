@@ -143,7 +143,7 @@ budget/
   README.md  AGENTS.md  Taskfile.yml  mise.toml  docker-compose.yml
   .env.schema  .gitignore  .github/workflows/
   docs/
-  deploy/                 Dockerfiles, httpd.conf, image-tag values
+  docker/                 Dockerfiles, httpd.conf, image-tag values
   client/                 Expo app: iOS + web
     package.json  app.config.ts  eas.json  metro.config.js  babel.config.js
     assets/

@@ -1,0 +1,314 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-upgg",
+  "title": "Transfers T2: transfer payee lifecycle on the server (one per account, renamed with it, protected, listed)",
+  "description": "Plan .agents/plans/2026-11-24_transfers-refactor.md, task T2. Map: transfers-map-api.md on the epic budget-e67y (points 1, 5, 8: R3, R7). Exactly one system payee 'Transfer : <account>' per account: created with the account, renamed when the account is renamed, duplicates repaired, protected from rename/merge/delete/hide by the payee endpoints; accounts.transfer_payee_id and payees.transfer_account_id always agree; GET /payees returns transfer payees flagged (additive output field) so pickers can offer them. Identity by id, never by name. Additive migration only (shared database), with a read-only pre-check that reports duplicates.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-25T01:55:52.857Z",
+  "updated_at": "2026-11-25T03:17:43.971Z",
+  "started_at": null,
+  "closed_at": "2026-11-25T03:17:38.850Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-e67y",
+  "sprint": null,
+  "labels": [],
+  "notes": "T2 implemented on tk/budget-upgg: transfer-payees domain/store, repair (plan+report+apply, script), protection errors, GET /payees include_transfers, migration 0117 (plain index; uniqueness in code). api 1558 pass/0 fail/0 skip, tsc+eslint clean in shared and api.\nIndependent review of 031cd8e (review-upgg.md attached): 4 blockers (B1 stale payee text after account rename deletes/moves the mirror; B2 memo edit on a legacy row creates a mirror; B3 account rename hard-deletes an unrelated payee and its rule; B4 healing writes on ordinary requests). Sent back. Not approved.\nReview fixes B1-B4, F1-F13 committed; api 1579 pass/0 fail/0 skip.\nRound 3 fixes committed: former names (0118), resolution order, rule targets, foreign refs; api 1586 pass/0 fail/0 skip.\nlanded outside tk close at 574d92c (branch tk/budget-upgg merged into main by hand)\nMerged to local main (not pushed); owner approved in the Inbox thread 'Transfers refactor' on 2026-11-25. One system transfer payee per account (ensure/rename in the account's transaction, protected, payee_id on create/update, former names 0118, index 0117, one resolver for register/repeat/bulk/sync, repair script report-by-default). Three independent reviews attached; third found no blockers. Orchestrator reran on the branch merged with main (incl. budget-zkts): tsc shared/api clean, api eslint clean, shared 218, full api 1616 pass / 0 fail. Carry-overs on budget-nq2f and budget-mkrt.",
+  "design": null,
+  "acceptance_criteria": "Tests: account create/rename/close keeps exactly one transfer payee with the right name; a budget with duplicate transfer payees is repaired with transactions re-pointed; rename/merge/delete of a transfer payee is refused with a clear code; two accounts with the same name each have their own payee. Existing contract outputs only gain fields. Full api suite green, no skips.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-upgg",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-upgg",
+    "changeset": {
+      "base": "30a14e53c82ed3fcf3a38d3b4b047811d2d5e6d2",
+      "head": "ddbd40f7df019b82b7e10ee3739e924e252a0075",
+      "commits": [
+        {
+          "sha": "ddbd40f",
+          "subject": "Merge branch 'main' into tk/budget-upgg"
+        },
+        {
+          "sha": "5b991e5",
+          "subject": "Merge tk/budget-zkts: transfer matcher bank rules; refused pairs stay suggestions"
+        },
+        {
+          "sha": "5603daf",
+          "subject": "fix(transfers): every unlinked row carries its refused candidates; savings->card text; more tests"
+        },
+        {
+          "sha": "af4b479",
+          "subject": "fix(transfers): former names, one resolution order, rule targets, foreign references"
+        },
+        {
+          "sha": "a833f09",
+          "subject": "fix(transfers): refused suggestions only for pairs main already matched"
+        },
+        {
+          "sha": "1df7ddb",
+          "subject": "feat(transfers): offer rule-refused pairs as suggestions, never link them"
+        },
+        {
+          "sha": "36346b6",
+          "subject": "fix(transfers): stale payee text never changes an edit, ordinary requests never repair"
+        },
+        {
+          "sha": "031cd8e",
+          "subject": "feat(transfers): one transfer payee per account, renamed with it, protected, repairable"
+        },
+        {
+          "sha": "aa31e97",
+          "subject": "fix(transfers): judge rule 3 on checking accounts only, drop unreachable one-side rule suggestions"
+        },
+        {
+          "sha": "6e7165d",
+          "subject": "Merge branch 'main' into tk/budget-zkts"
+        },
+        {
+          "sha": "84aa070",
+          "subject": "feat(transfers): account rules by bank in the matcher (cards only receive; checking->card same bank; checking->checking across banks)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0117_transfer_payee_account_idx.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0118_transfer_payee_former_names.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/scripts/repair-transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/bank-key.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/bank-key.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/edited-payee.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transaction-update.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-links.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payee-repair.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payees.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfer-payees.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/runbooks/transfer-payee-repair.md",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/schemas.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 3404,
+        "deletions": 151
+      }
+    },
+    "agent_session": "011e3c6b-8148-4a11-8593-8d1e761197c6",
+    "finished_at": "2026-11-25T02:53:17.984Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 3,
+        "files": 32,
+        "additions": 2525,
+        "deletions": 120
+      },
+      "head": "af4b47952de9ca7b9d3704fb29e681b926f87fa2",
+      "at": "2026-11-25T02:53:17.984Z"
+    },
+    "landedOutside": {
+      "commit": "574d92c4ae949b9ecd25387c0d593f3a155a75a2",
+      "branchHead": "ddbd40f7df019b82b7e10ee3739e924e252a0075",
+      "baseBranch": "main",
+      "at": "2026-11-25T03:17:38.821Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-89084b",
+      "name": "review-upgg.md",
+      "mime": "text/markdown",
+      "size": 11011,
+      "sha256": "8c30a1c40810598affc2f5bed825e97793d378754705020e0b600abfdd4a01d3",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-7de515",
+      "name": "review-upgg-2.md",
+      "mime": "text/markdown",
+      "size": 11404,
+      "sha256": "1557ca5f7d8e4149898efcf18678f3887a9381b0d8101d1c2d3f5a65876b58ea",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-5fdeda",
+      "name": "review-upgg-3.md",
+      "mime": "text/markdown",
+      "size": 9026,
+      "sha256": "63793b86ecbfa9296db4c461b389ec0e89df0e784f8712aa5ca698af31ca06ab",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 2,
+  "comments": [],
+  "comment_count": 0
+}

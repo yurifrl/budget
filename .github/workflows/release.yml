@@ -13,9 +13,9 @@
 #             fail fast on a malformed value.
 #   images  - build and push the web, api and admin Docker images to GHCR
 #             (linux/amd64 + linux/arm64; tags: latest, <version>, sha).
-#   deploy  - pin <version> in k8s/values.yaml on main (ArgoCD rolls the
-#             Deployments from it; budget-worker takes the budget-api tag)
-#             and create the idempotent GitHub release.
+#   deploy  - pin the budget-admin tag in k8s/values.yaml on main (ArgoCD
+#             rolls it; api and web deploy continuously from deploy.yml) and
+#             create the idempotent GitHub release.
 #
 # Repo secrets:    GITHUB_TOKEN is provided by Actions.
 name: Release
@@ -78,13 +78,13 @@ jobs:
       matrix:
         include:
           - name: web
-            dockerfile: deploy/Dockerfile.web
+            dockerfile: docker/Dockerfile.web
             image: budget-web
           - name: api
-            dockerfile: deploy/Dockerfile.api
+            dockerfile: docker/Dockerfile.api
             image: budget-api
           - name: admin
-            dockerfile: deploy/Dockerfile.admin
+            dockerfile: docker/Dockerfile.admin
             image: budget-admin
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -144,23 +144,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Pin image tags (ArgoCD rolls the deployments from this)
+      - name: Pin admin image tag (api and web deploy on every main push)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Commit on top of current main: never roll main back to an older
-          # ref (this run may have been triggered by a tag of an older SHA).
-          git fetch origin main
-          git checkout -B deploy-pin origin/main
-          # budget-worker runs the budget-api image, so it takes the same tag.
-          sed -i "s/^  budget-web: .*/  budget-web: ${VERSION}/; s/^  budget-api: .*/  budget-api: ${VERSION}/; s/^  budget-worker: .*/  budget-worker: ${VERSION}/; s/^  budget-admin: .*/  budget-admin: ${VERSION}/" k8s/values.yaml
-          if git diff --quiet -- k8s/values.yaml; then
-            echo "k8s/values.yaml already pins ${VERSION}, nothing to commit (idempotent re-run)"
-            exit 0
-          fi
-          git add k8s/values.yaml
-          git commit -m "deploy: images ${VERSION}"
-          git push origin HEAD:main
+          # Only budget-admin: api and web are pinned per commit by deploy.yml
+          # on every push to main. Pinning their version tag here could roll
+          # them back to an older commit when main moved during the build, and
+          # the next deploy would not correct it. Commit on top of current
+          # main: never roll main back to an older ref (this run may have been
+          # triggered by a tag of an older SHA). Retry when a concurrent
+          # deploy.yml pin moved main between the fetch and the push.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git checkout -B deploy-pin origin/main
+            sed -i "s/^  budget-admin: .*/  budget-admin: ${VERSION}/" k8s/values.yaml
+            if git diff --quiet -- k8s/values.yaml; then
+              echo "k8s/values.yaml already pins admin ${VERSION}, nothing to commit (idempotent re-run)"
+              exit 0
+            fi
+            git add k8s/values.yaml
+            git commit -m "deploy: images ${VERSION}"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "push lost a race with another k8s/values.yaml commit, retrying (${attempt}/3)"
+            sleep 5
+          done
+          echo "::error::could not pin budget-admin ${VERSION} after 3 attempts"
+          exit 1
 
       - name: Create GitHub release
         env:

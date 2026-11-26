@@ -1,0 +1,322 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-n94s",
+  "title": "Categorize: a transaction whose category is later removed returns to the queue (owner decision); skipped rows stay out",
+  "description": "Owner decision 2026-11-24 (Inbox thread): 'Cleared rows come back'. Today an accepted transaction keeps its categorize_decisions row forever, so if the user later removes its category by hand it is uncategorized but hidden from the Categorize queue, excluded from counts, refused by accept (200 accepted:0 or 409) and by skip, and never re-classified. Wanted: when a transaction with an ACCEPT decision has no category any more, it is back in the queue with its earlier suggestions pending again, counted, acceptable and skippable, and a candidate for the engine. A SKIP decision is unchanged: the row stays out of the queue and the engine never looks at it. See review-edxg-2.md F3 (attached to budget-edxg) and api/src/categorize/{decision-store,queue-store,store}.ts.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-25T00:12:59.414Z",
+  "updated_at": "2026-11-25T03:20:23.593Z",
+  "started_at": null,
+  "closed_at": "2026-11-25T03:20:19.127Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-v2xe",
+  "sprint": null,
+  "labels": [],
+  "notes": "Implemented in worktree: stale accepts treated as undecided at read time (queue/counts/bundles/candidates, manual rows not re-offered) and replaced on write (accept upsert, skip flip, engine replaceSuggestions restores pending). Checks: task typecheck, task lint, shared 217 pass, full api 1531 pass/0 fail (BUDGET_REQUIRE_TEST_DB=1, PG 55432). New tests fail on the old store code. Contracts: descriptions only.\nlanded outside tk close at 5e847a6 (branch tk/budget-n94s merged into main by hand)\nMerged to local main (not pushed); owner approved in the Categorize Inbox thread on 2026-11-25. Stale accept decisions (accepted, category later cleared by hand) are inert at read time and replaced on the next accept/skip; skip unchanged. Orchestrator read the change and reran on the branch merged with main: tsc shared/api clean, api eslint clean, full api 1619 pass / 0 fail.",
+  "design": null,
+  "acceptance_criteria": "Tests: accept then clear by hand -> row in queue with suggestions pending, counts include it, accept and skip work, engine candidate again; accept then change to another category by hand -> not in queue (it has a category); skip -> still out and not a candidate; undo semantics unchanged. No contract shape change unless needed (say so). Full api suite green with no skips.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-n94s",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-n94s",
+    "changeset": {
+      "base": "30a14e53c82ed3fcf3a38d3b4b047811d2d5e6d2",
+      "head": "2318bde7503e9347ce09291495c355c813f12d3b",
+      "commits": [
+        {
+          "sha": "2318bde",
+          "subject": "Merge branch 'main' into tk/budget-n94s"
+        },
+        {
+          "sha": "574d92c",
+          "subject": "Merge tk/budget-upgg: one system transfer payee per account (lifecycle, protection, former names, repair script)"
+        },
+        {
+          "sha": "ddbd40f",
+          "subject": "Merge branch 'main' into tk/budget-upgg"
+        },
+        {
+          "sha": "5b991e5",
+          "subject": "Merge tk/budget-zkts: transfer matcher bank rules; refused pairs stay suggestions"
+        },
+        {
+          "sha": "5603daf",
+          "subject": "fix(transfers): every unlinked row carries its refused candidates; savings->card text; more tests"
+        },
+        {
+          "sha": "af4b479",
+          "subject": "fix(transfers): former names, one resolution order, rule targets, foreign references"
+        },
+        {
+          "sha": "a833f09",
+          "subject": "fix(transfers): refused suggestions only for pairs main already matched"
+        },
+        {
+          "sha": "1df7ddb",
+          "subject": "feat(transfers): offer rule-refused pairs as suggestions, never link them"
+        },
+        {
+          "sha": "36346b6",
+          "subject": "fix(transfers): stale payee text never changes an edit, ordinary requests never repair"
+        },
+        {
+          "sha": "031cd8e",
+          "subject": "feat(transfers): one transfer payee per account, renamed with it, protected, repairable"
+        },
+        {
+          "sha": "aa31e97",
+          "subject": "fix(transfers): judge rule 3 on checking accounts only, drop unreachable one-side rule suggestions"
+        },
+        {
+          "sha": "6e7165d",
+          "subject": "Merge branch 'main' into tk/budget-zkts"
+        },
+        {
+          "sha": "29ce310",
+          "subject": "fix(categorize): return hand-cleared accepted rows to the queue"
+        },
+        {
+          "sha": "84aa070",
+          "subject": "feat(transfers): account rules by bank in the matcher (cards only receive; checking->card same bank; checking->checking across banks)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0117_transfer_payee_account_idx.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0118_transfer_payee_former_names.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/scripts/repair-transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/bank-key.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/bank-key.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/edited-payee.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transaction-update.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-links.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payee-repair.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payees.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/domain/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/accounts.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budget-restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfer-payees.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/budgets.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/restore.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transfer-payees.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/decision-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/queue-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/routes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync-transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/runbooks/transfer-payee-repair.md",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/schemas.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/decisions.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/queue.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 3634,
+        "deletions": 224
+      }
+    },
+    "agent_session": "01a2100c-83dc-72d3-a6e5-42a1de856ebb",
+    "finished_at": "2026-11-25T00:22:05.099Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 6,
+        "additions": 230,
+        "deletions": 73
+      },
+      "head": "29ce310870ed563a3825ed5b1a2aed31a997ef71",
+      "at": "2026-11-25T00:22:05.099Z"
+    },
+    "landedOutside": {
+      "commit": "5e847a6a73a62c98682a33549e508f7206004437",
+      "branchHead": "2318bde7503e9347ce09291495c355c813f12d3b",
+      "baseBranch": "main",
+      "at": "2026-11-25T03:20:19.097Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

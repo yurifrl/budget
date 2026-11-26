@@ -84,7 +84,7 @@ All of these were run on 2026-11-17/18. Output is summarised.
 | iOS simulator | `bunx expo run:ios --configuration Release --no-bundler --device "iPhone 17 Pro"` (no one held the ios-simulator lease) | prebuild, pods and `› Build Succeeded`, `0 error(s)`; the embedded bundle was built from `shared/` (1231 modules). Installed on the simulator. The CLI then exited 1 with `Simulator app did not open fast enough`. `xcrun simctl launch` on the booted simulator, with the API on :3100, rendered `hello_get @ http://localhost:3100` / `Hello, Budget!` |
 | MCP + zod | `api/src/mcp/tools.test.ts` | SDK registers, lists (JSON schema has `minLength: 1`) and calls the tool; empty name is rejected; `zod` resolved from api/ and from the SDK realpaths to `shared/node_modules/zod` |
 | Temporal | `api/src/workflows/bundle.test.ts` | `bundleWorkflowCode` on `api/src/workflows/index.ts` succeeds |
-| API image | `container build --dns 1.1.1.1 -f deploy/Dockerfile.api -t budget-api:phase0 .` (repo root) | built; `container run -p 127.0.0.1:3101:3100` answered `{"message":"Hello, Docker!"}` |
+| API image | `container build --dns 1.1.1.1 -f docker/Dockerfile.api -t budget-api:phase0 .` (repo root) | built; `container run -p 127.0.0.1:3101:3100` answered `{"message":"Hello, Docker!"}` |
 | End to end (web) | API on :3100 + `dist/web` served on :8092, loaded in a headless browser | page shows `hello_get @ http://localhost:3100` and `Hello, Budget!` |
 
 Lockfiles: `grep -c fbr.land */bun.lock` gives 0 for all three.
@@ -260,7 +260,7 @@ contract) and the Temporal bundle test now bundles the real
 - Test env names: `BUDGET_REQUIRE_TEST_DB=1` (DB suites fail instead of skip),
   `BUDGET_TEST_DB`, `BUDGET_TEST_PG_BASE`, `BUDGET_TEST_DB_ISOLATED`.
   `task test:api` sets the first.
-- `deploy/Dockerfile.api` also runs the worker: `bun src/worker.ts`. It copies
+- `docker/Dockerfile.api` also runs the worker: `bun src/worker.ts`. It copies
   `api/db/migrations` and `api/VERSION`. `api/VERSION` replaces syscd's root
   `VERSION` (read by `/health`).
 
@@ -290,7 +290,7 @@ Run on 2026-11-18 from the `tk/budget-yue` worktree against Postgres :5432
 | Boot guard | no auth env: exit 1; `AUTH_DISABLED_OK=1` + `KUBERNETES_SERVICE_HOST`: exit 1 |
 | `e2e-mcp http` and `stdio`, `e2e-consent`, CLI `login` + `whoami` | pass (auth on) |
 | `e2e-jobs`, `e2e-connections` (fake adapter) | pass against compose Temporal :57233 |
-| `container build --dns 1.1.1.1 -f deploy/Dockerfile.api -t budget-api:phase2 .` | built; image holds 33 migrations; boot guard fires without env |
+| `container build --dns 1.1.1.1 -f docker/Dockerfile.api -t budget-api:phase2 .` | built; image holds 33 migrations; boot guard fires without env |
 
 ## Phase 3: client lift-and-shift
 
@@ -1300,7 +1300,7 @@ The Temporal worker used to bundle its workflows with webpack on every boot
 (`workflowsPath`). In the cluster that peak got `budget-worker` OOMKilled at its
 384Mi limit about 28 s after each start, as soon as Temporal was reachable.
 
-Now `deploy/Dockerfile.api` runs `bun run build:workflows`
+Now `docker/Dockerfile.api` runs `bun run build:workflows`
 (`api/scripts/build-workflow-bundle.ts` -> `api/dist/workflow-bundle.js`) and the
 worker loads that file (`api/src/jobs/workflows/source.ts`: bundle if the file
 exists, otherwise bundle at start, which is what local dev and tests do).
@@ -2651,3 +2651,30 @@ row, not from a timestamp.
   0 updated, 0 imported, no payee created; new rows and a changed bank text take the rules; legacy
   rows keep their payee when only the date or amount moves; apply on rows of the earlier form,
   revert, the skips, transfer hints).
+
+## Continuous api/web deploy on main (2026-11-26)
+
+Why: server code reached the cluster only through `task release` (version bump,
+tag, `release.yml`), so fixes sat on main until a release was cut. Now any push
+to main that can change an image is built and rolled by ArgoCD.
+
+- `deploy.yml` runs on a push to main touching `api/**`, `client/**`,
+  `shared/**`, `docker/**`, `.dockerignore` or itself. It builds `budget-web`
+  and `budget-api` for linux/amd64 + linux/arm64 tagged `sha-<commit>` (one
+  immutable image per commit) and commits that tag for `budget-web`,
+  `budget-api` and `budget-worker` into `k8s/values.yaml`.
+- The pin commit is made by the bot on top of current main, retried up to 3
+  times: a push that landed during the 10-20 min build must not be rolled back,
+  and a concurrent pin (another deploy or a release) can move main between the
+  fetch and the push. Runs share the `deploy-main` concurrency group with
+  `cancel-in-progress`: a newer push cancels an older build instead of letting
+  the cluster roll to stale code afterwards.
+- `release.yml` keeps building the versioned web/api/admin images and creating
+  the GitHub release, but pins ONLY `budget-admin`. Pinning the api/web version
+  tag there would roll them back to an older commit whenever main moved during
+  the build, and the next deploy would not correct it (its pin landed before
+  the release pin). The admin image has no continuous deploy, so the release
+  pin is its deployment.
+- Docs-only pushes deploy nothing (path filter). Rollback is unchanged: commit
+  the tag to run into `k8s/values.yaml` (`sha-<commit>` for any main commit,
+  `<version>` for a release).

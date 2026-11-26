@@ -1,0 +1,443 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-p8td",
+  "title": "Transfers T4-T6 screens: Manage Payees 'Transfer Payees' group with renaming rules (several per payee), remove 'Treat as transfer' and 'Transfer rules' tab, category menu without Payment/Transfer, popover 'always' writes a renaming rule",
+  "description": "Plan .agents/plans/2026-11-24_transfers-refactor.md tasks T4, T5, T6 and the owner decisions in it. Owner's reference: YNAB's Manage Payees with a 'Transfer Payees' group, one per account, each with Renaming rules ('Imported payees that match these rules will be renamed'), and the note that transfer payees are created by the app and cannot be edited or deleted. Server is ready on main: GET /payees?include_transfers=true (transfer_account_id, transfer_account_name), payee_id on transaction create/update, rename-rule operations list/add/update/remove, 409 transfer_payee_protected, account_name_exists.",
+  "status": "ready-to-review",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-25T13:43:10.893Z",
+  "updated_at": "2026-11-25T17:10:41.980Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-e67y",
+  "sprint": null,
+  "labels": [],
+  "notes": null,
+  "design": null,
+  "acceptance_criteria": "Screenshots at 1400 and 375 of each changed screen from the running app; client tsc, eslint, tests green; a transfer can be made by picking a transfer payee, remembered by a renaming rule, and undone, on web and at phone width.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-p8td",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-p8td",
+    "changeset": {
+      "base": "e5979700a4e30c058af7c3100208ce81f0a7b8db",
+      "baseBranch": "main"
+    },
+    "agent_session": "011e3c6b-8148-4a11-8593-8d1e761197c6",
+    "finished_at": "2026-11-25T17:03:07.361Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 15,
+        "files": 114,
+        "additions": 4499,
+        "deletions": 1275
+      },
+      "head": "3276291c48b429603ceebcfdaac8cf91cd62197b",
+      "at": "2026-11-25T17:03:07.361Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-6611cc",
+      "name": "p8td-1400-ordinary-payee.png",
+      "mime": "image/png",
+      "size": 138671,
+      "sha256": "fc73e5ad2944325f4edc92222c295a1e6f0782fc11599cfd309a044186da6fe7",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-90ddc5",
+      "name": "p8td-1400-transfer-payee.png",
+      "mime": "image/png",
+      "size": 129976,
+      "sha256": "4eb4021498b23577c854da1f3bb67612905dd8dda4d644927dfab6d6cd28f6fb",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-039a1e",
+      "name": "p8td-1400-apply-confirm.png",
+      "mime": "image/png",
+      "size": 151924,
+      "sha256": "cc4cf540539e208a1984de8090c83089da0ed2dbcec267c3670dc146749716f4",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-009ed7",
+      "name": "p8td-1400-transfer-apply-confirm.png",
+      "mime": "image/png",
+      "size": 150447,
+      "sha256": "ed0cc560d57ca8aa71255604aa15074358628659ee5ee0a200512d6ff69f17d7",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-eb4c9c",
+      "name": "p8td-1400-legacy-auto.png",
+      "mime": "image/png",
+      "size": 149618,
+      "sha256": "878c1bf754327efa10aabc082db38db8b51218cd944778e367b20566851eb579",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-39f058",
+      "name": "p8td-1400-legacy-account.png",
+      "mime": "image/png",
+      "size": 146919,
+      "sha256": "069fb437a884db34ba0f0032b8515e5eba265565ef892a36e07487d70f598383",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f73b52",
+      "name": "p8td-1400-toast-undo.png",
+      "mime": "image/png",
+      "size": 147576,
+      "sha256": "138c7a2722c12a39d8667c4c12f3646fd829655917b8396cdbe4bfcfc5a99653",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-aa8c05",
+      "name": "p8td-375-groups.png",
+      "mime": "image/png",
+      "size": 32051,
+      "sha256": "b407b4f3bf7bb0d1c50a1fc7cba08071a6343b7a82c5ccaa441237ab57b00ba7",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-81646b",
+      "name": "p8td-375-ordinary-payee.png",
+      "mime": "image/png",
+      "size": 55541,
+      "sha256": "d6d6146b827da5a6725d3d551f8e53297ece44c4f4c1544603c69abad583a0f3",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-fdbba3",
+      "name": "p8td-375-transfer-payee.png",
+      "mime": "image/png",
+      "size": 52427,
+      "sha256": "05c13b7cffa31278768a58a3f7ebdaf3b75733b30cabaaeb87425c4b1f028c39",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d85918",
+      "name": "p8td-375-apply-confirm.png",
+      "mime": "image/png",
+      "size": 53127,
+      "sha256": "acabb3afbbc753f10c1264a5f0f9b72041ab0f37d5b9a45891d871dc7e190506",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-7f7570",
+      "name": "p8td-375-legacy-auto.png",
+      "mime": "image/png",
+      "size": 61489,
+      "sha256": "21f502d37466243a168e75b5f8f79b9d5e996fcec853c19b11f0d9792c243b21",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-eab84c",
+      "name": "p8td-375-legacy-account.png",
+      "mime": "image/png",
+      "size": 59591,
+      "sha256": "c9fabe1f2ef4784ee202b10207d7fbce4df28a569b5620826e25edd44a9b2d3e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-4c1b75",
+      "name": "p8td-375-toast-undo.png",
+      "mime": "image/png",
+      "size": 60495,
+      "sha256": "bc5dc59118dbec1198ca2c317a61564af9244af110b46c618104be2c5481af52",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-773a49",
+      "name": "p8td-375-undone.png",
+      "mime": "image/png",
+      "size": 59787,
+      "sha256": "4f58cdacbc214fe4e8bfc2164b91b66da69431554dfd66325594cd22f313a4a5",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-50d75c",
+      "name": "p8td2-1400-register-transfer.png",
+      "mime": "image/png",
+      "size": 155553,
+      "sha256": "ee9c37c2bea2f50af71dd58f49f10713cffdf81b9f2ecd017bcf4ee08beaae8d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-e91223",
+      "name": "p8td2-1400-payee-picker.png",
+      "mime": "image/png",
+      "size": 176386,
+      "sha256": "9af11006cc648107f4f1742ea24665c4759e184dc49a64e4f80d5d423495ad5f",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-5f61da",
+      "name": "p8td2-1400-category-dropdown.png",
+      "mime": "image/png",
+      "size": 179781,
+      "sha256": "9f35c48bee99cfab5eea122cd7176b17993905b74b2b0108f8d7e9aa73a85305",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-7afa71",
+      "name": "p8td2-1400-transfer-picked.png",
+      "mime": "image/png",
+      "size": 169115,
+      "sha256": "9723cf9cd67aa73fd506af333ed2ad89427e553efee5e9afab07d029f2624f84",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f3ec9b",
+      "name": "p8td2-1400-category-no-card-payment.png",
+      "mime": "image/png",
+      "size": 215806,
+      "sha256": "459b609eac265c8e9fb1b8698e0f25264dd7c4dd80826949224c5c5d40cff0f1",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-5e3b08",
+      "name": "p8td2-375-register-transfer.png",
+      "mime": "image/png",
+      "size": 72740,
+      "sha256": "0a896c1c1cdadc3f07b830e511c67700a5c3310f846866c394aeffdfa73c2d92",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ef6c3d",
+      "name": "p8td2-375-payee-picker.png",
+      "mime": "image/png",
+      "size": 34968,
+      "sha256": "17dc27699db4b543d7fe4033810e3ae718a15fa452cdf18515aa5416adb69453",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-813737",
+      "name": "p8td2-375-transfer-picked.png",
+      "mime": "image/png",
+      "size": 31945,
+      "sha256": "e6c8528c5546ad2942f4ea2ee5285c572ed88f4305340eae808d0859c387de9b",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-8c7538",
+      "name": "p8td2-375-category-picker.png",
+      "mime": "image/png",
+      "size": 32490,
+      "sha256": "4faa88e158681fec204d4a8406f17c6b1fd7d4f315a5c2ea758c10db8415c7b9",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-122c7f",
+      "name": "p8td-engine-before-after.txt",
+      "mime": "text/plain",
+      "size": 1021,
+      "sha256": "db6cdc6a9c1f491d47f5cb73f543bc2eca91bc3fb23cc112eeebbe17c818be5f",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-1c7600",
+      "name": "p8td3-1400-popover-rule.png",
+      "mime": "image/png",
+      "size": 268864,
+      "sha256": "b62378e39880f828d2d55e54edb17303207b9c162aaeaed8b571b62be83e085e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d742cb",
+      "name": "p8td3-1400-other-account.png",
+      "mime": "image/png",
+      "size": 255555,
+      "sha256": "a46f7854333dffbbc12b027757665521a5604481777a0a36d59ad24dfd51c2b5",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-e8c897",
+      "name": "p8td3-1400-after-link.png",
+      "mime": "image/png",
+      "size": 234614,
+      "sha256": "c95fe551124b0272848d97c3fdfdfd068a8d2d4c5f05a49d9820432864b5b454",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-491de1",
+      "name": "p8td3-1400-payees-rule.png",
+      "mime": "image/png",
+      "size": 131894,
+      "sha256": "8ef95217104e3cbdf45b8242487f7d7c69c4b9b62804e78b75ed0ae4bef482f3",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c55766",
+      "name": "p8td3-1400-review-list.png",
+      "mime": "image/png",
+      "size": 92927,
+      "sha256": "9a1740d14837a08dc8b1b50a6f09ee051ee8b1655bdff02e707602772c3b1d42",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-35ef2b",
+      "name": "p8td3-375-popover-rule.png",
+      "mime": "image/png",
+      "size": 67358,
+      "sha256": "c8a1633e5dbfc369b37283569fec336559914a1b536d0a2cbff648b77e28b05a",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-67bd92",
+      "name": "p8td3-375-other-account.png",
+      "mime": "image/png",
+      "size": 57634,
+      "sha256": "8d852c48f703cebf2c8d5fc35358aabcc803f53e2c9cd70815b4c861e67bc76e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-aed863",
+      "name": "p8td3-375-after-link.png",
+      "mime": "image/png",
+      "size": 77043,
+      "sha256": "c2bfe622d334bf09f5f1df4c4ad868bdab58de23d96c627eef44478234c59cf2",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-354d98",
+      "name": "p8td3-375-payees-rule.png",
+      "mime": "image/png",
+      "size": 57204,
+      "sha256": "cfe621d0a68426fb67831c53e5ffc43ec97dda6551d2625856519d41b26f43b6",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-05e32b",
+      "name": "p8td3-375-review-list.png",
+      "mime": "image/png",
+      "size": 39044,
+      "sha256": "ed732d36b613dd64bb1840c51dbe465bdf72d41294146a84ff9eb3cf02a33abe",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-0f547b",
+      "name": "p8td-engine-legacy-before-after.txt",
+      "mime": "text/plain",
+      "size": 1721,
+      "sha256": "61521049986a8dc77f2cbfb2db61b71c0a6d88a1d004121477d682f12024ef65",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-83dbc6",
+      "name": "review-p8td.md",
+      "mime": "text/markdown",
+      "size": 13336,
+      "sha256": "44e013ad338af062d2f74b07a91395bfdfce36734d3993251d942e8ee3126e43",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-7f4bda",
+      "name": "p8td4-1400-convert-notice.png",
+      "mime": "image/png",
+      "size": 158786,
+      "sha256": "6f224d6e01d33320065376792422e6358f34d4d5fffaf051af027fba8bcc13b8",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-83d659",
+      "name": "p8td4-1400-convert-targets.png",
+      "mime": "image/png",
+      "size": 160247,
+      "sha256": "b9328dbc76d75fabf4732968f8052a21f20450ccc3d6c545de3f61e32ba11226",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-9b4558",
+      "name": "p8td4-375-convert-notice.png",
+      "mime": "image/png",
+      "size": 59535,
+      "sha256": "e7cfe681d652de85c4ea943155eee4186aaa4ce47fcb2eb31e72581d041bffca",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-88e25b",
+      "name": "p8td4-375-rule-removed-undo.png",
+      "mime": "image/png",
+      "size": 58286,
+      "sha256": "774db0b4fea4bdf80adce11c7455563cf62471b2f0891042aaee1481180e4188",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-32ca47",
+      "name": "p8td-probe-after-fix.txt",
+      "mime": "text/plain",
+      "size": 2859,
+      "sha256": "c7e0d1c5740565d2265dd46909425aece5509958123b789e1ad8334a135cbce8",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-6d8f8f",
+      "name": "review-p8td-2.md",
+      "mime": "text/markdown",
+      "size": 12534,
+      "sha256": "6c576befe99986d4513bc40f7f1f15d879f08f2a55fa6d8d90ef40026f147592",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

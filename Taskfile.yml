@@ -130,20 +130,20 @@ tasks:
   image:api:
     desc: Build the API image (context = repo root). On this Mac the docker shim's builder has no DNS; use `container build --dns 1.1.1.1 ...` instead.
     cmds:
-      - docker build -f deploy/Dockerfile.api -t budget-api:dev .
+      - docker build -f docker/Dockerfile.api -t budget-api:dev .
 
   image:web:
     desc: Build the web image (context = repo root; same DNS note as image:api)
     cmds:
-      - docker build -f deploy/Dockerfile.web -t budget-web:dev .
+      - docker build -f docker/Dockerfile.web -t budget-web:dev .
 
   image:admin:
     desc: Build the admin image (context = repo root; same DNS note as image:api)
     cmds:
-      - docker build -f deploy/Dockerfile.admin -t budget-admin:dev .
+      - docker build -f docker/Dockerfile.admin -t budget-admin:dev .
 
   release:
-    desc: Server release. Bump ONLY api/VERSION (UTC date; -NN suffix for same-day re-releases), commit and push to main. CI (version.yml -> release.yml) tags v<VERSION>, builds the web/api/admin images, pins k8s/values.yaml and creates the GitHub release. Never touches the iOS app (see release:app)
+    desc: Server release. Bump ONLY api/VERSION (UTC date; -NN suffix for same-day re-releases), commit and push to main. CI (version.yml -> release.yml) tags v<VERSION>, builds the versioned web/api/admin images, pins the admin tag in k8s/values.yaml and creates the GitHub release. The api and web images deploy per commit on every push to main (deploy.yml), not here. Never touches the iOS app (see release:app)
     cmds:
       - |
         branch="$(git rev-parse --abbrev-ref HEAD)"

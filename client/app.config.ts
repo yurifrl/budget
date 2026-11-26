@@ -18,7 +18,7 @@ const VERSION_PATTERN = /^\d{4}\.\d{2}\.\d{2}(-\d{2})?$/;
 
 /**
  * `WEB_RELEASE_VERSION` overrides `client/VERSION` for the web export only:
- * the web image ships with the server release, so deploy/Dockerfile.web sets
+ * the web image ships with the server release, so docker/Dockerfile.web sets
  * it to `api/VERSION` and the menu shows the server version on web. Native
  * builds (EAS) never set it, so the iOS app keeps its own `client/VERSION`.
  */

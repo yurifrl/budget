@@ -1,0 +1,403 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-8vnk",
+  "title": "Categorize page: 'Leave uncategorized' is never sent on a timer; rows stay in a Leaving strip until the user presses Done or leaves the page",
+  "description": "Owner decision 2026-11-25 (Categorize Inbox thread): 'Never send it on a timer'. Today a skip is sent when its own 10 s timer ends. New behaviour: pressing S (or the button) moves the row to a 'Leaving uncategorized' strip, with no countdown; each row there has Undo, and Z still pops the undo stack in key-press order. Nothing is sent until the user presses a 'Done' button on the strip (which names how many rows will leave the list for everyone in the budget), or leaves the page / switches budget / closes the tab, at which point the pending rows ARE sent (the reverse of today, where leaving cancels them): confirm on in-app navigation with a short prompt naming the count (Send and leave / Keep them and leave / Stay); on tab close use the best effort the platform allows and say what it is. Accept bundle / Accept all keep excluding rows in the strip. Also fix from review-mjug-4.md follow-ups 1, 2 and 5: no empty '0 transactions' undo entry; bundle, Accept all and header counts exclude rows in the strip; and with no timer the late-Z race disappears. Keep the app running on :3100/:8091 from the task's worktree for the owner.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-25T13:44:38.702Z",
+  "updated_at": "2026-11-25T16:03:09.096Z",
+  "started_at": null,
+  "closed_at": "2026-11-25T16:02:55.293Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-v2xe",
+  "sprint": null,
+  "labels": [],
+  "notes": "Skips never go out on a timer: Leaving strip (no countdown, Undo per row, Done button naming the count, hint says tab close/reload sends nothing), Z in key-press order, leave prompt (Send and leave / Keep them and leave / Stay) on route or budget change, browser leave-site question while rows wait. Counts (header, bundles, Accept all) exclude strip rows; Accept bundle/all exclude them; empty bundle accept leaves no undo entry; all skip-timer code removed. Finding: the rail Link does a FULL PAGE LOAD in the browser (window state lost), so rail navigation cannot be intercepted by the prompt (rows just come back); router.push navigation and budget switch are covered. client: tsc 0, eslint 0, bun test 1465 pass 0 fail.\nRound 2: Done/Send-and-leave lock the rows first (no Undo, Z passes over, shows 'being sent'), re-check before each request, busy counter balanced; leave prompt locked while sending, names the budget, shows sent/failed counts; retry rows stay in the strip, refused rows leave with a note; strip rows dropped only when the queue page is the whole queue; badge excludes the strip; hint reworded. client: tsc 0, eslint 0, bun test 1474 pass 0 fail.\nRound 3: rows committed by Done are not offered to the leave prompt, never restored locked, and finish sending after the page goes away; Z never passes over sending rows (shows 'being sent'); 400/403/404 leave with a note; dropped note in the prompt; pt-BR plurals. Verified with a 3-5 s delayed /categorize/skip: Done then switch + Stay/Keep/Send, Done then route change, Z during send. client: tsc 0, eslint 0, bun test 1474 pass 0 fail.\nlanded outside tk close at fba921e (branch tk/budget-8vnk merged into main by hand)\nMerged to local main as fba921e (not pushed); owner approved in the Categorize Inbox thread on 2026-11-25. 'Leave uncategorized' is never sent on a timer: Leaving strip with Done, leave prompt (Send / Keep / Stay), committed rows finish sending, no skip sent on reload or close. Two independent reviews attached; the last blocker was reproduced and re-tested with a delayed request. Orchestrator reran on the branch merged with main: client tsc and eslint clean, 1474 tests pass.",
+  "design": null,
+  "acceptance_criteria": "Browser-verified without sending any skip except through Done on demo data that is then restored; screenshots at 1400 of the strip with Done and of the leave prompt; client tsc, eslint, tests green.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-8vnk",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-8vnk",
+    "changeset": {
+      "base": "2c5c3d8d7b8e26bfc8a45a402c4a53ad17106a2d",
+      "head": "83d6d9556f2073d4bf9f50271667cc8bf06536b2",
+      "commits": [
+        {
+          "sha": "83d6d95",
+          "subject": "Merge branch 'main' into tk/budget-8vnk"
+        },
+        {
+          "sha": "e4e9223",
+          "subject": "fix(categorize): rows Done has committed are never offered to the leave prompt or restored locked; Z never passes over them; 400/403/404 leave with a note; prompt note for dropped rows; pt-BR plurals"
+        },
+        {
+          "sha": "e597970",
+          "subject": "Merge tk/budget-ou8p: renaming rules apply only going forward; apply to past transactions with preview and undo"
+        },
+        {
+          "sha": "6bd2863",
+          "subject": "fix(rename-rules): syncs take the budget lock shared, apply/revert exclusive with a 5s lock_timeout (409 bank_sync_running), JS-equal trim in the prefilter (budget-ou8p round 4)"
+        },
+        {
+          "sha": "c34f3e7",
+          "subject": "fix(categorize): Done locks the rows it sends (no Undo, re-checked before each request); leave prompt locked while sending and names the budget; retry/refused handling; strip rows kept unless the queue is fully loaded; badge excludes the strip"
+        },
+        {
+          "sha": "b3e4968",
+          "subject": "wip"
+        },
+        {
+          "sha": "269e1a9",
+          "subject": "docs: real text order"
+        },
+        {
+          "sha": "1f35904",
+          "subject": "fix(rename-rules): bank_text of the latest pull on every path, raw text preferred, revert once, per-budget lock, SQL prefilter, docs (budget-ou8p round 3)"
+        },
+        {
+          "sha": "d4f1f61",
+          "subject": "wip"
+        },
+        {
+          "sha": "51e09cc",
+          "subject": "fix(categorize): leave prompt works with a page that stays mounted behind the new route (commands to a live page, restore for a gone one)"
+        },
+        {
+          "sha": "9091e2b",
+          "subject": "feat(categorize): browser leave-site question while rows wait in the strip"
+        },
+        {
+          "sha": "939c800",
+          "subject": "fix(rename-rules): text-based change detection, real bank text for apply, server-recorded revert, exact /bulk text (budget-ou8p review)"
+        },
+        {
+          "sha": "16ad3f7",
+          "subject": "fix(categorize): the leave store is one per app (route modules are evaluated again on re-entry)"
+        },
+        {
+          "sha": "c438dab",
+          "subject": "fix(categorize): the shell watches route and budget and asks about rows left in the strip (the navigator does not run the page's cleanup)"
+        },
+        {
+          "sha": "7bfcfcf",
+          "subject": "Merge branch 'main' into tk/budget-ou8p"
+        },
+        {
+          "sha": "6680ac6",
+          "subject": "feat(categorize): skips are never sent on a timer: Leaving strip with Done, leave prompt, counts without the strip, no empty undo entry"
+        },
+        {
+          "sha": "da81e58",
+          "subject": "docs: rules apply going forward (budget-ou8p)"
+        },
+        {
+          "sha": "d7cce45",
+          "subject": "test(rename-rules): rules apply going forward, apply/preview/revert (budget-ou8p)"
+        },
+        {
+          "sha": "eec6beb",
+          "subject": "feat(rename-rules): preview, apply and revert one rule on past transactions (budget-ou8p)"
+        },
+        {
+          "sha": "5414892",
+          "subject": "feat(rename-rules): sync refresh and statement re-import leave stored rows alone when a rule changes (budget-ou8p)"
+        }
+      ],
+      "files": [
+        {
+          "path": "api/db/migrations/0122_rename_rule_applies.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/rename-apply.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/ledger.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transactions.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/rename-apply.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/adapters/pluggy/index.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/bank-text.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/rename-rules-forward.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/connections/rename-rules-legacy.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/sync.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/BundleCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/BundlesView.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/CategorizeScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/LeavePrompt.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/OneByOneView.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/PendingSkipsStrip.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/QueuePane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/accept.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/accept.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/leave.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/leave.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/leave.store.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/leave.store.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/oneByOne.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/oneByOne.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/page.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/page.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/queue.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/queue.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useBundleRows.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizeAccept.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizePage.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useNow.ts",
+          "status": "D"
+        },
+        {
+          "path": "client/src/features/categorize/useUnloadGuard.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/shell/BudgetLayout.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/buttons.tsx",
+          "status": "M"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/payees.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 3154,
+        "deletions": 282
+      }
+    },
+    "agent_session": "011e3c6b-8148-4a11-8593-8d1e761197c6",
+    "finished_at": "2026-11-25T15:27:10.692Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 7,
+        "files": 31,
+        "additions": 1226,
+        "deletions": 230
+      },
+      "head": "e4e9223f774b20371d2635f1322e8faa6dbeba35",
+      "at": "2026-11-25T15:27:10.692Z"
+    },
+    "landedOutside": {
+      "commit": "fba921ea52d17b55e1ae01d668102a61d47e9ba7",
+      "branchHead": "83d6d9556f2073d4bf9f50271667cc8bf06536b2",
+      "baseBranch": "main",
+      "at": "2026-11-25T16:02:55.269Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-c87ada",
+      "name": "mjug5-1400-leaving-strip-done.png",
+      "mime": "image/png",
+      "size": 215009,
+      "sha256": "564f9685741289c755438f33456065447b6f82cbd04a2e068ce46e31947088bc",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f54c59",
+      "name": "mjug5-1400-leave-prompt.png",
+      "mime": "image/png",
+      "size": 86243,
+      "sha256": "69c7fcc12f244c1d2fbd4ff40515d180051d4db44a0cfeeb08782da837a39cb5",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d7a964",
+      "name": "review-8vnk.md",
+      "mime": "text/markdown",
+      "size": 10172,
+      "sha256": "cd70d08210c5c1b743e20d271b1a5c2ebccd7420515f97a3bf0483b427bfa07d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-b0a610",
+      "name": "review-8vnk-2.md",
+      "mime": "text/markdown",
+      "size": 8113,
+      "sha256": "53d2c9f8f5fc63328374716402e27274db3cf027798fc8182b5eee04249ccd0a",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

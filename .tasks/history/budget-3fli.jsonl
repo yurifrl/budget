@@ -1,0 +1,1 @@
+{"issue_id":"budget-3fli","action":"save","at":"2026-11-25T13:09:33.619Z","actor":null,"data":{"status":"open","title":"Categorize server: undoing an accept with a category picked by search destroys the row's AI suggestions (manual row overwrites rank 1, undo deletes manual rows)"}}

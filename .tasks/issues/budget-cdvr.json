@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-cdvr",
+  "title": "Categorizer follow-ups after budget-fvtx: reasoning-effort gating per OpenAI model, attempt counter rules, masking gaps, >200 categories, run-level token cap, live provider check",
+  "description": "From review-fvtx-3.md (no blockers). 1) request-shape 400s count toward the 3-attempt cap and capped rows only return through force, which nothing calls. 2) attempt counter rises on every outcome; a stale-heartbeat retry can count twice. 3) list limit 200 also limits allowed category ids. 4) reasoning effort is sent to gpt-5*-chat-latest and o1-mini/o1-preview, which may reject it (a 400 on every call stops a run after 3); DeepSeek gets it for every model; 'low' turns reasoning on for models whose default is none. Needs one live call per adapter with real keys. 5) maskFreeText misses spaced CPFs, account 56789-0, (11) 98765-4321, e-mail PIX keys; over-masks DT 20261124, LOJA 0001234, NF numbers; payee and import payee names reach the prompt unmasked. 6) the 3-in-a-row stop is per chunk. 7) 81-minute chunk deadline vs one 429 wait per transaction; no run-level token cap (worst case 8M tokens). 8) comments name a test file that does not exist. 9) equivalence test lacks a credit-card-payment fixture. Also deferred from review 2: heartbeat-resume lag, continue-as-new.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-24T19:48:38.492Z",
+  "updated_at": "2026-11-24T19:48:38.492Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-v2xe",
+  "sprint": null,
+  "labels": [],
+  "notes": null,
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": null,
+  "metadata": {},
+  "attachments": [
+    {
+      "path": "/private/tmp/claude-501/-Users-yuri-Workdir-Yuri-budget/011e3c6b-8148-4a11-8593-8d1e761197c6/scratchpad/review-fvtx-3.md",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

@@ -4,30 +4,571 @@
   "id": "budget-dcxr",
   "title": "AI keys screen (client): save key, detect or choose provider, pick model, test, remove",
   "description": "Screen next to pluggy-keys (client/src/features, route in app/(budget)). Paste key, provider is detected and can be changed, then models from that provider are listed to choose; test and remove. Shows when the shared server AI is available instead. Strings through t() with pt-BR. Plan, decisions and owner answers: handoff.md at the repo root. Mock: tk show budget-seoa (evidence ev-c96ced overview, PNGs). Follow AGENTS.md (contracts, migrations additive only + MIGRATION_SIGNATURES, i18n, ports, test DB rules).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-24T14:36:42.349Z",
-  "updated_at": "2026-11-24T14:36:42.351Z",
+  "updated_at": "2026-11-24T18:35:17.709Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-24T18:35:17.236Z",
   "due_at": null,
   "defer_until": null,
   "parent": "budget-v2xe",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Built the client AI key screen (/ai-keys). Feature client/src/features/ai-keys/ (screen, form, saved/shared cards, thin hook, tested aiKeys.logic.ts, en+pt-BR catalogs). RTK slice client/src/budget/data/api/ai.ts over the shared ai contracts (status, save, delete, test, detect, list models). Settings entry next to Linked banks, hidden tab route, FAB suppressed. Checks: bunx tsc --noEmit 0 errors; bunx eslint . 0 errors, 0 warnings; bun test 1284 pass / 0 fail (98 files). Web proof at 1400 and 375 against the real local API with a stateful /ai/* stub proxy (fake keys, no real provider): empty, detected provider + model list, saved+tested, bad-key error, shared server AI, manual Z.ai pick, remove notice. Two commits; found and fixed a real bug in the run: mutation triggers changing identity restarted the detection effect and left 'Detecting provider…' forever.\nFollow-up for budget-ucyr (read via git show tk/budget-ucyr, not merged): 'ai_key_forbidden' (403) now has its own message (en+pt-BR); the client matches the fixed wire value with a documented local constant because the ucyr contract/errors constant is not on this branch yet. The model is optional at save time: when listing models returns 403 (or any error) the form shows the explanation, offers a typed model id, keeps a chosen model across Retry, and lets Save store the key without a model. The saved card explains a model-less key that was saved because listing was forbidden (survives the post-save provider reset). Z.ai's static list needs no client change: /ai/models serves it. Verified in the browser with a stub: restricted key -> 403 explanation + manual field + Save without model -> saved card explanation; typed model + Save -> the same 403 message; normal key + model still saves. Checks: bunx tsc --noEmit 0 errors; bunx eslint . 0 errors, 0 warnings; bun test 1286 pass / 0 fail. Evidence: ev-7bc2d4, ev-925ebc, ev-ef2a74, ev-885562, ev-9aa127, ev-227a9d.\nAligned with the final ai contracts after ucyr f34eb55 (read via git show; not merged). Removed ai_key_forbidden end to end: local constant, en/pt-BR keyForbidden string, modelsForbidden/savedForbidden flags and their resets, saved-card forbidden explanation, tests. Errors now branch on the body code only: the nine contract codes plus rate_limited and upstream_error each have an en/pt-BR message; a 429/502 without its code falls back to the generic sentence, never a status guess. Status: own non-null + effective null renders 'saved key can no longer be opened on this server... Save the key again' (ownKeyUnreadable, saved card); shared AI shows only when shared.available is true (mode test). Z.ai: the model combobox offers a 'Use \"<typed id>\"' row plus a hint, so a typed id outside the suggestion list can be saved; /ai/models and save now accept it server-side. Kept: optional model, manual model field and save-without-model when the list fails (verified with a 429 list-unavailable stub). Checks: bunx tsc --noEmit 0 errors; bunx eslint . 0 errors, 0 warnings; bun test 1287 pass / 0 fail. New evidence: ev-d957a1, ev-ec7262, ev-6c0914, ev-13ecbc, ev-4514d5, ev-91edcc, ev-c1b354. Obsolete and detached: ev-7bc2d4, ev-925ebc, ev-ef2a74, ev-885562, ev-9aa127, ev-227a9d (the forbidden case).\nIndependent review (attached review-dcxr.md): 5 must-fix, 12 follow-ups; sent back to the omp session. Not approved.\nReview fixes (review-dcxr.md), all in client/src. 1) useAiKeys.ts model-list effect: 600ms debounce after detection settles, shouldListModels() gate (tested), cleanup aborts the request, sequence id keeps stale answers/resets away. 2) aiKeyForm.logic.ts effectiveModel(): typed text is the model on Save for Z.ai and for the retryable manual field; tested; verified saving glm-5.3-flashx-custom without tapping Use. 3) aiKeys.logic.ts: own+effective null keeps the unreadable card (comment says it needs ucyr's ownKeyUsable); own null+effective null+shared available is 'blocked' (BlockedAiCard) and never 'shared AI in use'; tested. 4) AiKeySavedCard.tsx uses useMoneyFormat().formatDate (screenshot: Saved 24/11/2026). 5) ui/primitives/settingsCard.tsx + ui/PasswordField.tsx; both PluggyKeysCard and the AI cards use them; Pluggy before/after PNGs are byte-identical (md5 at 1400 and 375); PasswordField moved cleanly with a credential mode (autocomplete=new-password) used by both secret fields. 7) modelListFailure(): manual field/Retry/save-without only for rate_limited, upstream_error, network; ai_key_rejected shows only the message. 8) detect finally resets only for its own sequence; cleanup aborts. 9) runCredentialAction(): ref guard + reset on settle; tested (double tap, args cleared). 10) aiKeyForm.logic.ts reducer + 19 tests; useAiKeys function is ~250 lines. 11) aiErrorKey pinned per code; runCredentialAction store-args test; invalid_input/upstream_timeout; pt-BR spot check. 12) Z.ai hint corrected and moved above the picker. 14) chips are a 44pt radio group; errors/notices are polite live regions; detection hint is the key field's accessibilityHint; SettingsCardButton/IndigoButton announce disabled. 15) autocomplete=new-password on both secret fields via the shared PasswordField. 16) error.unreachable removed; apiErrorMessage handles the network case. Checks: bunx tsc --noEmit 0 errors; bunx eslint . 0 errors, 0 warnings; bun test 1308 pass / 0 fail (99 files). New evidence: ev-8b8207 ev-b48f5b ev-865cd4 ev-fb54b8 (Pluggy before/after), ev-1de3d6 ev-f18edb (empty), ev-7a60bf ev-f6b8a6 (choose), ev-b1d96b ev-b5414a (key/models), ev-e9c8dd ev-825d53 (saved), ev-aed5e8 ev-0c6d84 (remove confirm), ev-9b4b95 ev-3f447f (removed), ev-48aaa9 ev-4ba76d (error), ev-c10ea2 ev-95c5ca (list unavailable), ev-ad23f5 ev-a04cc5 (unreadable), ev-8bc6e1 ev-809fac (blocked), ev-f5027a ev-107179 (shared), ev-0f4b27 ev-8a78c8 (Z.ai typed), ev-be0171 ev-72a521 (Z.ai typed saved). Obsolete and detached: ev-927da9 ev-c59a45 ev-f182c6 ev-2afd36 ev-6ec222 ev-1dc6ff ev-8ac731 ev-8272c0 ev-6fd392 ev-29e09e ev-bef57e ev-937918 ev-5aeada ev-11be7b ev-d957a1 ev-ec7262 ev-6c0914 ev-13ecbc ev-4514d5 ev-91edcc ev-c1b354; kept ev-c03029 (Settings entry, unchanged). Not done: item 6 (detect on device) and item 13 (model change without the key) are filed separately; no physical iOS run; contrast not measured.\nSynced onto main 0919ddb (budget-ucyr merged; no ai_key_forbidden in the final contracts). Rebased cleanly; re-ran client checks on the merged base: tsc 0 errors, eslint 0/0, bun test 1308 pass / 0 fail.\nReview 2 fixes (review-dcxr-2.md). 1) Must-fix: canSaveAiKey + isModelListPending in aiKeyForm.logic.ts (tested: detection running, debounce window, loading, loaded, failed); useAiKeys computes canSave/modelsPending and AiKeyForm's loading line and Save disabled state read the same flag, so the paste→list window cannot save a key with no model. Browser: Save aria-disabled=true while 'Loading models…' then enabled after the list (ev-50ac52, ev-987f6b). 2) useFocusEffect cleanup in useAiKeys.ts resets key/editing/error/notice/test/confirm on blur and in usePluggyKeys.ts clears client id/secret/error/notice/confirm/replacing; the effects' cleanups abort detect/list. Browser 375: typed key (ev-e4234e) → Plan tab → in-app back with the window marker preserved (no reload) → field empty (ev-27fe6d); Pluggy typed (ev-1f0fdf) → same → both fields empty (ev-2f6b80). The 1400 focus pair is not attached: the desktop rail link is a document navigation, so that sequence cannot distinguish a remount; the 375 tab switch is the mounted-screen proof. 3) localDatePart() in aiKeys.logic.ts feeds formatDate; stub updated_at 2026-11-24T22:00:00-03:00 shows Saved 24/11/2026, not the UTC 25/11 (ev-e2163b, ev-bb096e). 4) detectionHint returns null when a provider is chosen and nothing was detected; form.providerChosen removed from en/pt-BR (ev-a7dea9, ev-bebdce). 5) Chose 'keep the previous choice': modelQueryEdited keeps the pick for list-driven providers (only clearing the field unchoses); Z.ai typed text still replaces the pick; tested. Browser: picked Claude Sonnet 4.5, edited the field to 'claude-sonnet', Save stored claude-sonnet-4-5 (ev-bb096e). 6) editKey clears the notice; browser: remove → 'Key removed.' → type a bad key → error with no stale notice (ev-5f7614, ev-ccc66a). 7) The unreadable card shows only Save a new key and Remove, no Test (ev-390463, ev-445b55). 8) Comments: ownKeyUnreadable is reachable now that ucyr is on main; detection is a server call; the screen/hook say the key is held only while focused. Checks in client/: bunx tsc --noEmit 0 errors; bunx eslint . 0 errors, 0 warnings; bun test 1313 pass / 0 fail (99 files). Superseded evidence detached: ev-e9c8dd ev-825d53 ev-48aaa9 ev-4ba76d ev-ad23f5 ev-a04cc5 ev-0f4b27 ev-8a78c8. Still valid: empty/choose/key-and-models/remove/removed/list-unavailable/blocked/shared/zai-saved/Pluggy before-after and the Settings entry.\nMerged to local main (not pushed); owner approved in the Inbox thread on 2026-11-24. client/src/features/ai-keys: paste key, provider detected or chosen, model list, save/test/remove; shared ui/primitives/settingsCard.tsx and ui/PasswordField.tsx now used by Pluggy keys too; both key screens reset on blur. Two independent reviews (review-dcxr.md, review-dcxr-2.md); orchestrator reran tsc, eslint and bun test on 3561109: clean, 1313 pass. Not done: real iPhone run, real provider key. Leftovers: budget-jss7, budget-5g9o.",
   "design": null,
   "acceptance_criteria": "Works on web and iOS layout; screenshots at 1400 and 375 attached; client tsc, eslint, bun test green.",
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
-  "attachments": [],
+  "branch": "tk/budget-dcxr",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-dcxr",
+    "changeset": {
+      "base": "0919ddbe093f7738cfa6e8b4989e9b4f9b52c03b",
+      "head": "3561109ed591643e27126f1203c21eab87606ce7",
+      "commits": [
+        {
+          "sha": "3561109",
+          "subject": "fix(client): close review 2 on the AI key screen"
+        },
+        {
+          "sha": "d83ca18",
+          "subject": "test(client): gate the AI model list on settled detection"
+        },
+        {
+          "sha": "a48b23b",
+          "subject": "refactor(client): AI keys review fixes (sequencing, reducer, shared cards)"
+        },
+        {
+          "sha": "fac9c98",
+          "subject": "refactor(client): align AI key screen with the final ai contracts"
+        },
+        {
+          "sha": "5c1f0a6",
+          "subject": "fix(client): handle ai_key_forbidden and keys saved without a model"
+        },
+        {
+          "sha": "f72a951",
+          "subject": "fix(client): keep AI key detection from restarting mid-request; show removal notice"
+        },
+        {
+          "sha": "50b76fc",
+          "subject": "feat(client): AI key screen (save, detect provider, pick model, test, remove)"
+        }
+      ],
+      "files": [
+        {
+          "path": "client/src/app/(budget)/ai-keys.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/ai.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/base.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeyForm.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeySavedCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeysScreen.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeyForm.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeyForm.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeys.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeys.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/useAiKeys.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/PasswordForms.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/PluggyKeysCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/usePluggyKeys.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/ChangePasswordCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/SettingsRootPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/PasswordField.tsx",
+          "status": "R077"
+        },
+        {
+          "path": "client/src/ui/bits.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/buttons.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/settingsCard.tsx",
+          "status": "A"
+        }
+      ],
+      "counts": {
+        "additions": 2407,
+        "deletions": 145
+      }
+    },
+    "agent_session": "01a20e4c-6cfd-76f6-a8ef-b9369d2688bc",
+    "finished_at": "2026-11-24T18:16:52.391Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 7,
+        "files": 32,
+        "additions": 2407,
+        "deletions": 145
+      },
+      "head": "3561109ed591643e27126f1203c21eab87606ce7",
+      "at": "2026-11-24T18:16:52.391Z"
+    },
+    "worktreePruned": {
+      "pruned": false,
+      "removedWorktree": false,
+      "removedBranch": false,
+      "reason": "branch tk/budget-dcxr is not fully merged into 0919ddbe093f7738cfa6e8b4989e9b4f9b52c03b"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-c03029",
+      "name": "1400-settings-entry.png",
+      "mime": "image/png",
+      "size": 127370,
+      "sha256": "1489eaad580a6bfa0a1c62cd9871191bfa04fa4ba022d8c2e1fe3eb1640bf393",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-55ba0a",
+      "name": "review-dcxr.md",
+      "mime": "text/markdown",
+      "size": 14270,
+      "sha256": "128aa7165fd65d8a23f004dee47d211006f5b0f66d04edf29bff44a28cc172fb",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-8b8207",
+      "name": "pluggy-before-1400.png",
+      "mime": "image/png",
+      "size": 140654,
+      "sha256": "d3cd547f99428076a8d56467c43dccbb6f75e69002930db214280f686933fe45",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-b48f5b",
+      "name": "pluggy-after-1400.png",
+      "mime": "image/png",
+      "size": 140654,
+      "sha256": "d3cd547f99428076a8d56467c43dccbb6f75e69002930db214280f686933fe45",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-865cd4",
+      "name": "pluggy-before-375.png",
+      "mime": "image/png",
+      "size": 94117,
+      "sha256": "7ab37438213c0aad29ea2c2fbab7546e56186e7bcf67ce912b582e53ba4c12ab",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-fb54b8",
+      "name": "pluggy-after-375.png",
+      "mime": "image/png",
+      "size": 94117,
+      "sha256": "7ab37438213c0aad29ea2c2fbab7546e56186e7bcf67ce912b582e53ba4c12ab",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-1de3d6",
+      "name": "1400-empty.png",
+      "mime": "image/png",
+      "size": 93832,
+      "sha256": "a555550278bfc6840210397892ceb4c2c6e70dc4012abe3dd52d8723a06d2b09",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f18edb",
+      "name": "375-empty.png",
+      "mime": "image/png",
+      "size": 59028,
+      "sha256": "11ddf63d5fdc26c37f61c56b1d266304cd160756b7f86562e5bd8de9cf27fb78",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-7a60bf",
+      "name": "1400-choose-provider.png",
+      "mime": "image/png",
+      "size": 103471,
+      "sha256": "cf1dd195a5e3670fe437ecb7c59417b204d3b9c3209c66547fb086d7e6a026d0",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f6b8a6",
+      "name": "375-choose-provider.png",
+      "mime": "image/png",
+      "size": 64974,
+      "sha256": "049bec920915ae775fb8c71cc93cf4c56c6584484e32d1cc9ce14d9fe93f2f42",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-b1d96b",
+      "name": "1400-key-and-models.png",
+      "mime": "image/png",
+      "size": 114036,
+      "sha256": "40c860a44e721bc0ff027891b76b69a5d9738c0e9f84777028a5c646c3069f0a",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-b5414a",
+      "name": "375-key-and-models.png",
+      "mime": "image/png",
+      "size": 77111,
+      "sha256": "27956a6bc9d40fd8044fc4f07d6e7aea783cd3c626107cb12560a7c5bfd75818",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-aed5e8",
+      "name": "1400-remove-confirm.png",
+      "mime": "image/png",
+      "size": 103162,
+      "sha256": "809bbbe609f6456bcc129d609aad9953041d184e9e39d73c557c26932bcc30b1",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-0c6d84",
+      "name": "375-remove-confirm.png",
+      "mime": "image/png",
+      "size": 68792,
+      "sha256": "2307e7d7a6ca77fc26b77359933d5b98b79fb7c5544fb3edcb64a63a25eba080",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-9b4b95",
+      "name": "1400-removed.png",
+      "mime": "image/png",
+      "size": 95917,
+      "sha256": "0c99660bc068c76be7c704eae9bd8ab7bc3b75ca2a4cc0e50028a98832b19228",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-3f447f",
+      "name": "375-removed.png",
+      "mime": "image/png",
+      "size": 61169,
+      "sha256": "3dbc21951668a9b293d2eb3821dc6163bd63fc3f6485bda922c5f7fa0d82bf77",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c10ea2",
+      "name": "1400-list-unavailable.png",
+      "mime": "image/png",
+      "size": 126621,
+      "sha256": "06af96331fd9256f2e2a11fafc2e69ef18caa65ce5d7afb67165be6a6412d8b1",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-95c5ca",
+      "name": "375-list-unavailable.png",
+      "mime": "image/png",
+      "size": 75740,
+      "sha256": "3fb0c3588a9eae5bac443c8165ca108ddfb81030ab9a23991187d28051b74352",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-8bc6e1",
+      "name": "1400-blocked.png",
+      "mime": "image/png",
+      "size": 93497,
+      "sha256": "580d481f47ffa8397c5d67f368fc17efe671bfac6000ed60a70529ae157ac30c",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-809fac",
+      "name": "375-blocked.png",
+      "mime": "image/png",
+      "size": 56024,
+      "sha256": "a26c2b5852231ce78688b29dd8c8f15cb0a3d93c9580bc45ff737613c3829804",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f5027a",
+      "name": "1400-shared.png",
+      "mime": "image/png",
+      "size": 111615,
+      "sha256": "6653db27a842710b9ca8df27e2b95885a2ccd849528b1ee70d70cd80aef7751d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-107179",
+      "name": "375-shared.png",
+      "mime": "image/png",
+      "size": 77557,
+      "sha256": "7f6d3e1ba9209190199ea0709dd2f569d721d2f1f9f90782ec608f92e82be600",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-be0171",
+      "name": "1400-zai-typed-saved.png",
+      "mime": "image/png",
+      "size": 88400,
+      "sha256": "22abf2b85a84668eb8fcdb4b81a3d1a8b4e2efe395fc9141f9fc52799c87baaa",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-72a521",
+      "name": "375-zai-typed-saved.png",
+      "mime": "image/png",
+      "size": 52468,
+      "sha256": "806e9954330bbe362d9ee2aa6a5c441fc73011d7c7866db753c345445f1f5e5a",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-0ed4ac",
+      "name": "review-dcxr-2.md",
+      "mime": "text/markdown",
+      "size": 19353,
+      "sha256": "0f35774d45f1003047c2144deaf3095c241eb95828d85ffc4abce1caafab87cf",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-50ac52",
+      "name": "1400-save-disabled-loading.png",
+      "mime": "image/png",
+      "size": 101990,
+      "sha256": "76c6d4c4a0a84127b915a30102496ec596c4c6034ffd3256c3c94d60e5352168",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-987f6b",
+      "name": "375-save-disabled-loading.png",
+      "mime": "image/png",
+      "size": 67597,
+      "sha256": "60309acf68c784882418fc0a8493771ec84045e3b2ac552fad18ddee181f7093",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-e4234e",
+      "name": "375-key-typed-before-leave.png",
+      "mime": "image/png",
+      "size": 72626,
+      "sha256": "93f172828ca7324a551a2912f8c58ce35dd928b729c87b97a807eea953776823",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-27fe6d",
+      "name": "375-key-empty-after-return.png",
+      "mime": "image/png",
+      "size": 59028,
+      "sha256": "11ddf63d5fdc26c37f61c56b1d266304cd160756b7f86562e5bd8de9cf27fb78",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-1f0fdf",
+      "name": "375-pluggy-typed-before-leave.png",
+      "mime": "image/png",
+      "size": 94151,
+      "sha256": "6ce3002d53895fbb6ab4c20ee300e5d167840a19a670afcdad9bcb79bbe81ea0",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-2f6b80",
+      "name": "375-pluggy-empty-after-return.png",
+      "mime": "image/png",
+      "size": 94117,
+      "sha256": "7ab37438213c0aad29ea2c2fbab7546e56186e7bcf67ce912b582e53ba4c12ab",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-e2163b",
+      "name": "1400-saved-test.png",
+      "mime": "image/png",
+      "size": 89064,
+      "sha256": "d83b7b4d6f42ebe1f17fdc440cdfc902dedfda5e2743a834979089f9cc8bc655",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-bb096e",
+      "name": "375-saved-test.png",
+      "mime": "image/png",
+      "size": 53975,
+      "sha256": "99b4ab707aa1f4f6055e9f053d0ce6765c3c549a7555c6be1a13b7360599465b",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-5f7614",
+      "name": "1400-error.png",
+      "mime": "image/png",
+      "size": 122694,
+      "sha256": "f113783631bd3b238991a12661b180a51d3d699eb92a94441046dac23faf3104",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ccc66a",
+      "name": "375-error.png",
+      "mime": "image/png",
+      "size": 86253,
+      "sha256": "b0d95d7c17720fbbee5c64eb56d5258c03be6898e519f255ab10860221274f7e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-390463",
+      "name": "1400-unreadable.png",
+      "mime": "image/png",
+      "size": 93612,
+      "sha256": "a265e4ec4dd464672d777ef850fb545083d0e21ece48b4b6a6ca463b1de9dda5",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-445b55",
+      "name": "375-unreadable.png",
+      "mime": "image/png",
+      "size": 57867,
+      "sha256": "47a31ea5fbb4ecff6825389cc8e160f3f31bc05d24e9cd3fa671fcae6827ba56",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-a7dea9",
+      "name": "1400-zai-typed.png",
+      "mime": "image/png",
+      "size": 105656,
+      "sha256": "937d0cc4e699a102317ecc8ca4a4b8d5a402443b2223b7e99834df2486f27563",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-bebdce",
+      "name": "375-zai-typed.png",
+      "mime": "image/png",
+      "size": 70857,
+      "sha256": "6b1354892d6ae2575cbf2ccbbbd4e75bb22374f129b02ec67ace801123ee2090",
+      "metadata": {}
+    }
+  ],
   "dependencies": [
     {
       "issue_id": "budget-dcxr",

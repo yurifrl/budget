@@ -6,7 +6,7 @@ Personal budgeting app, moved out of syscd-app.
 - `api/` Bun + Hono API, jobs worker, CLI, MCP
 - `client/` Expo app (iOS + web)
 - `admin/` Vite SPA for the jobs ledger
-- `deploy/` Dockerfiles, `k8s/` image tags, `.github/workflows/` CI and release
+- `docker/` Dockerfiles, `k8s/` image tags, `.github/workflows/` CI and release
 
 There is no root `package.json`. Each package installs on its own, `shared/`
 first (the others link to its zod). Local dev:

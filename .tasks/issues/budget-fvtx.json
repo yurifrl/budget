@@ -4,30 +4,763 @@
   "id": "budget-fvtx",
   "title": "Categorizer engine + Temporal job: tool-calling agent, category_suggestions table, categorize_run",
   "description": "api/src/categorize/. Read-only budget-scoped tools: get_transaction (incl. connection_transactions.raw_payload), list_categories, payee_history, search_similar_transactions. Output up to 3 {category_id, confidence, reason} per transaction, zod-validated, unknown ids dropped. Existing suggestedCategoryForPayee answers first; the rest goes to the model. Table category_suggestions (transaction, rank, category, confidence, reason, source, model, status), upsert on re-run. Never writes transactions.category_id. Job categorize_run, one per budget (subject key = budget id), chunked activities with heartbeat and retries on a rate-limited -ai queue, progress and token usage in the jobs ledger; modelled on connections jobspec/workflows. First step: check whether raw_payload carries a location (lat/long or address) and note the finding on the task. Plan, decisions and owner answers: handoff.md at the repo root. Mock: tk show budget-seoa (evidence ev-c96ced overview, PNGs). Follow AGENTS.md (contracts, migrations additive only + MIGRATION_SIGNATURES, i18n, ports, test DB rules).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-24T14:36:42.878Z",
-  "updated_at": "2026-11-24T14:36:42.880Z",
+  "updated_at": "2026-11-24T22:52:39.366Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-24T22:52:26.169Z",
   "due_at": null,
   "defer_until": null,
   "parent": "budget-v2xe",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "raw_payload finding (before code). `connection_transactions.raw_payload` (migration 0105) holds the provider transaction object verbatim: the Pluggy adapter's `toAggregatedTransaction` sets `raw: { ...txn }` and its zod schema is `.passthrough()`, so every upstream field survives. Documented Pluggy Transaction fields (docs.pluggy.ai/en/docs/products/transactions, read 2026-11-24): id, accountId, date, description, descriptionRaw, amount, amountInAccountCurrency, balance, currencyCode, category + categoryId (Pluggy Enrichment, Pro), providerCode, providerId, status (POSTED/PENDING), type (DEBIT/CREDIT), operationType (PIX/TED/PAGAMENTO_FATURA/...), paymentData, creditCardMetadata, merchant. merchant = { name, businessName, cnpj, cnae, category } — no address. paymentData = participant name/branchNumber/accountNumber/routingNumber/routingNumberISPB/documentNumber + referenceNumber, receiverReferenceId, paymentMethod, reason, boletoMetadata — bank identifiers, no address. **No latitude/longitude or address field exists anywhere in the documented transaction object**, so the mock's map panel cannot be built from raw_payload as it stands. Local evidence: budgetnew_dev on compose Postgres :55432 has 0 rows in connection_transactions (column exists, table empty), so nothing to inspect; rows imported before 0105 stay NULL until their next sync. Useful non-location fields for categorization: merchant.name/businessName/category/cnae, category/categoryId, operationType, descriptionRaw, paymentData.paymentMethod/reason/participant names, creditCardMetadata payeeMCC/installments. Caveat: passthrough keeps undocumented fields, so if a connector ever sends latitude/longitude it would survive, but no documented field supplies it — do not promise a map.\nBuilt in branch tk/budget-fvtx (commit e3cc1cc, 34 files). Files: api/src/categorize/{index,job,jobspec,messages,workflows,activities,chunk,agent,tools,store,errors}.ts + tests + test-fixtures/fake-provider; api/db/migrations/0110_category_suggestions.sql (+MIGRATION_SIGNATURES); api/scripts/e2e-categorize.ts; wiring in api/src/worker.ts (-ai queue), api/src/jobs/workflows/index.ts (bundle export + bundle test), api/eslint.config.js (categorize seams), api/src/budget/index.ts (suggestedCategoryForPayee export), ai port usage (types/adapters/usage.ts + barrel setProviders test seam), docs/architecture.md + docs/decisions.md. Exports for budget-edxg: startCategorizeRun(db,{budgetId,ownerUserId,requestedBy}), categorizeRunStatus(db,budgetId) -> {active,lastFinished}, readCategorySuggestions(db,budgetId,{minConfidence,status?,transactionId?,limit,offset}) -> {rows,total}; types SuggestionRow/SuggestionListOptions/SuggestionSource/SuggestionStatus; constants CATEGORIZE_RUN_JOB/AI_QUEUE_SUFFIX/AI_ACTIVITIES_PER_SECOND/CATEGORIZE_CHUNK_SIZE. Retry policy: timeout retried once/transaction then counted failed; bad_response counted failed; auth/permanent non-retryable stop the run; rate_limited activity retry with provider retry-after capped 15m (default 60s); transient activity retry; one failing transaction never fails the run. Checks: task typecheck OK, task lint OK, full api suite BUDGET_REQUIRE_TEST_DB=1 BUDGET_TEST_PG_BASE=...:55432 -> 1403 pass / 0 fail / 0 skip; e2e-categorize against compose Temporal :57233 -> E2E PASS (16 assertions; real workflow + both queues + ledger counts/usage + no-key stop).\nReviewer note: the 'tk finish' stat card (10 commits / 71 files) is derived from the task's pinned changeset base, which predates the AI-layer merge on main. The actual branch diff vs main is one commit, e3cc1cc, 34 files (+2702 −7): git diff --stat main...HEAD. No other task's work is on this branch.\nIndependent review of e3cc1cc (attached review-fvtx.md): 6 must-fix, 13 follow-ups; sent back to the omp session. Not approved.\nReview round 2 at HEAD 36e950d (41 files; commit 'fix(categorize): address the budget-fvtx review'). Each fix landed with a test that fails on e3cc1cc; verify by checking out e3cc1cc and running api/src/categorize.\n\nM1 tools.ts: get_transaction/payee_history ids are z.string().uuid(); execute() wraps every tool (ZodError -> {error:'invalid arguments'}, anything else -> {error:'tool lookup failed'}). Tests: tools.test.ts non-uuid ids + broken Queryable; categorize.test.ts a model tool guess 'txn_1' becomes a tool result and the run continues.\nM2 ai/index.ts: setProviders/ProviderEntry/ProviderOptions removed from the barrel; tests, testing helpers and the e2e deep-import src/ai/providers. routes.test.ts asserts the barrel lacks setProviders again. api/eslint.config.js lets *.test.ts and src/*/testing import internals, last in the config so the feature zone cannot re-enable the rule.\nM3 store.ts replaceSuggestions: any decided row (status<>'pending') -> false; upsert is WHERE status='pending'; chunk.ts pre-checks hasDecidedSuggestion before the payee rule/model when force. A decided transaction is never re-asked, overwritten, or hidden behind a new rank. Tests in categorize.test.ts (dismissed + accepted survive a forced re-run, zero model calls).\nM4 store.ts CANDIDATE_WHERE: outflows only (amount<=0; amount 0 still needs a category per the client), live/open/on-budget accounts, no split legs, no transfer links, no non-dismissed transfer_marks, payee transfer_rule waiting/outside (date age <= wait_days or no_match='outside', rule active since creation), on-budget 'Transfer : <account>' payees by transfer_account_id OR name, Reconciliation/Balance Adjustment payees. Client untouched per instructions; candidates.test.ts IMPORTS client/src/domain/register.ts registerCategoryCell and asserts SQL==cell.warn for every expressible row, then tests each exclusion separately (inflow, adjustments, split, upcoming, linked, marked, transfer payee, card payment, off-budget, closed, deleted account; rule waiting/outside vs review).\nM5 jobspec.ts: CLASSIFY_MAX_TOKENS=1024 per turn (chatTimeoutMs=60s), CLASSIFY_MAX_CALLS=6 (4 tool turns + answer + one timeout retry, shared budget across retries and 429 retries), CLASSIFY_MAX_TOKENS_PER_TRANSACTION=20000 checked cumulatively, CATEGORIZE_CHUNK_SIZE=5, CATEGORIZE_RUN_LIMIT=100 per run (prepare reports remaining; rest is next run), CATEGORIZE_CHUNK_TIMEOUT_MS=5*6*60s+60s=31min used as the chunk activity startToClose. Pending suggestions are skipped unless job input force=true. Activities resume from Context heartbeatDetails (cursor+counter+usage), verified by readProgress tests and a runChunk resume test (finished rows not re-asked, usage merged). Worker -ai queue maxConcurrentActivityTaskExecutions=1. Choice rationale: 100 txns ~<=600 model calls/~0.6M output tokens worst case with a shared key; typical one call/transaction.\nM6 agent.ts final turn keeps tools declared and sends toolChoice none. Anthropic: handle-tool-calls doc step 4 'Send the request with the same tools as the first request' (400 'tool_use ids were found without tool_result blocks'); define-tools doc: tool_choice {type:'none'} is supported. OpenAI: function-calling guide 'set tool_choice to none'. Z.ai OpenAPI documents tool_choice only 'auto', so its adapter keeps tools and omits tool_choice. Adapter tests stub the documented Anthropic 400 and assert tools+tool_choice on Anthropic/OpenAI, tools without tool_choice on Z.ai.\n\nF1 keyset: prepareRun returns the newest candidate (date,id) as the snapshot; lists walk (date,id)<cursor, <=snapshot. Test inserts newer+older rows mid-run and proves no duplicate/skip.\nF2 classifyWithPolicy owns one cumulative usage budget and reports deltas after every attempt; chunk progress/heartbeat and chunk result include failed transactions' tokens. Tests: failed-after-tool-turn usage and tool+timeout+retry usage counted once; run-level failure heartbeat carries 7/3.\nF3 agent.ts sanitizeReason (controls+bidi stripped, whitespace collapsed, 200 chars) and MAX_MODEL_CONFIDENCE 0.99; source stays stored/reported; overlong reasons truncate instead of failing. Tests in agent.test.ts.\nF4 errors.ts failureForProviderError: 400/413/422 -> kind 'request' (per-transaction failure); other 4xx/auth/429 unchanged. Doc basis: Anthropic errors page (400 invalid_request_error = format/content of the request; 413 request_too_large), OpenAI error codes 400 invalid_request_error. Test: 400 fails one transaction and the run continues; 404 stops it.\nF5 chunk.ts ignores a payee-rule category outside the visible allowed set (falls through to the model); store.listSuggestions filters hidden/deleted categories+groups and deleted accounts; searchSimilar/payeeHistory evidence excludes hidden. Tests in suggestions.test.ts + categorize.test.ts.\nF6 an answer whose ids are all unknown is bad_response and writes nothing; pending rows survive. Test in categorize.test.ts.\nF7 fake provider + fixtures moved to api/src/categorize/testing/ (eslint bans the path outside tests); no production import remains.\nF8 one provider call at a time per key: categorize/key-lock.ts serializes per owner, worker -ai queue concurrency 1, and a 429 waits <=60s then retries that ONE transaction; a second 429 returns to Temporal. Tests: key-lock.test.ts, rate-limit tests in categorize.test.ts (one retry succeeds; second 429 throws).\nF10 store.runActorForBudget is the single function (today the budget owner); startCategorizeRun(db,{budgetId,requestedBy,force?}) derives the tenant and 404s a missing budget. Test: a member requests, run.tenant_id is the owner.\nF11 listSuggestions validates transactionId as a uuid -> HttpError 400 invalid_transaction_id (new code in shared/src/errors.ts + i18n en/pt-BR); docs say the HTTP layer checks budget access.\nF12 migration 0111_category_suggestions_category_idx.sql (index on category_id) + signature. Checked the shared DB: syscd-app has no TRUNCATE of transactions/budgets/categories/accounts (only food_portion+food_catalog cascade), and transactions already had referencing tables, so plain TRUNCATE was never possible; no new impact.\nF13 activities.ts failureLogFields logs {kind, pg_code} (code only) for unexpected errors; unit test proves the message is never included.\n\nChecks at HEAD 36e950d: task typecheck OK; task lint OK; full api suite BUDGET_REQUIRE_TEST_DB=1 BUDGET_TEST_PG_BASE=...:55432 -> 1451 pass, 0 fail, 0 skip (100 files; 85 in src/categorize over 8 files); e2e against compose Temporal :57233 -> E2E PASS (16 assertions; result total=2 done=2 rule=1 suggested=1 remaining=0 input_tokens=40 output_tokens=12). Not done: continue-as-new (noted in docs/decisions.md; 100-run cap keeps history small); inputs-changed detection for pending suggestions (no transactions.updated_at), pending rows are re-asked only with force; cross-pod key serialization relies on the provider 429 (in-process lock + one AI activity per worker).\nOwner decisions applied at HEAD b2448a2 (merge of main 20cd7ba + decision commit).\n\n(1) Owner key confirmed: api/src/categorize/store.ts runActorForBudget remains the single function; docs/decisions.md now records it as a confirmed product decision — a shared-budget run uses the budget OWNER's key (own, else the shared AI key when the owner has it), whoever starts it; the ledger tenant is the owner. startCategorizeRun still derives it; test in suggestions.test.ts (member requests, tenant is owner).\n\n(2) No map / merchant panel: store.ts BankFacts is now {merchant:{name, legal_name, cnpj, category, cnae}, operation_type, payment:{method, reason, counterparty_name}, card, ...}, every field optional, from raw_payload; counterparty_name is direction-aware (receiver for outflows, payer for inflows). get_transaction returns it; SuggestionRow.bank carries the same shape to readCategorySuggestions (barrel exports BankFacts); null for hand-entered rows. No location fields. The merchant CNPJ is exposed by this decision; CPF/participant documents, account/branch/reference/card numbers stay dropped. Tests: tools.test.ts merchant-panel shape + inflow counterparty + identifiers still hidden; suggestions.test.ts row.bank from raw_payload and bank null without one.\n\nMain merged into tk/budget-fvtx (client AI key screen, client-only changes) before finishing. Checks at HEAD: task typecheck OK, task lint OK, full api suite -> 1452 pass / 0 fail / 0 skip (100 files); e2e-categorize vs compose Temporal :57233 -> E2E PASS (16 assertions). Evidence attached.\nSecond review applied at HEAD 48e32cd (b2448a2 + this commit).\n\nMF1: api/db/migrations/0112_categorize_attempts.sql + signature; store.recordAttempt/listAttempts; candidate SQL skips no_suggestion while the SQL-computed payee+memo fingerprint matches and failed while backing off (10m x2, cap 6h) under 3 attempts; force resets. chunk.ts records every rule/model attempt (suggested/no_suggestion/failed + kind + model); readCategorizeAttempts + SuggestionRow.attempt give edxg 'not classified' vs 'classified, none'. Tests: empty not re-billed, memo change re-asks, truncated backoff/3-attempt cap/force reset, backlog progress across capped runs. Chose a separate table (not a rank-0 marker): a no-suggestion attempt has no category and the suggestion table is keyed per category rank.\n\nMF2: AiReasoningEffort on the port; Anthropic output_config.effort (effort doc), OpenAI reasoning_effort (reasoning guide) gated to gpt-5+/o-series, OpenRouter reasoning.effort (reasoning-tokens doc), DeepSeek reasoning_effort (thinking-mode doc), Z.ai reasoning_effort on GLM-5.3 (GLM-5.3 doc). Categorizer asks low. Caps: 4000 output, 160 s call, 81 min chunk, 80k tokens/transaction. finishReason max_tokens/length -> truncated kind, recorded, not retried blindly. Documentation only: no live provider call was made.\n\nFU1: needsCategory + isSystemAdjustmentPayee in shared/src/domain/category-needs.ts; client register and SpendingScreen use it; candidates.test.ts now runs the shared predicate and the SQL over the same fixtures (no api->client import), with pending from budget transferOverview (exported seam). Closes manual-mark, dismissed-mark-under-rule, open-counterpart and today() divergences.\nFU2: listCategoryChoices/listSuggestions exclude is_credit_card_payments and internal groups/categories; test.\nFU3: 200-char cap on bank/payee/memo/note (80 for names), 200 categories, notes dropped before the 40k tool-result cap; tests.\nFU4: CPF/CNPJ/account-shaped runs masked in descriptionRaw and PIX reason; merchant CNPJ kept; tests.\nFU5: freeze-after-any-decision rule documented in docs/decisions.md and startCategorizeRun's JSDoc.\nFU8: 3 consecutive request failures -> CategorizeError('systematic') -> non-retryable AiSystematic with fixed user-safe sentence; tests.\nFU9: eslint test exemption re-enabled as a rule with only the ai/providers seam (ai/http now on the barrel); lint clean.\nFU6/FU7/FU10 noted as deferred in docs/decisions.md.\n\nChecks: task typecheck OK, task lint OK, shared 209 pass/0 fail, client 1313 pass/0 fail, api 1470 pass/0 fail/0 skip (BUDGET_REQUIRE_TEST_DB=1, :55432), e2e-categorize vs Temporal :57233 E2E PASS (16 assertions, evidence attached).\nlanded outside tk close at 4a62461 (branch tk/budget-fvtx merged into main by hand)\nMerged to local main (not pushed); owner approved in the Inbox thread on 2026-11-24. api/src/categorize: read-only budget-scoped tools, agent loop, category_suggestions (0110, 0111), categorize_attempts (0112), categorize_run job on the -ai queue; shared/src/domain/category-needs.ts now used by client and api. Three independent reviews attached (review-fvtx.md, -2, -3; third found no blockers). Orchestrator reran on the branch merged with main: tsc shared/api/client clean, api eslint clean, client 1319 pass, full api suite 1470 pass / 0 fail with BUDGET_REQUIRE_TEST_DB=1. Never run against a real provider. Leftovers: budget-cdvr.",
   "design": null,
   "acceptance_criteria": "Tests with a fake AiProvider: idempotent re-run, invalid ids dropped, payee rule short-circuit, budget scoping; workflow registered and run in e2e or documented why not; test:api green.",
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
-  "attachments": [],
+  "branch": "tk/budget-fvtx",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-fvtx",
+    "changeset": {
+      "base": "3cbf4b3d67f5a42bf6fd7ee5fcdc6f9c1247b1ab",
+      "head": "f98340ebe8295082b103e90be537ef12ef436cb3",
+      "commits": [
+        {
+          "sha": "f98340e",
+          "subject": "Merge branch 'main' into tk/budget-fvtx"
+        },
+        {
+          "sha": "26dc6b7",
+          "subject": "deploy: images 2026.11.24-01"
+        },
+        {
+          "sha": "6c266d0",
+          "subject": "docs: release notes v2026.11.24-01"
+        },
+        {
+          "sha": "62fed99",
+          "subject": "release: v2026.11.24-01"
+        },
+        {
+          "sha": "ed02cce",
+          "subject": "Merge remote-tracking branch 'origin/main'"
+        },
+        {
+          "sha": "744d849",
+          "subject": "Merge tk/budget-xlng: import Contabilizei statement CSV"
+        },
+        {
+          "sha": "48e32cd",
+          "subject": "fix(categorize): address the second budget-fvtx review (MF1, MF2, FU1-FU9)"
+        },
+        {
+          "sha": "c080a0c",
+          "subject": "refactor(client): Contabilizei rows rely on server import ids"
+        },
+        {
+          "sha": "14e6c57",
+          "subject": "fix(client): Contabilizei import ids unique across payees"
+        },
+        {
+          "sha": "08a3725",
+          "subject": "feat(client): import Contabilizei statement CSV"
+        },
+        {
+          "sha": "b2448a2",
+          "subject": "feat(categorize): merchant panel facts and the owner-key decision (budget-fvtx)"
+        },
+        {
+          "sha": "20cd7ba",
+          "subject": "Merge branch 'main' into tk/budget-fvtx"
+        },
+        {
+          "sha": "36e950d",
+          "subject": "fix(categorize): address the budget-fvtx review (M1-M6, F1-F13) (budget-fvtx)"
+        },
+        {
+          "sha": "4e29221",
+          "subject": "Merge tk/budget-dcxr: AI key screen (client), shared settings card and PasswordField in ui/"
+        },
+        {
+          "sha": "3561109",
+          "subject": "fix(client): close review 2 on the AI key screen"
+        },
+        {
+          "sha": "e3cc1cc",
+          "subject": "feat(categorize): categorizer engine, category_suggestions and categorize_run job (budget-fvtx)"
+        },
+        {
+          "sha": "d83ca18",
+          "subject": "test(client): gate the AI model list on settled detection"
+        },
+        {
+          "sha": "a48b23b",
+          "subject": "refactor(client): AI keys review fixes (sequencing, reducer, shared cards)"
+        },
+        {
+          "sha": "fac9c98",
+          "subject": "refactor(client): align AI key screen with the final ai contracts"
+        },
+        {
+          "sha": "5c1f0a6",
+          "subject": "fix(client): handle ai_key_forbidden and keys saved without a model"
+        },
+        {
+          "sha": "f72a951",
+          "subject": "fix(client): keep AI key detection from restarting mid-request; show removal notice"
+        },
+        {
+          "sha": "50b76fc",
+          "subject": "feat(client): AI key screen (save, detect provider, pick model, test, remove)"
+        },
+        {
+          "sha": "0919ddb",
+          "subject": "Merge tk/budget-ucyr: harden the AI provider layer before the categorizer"
+        },
+        {
+          "sha": "28f3f4e",
+          "subject": "fix(ai): third review round for the provider layer (budget-ucyr)"
+        },
+        {
+          "sha": "f34eb55",
+          "subject": "fix(ai): second review round for the provider layer (budget-ucyr)"
+        },
+        {
+          "sha": "378984a",
+          "subject": "fix(ai): harden the provider layer before the categorizer (budget-ucyr)"
+        },
+        {
+          "sha": "05e3267",
+          "subject": "Merge tk/budget-q8kf: AI provider layer (shared-ai-key flag, own keys, five provider adapters)"
+        },
+        {
+          "sha": "0d3d27c",
+          "subject": "Merge branch 'main' into tk/budget-q8kf"
+        },
+        {
+          "sha": "2ed8baf",
+          "subject": "chore(ai): renumber the AI credentials migration to 0109"
+        },
+        {
+          "sha": "318de4a",
+          "subject": "deploy: images 2026.11.24"
+        },
+        {
+          "sha": "de17b0b",
+          "subject": "docs: release notes v2026.11.24"
+        },
+        {
+          "sha": "db50606",
+          "subject": "fix(ai): harden key checks, Anthropic tool loops and provider isolation (budget-q8kf)"
+        },
+        {
+          "sha": "9eff45c",
+          "subject": "feat(ai): AI provider layer for category suggestions (budget-q8kf)"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.schema",
+          "status": "M"
+        },
+        {
+          "path": "CHANGELOG.md",
+          "status": "M"
+        },
+        {
+          "path": "api/VERSION",
+          "status": "M"
+        },
+        {
+          "path": "api/db/migrations/0109_ai_credentials.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0110_category_suggestions.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0111_category_suggestions_category_idx.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0112_categorize_attempts.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/eslint.config.js",
+          "status": "M"
+        },
+        {
+          "path": "api/scripts/e2e-categorize.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/ai/detect.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/detect.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/env.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/errors.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/http.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/http.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/keys.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/keys.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/anthropic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/anthropic.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/index.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/openai-compatible.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/openai-compatible.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/usage.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/redact.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/redact.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/routes.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/settings.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/types.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/activities.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/activities.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/agent.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/agent.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/candidates.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/categorize.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/chunk.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/errors.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/job.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/jobspec.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/jobspec.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/key-lock.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/key-lock.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/messages.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/suggestions.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/testing/fake-provider.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/testing/fixtures.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/testing/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/tools.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/tools.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/workflows.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/test-op.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/features/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/worker-host.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/workflows/bundle.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jobs/workflows/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/worker.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/(budget)/ai-keys.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/ai.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/base.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/systemNames.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeyForm.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeySavedCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeysScreen.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeyForm.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeyForm.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeys.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeys.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/useAiKeys.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/PasswordForms.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/PluggyKeysCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/usePluggyKeys.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/ImportScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/parsers/import.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/parsers/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/parsers/sources/contabilizei.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/import/parsers/sources/statement.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/ChangePasswordCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/SettingsRootPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/spending/SpendingScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/profile/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/PasswordField.tsx",
+          "status": "R077"
+        },
+        {
+          "path": "client/src/ui/bits.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/buttons.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/settingsCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "k8s/values.yaml",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/ai/credentials.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/credentials.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/outputs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/contracts.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/domain/category-needs.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/domain/category-needs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/features.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 11974,
+        "deletions": 230
+      }
+    },
+    "agent_session": "01a20e9f-f777-7397-8ba4-ce1e43a9b6f6",
+    "finished_at": "2026-11-24T19:40:35.805Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 22,
+        "files": 117,
+        "additions": 11700,
+        "deletions": 212
+      },
+      "head": "48e32cd8e529afc30d191bcb2e30e86771f1c5e3",
+      "at": "2026-11-24T19:40:35.805Z"
+    },
+    "landedOutside": {
+      "commit": "4a6246117cb98752975c63088ba474ad39fedd2f",
+      "branchHead": "f98340ebe8295082b103e90be537ef12ef436cb3",
+      "baseBranch": "main",
+      "at": "2026-11-24T22:52:26.119Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-492f4c",
+      "name": "e2e-categorize-proof.log",
+      "mime": "application/octet-stream",
+      "size": 5225,
+      "sha256": "392f37f023fd0cac4030149bca7e5d0b94bde23b2737fa7a17ab670e7ffcce4d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-707d6a",
+      "name": "review-fvtx.md",
+      "mime": "text/markdown",
+      "size": 15987,
+      "sha256": "16550b9fae3134a9daa9d1bfe42fc3606779ecb0189c0d1330d971e7c42a0f94",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-89fbd1",
+      "name": "e2e-categorize-decisions.log",
+      "mime": "application/octet-stream",
+      "size": 5267,
+      "sha256": "696e8bb324958b629b90b8493ed0e08d9a3ea1782958d990a224050d08e62805",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-d4daa6",
+      "name": "review-fvtx-2.md",
+      "mime": "text/markdown",
+      "size": 18616,
+      "sha256": "794e2cf2f9cab89ba7d08f11ee51172bba4be2f2e93906464476f5dbdc329253",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-db737c",
+      "name": "e2e-categorize-review2.log",
+      "mime": "application/octet-stream",
+      "size": 5267,
+      "sha256": "c591941ef4bd202dfac7a65273bc243f76b7c57def7e58786e188072006cad23",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-4f3c26",
+      "name": "review-fvtx-3.md",
+      "mime": "text/markdown",
+      "size": 11060,
+      "sha256": "98a41983a818fdc864cc9eed89bb30c7d5a9b15128116743c6ec0e1b193c5d73",
+      "metadata": {}
+    }
+  ],
   "dependencies": [
     {
       "issue_id": "budget-fvtx",
@@ -36,10 +769,18 @@
       "created_at": "2026-11-24T14:36:42.878Z",
       "created_by": "yuri",
       "metadata": {}
+    },
+    {
+      "issue_id": "budget-fvtx",
+      "depends_on_id": "budget-ucyr",
+      "type": "blocks",
+      "created_at": "2026-11-24T15:59:59.360Z",
+      "created_by": "yuri",
+      "metadata": {}
     }
   ],
-  "dependency_count": 1,
-  "dependent_count": 0,
+  "dependency_count": 2,
+  "dependent_count": 1,
   "comments": [],
   "comment_count": 0
 }

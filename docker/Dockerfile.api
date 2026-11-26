@@ -1,0 +1,35 @@
+# Budget API image. Build context is the REPO ROOT (shared/ sits beside api/):
+#   docker build -f docker/Dockerfile.api -t budget-api .
+# Debian (not alpine): Temporal's native core-bridge fails to load on musl
+# (ERR_DLOPEN_FAILED). The same image runs the jobs worker:
+#   docker run ... budget-api bun src/worker.ts
+FROM oven/bun:1.4.4
+
+WORKDIR /app
+
+# shared/ first: it owns zod, and api/ overrides zod to
+# link:../shared/node_modules/zod, so shared/node_modules must exist before
+# api installs.
+COPY shared/package.json shared/bun.lock shared/bunfig.toml shared/
+RUN cd shared && bun install --frozen-lockfile --production
+
+COPY api/package.json api/bun.lock api/bunfig.toml api/
+RUN cd api && bun install --frozen-lockfile --production
+
+COPY shared/tsconfig.json shared/
+COPY shared/src shared/src
+# api/tsconfig.json carries the @shared/* path that bun resolves at runtime.
+COPY api/tsconfig.json api/
+COPY api/src api/src
+# Pre-build the Temporal workflow bundle so the worker loads a file instead of
+# running webpack at every boot (that peak got the worker OOMKilled).
+COPY api/scripts/build-workflow-bundle.ts api/scripts/
+RUN cd api && bun run build:workflows && test -s dist/workflow-bundle.js
+# Migrations are read from api/db/migrations at boot; VERSION feeds /health.
+COPY api/db/migrations api/db/migrations
+COPY api/VERSION api/
+
+WORKDIR /app/api
+ENV API_HOST=0.0.0.0 API_PORT=3100
+EXPOSE 3100
+CMD ["bun", "src/index.ts"]

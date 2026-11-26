@@ -1,0 +1,531 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-xlng",
+  "title": "Import Contabilizei statement CSV",
+  "description": "",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-24T19:05:04.219Z",
+  "updated_at": "2026-11-24T21:47:38.453Z",
+  "started_at": null,
+  "closed_at": "2026-11-24T21:47:23.863Z",
+  "due_at": null,
+  "defer_until": null,
+  "parent": null,
+  "sprint": null,
+  "labels": [],
+  "notes": "Implemented Contabilizei CSV import in worktree .worktrees/budget-budget-xlng (branch tk/budget-xlng), commit 08a3725.\n\nNew: parsers/sources/contabilizei.ts (zero-config source, mirrors nubank.ts). Payee <- Descricao, memo <- Lancamento, amounts <- Entrada/Saida (pt-BR, NBSP after R$ ok, bare '-' or empty = 0); both-empty or both-set rows -> line error. Derived import ids contabilizei:<date>:<signedMilli>:<n> (key: date + signed amount + lower-cased payee; ordinal 1-based per file). statement.ts routes it before the Nubank check (shared Data/Descricao header); generic parser untouched. i18n en + pt-BR: screen.subtitle and file.hint now list Contabilizei. useImportFlow passes importId through generically (makeDraftRows spreads rows, rowsToImport spreads, snakeImportRow sets wire.import_id) — no Nubank special case found, no flow change needed.\n\nChecks in client/ (bun install shared-first done in worktree):\n- bunx tsc --noEmit: exit 0\n- bunx eslint .: exit 0 (i18n lint included)\n- bun test: 1320 pass / 0 fail (99 files); import.test.ts: 43 pass / 0 fail, incl. 7 new tests: sample parse (BOM/CRLF/NBSP/'-' cells, 11 rows 0 errors, row1 YURI FREIRE LIMA/PIX/1000000 out, DARF Unificado 17831, NSX inflows 250000+7096041), unique+stable ids, :1/:2 for identical same-day rows, both-sides errors, detectContabilizeiCsv negative on Nubank/YNAB/generic fixtures, parseStatementFile routing (payee != PIX).\n\nPlan's step 5 (manual dev-budget import + screenshots) left for review; tk finish intentionally not run.\nBug fix (plan's occurrence-key spec was wrong): payee removed from the occurrence key — ids now counted per (date, signedMilli), so same-day equal-amount rows with DIFFERENT payees get :1/:2 instead of colliding and being dropped by server dedupe. Commit <hash> on tk/budget-xlng; checks: tsc 0, eslint 0, bun test 1321 pass / 0 fail (8 Contabilizei tests incl. new cross-payee regression test). Plan file .agents/plans/2026-11-24_contabilizei-csv-import.md updated in main repo to match.\nCorrection to previous note: the fix commit hash is 14e6c57 (previous note had a placeholder). Full history on tk/budget-xlng: 08a3725 feat(client) import Contabilizei statement CSV, then 14e6c57 fix(client) Contabilizei import ids unique across payees.\nReview follow-up applied, commit c080a0c on tk/budget-xlng: dropped the client-side importId entirely (occurrence map, ContabilizeiRow/ContabilizeiParseResult gone; plain ImportRow rows) — POST /bulk already generates YNAB:<milli>:<date>:<payeeId>:<occurrence> for id-less rows and dedupes against existing occurrences in the account, which is payee-aware and DB-anchored (robust across reordered overlapping exports where a file-order ordinal is not). Entrada/Saida cells are now netted (signed = inflow - outflow, split by sign): negative cells reverse their side, no negative cents. Net-zero rows -> 'amount is zero' (already mapped in parserMessages); both-sides-empty stays 'no readable amount'. Plan file in main repo corrected: the 'Not idempotent' finding retracted, design says no client id. Checks: tsc 0, eslint 0, bun test 1319 pass / 0 fail (6 Contabilizei tests incl. netting + net-zero + both-empty).\nOrchestrator verification: c080a0c — tsc clean, import tests 94 pass/0 fail (omp: full client 1319 pass, eslint clean). Independent review findings (client id redundant with server YNAB fallback key; negative cells; zero-net message) addressed in c080a0c. Manual web check: 11 rows, correct payees, re-import adds 0 rows (evidence ev-4b0ece ev-2144f0 ev-c1e2d8 ev-330b2c). Server id-less dedupe covered by api/src/budget/routes/transactions.test.ts. Follow-ups: budget-otkr, budget-ujno.\nlanded outside tk close at 744d849 (branch tk/budget-xlng merged into main by hand)\nApproved by user. Merged to main (3 commits: contabilizei.ts parser, statement.ts routing, i18n en/pt-BR; client sends no import id, server YNAB fallback dedupes re-imports). Released v2026.11.24-01 (server only, no app): CI + Release green, prod /health reports 2026.11.24-01. Evidence ev-4b0ece ev-2144f0 ev-c1e2d8 ev-330b2c. Follow-ups budget-otkr, budget-ujno.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-xlng",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-xlng",
+    "changeset": {
+      "base": "3cbf4b3d67f5a42bf6fd7ee5fcdc6f9c1247b1ab",
+      "head": "c080a0c5e66c9899fc0240cdab4e0e5963e4ee64",
+      "commits": [
+        {
+          "sha": "c080a0c",
+          "subject": "refactor(client): Contabilizei rows rely on server import ids"
+        },
+        {
+          "sha": "14e6c57",
+          "subject": "fix(client): Contabilizei import ids unique across payees"
+        },
+        {
+          "sha": "08a3725",
+          "subject": "feat(client): import Contabilizei statement CSV"
+        },
+        {
+          "sha": "4e29221",
+          "subject": "Merge tk/budget-dcxr: AI key screen (client), shared settings card and PasswordField in ui/"
+        },
+        {
+          "sha": "3561109",
+          "subject": "fix(client): close review 2 on the AI key screen"
+        },
+        {
+          "sha": "d83ca18",
+          "subject": "test(client): gate the AI model list on settled detection"
+        },
+        {
+          "sha": "a48b23b",
+          "subject": "refactor(client): AI keys review fixes (sequencing, reducer, shared cards)"
+        },
+        {
+          "sha": "fac9c98",
+          "subject": "refactor(client): align AI key screen with the final ai contracts"
+        },
+        {
+          "sha": "5c1f0a6",
+          "subject": "fix(client): handle ai_key_forbidden and keys saved without a model"
+        },
+        {
+          "sha": "f72a951",
+          "subject": "fix(client): keep AI key detection from restarting mid-request; show removal notice"
+        },
+        {
+          "sha": "50b76fc",
+          "subject": "feat(client): AI key screen (save, detect provider, pick model, test, remove)"
+        },
+        {
+          "sha": "0919ddb",
+          "subject": "Merge tk/budget-ucyr: harden the AI provider layer before the categorizer"
+        },
+        {
+          "sha": "28f3f4e",
+          "subject": "fix(ai): third review round for the provider layer (budget-ucyr)"
+        },
+        {
+          "sha": "f34eb55",
+          "subject": "fix(ai): second review round for the provider layer (budget-ucyr)"
+        },
+        {
+          "sha": "378984a",
+          "subject": "fix(ai): harden the provider layer before the categorizer (budget-ucyr)"
+        },
+        {
+          "sha": "05e3267",
+          "subject": "Merge tk/budget-q8kf: AI provider layer (shared-ai-key flag, own keys, five provider adapters)"
+        },
+        {
+          "sha": "0d3d27c",
+          "subject": "Merge branch 'main' into tk/budget-q8kf"
+        },
+        {
+          "sha": "2ed8baf",
+          "subject": "chore(ai): renumber the AI credentials migration to 0109"
+        },
+        {
+          "sha": "db50606",
+          "subject": "fix(ai): harden key checks, Anthropic tool loops and provider isolation (budget-q8kf)"
+        },
+        {
+          "sha": "9eff45c",
+          "subject": "feat(ai): AI provider layer for category suggestions (budget-q8kf)"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.schema",
+          "status": "M"
+        },
+        {
+          "path": "api/db/migrations/0109_ai_credentials.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/ai/detect.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/detect.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/env.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/errors.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/http.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/http.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/keys.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/keys.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/anthropic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/anthropic.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/index.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/openai-compatible.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/providers/openai-compatible.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/redact.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/redact.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/routes.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/routes.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/settings.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/ai/types.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/test-op.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/features/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/worker.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/app/(budget)/ai-keys.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/ai.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/budget/data/api/base.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeyForm.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeySavedCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/AiKeysScreen.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeyForm.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeyForm.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeys.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/aiKeys.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/en.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/i18n/pt-BR.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/ai-keys/useAiKeys.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/auth/PasswordForms.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/auth/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/PluggyKeysCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/banks/keys/usePluggyKeys.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/ImportScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/parsers/import.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/parsers/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/import/parsers/sources/contabilizei.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/import/parsers/sources/statement.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/profile/ChangePasswordCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/SettingsRootPane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/settings/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/profile/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/BudgetTabs.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/PasswordField.tsx",
+          "status": "R077"
+        },
+        {
+          "path": "client/src/ui/bits.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/buttons.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/ui/primitives/settingsCard.tsx",
+          "status": "A"
+        },
+        {
+          "path": "docs/architecture.md",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/ai/credentials.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/credentials.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/index.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/ai/outputs.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/contracts/contracts.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/features.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/features.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 6288,
+        "deletions": 183
+      }
+    },
+    "agent_session": "bf547ef2-f7f4-4682-b434-1aafbec5b46f",
+    "finished_at": "2026-11-24T19:24:49.520Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 20,
+        "files": 85,
+        "additions": 6288,
+        "deletions": 183
+      },
+      "head": "c080a0c5e66c9899fc0240cdab4e0e5963e4ee64",
+      "at": "2026-11-24T19:24:49.520Z"
+    },
+    "landedOutside": {
+      "commit": "744d8494da5e5e2238e67a030e0e897c6e4c49a6",
+      "branchHead": "c080a0c5e66c9899fc0240cdab4e0e5963e4ee64",
+      "baseBranch": "main",
+      "at": "2026-11-24T21:47:23.627Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-4b0ece",
+      "name": "1-review-list.png",
+      "mime": "image/png",
+      "size": 123870,
+      "sha256": "6d55bfa180ea31b4229305c68c74c05b5f11be57d614871518357a0c442862ba",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-2144f0",
+      "name": "2-after-import.png",
+      "mime": "image/png",
+      "size": 165173,
+      "sha256": "2b3dac1ddb7a2398bac46dd7beeb374c4c89813cd9a4f1c085e761e4b139adf1",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c1e2d8",
+      "name": "3-reimport-result.png",
+      "mime": "image/png",
+      "size": 121826,
+      "sha256": "6146bb0a4ff53af47ee358c19ecedbbfb4e27ee9aabad6616bf69978371c9893",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-330b2c",
+      "name": "4-reimport-after-confirm.png",
+      "mime": "image/png",
+      "size": 165173,
+      "sha256": "2b3dac1ddb7a2398bac46dd7beeb374c4c89813cd9a4f1c085e761e4b139adf1",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

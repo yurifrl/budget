@@ -1,4 +1,4 @@
-# Build contexts are the repo root (deploy/Dockerfile.*): keep them small.
+# Build contexts are the repo root (docker/Dockerfile.*): keep them small.
 **/node_modules
 **/dist
 **/.expo
