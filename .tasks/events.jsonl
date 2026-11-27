@@ -1496,3 +1496,4 @@
 {"seq":1491,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-27T13:35:15.998Z","task":"budget-xxpr","type":"task.update","actor":"yuri","data":{"fields":["metadata.changeset"]}}
 {"seq":1492,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-27T13:35:18.371Z","task":"budget-9ekv","type":"task.worktree","actor":"yuri","data":{"path":"/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-9ekv","branch":"tk/budget-9ekv"}}
 {"seq":1493,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-27T13:35:18.371Z","task":"budget-9ekv","type":"task.update","actor":"yuri","data":{"fields":["metadata.changeset"]}}
+{"seq":1494,"host":"Yuris-MacBook-Pro-2.local","ts":"2026-11-27T13:37:10.672Z","task":"budget-4u4d","type":"task.update","actor":"yuri","data":{"fields":["notes"]}}
