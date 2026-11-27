@@ -183,3 +183,15 @@ export function transferAcceptError(error: unknown): string | undefined {
       return undefined;
   }
 }
+
+/**
+ * The pair a matcher suggestion names, written the way a Jev card writes it:
+ * both accounts once the other side is settled, else the one side that is
+ * known (a pair still to pick from, or a row with no match at all).
+ */
+export function matcherHeading(pair: { fromAccount: string | null; toAccount: string | null }): string {
+  if (pair.fromAccount && pair.toAccount) return t('transfer.pair', { out: pair.fromAccount, in: pair.toAccount });
+  if (pair.fromAccount) return t('transfer.from', { account: pair.fromAccount });
+  if (pair.toAccount) return t('transfer.to', { account: pair.toAccount });
+  return '';
+}

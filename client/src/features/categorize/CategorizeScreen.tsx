@@ -95,7 +95,7 @@ function CategorizePage() {
         <View pointerEvents={page.reloading ? 'none' : 'auto'} style={page.reloading ? styles.reloading : undefined}>
 
         {page.view === 'bundles' ? (
-          <TransferSection budgetId={page.budgetId} transfers={page.transfers} isPhone={!shell.isDesktop} />
+          <TransferSection transfers={page.transfers} isPhone={!shell.isDesktop} />
         ) : null}
 
         {page.viewModel && page.view === 'bundles' ? (

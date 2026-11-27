@@ -5,6 +5,7 @@ import type { CategorizeTransferGroup } from '@/budget/data/api';
 import {
   jevGroups,
   jevItems,
+  matcherHeading,
   transferAcceptError,
   transferDecisions,
   transferHeading,
@@ -168,5 +169,14 @@ describe('transferAcceptError', () => {
   test('anything else falls back to the generic accept sentence', () => {
     expect(transferAcceptError({ status: 500 })).toBeUndefined();
     expect(transferAcceptError(new Error('offline'))).toBeUndefined();
+  });
+});
+
+describe('matcherHeading', () => {
+  test('names both accounts when both sides are known, else the one that is', () => {
+    expect(matcherHeading({ fromAccount: 'Itaú', toAccount: 'Nubank' })).toBe('Itaú → Nubank');
+    expect(matcherHeading({ fromAccount: 'Itaú', toAccount: null })).toBe('Transfer from Itaú');
+    expect(matcherHeading({ fromAccount: null, toAccount: 'Nubank' })).toBe('Transfer to Nubank');
+    expect(matcherHeading({ fromAccount: null, toAccount: null })).toBe('');
   });
 });

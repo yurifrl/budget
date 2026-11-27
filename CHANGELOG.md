@@ -399,6 +399,12 @@
 - chore: start Budget repo (source: syscd-app 8e79a31)
 
 
+## 2026-11-27 Transfers Read Alike
+
+### Changed
+- The Categorize page's two transfer halves — the matcher's suggestions and Jev's answers — now share one card per account pair and one row layout, so a system guess and a Jev answer read the same way
+- Matcher suggestions group by pair with a running total, and each row carries the signed amount, date, both accounts, its certainty and Choose match / Not a transfer
+
 ## 2026-11-27 Categorize: searchable bundle category and a scrolling picker
 
 ### Changed

@@ -268,6 +268,8 @@ export default {
   'transfer.to': 'Transfer to {account}',
   'transfer.from': 'Transfer from {account}',
   'transfer.pair': '{out} → {in}',
+  'transfer.choose': 'Choose match',
+  'transfer.count': { one: '{count} transaction', other: '{count} transactions' },
   'transfer.percent': '{percent}%',
   'transfer.accept': 'Accept',
   'transfer.acceptPair': 'Accept all ({count})',

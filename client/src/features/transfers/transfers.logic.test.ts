@@ -15,6 +15,7 @@ import {
   ruleReason,
   selectAllRows,
   scopeSuggestions,
+  suggestionPairs,
   whyLine,
 } from './transfers.logic';
 
@@ -216,5 +217,24 @@ describe('review list and bulk bar', () => {
     expect(linkedToast({ linked: ['a', 'b'] })).toBe('1 linked as transfer');
     expect(linkedToast({ linked: ['a', 'b'] }, { saved: false, message: 'Too short' })).toBe('1 linked as transfer · rule not saved: Too short');
     expect(linkedToast({ linked: ['a', 'b'] }, { saved: false })).toContain('rule not saved');
+  });
+});
+
+describe('suggestionPairs', () => {
+  test('one card per account pair and payee, summed, most rows first', () => {
+    const twin = { ...sure, id: 'o1b', leg: leg('o1b', 'itau', -3_000_000, { payee_name: 'payee o1' }) };
+    const pairs = suggestionPairs([sure, choose, twin]);
+    expect(pairs.map((p) => [p.fromAccount, p.toAccount, p.rows.length])).toEqual([
+      ['Itau Conta', 'Nubank Conta', 2],
+      ['Itau Conta', null, 1],
+    ]);
+    expect(pairs[0]!.total).toBe(600_000);
+  });
+
+  test('a suggestion whose other side is still to pick keeps its known side', () => {
+    const pair = suggestionPairs([choose])[0]!;
+    expect(pair.fromAccount).toBe('Itau Conta');
+    expect(pair.toAccount).toBeNull();
+    expect(pair.rows[0]!.choices).toHaveLength(2);
   });
 });

@@ -237,3 +237,40 @@ export function linkedToast(result: { linked: string[] }, rule?: { saved: boolea
   // The link went through; say plainly that the rule did not, and why.
   return `${linked} · ${t('toast.ruleNotSaved', { reason: rule.message ?? t('rule.notSaved.invalid') })}`;
 }
+
+/** One card of the matcher's suggestions: an account pair (and payee) asked as one question. */
+export interface SuggestionPairView {
+  key: string;
+  /** The account the money leaves; null while that side is still to pick. */
+  fromAccount: string | null;
+  /** The account the money lands in; null while that side is still to pick. */
+  toAccount: string | null;
+  payee: string;
+  /** The money the pair moves, absolute cents. */
+  total: Cents;
+  rows: ReviewRow[];
+}
+
+/**
+ * The matcher's suggestions as the pair cards Jev's answers get: one card per
+ * account pair and payee, most rows first, so the page's two halves read the
+ * same. A suggestion whose other side is still to pick joins its own card,
+ * named by the side that is known.
+ */
+export function suggestionPairs(suggestions: readonly TransferSuggestion[]): SuggestionPairView[] {
+  const byKey = new Map<string, SuggestionPairView>();
+  for (const suggestion of suggestions) {
+    const row = reviewRow(suggestion);
+    const fromAccount = row.from?.account_name ?? null;
+    const toAccount = row.to?.account_name ?? null;
+    const key = `${fromAccount}\u0000${toAccount}\u0000${row.payee}`;
+    const pair = byKey.get(key);
+    if (pair) {
+      pair.rows.push(row);
+      pair.total += row.amount;
+    } else {
+      byKey.set(key, { key, fromAccount, toAccount, payee: row.payee, total: row.amount, rows: [row] });
+    }
+  }
+  return [...byKey.values()].sort((a, b) => b.rows.length - a.rows.length);
+}

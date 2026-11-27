@@ -258,6 +258,8 @@ const m: Translation<typeof en> = {
   'transfer.to': 'Transferência para {account}',
   'transfer.from': 'Transferência de {account}',
   'transfer.pair': '{out} → {in}',
+  'transfer.choose': 'Escolher par',
+  'transfer.count': { one: '{count} transação', other: '{count} transações' },
   'transfer.percent': '{percent}%',
   'transfer.accept': 'Aceitar',
   'transfer.acceptPair': 'Aceitar todas ({count})',
