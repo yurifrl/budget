@@ -1,0 +1,1 @@
+{"issue_id":"budget-luql","action":"save","at":"2026-11-26T20:09:31.643Z","actor":null,"data":{"status":"open","title":"CI: expo-doctor fails on expo-image ~58.0.19 and expo-sharing ~58.0.24 (new patches; local Safe-chain minimum package age blocks the bump for now)"}}

@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-euff",
+  "title": "Plan: deleting a category asks for a destination category and moves its transactions and assigned money there (YNAB popup); nothing ever becomes uncategorized by a delete",
+  "description": "",
+  "status": "ready-to-review",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T04:23:03.414Z",
+  "updated_at": "2026-11-27T10:20:32.540Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": "Delete is YNAB's three-case dialog (docs/ynab-plan-parity.md §2), end to end.\n\n## Contract change\n`budget_categories_delete` (DELETE /categories/:id) gains an OPTIONAL\n`destination_id` query parameter; still `noContent`, still `kind: destructive`,\nstill `EXPOSE_ALL`. New codes: `category_needs_destination` (409) and\n`invalid_destination_category` (400), each with an en + pt-BR message.\nWith `destination_id` the handler moves everything in ONE transaction; without\nit, a category that a row still names is refused (409) instead of being\ntombstoned. An already-deleted category that still holds rows is accepted when a\ndestination is given — that is the \"Deleted categories\" repair path.\n\n## Rules decided\n- trigger for the dialog: live transaction legs (incl. split legs), scheduled\n  rows, scheduled split legs, repeat templates, assigned money of any sign.\n- destination must be live, visible, non-internal and outside the card-payments\n  group — `categoryAssignability` already owns that rule, reused unchanged.\n- the move re-points: transactions, subtransactions, scheduled_transactions,\n  scheduled_subtransactions, txn_repeat_rules, category_suggestions,\n  categorize_decisions, payees.default_category_id (renaming rules are text\n  matches on the imported name, left alone).\n- assignments are summed per month into the destination's own row (upsert-sum).\n- targets are DROPPED (carrying one would silently change what the destination\n  asks for); month notes are APPENDED to the destination's note for that month,\n  never overwriting the person's words.\n- a card's payment category is still hidden, never deleted (409\n  `payment_category_not_deleted`, same `isCardPaymentsGroup` reader as before).\n- the Plan's \"Deleted categories\" row gains one action, \"Move to a category…\",\n  sending every stranded category through the same SQL path.\n\n## Casa clone, one case-3 delete (Farmacia -> Mercado Livre), before -> after\nMeasured on a clone (budgetnew_test_euff, dumped + restored, dropped after).\n- transactions: 25 on the source -> 0; destination 68 -> 93 (+25)\n- transaction net: source -7.959.060 milliunits -> destination\n  -28.983.920 -> -36.942.980 (delta = -7.959.060, exact)\n- assigned months merged: 2025-03 909.620+790.000=1.699.620; 2025-05 1.000.000\n  (new); 2025-06 820.490 (new); 2025-10 627.390+959.230=1.586.620;\n  2026-11 -1.715.160+1.370.540=-344.620 — total assigned unchanged 74.464.870\n- uncategorized transactions: 3.415 -> 3.415; rows stranded on deleted\n  categories: 0 -> 0; every month's assigned total unchanged (the only delta in\n  the run is the seeded case-2 category, -500.000)\n- Ready to Assign in the live app: R$ 134.027,91 before, R$ 134.027,91 after.\n- case 2 (money only): dialog verbatim, RTA R$ 134.027,91 -> R$ 134.527,91\n  (+R$ 500,00 = the category's assignment).\n- case 1 (nothing): no dialog, row gone.\n\n## Screenshots (docs/evidence/delete-popup/, attached as evidence)\n01-plan-before.png, 02-row-menu.png, 03-dialog-destination.png,\n04-dialog-picked.png, 05-plan-after.png, 06-case2-dialog-rta.png,\n07-case2-plan-after.png, 08-case1-before.png, 09-case1-immediate.png\n\n## Checks\n- shared: `bun test` 232 pass, 0 fail; tsc + eslint clean.\n- api: FULL suite with BUDGET_TEST_PG_BASE + BUDGET_REQUIRE_TEST_DB=1 —\n  1775 pass, 1 skip, 0 fail (new tests: routes/category-delete.test.ts, 6 cases;\n  access catalog attack case for `destination_id`).\n- client: tsc + eslint clean; `bun test` 1581 pass, 0 fail (new:\n  domain/planSelection.test.ts delete-plan cases, domain/categoryDelete.test.ts\n  engine proof — identical RTA every month, destination absorbs, orphaned empty).\n- docs/decisions.md records the rules.\nREVIEW (orchestrator) 2026-11-27: accepted on my side. Checks run by me on the branch: shared 232, client 1581, api 1775 pass/1 skip/0 fail, tsc+eslint clean; store SQL read; screenshots checked. Merged into integration at 588a743 (verified by me: shared 232, client 1587, api 1775/1 skip/0 fail). One relative-path edit by this worker landed in main's api/src/access.test.ts at 06:19 local; I removed exactly its 5 lines.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-euff",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-euff",
+    "changeset": {
+      "base": "a5d37bbfd4f18a2bcfdbd518a7546185d39af220",
+      "baseBranch": "main"
+    },
+    "agent_session": "01a21c24-2bb0-7190-a0a5-6a279259f422",
+    "finished_at": "2026-11-27T10:09:25.479Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 24,
+        "files": 132,
+        "additions": 7896,
+        "deletions": 407
+      },
+      "head": "3e0ce2051e642849aed1c643cbaf99012f767d62",
+      "at": "2026-11-27T10:09:25.479Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-046cb0",
+      "name": "01-plan-before.png",
+      "mime": "image/png",
+      "size": 172489,
+      "sha256": "f5dd27278e755d3cc664d6e6a0f408243a6c70afe913905536d9b73482031243",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-4588b7",
+      "name": "02-row-menu.png",
+      "mime": "image/png",
+      "size": 181630,
+      "sha256": "e616698842828375c6dfd7faecf1604fda0a128dcad0b1d78c16fd562916a0a4",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-429c53",
+      "name": "03-dialog-destination.png",
+      "mime": "image/png",
+      "size": 185666,
+      "sha256": "cf1d40d1772cb9b2a22e45b459f5dd562ca9304bff3c3adba72c5b0d26a0da81",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c3b95e",
+      "name": "04-dialog-picked.png",
+      "mime": "image/png",
+      "size": 185792,
+      "sha256": "ee1c10662ce39edc6018cd61d8b70f055b68d3bcdffed3fefacd796145ea2760",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-7ba827",
+      "name": "05-plan-after.png",
+      "mime": "image/png",
+      "size": 172513,
+      "sha256": "86b5f390e7611429d9a892690d52e68e8a62051992cccffd6567a3a5d45a0f3b",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-7fe58a",
+      "name": "06-case2-dialog-rta.png",
+      "mime": "image/png",
+      "size": 190450,
+      "sha256": "ddde7d126772fadce98224bb3519c56aad04b323cb43f230837fd93dcb811e7f",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ee256b",
+      "name": "07-case2-plan-after.png",
+      "mime": "image/png",
+      "size": 177068,
+      "sha256": "2de722e15924a9f59c290bf26f50bcaf890240e7778beb7a576ee12df720ea6e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-580923",
+      "name": "08-case1-before.png",
+      "mime": "image/png",
+      "size": 177068,
+      "sha256": "2de722e15924a9f59c290bf26f50bcaf890240e7778beb7a576ee12df720ea6e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-c34ed8",
+      "name": "09-case1-immediate.png",
+      "mime": "image/png",
+      "size": 177492,
+      "sha256": "43c19b5b01a7bb018402bccd7a06cd9f3af5d73eb11b45e952f418e6a72cac0b",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [
+    {
+      "issue_id": "budget-euff",
+      "depends_on_id": "budget-vyk0",
+      "type": "blocks",
+      "created_at": "2026-11-27T04:23:03.414Z",
+      "created_by": "yuri",
+      "metadata": {}
+    },
+    {
+      "issue_id": "budget-euff",
+      "depends_on_id": "budget-qlog",
+      "type": "blocks",
+      "created_at": "2026-11-27T04:23:03.414Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 2,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

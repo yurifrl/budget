@@ -1,0 +1,5 @@
+- Make a script that dumps production db and loads it locally with integrations
+- Create Dividers in category, a word and small line that divides items in a category
+- Hidden categories renamin with their funds, today hidden categories show no money
+- Rename hidden categories to archive have a page for archived, the page is like the plan page, use the same code, but it's acessible by menu, is hidden
+- Change Bundles to be less colorfil, make it look like a normal item just have the amount of items it has today in name and the arrow to collapse, remove the purple tint and border

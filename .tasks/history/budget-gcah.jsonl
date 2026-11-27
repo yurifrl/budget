@@ -1,0 +1,1 @@
+{"issue_id":"budget-gcah","action":"save","at":"2026-11-27T06:40:13.469Z","actor":null,"data":{"status":"open","title":"Pre-existing: 'bun test src/budget' alone fails with ReferenceError accountsOps before initialization (import cycle in api/src/budget/index.ts); full 'bun test' passes"}}

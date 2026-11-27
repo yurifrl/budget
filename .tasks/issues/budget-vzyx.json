@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-vzyx",
+  "title": "Plan: automatic 'Uncategorized Transactions' first row (YNAB), linked to the Categorize feature",
+  "description": "",
+  "status": "ready-to-review",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T04:23:03.835Z",
+  "updated_at": "2026-11-27T12:12:39.402Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": "Rule: uncategorizedRow(bm) at client/src/domain/planSections.ts:235 (null when the month has no uncategorized activity/available); planMoneyRows stays the full set for the identity test; footerMoneyRows (:294) = planMoneyRows minus that row, so no row is drawn twice. PlanGridBody gained `first` (ListHeaderComponent), PlanScreen passes the row only when live.\n\nTests written first and seen failing (SyntaxError: footerMoneyRows not exported), then 33 pass in planSections.test.ts. Full: shared 232 pass / client 1582 pass / 0 fail; tsc + eslint clean in shared and client (api untouched).\n\nLive check (real Chrome via playwright, budget Casa, Nov 2026): row y=251 sits between the column header (227) and the first group header (304) -> true first row; cells — / -R$80.078,15 / -R$80.078,15 aligned to header columns x 760/880/1000/1140; name colour rgb(165,172,249); clicking navigates to /categorize. Evidence: verify-plan-row.png, verify-crop.png, verify-categorize.png.\nReview round: four brief items done, verification redone inside the rules.\n- count next to the name, computed by the pure layer from the engine's own legs (zeroSum.uncategorizedBreakdown); engine test proves count and amount come from one source\n- AVAILABLE is the overspend pill (red for cash, credit variant for card-only) via PlanTotalsCells.availablePill\n- detail: plan side panel on desktop, OverlaySheet on phone, breakdown (cash, card, per-card when >1) + ONE consequence sentence chosen by a pure function, two variants x two languages\n- presence rule: engine count > 0 (absent in Dec 2026 on Casa)\nGestures: the name is the Categorize link; the rest of the row opens the detail. Detail also has an Open Categorize button.\nEvidence: docs/evidence/uncategorized-row/1..6 (1440 + 390, plan row, detail sentence, /categorize after pressing, December absent), DOM assertions recorded in its README. Own DB clone budgetnew_test_vzyx (dropped), api 3101 / web 8093, no compose touched.\nREVIEW (orchestrator) 2026-11-27: accepted on my side after one rework (count, overspent pill, detail panel, three consequence sentences). Merged into integration at ea62d1e; account header identity fix 31c1bdb.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-vzyx",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-vzyx",
+    "changeset": {
+      "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
+      "baseBranch": "main"
+    },
+    "agent_session": "01a21c7a-c8a5-71a2-949a-87f19d3b92ee",
+    "finished_at": "2026-11-27T11:39:27.450Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 31,
+        "files": 158,
+        "additions": 8328,
+        "deletions": 718
+      },
+      "head": "55bd84d721b2eb85cd26b5ada2e05379818e8e8f",
+      "at": "2026-11-27T11:39:27.450Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-3bb41b",
+      "name": "verify-plan-row.png",
+      "mime": "image/png",
+      "size": 185137,
+      "sha256": "e62e38c5a699da10d06719b929c5843da4b13f1810babb82cbcb72c4ba8fad28",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-2ca457",
+      "name": "verify-crop.png",
+      "mime": "image/png",
+      "size": 84657,
+      "sha256": "bc97523b505242e10d44ce19059d329b848205dad0a85038998d93ec056342aa",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-bbc65d",
+      "name": "verify-categorize.png",
+      "mime": "image/png",
+      "size": 221877,
+      "sha256": "daa9165155887b0e7e8457b16d54b74d7c370f56283cd4c94c33be5704f7b21e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-ef88d1",
+      "name": "1-plan-row-1440.png",
+      "mime": "image/png",
+      "size": 251960,
+      "sha256": "ffe9b2e935172c7517851421cc2ebc3839f9cf462297626776b50fc97eab763a",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-b833be",
+      "name": "3-categorize-1440.png",
+      "mime": "image/png",
+      "size": 544262,
+      "sha256": "dbfbe47eaaac1e70ff4785067130a3855adeda8b7bcf098e1451ad57d45a9018",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-03ec89",
+      "name": "4-december-1440.png",
+      "mime": "image/png",
+      "size": 228142,
+      "sha256": "d3ef8abd77941ed69ba748494a5639d5ccd5186926bf5bc6931d23cc754b529b",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-daca12",
+      "name": "2-detail-1440.png",
+      "mime": "image/png",
+      "size": 487836,
+      "sha256": "85859da5bf1856f034f580cc8ed966ae99a9e51589d9ef771bc25010c0a0bc65",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-bb9bfb",
+      "name": "5-plan-row-390.png",
+      "mime": "image/png",
+      "size": 191068,
+      "sha256": "e7252e1629a3b9bff6bdf99f7dafc90da9f74170a4487d8dd9f4e541b30314be",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-6fa2d3",
+      "name": "6-detail-390.png",
+      "mime": "image/png",
+      "size": 254989,
+      "sha256": "a466562cbf3b6b5f6621cba400f33341991afd69fda15924a05f5a7f719eab5c",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-879ee9",
+      "name": "README.md",
+      "mime": "text/markdown",
+      "size": 2151,
+      "sha256": "55a9eafc99b9985a498e009c2491ca2478f540537e89a1e4e7e12c993141e282",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [
+    {
+      "issue_id": "budget-vzyx",
+      "depends_on_id": "budget-vyk0",
+      "type": "blocks",
+      "created_at": "2026-11-27T04:23:03.835Z",
+      "created_by": "yuri",
+      "metadata": {}
+    },
+    {
+      "issue_id": "budget-vzyx",
+      "depends_on_id": "budget-qlog",
+      "type": "blocks",
+      "created_at": "2026-11-27T04:23:03.835Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 2,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

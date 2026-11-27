@@ -11,7 +11,7 @@
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-25T16:49:52.495Z",
-  "updated_at": "2026-11-25T16:49:52.495Z",
+  "updated_at": "2026-11-27T13:17:14.053Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -25,8 +25,14 @@
   "estimated_minutes": null,
   "spec_id": null,
   "external_ref": null,
-  "branch": null,
-  "metadata": {},
+  "branch": "tk/budget-dt00",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-dt00",
+    "changeset": {
+      "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
+      "baseBranch": "main"
+    }
+  },
   "attachments": [],
   "dependencies": [],
   "dependency_count": 0,

@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-zbqd",
+  "title": "Plan: rename Hide to Archive; archived categories keep their money and transactions and live on an Archived page (same plan grid code), reachable from the menu",
+  "description": "",
+  "status": "ready-to-review",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T04:23:03.040Z",
+  "updated_at": "2026-11-27T10:08:41.495Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": "REVIEW (orchestrator) 2026-11-27: accepted on my side after one rework (first version still listed archived rows inline and used a separate table). Screenshots checked; client 1579 pass, tsc/eslint clean. Merged into integration at 192c80e (verified by me: shared 232, client 1579, api 1768 pass/1 skip/0 fail, tsc clean).",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-zbqd",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-zbqd",
+    "changeset": {
+      "base": "a5d37bbfd4f18a2bcfdbd518a7546185d39af220",
+      "baseBranch": "main"
+    },
+    "agent_session": "01a21c24-3c34-7549-8c57-d562fdf9eb6c",
+    "finished_at": "2026-11-27T10:04:29.689Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 26,
+        "files": 144,
+        "additions": 7452,
+        "deletions": 645
+      },
+      "head": "fe81115c325e505a82725b495b15fe46e1b7e5ee",
+      "at": "2026-11-27T10:04:29.689Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-4b3145",
+      "name": "archived-numbers.txt",
+      "mime": "text/plain",
+      "size": 1384,
+      "sha256": "92b00dd4d44cce43923c19ff29ab1502c3ff87a475b70813f4d4a47e453c6065",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-238375",
+      "name": "02-plan-footer-archived-12.png",
+      "mime": "image/png",
+      "size": 174763,
+      "sha256": "758e82e677ec10810431f6ab623b42e5cfb262765cf03448f9b9432e7dc1659d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-f0d9d1",
+      "name": "05-settings-menu-archived-row.png",
+      "mime": "image/png",
+      "size": 165371,
+      "sha256": "76455f951ddbc4ce511ac4138511606a0daf481b3748842f1cd4ec1c8efebcf4",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-990cef",
+      "name": "01-row-menu-archive.png",
+      "mime": "image/png",
+      "size": 182059,
+      "sha256": "234f4b7eb3979148a826f7477105f370eb6745b77f93f0c7ec14b3051395cb83",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-039382",
+      "name": "02-plan-bottom.png",
+      "mime": "image/png",
+      "size": 72062,
+      "sha256": "2029b58ff949f2e6324b9c90a59d2cbba39ec6f9978215d10a1284e346d0c4f1",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-69284a",
+      "name": "03-archived-page.png",
+      "mime": "image/png",
+      "size": 73829,
+      "sha256": "fc3ca6709078b5b5b482fc9db4d5b8d8a4338ec0c5aff58037310126379cf59a",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-dd61bf",
+      "name": "REPORT.md",
+      "mime": "text/markdown",
+      "size": 3644,
+      "sha256": "f4fd3c4675e1967b7d1c2688d4dd1b894e85c41ee834d4ad0378e78266c6cdfc",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [
+    {
+      "issue_id": "budget-zbqd",
+      "depends_on_id": "budget-vyk0",
+      "type": "blocks",
+      "created_at": "2026-11-27T04:23:03.040Z",
+      "created_by": "yuri",
+      "metadata": {}
+    },
+    {
+      "issue_id": "budget-zbqd",
+      "depends_on_id": "budget-qlog",
+      "type": "blocks",
+      "created_at": "2026-11-27T04:23:03.040Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 2,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

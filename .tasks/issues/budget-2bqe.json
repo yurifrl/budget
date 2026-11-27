@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-2bqe",
+  "title": "Import production data locally: all data of one user + budget (Casa and its linked accounts) into budgetnew_dev",
+  "description": "Isolated feature (own directory/CLI command, no coupling into request handlers). Given a user and a budget, copy ALL of that budget's production data into the local dev database: accounts, groups, categories (incl. hidden/deleted), assignments, transactions (incl. tombstones/removed, transfer links, installments), payees and rules, bundles, targets, notes, members/people, bank connections and their imported bank rows + every provider metadata field, categorize suggestions. Production is READ-ONLY: never write to it. Must be idempotent (run twice = same local state, no duplicates). Bank provider secrets must not be usable locally to hit the provider by accident (sync disabled or keys blanked). Document in docs/runbooks.",
+  "status": "ready-to-review",
+  "priority": 0,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T04:21:40.813Z",
+  "updated_at": "2026-11-27T06:01:26.928Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": "Importer shipped on the HTTP-only path (no DB read of production). 3rd run on Casa: 0 tables changed (idempotent), 4376 transactions / 1352 payees / 5 accounts; per-account balances identical prod vs local. Drops disclosed: 2 transactions.category_id nulled, 6 assignments dropped (targets soft-deleted, unservable).\nRound 2 (4 review items): (1) copied connections are written status=disconnected, key_source kept, next_poll_at null, paused_from null, status_message 'Imported from production: bank sync is disabled in this local copy' — verified: sweep selects 0 rows, no sync job exists, and syncWork returns skipped for 'disconnected'. (2) auth-off user: the local API resolves every request to dev@localhost (api/src/user/middleware.ts DEV_EMAIL); the importer looks that user up in the local DB and adds it to budget_members (never replacing production members). (3) Ready to Assign verified by the app's own engine (computeBudgetMonth) against local API and production API: identical, RTA 75545.89, envelopes 0.00, card payments -16374.15, on-budget 35664.58, derived upcoming 25 rows -22874.87, gap 23507.16 = the reported bug. (4) upcoming installments: derived at read time from connection_transactions.raw_payload creditCardMetadata, so the importer now reads each bank-imported row's provider record through GET /transactions/:id (import.raw) and writes connection_transactions — 4340 rows, and 25 derived rows reproduce. Gap list rewritten to lead with soft-deleted rows.\nREVIEW (orchestrator) 2026-11-27: accepted on my side. Verified on budgetnew_dev: 5 accounts equal production and each equals its transaction sum; connections imported as disconnected with next_poll_at null; dev@localhost added as member locally; 4359 connection_transactions; mapping tests 24 pass. Worker reports engine parity: local RTA 75.545,89 = production, payment envelopes -16.374,15 (not re-run by me). Known limits: soft-deleted rows are not served by the API (2 transactions lost category, 6 assignments dropped); each run does one GET per bank-imported transaction (~4.3k requests to production). Not merged: main checkout has another session's uncommitted work.",
+  "design": null,
+  "acceptance_criteria": "One command (task target) imports budget Casa for the owner into budgetnew_dev; second run changes nothing; local 'task run' shows Casa with the same account balances as production (Itau Cartao -21.448,14 total, Nubank Cartao -2.059,02, Nubank CC 100,56, Itau CC 5.533,92, Empresa 53.537,26 as of 2026-11-27) and the same Ready to Assign as production; tests for the pure mapping part; typecheck+lint+test green.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-2bqe",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-2bqe",
+    "changeset": {
+      "base": "a5d37bbfd4f18a2bcfdbd518a7546185d39af220",
+      "baseBranch": "main"
+    },
+    "agent_session": "01a21b3c-fb49-77a2-90ea-fdb005b64b71",
+    "finished_at": "2026-11-27T06:00:18.664Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 3,
+        "files": 8,
+        "additions": 2182,
+        "deletions": 0
+      },
+      "head": "288233875465360389f2d3b29278beae204472f6",
+      "at": "2026-11-27T06:00:18.664Z"
+    }
+  },
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-07c28a",
+      "name": "import-prod-run3.txt",
+      "mime": "text/plain",
+      "size": 2573,
+      "sha256": "4abed9d627996f4e9812faae75ecef01f2d12fe1bdc532c8ef2ecf3fcf0ddb5e",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-815aaa",
+      "name": "import-prod-evidence.txt",
+      "mime": "text/plain",
+      "size": 8412,
+      "sha256": "395eea37a6350c40f0ccf4076c0787af41de9abe7199deffbe3bce6eb54615a1",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 1,
+  "comments": [],
+  "comment_count": 0
+}

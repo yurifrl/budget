@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-wxym",
+  "title": "API: account label on categories and category groups (contract, migration, handlers, CLI/MCP), like the person label",
+  "description": "Server half of budget-lul6. Categories and groups already carry an optional person (user_id; operations categories.set_person, categories.set_group_person). Add an optional account label the same way: a category or a group can be tagged with one account of the same budget; a category with no own label inherits its group's. Read side returns it on category and group rows. No money logic here.",
+  "status": "ready-to-review",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T06:40:50.336Z",
+  "updated_at": "2026-11-27T07:19:32.640Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": "REVIEW (orchestrator) 2026-11-27: accepted on my side. Full api suite on branch 1725 pass/0 fail (run by me); shared helper effectiveAccountId/effectivePersonId added in cd565f5.",
+  "design": null,
+  "acceptance_criteria": "Contract + handler + store + migration (additive) + tests; account must belong to the same budget and not be deleted (re-scoped by budget_id in SQL), clearing with null works; deleting/closing an account leaves labels readable or clears them (decide, document, test); access.test.ts and catalog-outputs.test.ts samples added; export/restore round-trips the label; typecheck, lint, full api + shared tests green.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-wxym",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-wxym",
+    "changeset": {
+      "base": "a5d37bbfd4f18a2bcfdbd518a7546185d39af220",
+      "baseBranch": "main"
+    },
+    "agent_session": "01a21bbc-5cc4-725b-97d1-6c597810bd7e",
+    "finished_at": "2026-11-27T07:09:07.552Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 2,
+        "files": 27,
+        "additions": 651,
+        "deletions": 18
+      },
+      "head": "cd565f517e4b3f543a5c6decbd73c9b76889e138",
+      "at": "2026-11-27T07:09:07.552Z"
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

@@ -12,6 +12,7 @@
  *    rates, connections routes, jobs admin.
  */
 import { Hono } from 'hono';
+import { compress } from 'hono/compress';
 import { cors } from 'hono/cors';
 
 import budget from './budget';
@@ -74,6 +75,13 @@ export function buildApp({ appOrigin, adminOrigins = [], version, oauth, mcpIssu
       credentials: true,
     }),
   );
+
+  // Response compression. The register/plan payloads are megabytes of JSON
+  // (a full transaction list is ~4 MB) and clients reach this API over a
+  // tunnel at a few hundred KB/s: uncompressed bytes cost the user seconds on
+  // every load and every refetch. `/mcp` is excluded because it streams SSE.
+  const compressResponses = compress();
+  app.use('*', (c, next) => (c.req.path.startsWith('/mcp') ? next() : compressResponses(c, next)));
 
   // Simple healthcheck (public, pre-gate) — carries the release version so
   // the app's /stats page can show which API build it is talking to.

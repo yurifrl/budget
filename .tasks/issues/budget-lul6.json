@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-lul6",
+  "title": "Plan: label category groups and categories with people and with an account; filter the plan by account, where Ready to Assign + available in the shown categories = that account's balance exactly",
+  "description": "",
+  "status": "ready-to-review",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T04:23:04.202Z",
+  "updated_at": "2026-11-27T11:41:12.254Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": "Owner decision: YNAB model. For a cash account filter: RTA + available of that account's categories = that account's balance. For a card account the payment category is the card's side.\nREVIEW (orchestrator) 2026-11-27: accepted on my side. Code read (accountFigures.ts), screenshots checked, client 1638 pass + tsc/eslint clean on eaa5a8b; fixes f7d7ea0 (plain sentence, inline tick, phone header). Merged into integration at 273371e by the worker (its checks: shared 232, api 1775/1 skip/0 fail, client 1648, admin 20); my own re-run of the merged tree happens in the final verification after budget-vzyx merges.",
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-lul6",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-lul6",
+    "changeset": {
+      "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
+      "baseBranch": "main"
+    },
+    "agent_session": "01a21c7a-da64-778d-a33c-63bcd0b4c689",
+    "finished_at": "2026-11-27T11:28:04.785Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 29,
+        "files": 165,
+        "additions": 8947,
+        "deletions": 656
+      },
+      "head": "eaa5a8bab9babbab4295f42b1c0277b1493f6b7f",
+      "at": "2026-11-27T11:28:04.785Z"
+    }
+  },
+  "attachments": [],
+  "dependencies": [
+    {
+      "issue_id": "budget-lul6",
+      "depends_on_id": "budget-vyk0",
+      "type": "blocks",
+      "created_at": "2026-11-27T04:23:04.202Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 1,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

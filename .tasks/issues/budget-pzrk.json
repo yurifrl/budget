@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-pzrk",
+  "title": "Investigate linked-account balances vs the bank on imported Casa data: Itau Cartao (ours -21.448,14, bank 21.151,16) and Nubank Cartao (ours -2.059,02, bank 2.050,36); fix the cause",
+  "description": "",
+  "status": "ready-to-review",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T04:23:02.570Z",
+  "updated_at": "2026-11-27T06:01:27.248Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": "Owner confirmed 2026-11-27: Empresa (Contabilizei) real balance is 45.537,26. The app has 53.537,26, so 8.000,00 left the account and is missing in the app (manual account, fed by the Contabilizei CSV import). Include Empresa in the investigation: find the missing outflow(s); target local balances: Nubank CC 100,56; Nubank Cartao -2.050,36; Itau CC 5.533,92; Itau Cartao -21.151,16; Empresa 45.537,26.\nREVIEW (orchestrator) 2026-11-27: accepted on my side. Arithmetic checked (-20.588,88-562,28=-21.151,16; -2.950,36+900,00=-2.050,36; 53.537,26-8.000,00=45.537,26); transactions.test.ts + connections suite 449 pass, tsc clean. Owner decisions pending in Inbox: card balance vs bank display; production correction of duplicate 4ba6c8fa. Not merged.",
+  "design": null,
+  "acceptance_criteria": "Per account: the list of rows that explain the difference to the cent (duplicates, pending+posted twins, installments, missing rows, wrong sign, bill payments), the code path that caused each, a fix with tests, and after the fix the local balances equal the owner's real values exactly. Stop when they match.",
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-pzrk",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-pzrk",
+    "changeset": {
+      "base": "a5d37bbfd4f18a2bcfdbd518a7546185d39af220",
+      "baseBranch": "main"
+    },
+    "agent_session": "01a21b70-54c3-7466-8e13-884d4bf348a4",
+    "finished_at": "2026-11-27T05:57:07.676Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 1,
+        "files": 5,
+        "additions": 299,
+        "deletions": 40
+      },
+      "head": "4d1268a589fda478542ce7ba69ef9546fb1e4bb3",
+      "at": "2026-11-27T05:57:07.676Z"
+    }
+  },
+  "attachments": [],
+  "dependencies": [
+    {
+      "issue_id": "budget-pzrk",
+      "depends_on_id": "budget-2bqe",
+      "type": "blocks",
+      "created_at": "2026-11-27T04:23:02.570Z",
+      "created_by": "yuri",
+      "metadata": {}
+    }
+  ],
+  "dependency_count": 1,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}
