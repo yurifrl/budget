@@ -73,6 +73,24 @@ export function ConfidenceChip({
   );
 }
 
+/**
+ * Just the confidence number ("93%"), same bands. The bundle header pairs it
+ * with a category picker, so the category lives in the picker, not the chip.
+ */
+export function ConfidencePercent({ confidence, style }: { confidence: number; style?: StyleProp<TextStyle> }) {
+  const percent = thresholdPercent(confidence);
+  return (
+    <View accessible accessibilityLabel={t('chip.percentA11y', { percent })}>
+      <TagPill
+        label={t('chip.percent', { percent })}
+        tone={TONE[confidenceBand(confidence)]}
+        numberOfLines={1}
+        style={[styles.chip, style]}
+      />
+    </View>
+  );
+}
+
 const DOT_PALETTE: readonly { bg: string; fg: string }[] = [
   { bg: colors.indigoSoft, fg: colors.indigo3 },
   { bg: colors.greenPillBg, fg: colors.greenPillFg },

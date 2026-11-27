@@ -1,7 +1,8 @@
 /**
  * One bundle card (mock ev-2d6f08): payee + count + date range + total +
- * top-suggestion chip, an Accept button, and — when opened — its rows with
- * per-row chips and category search. Only the opened card fetches rows.
+ * the top suggestion as a category search with its confidence next to it, an
+ * Accept button, and — when opened — its rows with per-row chips and category
+ * search. Only the opened card fetches rows.
  */
 
 import { StyleSheet, Text, View, Pressable } from 'react-native';
@@ -14,7 +15,7 @@ import { GhostButton, IndigoButton } from '@/ui/bits';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors, radius } from '@/ui/theme';
 
-import { ConfidenceChip, PayeeDot } from './CategorizeBits';
+import { CategoryPicker, ConfidencePercent, PayeeDot } from './CategorizeBits';
 import { t } from './i18n';
 import type { PickedCategory } from './page.logic';
 import { bundleDateRange, type ShownBundle } from './queue.logic';
@@ -29,6 +30,7 @@ export function BundleCard({
   disabled,
   hiddenIds,
   onAccept,
+  onPickBundleCategory,
   onFileRow,
   onPickCategory,
 }: {
@@ -40,6 +42,8 @@ export function BundleCard({
   /** Rows hidden from the page (filed, or waiting in the strip): not drawn inside the card either. */
   hiddenIds: ReadonlySet<string>;
   onAccept: (bundle: ShownBundle, rows: readonly CategorizeQueueRow[]) => void;
+  /** File every row of the bundle with one picked category (the header search). */
+  onPickBundleCategory: (bundle: ShownBundle, category: PickedCategory) => void;
   onFileRow: (row: CategorizeQueueRow, suggestion: CategorizeSuggestion) => void;
   onPickCategory: (row: CategorizeQueueRow, category: PickedCategory) => void;
 }) {
@@ -72,7 +76,15 @@ export function BundleCard({
         <View style={styles.trail}>
           <Text style={styles.total}>{total}</Text>
           <Text style={styles.arrow}>→</Text>
-          <ConfidenceChip suggestion={bundle.suggestion} />
+          <CategoryPicker
+            budgetId={budgetId}
+            onPick={(category) => onPickBundleCategory(bundle, category)}
+            disabled={disabled}
+            style={styles.headPicker}
+            placeholder={bundle.suggestion.category_name}
+            label={t('bundle.pickCategory', { payee: bundle.payee })}
+          />
+          <ConfidencePercent confidence={bundle.suggestion.confidence} />
           <IndigoButton
             label={t('bundle.accept')}
             onPress={() => onAccept(bundle, rows.rows)}
@@ -135,6 +147,7 @@ const styles = StyleSheet.create({
   trail: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   total: { color: colors.text, fontSize: 14, fontWeight: '700', minWidth: 92, textAlign: 'right' },
   arrow: { color: colors.faint, fontSize: 14 },
+  headPicker: { minWidth: 150, maxWidth: 240, flexGrow: 0 },
   accept: { backgroundColor: colors.green, paddingVertical: 7, paddingHorizontal: 13 },
   note: { color: colors.muted, fontSize: 12, padding: 12 },
   failed: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },

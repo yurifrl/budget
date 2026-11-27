@@ -28,6 +28,7 @@ export function BundlesView({
   goneBundleKeys,
   bundleChangeTick,
   onAcceptBundle,
+  onPickBundleCategory,
   onAcceptAll,
   onFileRow,
   onPickCategory,
@@ -44,6 +45,7 @@ export function BundlesView({
   goneBundleKeys: ReadonlySet<string>;
   bundleChangeTick: number;
   onAcceptBundle: (bundle: ShownBundle, rows: readonly CategorizeQueueRow[]) => void;
+  onPickBundleCategory: (bundle: ShownBundle, category: PickedCategory) => void;
   onAcceptAll: () => void;
   onFileRow: (row: CategorizeQueueRow, suggestion: CategorizeSuggestion) => void;
   onPickCategory: (row: CategorizeQueueRow, category: PickedCategory) => void;
@@ -112,6 +114,7 @@ export function BundlesView({
             disabled={!idle}
             hiddenIds={hiddenIds}
             onAccept={onAcceptBundle}
+            onPickBundleCategory={onPickBundleCategory}
             onFileRow={onFileRow}
             onPickCategory={onPickCategory}
           />

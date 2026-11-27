@@ -55,8 +55,11 @@ const m: Translation<typeof en> = {
   'bundle.loadMore': 'Mostrar mais transações',
   'bundle.expand': 'Abrir {payee}',
   'bundle.collapse': 'Fechar {payee}',
+  'bundle.pickCategory': 'Escolher uma categoria para {payee}',
   'chip.label': '{category} {percent}%',
   'chip.a11y': 'Categorizar como {category}, {percent}% de confiança',
+  'chip.percent': '{percent}%',
+  'chip.percentA11y': '{percent}% de confiança',
 
   'noSuggestion.title': 'Sem sugestão',
   'noSuggestion.hint': {

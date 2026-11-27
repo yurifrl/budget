@@ -90,6 +90,8 @@ export interface CategorizeAccept {
   /** Done: send every row in the strip, permanently, for the whole budget. */
   sendSkips: () => Promise<void>;
   acceptBundle: (bundle: ShownBundle, knownRows: readonly CategorizeQueueRow[]) => Promise<boolean>;
+  /** File every row of one bundle with a picked category (the card's header picker). */
+  pickBundleCategory: (bundle: ShownBundle, category: PickedCategory) => Promise<boolean>;
   acceptAll: (bundles: readonly ShownBundle[]) => Promise<boolean>;
   /**
    * Accept Jev's transfer answers: each row is linked to the account it names.
@@ -434,7 +436,7 @@ export function useCategorizeAccept({
       const result = await accept({ budgetId, bundleKey: bundle.bundle_key, expectedCount: bundle.serverCount }).unwrap();
       return result.items;
     }
-    const rows = await bundleItems(bundle);
+    const rows = await bundleItems(bundle, bundle.suggestion.category_id);
     if (rows.length !== bundle.serverCount) {
       throw {
         status: 409,
@@ -506,8 +508,57 @@ export function useCategorizeAccept({
     return request;
   };
 
-  /** Every row of one bundle, paged at the contract's 200-row cap. */
-  const bundleItems = async (bundle: ShownBundle): Promise<CategorizeDecisionItem[]> => {
+  /**
+   * File a whole bundle with a picked category (the card's header picker). The
+   * server only resolves a bundle to its own suggestion, so the rows are read
+   * from the queue and sent as explicit pairs; a row already waiting in the
+   * strip keeps its own answer. The card leaves optimistically and comes back
+   * if the request fails.
+   */
+  const pickBundleCategory = (bundle: ShownBundle, category: PickedCategory): Promise<boolean> => {
+    if (!budgetId || inFlight.current) return Promise.resolve(false);
+    inFlight.current = true;
+    markGone(bundle.bundle_key, true);
+    const seq = nextSeq();
+    const label = bundleToastLabel({ ...bundle, suggestion: { ...bundle.suggestion, category_name: category.label } });
+    send({
+      type: 'acceptStarted',
+      items: [],
+      entry: { seq, kind: 'accept', label: '', transactionIds: [], confirmed: false },
+    });
+    const request = (async () => {
+      try {
+        const items = withoutPendingSkips(await bundleItems(bundle, category.id), stateRef.current);
+        const accepted: CategorizeDecisionItem[] = [];
+        for (let i = 0; i < items.length; i += ACCEPT_BATCH) {
+          const result = await accept({ budgetId, items: items.slice(i, i + ACCEPT_BATCH) }).unwrap();
+          accepted.push(...result.items);
+        }
+        const ids = accepted.map((item) => item.transaction_id);
+        if (ids.length === 0) {
+          send({ type: 'acceptEmpty', seq, requestIds: [] });
+          markGone(bundle.bundle_key, false);
+          refetch();
+          return false;
+        }
+        resultIds.current.set(seq, ids);
+        send({ type: 'acceptSucceeded', seq, transactionIds: ids, requestIds: [], label });
+        return true;
+      } catch (err) {
+        send({ type: 'acceptFailed', seq, requestIds: [], error: apiErrorMessage(err, t('error.accept')) });
+        markGone(bundle.bundle_key, false);
+        refetch();
+        return false;
+      } finally {
+        inFlight.current = false;
+      }
+    })();
+    requests.current.set(seq, request);
+    return request;
+  };
+
+  /** Every row of one bundle, paged at the contract's 200-row cap, filed with `categoryId`. */
+  const bundleItems = async (bundle: ShownBundle, categoryId: string): Promise<CategorizeDecisionItem[]> => {
     if (!budgetId) return [];
     const items: CategorizeDecisionItem[] = [];
     for (let offset = 0; offset < bundle.serverCount; offset += QUEUE_PAGE) {
@@ -518,7 +569,7 @@ export function useCategorizeAccept({
         ),
       ).unwrap();
       for (const row of page.rows) {
-        items.push({ transaction_id: row.transaction_id, category_id: bundle.suggestion.category_id });
+        items.push({ transaction_id: row.transaction_id, category_id: categoryId });
       }
       if (page.rows.length < QUEUE_PAGE) break;
     }
@@ -555,7 +606,7 @@ export function useCategorizeAccept({
     const request = (async () => {
       try {
         const all: CategorizeDecisionItem[] = [];
-        for (const bundle of bundles) all.push(...(await bundleItems(bundle)));
+        for (const bundle of bundles) all.push(...(await bundleItems(bundle, bundle.suggestion.category_id)));
         // Rows the person is leaving out (a skip pending) are not part of "accept all".
         const items = withoutPendingSkips(all, stateRef.current);
         if (items.length === 0) {
@@ -657,6 +708,7 @@ export function useCategorizeAccept({
     cancelSkip,
     sendSkips,
     acceptBundle,
+    pickBundleCategory,
     acceptAll,
     acceptTransfers,
     notice: (label: string) => send({ type: 'notice', label }),

@@ -110,6 +110,7 @@ function CategorizePage() {
             goneBundleKeys={page.accept.goneBundleKeys}
             bundleChangeTick={page.accept.bundleChangeTick}
             onAcceptBundle={(bundle, rows) => void page.accept.acceptBundle(bundle, rows)}
+            onPickBundleCategory={(bundle, category) => void page.accept.pickBundleCategory(bundle, category)}
             onAcceptAll={() => void page.accept.acceptAll(page.viewModel?.all ?? [])}
             onFileRow={(row, suggestion) => void page.accept.fileRow(row, suggestion)}
             onPickCategory={(row, category) => void page.accept.pickCategory(row, category)}

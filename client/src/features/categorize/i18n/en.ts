@@ -58,8 +58,11 @@ export default {
   'bundle.loadMore': 'Show more rows',
   'bundle.expand': 'Open {payee}',
   'bundle.collapse': 'Close {payee}',
+  'bundle.pickCategory': 'Choose a category for {payee}',
   'chip.label': '{category} {percent}%',
   'chip.a11y': 'File as {category}, {percent}% confidence',
+  'chip.percent': '{percent}%',
+  'chip.percentA11y': '{percent}% confidence',
 
   // No-suggestion group (manual pick)
   'noSuggestion.title': 'No suggestion',

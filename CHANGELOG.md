@@ -398,3 +398,9 @@
 - feat(shared): operation contract, zod re-export, hello_get contract
 - chore: start Budget repo (source: syscd-app 8e79a31)
 
+
+## 2026-11-27 Categorize: searchable bundle category and a scrolling picker
+
+### Changed
+- A bundle card's category is now a searchable picker with the confidence kept beside it; picking a category files every transaction in the bundle
+- Category and other combobox lists scroll to the end instead of being clipped at the panel's height

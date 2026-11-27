@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -180,6 +181,14 @@ export function Combobox({
   // capture listener above.
   const portalHost = process.env.EXPO_OS === 'web' ? document.body : null;
 
+  // The option list scrolls inside the panel: a long list (every category) used
+  // to be clipped by the panel's max height with no way to reach the rest.
+  const dropdownList = (
+    <ScrollView style={styles.dropdownScroll} keyboardShouldPersistTaps="handled">
+      {dropdownRows}
+    </ScrollView>
+  );
+
   return (
     <View ref={containerRef} style={[styles.container, containerStyle]}>
       <TextInput
@@ -225,13 +234,13 @@ export function Combobox({
         // the ScrollView transform, so the dropdown paints correctly everywhere.
         createPortalOnWeb(
           <View style={[styles.dropdown, anchor]}>
-            {dropdownRows}
+            {dropdownList}
           </View>,
           portalHost,
         )
       ) : open && items.length > 0 ? (
         // Native: in-place absolute dropdown (portals are web-only).
-        <View style={styles.dropdown}>{dropdownRows}</View>
+        <View style={styles.dropdown}>{dropdownList}</View>
       ) : null}
     </View>
   );
@@ -254,8 +263,6 @@ const styles = StyleSheet.create({
     top: 31,
     left: 0,
     right: 0,
-    maxHeight: 220,
-    overflow: 'hidden',
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border2,
@@ -263,20 +270,10 @@ const styles = StyleSheet.create({
     zIndex: 40,
     elevation: 8,
   },
-  // Portal twin of `dropdown` for the body-level web render: anchored via
-  // inline left/top/width, stacked above the app chrome (header 30 / scrim
-  // 40 / drawer 41) that sibling rows can't escape.
-  dropdownPortal: {
-    position: 'absolute',
-    maxHeight: 220,
-    overflow: 'hidden',
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    borderRadius: radius.field6,
-    zIndex: 60,
-    elevation: 8,
-  },
+  // The panel hugs its options (`flexGrow: 0`) up to this height; past it the
+  // list scrolls. The height lives here, not on the panel, so the panel never
+  // clips the list behind a plain `overflow: hidden`.
+  dropdownScroll: { maxHeight: 220, flexGrow: 0 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
