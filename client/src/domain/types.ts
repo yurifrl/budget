@@ -224,12 +224,10 @@ export interface Transaction {
   /**
    * An old per-payee "treat as transfer" rule's row with no linked other side:
    * `waiting` = the other side has not arrived yet (a transfer in flight: no
-   * category, no budget effect). `outside` (a transfer to an account outside the
-   * budget) is no longer offered or read by the app: the mapping drops it, so
-   * such a row is an ordinary one; the engine still takes it as an ordinary
-   * uncategorized row if a caller passes it (its money moves Ready to Assign).
+   * category, no budget effect). There is no "outside the budget" state
+   * (budget-dt00): such a row is an ordinary transaction.
    */
-  transferPending?: 'waiting' | 'outside';
+  transferPending?: 'waiting';
   /** Who linked this transfer leg (`rule` shows "auto · payee rule"). */
   transferLinkMethod?: 'auto' | 'rule' | 'user';
 }

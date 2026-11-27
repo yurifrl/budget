@@ -210,8 +210,8 @@ export function assembleBudget(src: BudgetSource): Budget {
             },
           }
         : {}),
-      // `waiting` rows (an old per-payee rule's row with no other side yet) stay. `outside` (a transfer to an
-      // account outside the budget) is no longer a thing: such a row reads as an ordinary one needing a category.
+      // `waiting` rows (an old per-payee rule's row with no other side yet) stay. Any other value (an older
+      // server's "outside the budget", no longer a state) reads as an ordinary row needing a category.
       ...(t.transfer_pending === 'waiting' ? { transferPending: 'waiting' as const } : {}),
       ...(t.transfer_link_method ? { transferLinkMethod: t.transfer_link_method } : {}),
       // Only real splits: the engine treats an empty `splits` array as a split

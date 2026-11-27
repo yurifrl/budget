@@ -84,6 +84,7 @@ export { transferOverview } from './domain/transfer-links';
 export { freeTransferCounterpart, linkByUser, transferMarksOf, unlinkTransfers } from './domain/transfer-links';
 /** The row-level mark writer, for undo putting back exactly what a link replaced. */
 export { setTransferMarks } from './store/transfers';
+export type { StoredTransferMark } from './domain/transfer-matcher';
 
 /**
  * The one rule for "could this row be the other leg of that transfer" and the

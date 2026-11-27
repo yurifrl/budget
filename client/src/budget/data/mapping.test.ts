@@ -299,8 +299,33 @@ describe('transfer links (spec T1)', () => {
   });
 
   test('the old "outside the budget" mark is dropped: the row maps as an ordinary one', () => {
+    // An older server could still send it; the contract no longer lists it.
     const [t] = map([transferTxn({ id: 'o1', transfer_account_id: null, transfer_pending: 'outside' })]);
     expect(t.transferPending).toBeUndefined();
+  });
+
+  test('an old "outside" row changes no figure: Ready to Assign, balances and activity match the same row without it (budget-dt00)', () => {
+    const budgetWith = (pending: string | null) => {
+      const src = casaSource();
+      src.transactions = [
+        ...src.transactions,
+        { ...src.transactions[0], id: 'o-out', amount: -33000, category_id: null, payee_id: null, payee_name: 'Pix', date: '2026-06-15', transfer_pending: pending },
+        { ...src.transactions[0], id: 'o-in', amount: 21000, category_id: null, payee_id: null, payee_name: 'Pix', date: '2026-06-16', transfer_pending: pending },
+      ] as unknown as BudgetSource['transactions'];
+      return assembleBudget(src);
+    };
+    const marked = budgetWith('outside');
+    const plain = budgetWith(null);
+    expect(marked.accounts).toEqual(plain.accounts);
+    for (const month of [202606, 202607]) {
+      const a = computeBudgetMonth(marked, month);
+      const b = computeBudgetMonth(plain, month);
+      expect(a).toEqual(b);
+      expect(a.readyToAssign).toBe(b.readyToAssign);
+    }
+    // The row really reaches the figures: the outflow moves Ready to Assign.
+    const without = assembleBudget(casaSource());
+    expect(computeBudgetMonth(plain, 202606).readyToAssign).not.toBe(computeBudgetMonth(without, 202606).readyToAssign);
   });
 
   test('the fallback never overrides a pointer', () => {

@@ -27,6 +27,7 @@ import { deleteMirror, ensureTransferPayee, insertMirror } from './transfers';
 import {
   daysApart,
   evidenceLabel,
+  matcherMark,
   pairViolation,
   planTransfers,
   readView,
@@ -66,7 +67,7 @@ function toMatchRow(r: store.TransferCandidateSql, hint: ImportHint | undefined)
     untouched: r.untouched_ledger && !hint?.blocked,
     payeeId: r.payee_id,
     hint: hint ? { category: hint.category, operationType: hint.operationType } : null,
-    mark: r.mark,
+    mark: matcherMark(r.mark),
     bank: bankKey(r.institution),
     connectionId: r.connection_id,
     hintAccountId: r.hint_account_id,
@@ -422,12 +423,12 @@ export async function markTransfers(
   client: PoolClient,
   budgetId: string,
   ids: readonly string[],
-  state: 'dismissed' | 'outside' | null,
+  state: 'dismissed' | null,
 ): Promise<number> {
   const unique = [...new Set(ids)];
   const live = await store.liveTransactionIdsInBudget(client, budgetId, unique);
   if (live.size !== unique.length) throw new HttpError(404, 'transaction not found');
-  // "Not a transfer" / "outside" answer the question an import's hint asked.
+  // "Not a transfer" answers the question an import's hint asked.
   if (state !== null) await store.clearTransferHints(client, budgetId, unique);
   return store.setTransferMarks(client, budgetId, unique, state);
 }

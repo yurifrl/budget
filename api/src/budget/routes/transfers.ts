@@ -1,6 +1,6 @@
 /**
  * Transfers between own accounts (budget-mit6): suggestions, person-made
- * links, unlink (Undo) and "not a transfer" / "outside the budget" decisions.
+ * links, unlink (Undo) and "not a transfer" decisions.
  * Rules live in domain/transfer-matcher.ts, SQL in store/transfers.ts.
  */
 import { pool, withTransaction } from '../../core/db';

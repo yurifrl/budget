@@ -489,12 +489,11 @@ export const transactionRowSchema = z.object({
   transfer_suggestion: transferRowSuggestionSchema.nullable().optional(),
   /**
    * List reads only: a row of a "treat as transfer" payee with no linked other
-   * side. `waiting` = its other side has not arrived yet (counts as a transfer:
-   * no category, no budget effect); `outside` = a transfer to an account
-   * outside the budget (no category asked; moves Ready to Assign like any money
-   * leaving or entering the budget). Null otherwise.
+   * side yet: `waiting` = its other side has not arrived (counts as a transfer:
+   * no category, no budget effect). Null otherwise. There is no "outside the
+   * budget" state (budget-dt00): such a row is an ordinary transaction.
    */
-  transfer_pending: z.enum(['waiting', 'outside']).nullable().optional(),
+  transfer_pending: z.enum(['waiting']).nullable().optional(),
   /** List reads only: who linked this transfer leg (`auto` matcher, `rule` payee rule, `user`); null when unknown or not linked. */
   transfer_link_method: z.enum(['auto', 'rule', 'user']).nullable().optional(),
 });

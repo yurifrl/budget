@@ -33,11 +33,19 @@ describe('categoryNeed', () => {
     expect(needsCategory({ ...base, splitCount: 2 })).toBe(false);
   });
 
-  test('transfer pending states and internal transfer payees need no category', () => {
+  test('a waiting transfer and internal transfer payees need no category', () => {
     expect(categoryNeed({ ...base, transferPending: 'waiting' })).toBe('transfer_waiting');
-    expect(categoryNeed({ ...base, transferPending: 'outside' })).toBe('transfer_outside');
     expect(categoryNeed({ ...base, transferPayee: true })).toBe('transfer');
     expect(needsCategory({ ...base, transferPayee: true })).toBe(false);
+  });
+
+  test('there is no transfer outside the budget: a stale "outside" state reads as an ordinary row', () => {
+    // The state was removed (owner: "that is just a transaction"). A caller that
+    // still passes the old value gets the plain answer, never a transfer.
+    const stale = { ...base, transferPending: 'outside' as unknown as CategoryNeedInput['transferPending'] };
+    expect(categoryNeed(stale)).toBe('needs_category');
+    expect(needsCategory(stale)).toBe(true);
+    expect(categoryNeed({ ...stale, amount: 100 })).toBe('inflow');
   });
 
   test('money in goes to Ready to Assign', () => {

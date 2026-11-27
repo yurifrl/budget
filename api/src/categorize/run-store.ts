@@ -45,10 +45,10 @@ export type RunCandidate = {
   raw_payload: Record<string, unknown> | null;
   /**
    * The person already answered the transfer question for this row with "not a
-   * transfer" (the matcher's `dismissed` mark or Jev's refusal, `REFUSED`) or "a
-   * transfer outside the budget" (`outside`), so a transfer is never offered for
-   * it again. A `manual` mark (a link they undid) is only "suggest, never
-   * auto-link": the row is still asked.
+   * transfer" (the matcher's `dismissed` mark or Jev's refusal, `REFUSED`), so a
+   * transfer is never offered for it again. A `manual` mark (a link they undid)
+   * is only "suggest, never auto-link", and an old `outside` mark is no answer
+   * at all (budget-dt00): the row is still asked.
    */
   transfer_refused: boolean;
 };
@@ -119,7 +119,7 @@ export async function runCandidates(
             t.payee_id, coalesce(p.name, t.import_payee_name) as payee,
             a.name as account_name, a.type as account_kind, t.account_id, t.memo,
             ct.bank_text, ct.raw_payload,
-            (coalesce(m.state in ('dismissed', 'outside'), false) or ${REFUSED}) as transfer_refused
+            (coalesce(m.state = 'dismissed', false) or ${REFUSED}) as transfer_refused
        ${NEEDS_CATEGORY_FROM}
        ${BANK_FACTS_JOIN}
        left join public.transfer_marks m on m.transaction_id = t.id and m.budget_id = t.budget_id

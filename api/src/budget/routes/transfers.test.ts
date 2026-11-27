@@ -190,9 +190,64 @@ describe.skipIf(!dbReady)('transfers between own accounts (operations)', () => {
     expect(await runLinker()).toBe(0);
     await op('budget_transfers_mark', { budget_id: B, transaction_ids: [a], state: null });
     expect((await list()).get(a)!.transfer_suggestion).not.toBeNull();
-    // Marking a row outside the budget: pending "outside", no suggestion.
-    await op('budget_transfers_mark', { budget_id: B, transaction_ids: [a], state: 'outside' });
-    expect((await list()).get(a)).toMatchObject({ transfer_pending: 'outside', transfer_suggestion: null });
+  });
+
+  test('"outside the budget" is not a decision any more: the mark is refused, an old one is ignored (budget-dt00)', async () => {
+    await reset();
+    const a = await imported(itau, -56_000, '2026-10-10', 'Pix', { edited: true });
+    await imported(nubank, 56_000, '2026-10-10', 'Recebido');
+    const res = await op('budget_transfers_mark', { budget_id: B, transaction_ids: [a], state: 'outside' });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe('invalid_input');
+    expect(res.json.error).toContain('outside');
+    expect((await pool.query('SELECT count(*)::int AS n FROM transfer_marks WHERE transaction_id = $1', [a])).rows[0].n).toBe(0);
+
+    // A mark written before the change stays in the table, untouched, and no
+    // reader treats it as a state: the row is an ordinary one (no pending
+    // state), offered as a transfer like any row whose link was undone.
+    await pool.query(`INSERT INTO transfer_marks (transaction_id, budget_id, state) VALUES ($1, $2, 'outside')`, [a, B]);
+    expect(await runLinker()).toBe(0);
+    const row = (await list()).get(a)!;
+    expect(row.transfer_pending).toBeNull();
+    expect(row.transfer_suggestion).toMatchObject({ confidence: 'sure', candidate_count: 1 });
+    expect((await pool.query('SELECT state FROM transfer_marks WHERE transaction_id = $1', [a])).rows).toEqual([{ state: 'outside' }]);
+  });
+
+  test('an old "outside" mark changes no balance: list and accounts read the same with and without it (budget-dt00)', async () => {
+    await reset();
+    // Untouched bank rows, so the matcher could link them on its own if it
+    // ignored the person's old answer: it must not.
+    const out = await imported(itau, -77_000, '2026-10-11', 'Pix enviado Ana');
+    await imported(nubank, 77_000, '2026-10-11', 'Pix recebido Ana');
+    const lone = await imported(itau, -12_300, '2026-10-12', 'Padaria');
+    const into = await imported(nubank, 45_600, '2026-10-13', 'Reembolso');
+    const categorized = await imported(itau, -9_900, '2026-10-14', 'Mercado');
+    await pool.query('UPDATE transactions SET category_id = $2 WHERE id = $1', [categorized, categoryId]);
+    await pool.query(
+      `UPDATE accounts a SET cleared_balance = COALESCE((SELECT sum(amount) FROM transactions t WHERE t.account_id = a.id AND NOT t.deleted), 0)
+       WHERE a.budget_id = $1`,
+      [B],
+    );
+    const snapshot = async () => {
+      const txns = await op('budget_transactions_list', { budget_id: B });
+      const accounts = await op('budget_accounts_list', { budget_id: B });
+      expect(txns.status).toBe(200);
+      expect(accounts.status).toBe(200);
+      const byId = (rows: { id: string }[]) => [...rows].sort((x, y) => x.id.localeCompare(y.id));
+      return { txns: byId(txns.json), accounts: byId(accounts.json) };
+    };
+    await pool.query(`INSERT INTO transfer_marks (transaction_id, budget_id, state) VALUES ($1,$4,'outside'),($2,$4,'outside'),($3,$4,'outside')`, [out, lone, into, B]);
+    expect(await runLinker()).toBe(0);
+    const marked = await snapshot();
+    await pool.query('DELETE FROM transfer_marks WHERE transaction_id = ANY($1)', [[out, lone, into]]);
+    const unmarked = await snapshot();
+    // Without the mark the untouched pair is linked by the next sync (any
+    // ordinary pair is); read now, before that, every figure is the same.
+    expect(marked.accounts).toEqual(unmarked.accounts);
+    const figures = (rows: Record<string, unknown>[]) =>
+      rows.map((r) => ({ id: r.id, amount: r.amount, category_id: r.category_id, transfer_account_id: r.transfer_account_id, transfer_pending: r.transfer_pending }));
+    expect(figures(marked.txns)).toEqual(figures(unmarked.txns));
+    for (const id of [out, lone, into]) expect(marked.txns.find((r: { id: string }) => r.id === id)).toMatchObject({ transfer_pending: null });
   });
 
   test('link to an account with no matching row creates the other leg; Undo deletes it and its balance', async () => {

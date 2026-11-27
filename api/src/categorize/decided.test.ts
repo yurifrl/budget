@@ -235,16 +235,19 @@ describe.skipIf(!dbReady)('one definition of "decided"', () => {
     expect((await queueRow(out))?.suggestions.map((s) => s.category_id)).toEqual([a.food]);
     expect((await acceptC(out, a.food)).status).toBe(200);
 
-    // "A transfer outside the budget": the register's own rule says the row
-    // needs no category (its transfer plan holds it pending, the register shows
-    // Transfer), so it is in neither list, and its transfer is not offered.
-    const outside = await tx({ amount: -1401, date: '2026-11-20' });
+    // An old "a transfer outside the budget" mark is no answer at all
+    // (budget-dt00): the row is not pending, its transfer is listed and can be
+    // accepted, and a row with only a category suggestion is in the queue.
+    const outside = await tx({ amount: -1401, date: '2026-11-20', mark: 'outside' });
     await suggest(outside, { account: savings }, 1);
     await suggest(outside, { category: a.food }, 2);
-    await setTransferMarks(pool, a.budgetId, [outside], 'outside');
-    expect(await inRead(outside)).toBe(false);
-    expect((await pendingTransferIds(pool, a.budgetId)).includes(outside)).toBe(true);
-    expect(await queueRow(outside)).toBeUndefined();
+    expect((await pendingTransferIds(pool, a.budgetId)).includes(outside)).toBe(false);
+    expect(await inRead(outside)).toBe(true);
+    expect((await acceptT(outside, savings)).status).toBe(200);
+    const outsideCat = await tx({ amount: -1402, date: '2026-11-20', mark: 'outside' });
+    await suggest(outsideCat, { category: a.food }, 1);
+    expect((await queueRow(outsideCat))?.suggestions.map((s) => s.category_id)).toEqual([a.food]);
+    expect((await acceptC(outsideCat, a.food)).status).toBe(200);
 
     const into = await tx({ accountId: savings, amount: 1450, date: '2026-11-15' });
     await tx({ amount: -1450, date: '2026-11-12' });
@@ -252,6 +255,25 @@ describe.skipIf(!dbReady)('one definition of "decided"', () => {
     await setTransferMarks(pool, a.budgetId, [into], 'dismissed');
     expect(await inRead(into)).toBe(false);
     expect(await queueRow(into)).toBeUndefined();
+  });
+
+  test('F4: an old "outside" mark withholds nothing from a run: categories and transfers for an outflow, transfers for an inflow', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const out = await tx({ amount: -1601, date: '2026-11-20', mark: 'outside' });
+    const into = await tx({ accountId: savings, amount: 1650, date: '2026-11-15', mark: 'outside' });
+    // Five days apart: Categorize's window, beyond the matcher's (which would list the pair itself).
+    await tx({ amount: -1650, date: '2026-11-10', mark: 'outside' });
+    const { calls } = await runWith(() => ({ suggestions: [], model: JEV_MODEL }));
+    const asked = (amount: number) => calls.find((c) => c.facts.amount === amount);
+    const outCall = asked(-1601);
+    expect(outCall).toBeDefined();
+    expect(outCall!.options.some((o) => o.id === a.food)).toBe(true);
+    expect(outCall!.options.some((o) => o.id === `transfer:${savings}`)).toBe(true);
+    const inCall = asked(1650);
+    expect(inCall).toBeDefined();
+    expect(inCall!.options.map((o) => o.id)).toContain(`transfer:${a.accountId}`);
+    expect(await attemptOf(out)).toBe('no_suggestion');
+    expect(await attemptOf(into)).toBe('no_suggestion');
   });
 
   test('F5: the read lists a transfer only when accepting it for THAT account would succeed', async () => {

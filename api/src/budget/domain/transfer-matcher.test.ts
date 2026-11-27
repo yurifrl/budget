@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { evidenceOf, pairViolation, planTransfers, readView, sameBank, type MatchRow, type TransferRule } from './transfer-matcher';
+import { evidenceOf, matcherMark, pairViolation, planTransfers, readView, sameBank, type MatchRow, type TransferRule } from './transfer-matcher';
 
 let n = 0;
 const TODAY = '2026-11-23';
@@ -212,11 +212,24 @@ describe('planTransfers: edits and decisions', () => {
     expect(p.links).toEqual([]);
     expect(p.suggestions).toHaveLength(1);
   });
-  test('a row marked outside the budget is pending "outside" and not matched', () => {
-    const a = out({ mark: 'outside' });
+  test('an old "outside the budget" mark is not a state: the row is never pending, and is suggested like an undone link', () => {
+    // budget-dt00: the stored value stays in transfer_marks, the matcher reads it
+    // as `manual` (the person once answered about the row, so it is offered but
+    // never linked on its own: nothing moves without them).
+    expect(matcherMark('outside')).toBe('manual');
+    expect(matcherMark('dismissed')).toBe('dismissed');
+    expect(matcherMark('manual')).toBe('manual');
+    expect(matcherMark(null)).toBeNull();
+    const a = out({ mark: matcherMark('outside') });
     const p = plan([a, inn()]);
-    expect(p.pending.get(a.id)).toBe('outside');
+    expect(p.pending.size).toBe(0);
     expect(p.links).toEqual([]);
+    expect(p.suggestions.map((s) => [s.id, s.confidence])).toEqual([[a.id, 'sure']]);
+    // Alone, it is an ordinary row: nothing pending, nothing suggested.
+    const lone = out({ mark: matcherMark('outside'), amount: -1234 });
+    const q = plan([lone]);
+    expect(q.pending.size).toBe(0);
+    expect(q.suggestions).toEqual([]);
   });
   test('a "never" payee rule suppresses suggestions and links', () => {
     const rules = new Map<string, TransferRule>([['p1', { mode: 'never', accountId: null, noMatch: 'review', waitDays: 5, since: null }]]);
@@ -244,11 +257,16 @@ describe('planTransfers: payee rules', () => {
     const p = plan([a, b, c], auto({ mode: 'account', accountId: 'nubank' }));
     expect(p.links).toEqual([{ outflowId: a.id, inflowId: b.id, method: 'rule', basis: 'unique' }]);
   });
-  test('no other side yet: waiting within the window, then outside or review per the rule', () => {
+  test('no other side yet: waiting within the window, then an ordinary row or review per the rule', () => {
     const fresh = out({ payeeId: 'pix', date: '2026-11-20' });
     expect(plan([fresh], auto()).pending.get(fresh.id)).toBe('waiting');
     const old = out({ payeeId: 'pix', date: '2026-11-01' });
-    expect(plan([old], auto()).pending.get(old.id)).toBe('outside');
+    // The stored policy `outside` no longer keeps the row as a transfer outside
+    // the budget (budget-dt00): past the wait it is just a transaction (no
+    // pending state, no suggestion), so it needs a category like any other.
+    const expired = plan([old], auto());
+    expect(expired.pending.size).toBe(0);
+    expect(expired.suggestions).toEqual([]);
     const p = plan([old], auto({ noMatch: 'review' }));
     expect(p.pending.has(old.id)).toBe(false);
     expect(p.suggestions).toEqual([{ id: old.id, confidence: 'one_side', basis: 'unmatched', candidateIds: [] }]);

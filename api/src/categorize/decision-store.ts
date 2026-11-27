@@ -20,6 +20,7 @@ import {
   transferMarksOf,
   unlinkTransfers,
   updateTransactionInClient,
+  type StoredTransferMark,
 } from '../budget';
 import { withTransaction, type Queryable } from '../core/db';
 import { HttpError } from '../core/validate';
@@ -469,7 +470,8 @@ export async function undoAccept(
         // The unlink marks both legs 'manual' so the matcher only suggests
         // them from now on; undo puts back exactly what the accept replaced.
         for (const [id, state] of Object.entries(decided.prev_marks ?? {})) {
-          await setTransferMarks(client, budgetId, [id], state as 'dismissed' | 'outside' | 'manual' | null);
+          // As recorded: an old `outside` mark comes back as it was (a reader ignores it), never a new one.
+          await setTransferMarks(client, budgetId, [id], state as StoredTransferMark | null);
         }
         await restorePendingSuggestions(client, budgetId, transactionId);
         await client.query(

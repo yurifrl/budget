@@ -238,9 +238,9 @@ export const REFUSED = `exists (
 /**
  * May row `t` be answered "a transfer to/from `account`" right now, apart from
  * the account's own state (open, on budget, not the row's own — the register's
- * link checks that, with its own codes)? No "not a transfer" or "outside the
- * budget" mark on the row, no "not a transfer" answer about it ({@link REFUSED}),
- * and for an INFLOW a free
+ * link checks that, with its own codes)? No "not a transfer" mark on the row
+ * (an old "outside the budget" mark is no answer: budget-dt00), no "not a
+ * transfer" answer about it ({@link REFUSED}), and for an INFLOW a free
  * counterpart in THAT account (accept never invents a leg for money that
  * arrived). The Transfers read, the queue's placement and accept all read this.
  */
@@ -248,7 +248,7 @@ export const TRANSFER_PAIR_OPEN = (account: string): string => `
       not exists (
         select 1 from public.transfer_marks m
          where m.transaction_id = t.id and m.budget_id = t.budget_id
-           and m.state in ('dismissed', 'outside')
+           and m.state = 'dismissed'
       )
       and not ${REFUSED}
       and (t.amount <= 0 or exists (
@@ -328,13 +328,13 @@ const candidateInflow = (days: string): string => `${CANDIDATE_BASE}
     and a.closed = false
     and a.on_budget = true
     -- The person already answered the transfer question about this row: "not a
-    -- transfer" (the matcher's mark or Jev's refusal), or "a transfer to an
-    -- account outside the budget". An inflow has no other question, so there is
-    -- nothing left to ask.
+    -- transfer" (the matcher's mark or Jev's refusal). An inflow has no other
+    -- question, so there is nothing left to ask. An old "outside the budget"
+    -- mark is no answer (budget-dt00): the row is asked like any other.
     and not exists (
       select 1 from public.transfer_marks m
        where m.transaction_id = t.id and m.budget_id = t.budget_id
-         and m.state in ('dismissed', 'outside')
+         and m.state = 'dismissed'
     )
     and not ${REFUSED}
     -- The other leg, by the ONE rule every lookup uses (see freeCounterpart):

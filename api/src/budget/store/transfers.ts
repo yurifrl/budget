@@ -4,6 +4,7 @@
  * payee `transfer_rule*` columns, plus the transaction columns a link writes.
  */
 import type { Queryable } from '../../core/db';
+import type { StoredTransferMark } from '../domain/transfer-matcher';
 import { allRulesSql } from './rename-rules';
 
 /**
@@ -36,7 +37,8 @@ export interface TransferCandidateSql {
   payee_name: string | null;
   /** Bank-imported with the bank's payee text (the sync shadow's `blocked` flag is read separately). */
   untouched_ledger: boolean;
-  mark: 'dismissed' | 'outside' | 'manual' | null;
+  /** As stored: an old `outside` is read by the matcher's `matcherMark` only. */
+  mark: StoredTransferMark | null;
   /** The account's bank connection, when linked. */
   connection_id: string | null;
   /** The account's institution label, else its connection's (raw text; see domain/bank-key.ts). */
@@ -255,7 +257,8 @@ export async function setTransferMarks(
   db: Queryable,
   budgetId: string,
   ids: readonly string[],
-  state: 'dismissed' | 'outside' | 'manual' | null,
+  // A stored state: undo puts back exactly the mark an accept replaced, which may be an old `outside`.
+  state: StoredTransferMark | null,
 ): Promise<number> {
   if (ids.length === 0) return 0;
   if (state === null) {

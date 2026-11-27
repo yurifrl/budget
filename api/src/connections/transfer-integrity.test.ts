@@ -518,12 +518,13 @@ describe.skipIf(!dbReady)('transfer integrity (budget-nq2f)', () => {
       expect((await patch(r.id, { payee: 'Padaria' })).status).toBe(204);
       expect(await has()).toBe(false);
     });
-    test('"not a transfer" (and "outside") end it', async () => {
-      for (const state of ['dismissed', 'outside'] as const) {
-        const { r, has } = await hinted(`h5-${state}`);
-        expect((await op('budget_transfers_mark', { budget_id: B, transaction_ids: [r.id], state })).status).toBe(200);
-        expect(await has()).toBe(false);
-      }
+    test('"not a transfer" ends it; the removed "outside" answer is refused and leaves it', async () => {
+      const { r, has } = await hinted('h5-dismissed');
+      expect((await op('budget_transfers_mark', { budget_id: B, transaction_ids: [r.id], state: 'dismissed' })).status).toBe(200);
+      expect(await has()).toBe(false);
+      const kept = await hinted('h5-outside');
+      expect((await op('budget_transfers_mark', { budget_id: B, transaction_ids: [kept.r.id], state: 'outside' })).status).toBe(400);
+      expect(await kept.has()).toBe(true);
     });
     test('an edit that changes nothing about the payee keeps it', async () => {
       const { r, has } = await hinted('h5-memo');

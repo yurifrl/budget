@@ -51,11 +51,29 @@ export const MAX_TRANSFER_DAYS_APART = 3;
 export type AccountKind = 'cash' | 'card' | 'other';
 /** How strongly the bank's own labels say "transfer". */
 export type Evidence = 'strong' | 'weak' | 'none' | 'against';
-export type TransferMark = 'dismissed' | 'outside' | 'manual';
+export type TransferMark = 'dismissed' | 'manual';
+/**
+ * A `transfer_marks.state` as stored. `outside` ("a transfer to an account
+ * outside the budget") is no state any more (budget-dt00: "that is just a
+ * transaction"); old rows keep it, nothing writes it, and {@link matcherMark}
+ * is the one place that reads it.
+ */
+export type StoredTransferMark = TransferMark | 'outside';
 export type TransferRuleMode = 'auto' | 'account' | 'never';
 export type MatchBasis = 'unique' | 'ordinal' | 'evidence' | 'rule' | 'ambiguous' | 'unmatched' | 'refused';
 export type SuggestionConfidence = 'sure' | 'choose' | 'one_side';
-export type PendingTransfer = 'waiting' | 'outside';
+export type PendingTransfer = 'waiting';
+
+/**
+ * The mark the matcher acts on. An old `outside` mark is read as `manual`: the
+ * row is an ordinary one (never pending, needs a category, offered as a
+ * transfer like any row), but because the person once answered about it, it is
+ * only suggested and never linked on its own, so nothing in the budget moves
+ * without them.
+ */
+export function matcherMark(stored: StoredTransferMark | null): TransferMark | null {
+  return stored === 'outside' ? 'manual' : stored;
+}
 
 /** What the bank said about a row (Pluggy raw `category` / `operationType`). */
 export interface BankHint {
@@ -147,7 +165,11 @@ export interface TransferRule {
   mode: TransferRuleMode;
   /** The fixed other account ('account' only). */
   accountId: string | null;
-  /** No matching row after `waitDays`: keep as a transfer outside the budget, or leave for review. */
+  /**
+   * No matching row after `waitDays`: `review` offers the row as one side of a
+   * transfer; `outside` (the stored name of the old "keep as a transfer outside
+   * the budget" policy) now leaves an ordinary row that needs a category.
+   */
   noMatch: 'outside' | 'review';
   waitDays: number;
   /** Rows created at or after this instant (ISO) are covered; null = every row. */
@@ -248,7 +270,6 @@ const considered = (row: MatchRow, rules: ReadonlyMap<string, TransferRule>): bo
   row.transferAccountId == null &&
   row.transferTransactionId == null &&
   row.mark !== 'dismissed' &&
-  row.mark !== 'outside' &&
   !(row.payeeId && rules.get(row.payeeId)?.mode === 'never');
 
 /** Do `o` (outflow) and `i` (inflow) look like the two legs of one transfer, account rules aside? */
@@ -500,11 +521,6 @@ export function planTransfers(
   today: string,
 ): TransferPlan {
   const plan: TransferPlan = { links: [], suggestions: [], pending: new Map(), rows: new Map() };
-  for (const r of rows) {
-    if (r.mark === 'outside' && r.categoryId == null && r.transferTransactionId == null && r.transferAccountId == null) {
-      plan.pending.set(r.id, 'outside');
-    }
-  }
   const nodes: Node[] = rows
     .filter((r) => considered(r, rules))
     .map((row) => ({ row, evidence: evidenceWithHint(row), rule: coveringRule(row, rules) }));
@@ -558,7 +574,8 @@ export function planTransfers(
     if (n.rule) {
       const age = n.row.date > today ? 0 : daysApart(n.row.date, today);
       if (age <= n.rule.waitDays) plan.pending.set(n.row.id, 'waiting');
-      else if (n.rule.noMatch === 'outside') plan.pending.set(n.row.id, 'outside');
+      // Past the wait, the old `outside` policy leaves just a transaction (no state, no suggestion).
+      else if (n.rule.noMatch === 'outside') continue;
       else if (!cardOutflow(n.row)) plan.suggestions.push({ id: n.row.id, confidence: 'one_side', basis: 'unmatched', candidateIds: [] });
       // A card outflow with a rule can never pair (rule 1), so it is never offered as one side either.
     } else if (n.evidence === 'strong' && !cardOutflow(n.row)) {

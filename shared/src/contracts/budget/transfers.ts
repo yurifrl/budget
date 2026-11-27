@@ -66,11 +66,15 @@ export const transfersUnlink = defineOperation({
 export const transfersMark = defineOperation({
   name: 'budget_transfers_mark',
   description:
-    'Record a decision about rows the transfer matcher looks at: `dismissed` = not a transfer (never suggested or linked again), `outside` = a transfer to an account outside the budget (no category asked), null = clear the decision.',
+    'Record a decision about rows the transfer matcher looks at: `dismissed` = not a transfer (never suggested or linked again), null = clear the decision. There is no "transfer to an account outside the budget": such a row is an ordinary transaction that needs a category, so `outside` is refused.',
   input: z.object({
     budget_id: budgetId,
     transaction_ids: idList,
-    state: z.enum(['dismissed', 'outside']).nullable(),
+    state: z
+      .enum(['dismissed'], {
+        error: 'must be "dismissed" or null ("outside" was removed: a transfer to an account outside the budget is an ordinary transaction)',
+      })
+      .nullable(),
   }),
   output: z.object({ updated: z.number().int() }),
   method: 'PUT',
@@ -82,7 +86,7 @@ export const transfersMark = defineOperation({
 export const payeesTransferRuleGet = defineOperation({
   name: 'budget_payees_transfer_rule_get',
   description:
-    'A payee\'s "treat as transfer" rule: mode (off, auto = link to the matching row in any own account, account = always to account_id, never = never a transfer), what happens when no matching row shows up within wait_days (outside = keep as a transfer to an account outside the budget, review = leave for review), and how many past rows it could still apply to.',
+    'A payee\'s "treat as transfer" rule: mode (off, auto = link to the matching row in any own account, account = always to account_id, never = never a transfer), what happens when no matching row shows up within wait_days (outside = from then on an ordinary transaction that needs a category, the value keeps its old name; review = offer it as one side of a transfer for review), and how many past rows it could still apply to.',
   input: z.object({ id: uuidSchema, budget_id: budgetId }),
   output: payeeTransferRuleSchema,
   method: 'GET',

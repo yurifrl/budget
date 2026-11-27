@@ -50,7 +50,7 @@ type Account = { id: string; name: string; on_budget: boolean; closed: boolean }
  */
 async function oracleInputs(
   budgetId: string,
-  pending: ReadonlyMap<string, 'waiting' | 'outside'>,
+  pending: ReadonlyMap<string, 'waiting'>,
 ): Promise<{ id: string; input: CategoryNeedInput }[]> {
   const { rows: accounts } = await pool.query<Account>(
     'select id, name, on_budget, closed from public.accounts where budget_id = $1 and deleted = false',
@@ -92,8 +92,10 @@ describe.skipIf(!dbReady)('the run candidate rule', () => {
   let b: BudgetFixture;
   /** Rows of accounts the register never renders, so the rule is never asked. */
   let hiddenAccounts: string[];
-  /** A row the transfer plan marked as a transfer out of the budget. */
+  /** A payee-rule row the transfer plan holds while its other side may still arrive. */
   let pendingRow: string;
+  /** A row carrying an old "outside the budget" mark: just a transaction (budget-dt00). */
+  let outsideRow: string;
 
   beforeEach(async () => {
     b = await newBudget('candidates');
@@ -226,12 +228,23 @@ describe.skipIf(!dbReady)('the run candidate rule', () => {
     const reconcilePayee = await newPayee(b.budgetId, 'Reconciliation Adjustment');
     await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-06', amount: -700, payeeId: reconcilePayee });
 
-    // A row the transfer plan keeps outside the budget.
+    // A payee-rule row still waiting for its other side: the plan holds it.
+    const rulePayee = await newPayee(b.budgetId, 'Pix to me', { transferRule: 'auto', transferRuleWaitDays: 5 });
     pendingRow = await newTransaction({
       budgetId: b.budgetId,
       accountId: b.accountId,
-      date: '2026-11-07',
+      // Dated today, so it is inside the rule's wait whenever the test runs.
+      date: new Date().toISOString().slice(0, 10),
       amount: -2200,
+      payeeId: rulePayee,
+    });
+
+    // An old "outside the budget" mark is no state at all: the row is a question.
+    outsideRow = await newTransaction({
+      budgetId: b.budgetId,
+      accountId: b.accountId,
+      date: '2026-11-07',
+      amount: -2300,
       mark: 'outside',
     });
 
@@ -249,7 +262,9 @@ describe.skipIf(!dbReady)('the run candidate rule', () => {
     // not pending, or a split with no live leg, would make this test vacuous).
     expect(deleted).toBeTruthy();
     expect(upcoming).toBeTruthy();
-    expect((await transferOverview(pool, b.budgetId)).pending.get(pendingRow)).toBe('outside');
+    const overview = await transferOverview(pool, b.budgetId);
+    expect(overview.pending.get(pendingRow)).toBe('waiting');
+    expect(overview.pending.has(outsideRow)).toBe(false);
   });
 
   afterAll(async () => {
@@ -270,12 +285,17 @@ describe.skipIf(!dbReady)('the run candidate rule', () => {
     const oracle = (await oracleInputs(b.budgetId, pending)).filter((row) => needsCategory(row.input));
     // The plain row, the zero amount, the pointer at an off-budget account, the
     // pointer at another budget's on-budget account, the pointer at the row's
-    // own account and the payee that points off budget. Everything else above
+    // own account, the payee that points off budget and the row with an old
+    // "outside" mark (budget-dt00). Everything else above
     // is excluded. Outflows only: the run ALSO asks about an inflow that has a
     // counterpart, which the shared rule deliberately calls "no category", so
     // the agreement is scoped to the outflows both rules describe.
-    expect(oracle).toHaveLength(6);
+    expect(oracle).toHaveLength(7);
+    expect(oracle.map((row) => row.id)).toContain(outsideRow);
+    expect(oracle.map((row) => row.id)).not.toContain(pendingRow);
     const outflows = asked.filter((row) => row.amount <= 0);
+    // The old mark withholds nothing: the row is asked with its transfer options.
+    expect(asked.find((row) => row.transaction_id === outsideRow)?.transfer_refused).toBe(false);
     expect(outflows.map((row) => row.transaction_id).sort()).toEqual(oracle.map((row) => row.id).sort());
   });
 

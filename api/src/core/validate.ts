@@ -71,9 +71,10 @@ function describeIssue(issue: z.core.$ZodIssue): string {
     return `${name} must be ${expected}`;
   }
   if (issue.message === 'must be a uuid') return `${name} must be a valid id`;
-  if (issue.code === 'invalid_value') return `${name} is not an allowed value`;
   // Custom messages already read as "must be ..."; zod's own ("Too big: ...") do not.
-  return /^must\b/.test(issue.message) ? `${name} ${issue.message}` : `${name} is invalid (${issue.message})`;
+  if (/^must\b/.test(issue.message)) return `${name} ${issue.message}`;
+  if (issue.code === 'invalid_value') return `${name} is not an allowed value`;
+  return `${name} is invalid (${issue.message})`;
 }
 
 export function parseValue<S extends z.ZodType>(schema: S, raw: unknown): z.infer<S> {

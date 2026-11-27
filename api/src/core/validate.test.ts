@@ -41,6 +41,15 @@ describe('parseValue messages', () => {
     expect(messageOf({ ...ok, kind: 'z' })).toBe('kind is not an allowed value');
     expect(messageOf({ ...ok, tags: ['a', 'b'] })).toStartWith('tags is invalid');
   });
+  test('an enum with its own "must ..." sentence says it instead of the generic text', () => {
+    const own = z.object({ state: z.enum(['a'], { error: 'must be "a" ("b" was removed)' }).nullable() });
+    try {
+      parseValue(own, { state: 'b' });
+      throw new Error('expected parseValue to throw');
+    } catch (err) {
+      expect((err as HttpError).message).toBe('state must be "a" ("b" was removed)');
+    }
+  });
   test('several problems are joined with "; "', () => {
     expect(messageOf({ ...ok, budget_id: undefined, amount_cents: 'x' })).toBe(
       'budget_id is required; amount_cents must be a number',

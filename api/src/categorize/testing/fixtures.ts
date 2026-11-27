@@ -142,7 +142,7 @@ export type TransactionFixture = {
   upcoming?: boolean;
   transferAccountId?: string | null;
   transferTransactionId?: string | null;
-  /** A transfer_matcher mark on the row. */
+  /** A transfer_matcher mark on the row, as stored (`outside` only as an old row would carry it). */
   mark?: 'dismissed' | 'outside' | 'manual';
 };
 

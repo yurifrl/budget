@@ -129,9 +129,10 @@ const STOP_MESSAGE: Record<JevStop, string> = {
  * the transfer, and it also gets "Not a transfer" so Jev can say the row is
  * ordinary money in rather than a movement it does not believe in.
  *
- * A row the person already answered "not a transfer" (or "outside the budget")
- * gets no transfer option at all: the question is not asked again. A mark
- * from a link they undid (`manual`) only stops auto-linking, so the row is asked.
+ * A row the person already answered "not a transfer" gets no transfer option
+ * at all: the question is not asked again. A mark from a link they undid
+ * (`manual`) only stops auto-linking, and an old "outside the budget" mark is
+ * no answer (budget-dt00), so either row is asked.
  * An inflow is offered only the accounts holding its free counterpart
  * (`counterpartAccounts`): accept takes no other, since it never invents a leg
  * for money that arrived.

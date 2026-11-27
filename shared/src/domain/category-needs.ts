@@ -12,9 +12,11 @@
  *
  * The caller supplies the facts the rule does not compute itself:
  * `transferPending` comes from the server's transfer plan (`transferOverview`
- * pending: a payee-rule row waiting for its other side, or one kept outside the
- * budget) and `transferPayee` from `isInternalTransferPayee` with the budget's
- * accounts. This keeps the rule independent of budget/plumbing shape.
+ * pending: a payee-rule row waiting for its other side) and `transferPayee`
+ * from `isInternalTransferPayee` with the budget's accounts. This keeps the
+ * rule independent of budget/plumbing shape. There is no transfer to an
+ * account outside the budget (owner, budget-dt00: "that is just a
+ * transaction"): such a row needs a category like any other.
  *
  * Order matters and mirrors the register cell: an auto-booked adjustment never
  * needs a category; a categorized row does not; a split parent shows Split; a
@@ -42,8 +44,8 @@ export type CategoryNeedInput = {
    * cents). Only the sign is read: money in does not need a category.
    */
   amount: number;
-  /** The transfer plan's pending state for this row, or null. */
-  transferPending: 'waiting' | 'outside' | null;
+  /** The transfer plan's pending state for this row (`waiting`), or null. */
+  transferPending: 'waiting' | null;
   /** The payee is the app's internal "Transfer : <on-budget account>" payee. */
   transferPayee: boolean;
 };
@@ -53,7 +55,6 @@ export type CategoryNeedReason =
   | 'reconciliation'
   | 'split'
   | 'transfer_waiting'
-  | 'transfer_outside'
   | 'transfer'
   | 'inflow'
   | 'needs_category';
@@ -63,7 +64,6 @@ export function categoryNeed(input: CategoryNeedInput): CategoryNeedReason {
   if (input.categoryId != null) return 'categorized';
   if (input.splitCount > 0) return 'split';
   if (input.transferPending === 'waiting') return 'transfer_waiting';
-  if (input.transferPending === 'outside') return 'transfer_outside';
   if (input.transferPayee) return 'transfer';
   if (input.amount > 0) return 'inflow';
   return 'needs_category';
