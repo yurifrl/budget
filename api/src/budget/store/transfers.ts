@@ -6,6 +6,15 @@
 import type { Queryable } from '../../core/db';
 import { allRulesSql } from './rename-rules';
 
+/**
+ * How far apart the two legs of one transfer may be dated, everywhere the app
+ * looks for the other leg: a person's "Other account..." link, the Jev run's
+ * candidate rule, the facts it sends and the accept-time re-check. ONE number,
+ * because a pair the app finds in one of those places and not in another is a
+ * pair it would link and then refuse (or propose and then not find).
+ */
+export const TRANSFER_PAIR_DAYS = 7;
+
 /** A row the transfer matcher may look at, with names for the review list. */
 export interface TransferCandidateSql {
   id: string;
@@ -112,6 +121,35 @@ export async function getTransferRows(db: Queryable, budgetId: string, ids: read
   return r.rows;
 }
 
+/**
+ * The other leg of one transfer, as SQL. ONE rule for every place that looks for
+ * it — a person's link, and the features that read the same pairs — so they
+ * cannot disagree about what a pair is: a live, still-unlinked row, the exact
+ * opposite amount, dated within the same window, never one marked "not a
+ * transfer". Which account the row must sit in is the caller's own predicate.
+ *
+ * Aliases and placeholders are the caller's, so the same text serves a lookup by
+ * parameter and a correlated subquery.
+ */
+export function freeCounterpart(refs: {
+  /** Alias of the row that could be the other leg. */
+  row: string;
+  amount: string;
+  date: string;
+  days: string;
+}): string {
+  return `not ${refs.row}.deleted
+      and not ${refs.row}.upcoming
+      and ${refs.row}.amount = ${refs.amount}
+      and ${refs.row}.transfer_account_id is null
+      and ${refs.row}.transfer_transaction_id is null
+      and abs(${refs.row}.date - ${refs.date}::date) <= ${refs.days}
+      and not exists (
+        select 1 from public.transfer_marks tm
+         where tm.transaction_id = ${refs.row}.id and tm.state = 'dismissed'
+      )`;
+}
+
 /** Rows of `accountId` that could be the other leg of `amount` around `date` (unlinked, live), closest first. */
 export async function findCounterpartInAccount(
   db: Queryable,
@@ -123,10 +161,8 @@ export async function findCounterpartInAccount(
 ): Promise<string | undefined> {
   const r = await db.query<{ id: string }>(
     `SELECT t.id FROM transactions t
-     WHERE t.budget_id = $1 AND t.account_id = $2 AND NOT t.deleted AND NOT t.upcoming
-       AND t.amount = $3 AND t.transfer_account_id IS NULL AND t.transfer_transaction_id IS NULL
-       AND abs(t.date - $4::date) <= $5
-       AND NOT EXISTS (SELECT 1 FROM transfer_marks m WHERE m.transaction_id = t.id AND m.state = 'dismissed')
+     WHERE t.budget_id = $1 AND t.account_id = $2
+       AND ${freeCounterpart({ row: 't', amount: '$3', date: '$4', days: '$5' })}
      ORDER BY abs(t.date - $4::date), (t.category_id IS NOT NULL), t.date, t.id
      LIMIT 1`,
     [budgetId, accountId, amount, date, maxDays],

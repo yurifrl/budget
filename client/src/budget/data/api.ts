@@ -14,7 +14,12 @@
  */
 import { categorizeApi } from './api/categorize';
 
-export { CATEGORIZE_COUNT_LIMIT, CATEGORIZE_QUEUE_TAGS, queueProvidedTags } from './api/categorize';
+export {
+  CATEGORIZE_COUNT_LIMIT,
+  CATEGORIZE_QUEUE_TAGS,
+  categorizePageTags,
+  queueProvidedTags,
+} from './api/categorize';
 
 export type { BudgetScope } from './api/base';
 export type {
@@ -30,6 +35,10 @@ export type {
   CategorizeSettings,
   CategorizeSkipResult,
   CategorizeSuggestion,
+  CategorizeTransferGroup,
+  CategorizeTransferRefusal,
+  CategorizeTransferRow,
+  CategorizeTransfers,
   CategorizeUndoResult,
 } from './api/categorize';
 export type { TransactionDetails } from './api/register';
@@ -167,6 +176,8 @@ export const {
   useAcceptCategorizeMutation,
   useUndoCategorizeMutation,
   useSkipCategorizeMutation,
+  useGetCategorizeTransfersQuery,
+  useRefuseCategorizeTransferMutation,
   useGetCategorizeSettingsQuery,
   useSetCategorizeSettingsMutation,
   useGetCategorizeRunQuery,

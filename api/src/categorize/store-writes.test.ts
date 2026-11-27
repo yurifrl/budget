@@ -10,7 +10,15 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { pool } from '../core/db';
 import { dbReady } from '../core/test-gate';
 import { recordAttempt, replaceSuggestions } from './store';
-import { cleanupFixtures, newBudget, newSuggestion, newTransaction, suggestionsOf, type BudgetFixture } from './testing';
+import {
+  cleanupFixtures,
+  newAccount,
+  newBudget,
+  newSuggestion,
+  newTransaction,
+  suggestionsOf,
+  type BudgetFixture,
+} from './testing';
 
 const jobRuns: string[] = [];
 
@@ -36,7 +44,7 @@ afterAll(async () => {
 });
 
 const row = (categoryId: string, confidence = 0.9) => ({
-  categoryId,
+  target: { kind: 'category' as const, categoryId },
   confidence,
   reason: null,
   source: 'jev' as const,
@@ -88,7 +96,7 @@ describe.skipIf(!dbReady)('writing a suggestion set', () => {
     // Another writer (the register, the MCP tool) settles the row first.
     await pool.query('update public.transactions set category_id = $2 where id = $1', [txn, b.food]);
 
-    expect(await replaceSuggestions(pool, b.budgetId, txn, [row(b.food)])).toBe(0);
+    expect(await replaceSuggestions(pool, b.budgetId, txn, [row(b.food)])).toBeNull();
     expect(await suggestionsOf(txn)).toEqual([]);
   });
 
@@ -101,11 +109,65 @@ describe.skipIf(!dbReady)('writing a suggestion set', () => {
     expect(stored.map((suggestion) => [suggestion.category_id, suggestion.rank])).toEqual([[b.food, 1]]);
   });
 
-  test('a set already answered by the person is not overwritten', async () => {
+  test('a set the person answered (a standing decision) is not overwritten', async () => {
     const txn = await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-04', amount: -3900 });
-    await newSuggestion({ transactionId: txn, budgetId: b.budgetId, categoryId: b.food, status: 'accepted' });
+    await newSuggestion({ transactionId: txn, budgetId: b.budgetId, categoryId: b.food, status: 'dismissed' });
+    await pool.query(
+      `insert into public.categorize_decisions (transaction_id, budget_id, kind, category_id) values ($1, $2, 'skip', null)`,
+      [txn, b.budgetId],
+    );
 
-    expect(await replaceSuggestions(pool, b.budgetId, txn, [row(b.dining)])).toBe(0);
-    expect((await suggestionsOf(txn)).map((suggestion) => suggestion.status)).toEqual(['accepted']);
+    expect(await replaceSuggestions(pool, b.budgetId, txn, [row(b.dining)])).toBeNull();
+    expect((await suggestionsOf(txn)).map((suggestion) => suggestion.status)).toEqual(['dismissed']);
+  });
+
+  test('a non-pending suggestion is no decision: an undecided row takes the new answer', async () => {
+    const txn = await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-04', amount: -3800 });
+    await newSuggestion({ transactionId: txn, budgetId: b.budgetId, categoryId: b.food, status: 'dismissed' });
+
+    expect(await replaceSuggestions(pool, b.budgetId, txn, [row(b.dining)])).toBe(1);
+    expect((await suggestionsOf(txn)).map((suggestion) => [suggestion.category_id, suggestion.status])).toEqual([
+      [b.dining, 'pending'],
+    ]);
+  });
+
+  test('V8: a released build’s upsert that names only the category still lands', async () => {
+    const txn = await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-05', amount: -4100 });
+    const savings = await newAccount(b.budgetId, 'Savings');
+    // The row already carries a transfer answer, then a build that predates the
+    // second target column upserts rank 1 naming only the category. A strict
+    // "exactly one target" check would make that legitimate write fail.
+    await pool.query(
+      `insert into public.category_suggestions
+         (transaction_id, budget_id, rank, transfer_account_id, confidence, reason, source, status)
+       values ($1, $2, 1, $3, 0.9, null, 'jev', 'pending')`,
+      [txn, b.budgetId, savings],
+    );
+    await pool.query(
+      `insert into public.category_suggestions
+         (transaction_id, budget_id, rank, category_id, confidence, reason, source, status)
+       values ($1, $2, 1, $3, 0.9, null, 'jev', 'pending')
+       on conflict (transaction_id, rank) do update set category_id = excluded.category_id`,
+      [txn, b.budgetId, b.food],
+    );
+    const { rows } = await pool.query<{ category_id: string | null; transfer_account_id: string | null }>(
+      'select category_id, transfer_account_id from public.category_suggestions where transaction_id = $1 and rank = 1',
+      [txn],
+    );
+    expect(rows).toEqual([{ category_id: b.food, transfer_account_id: savings }]);
+  });
+
+  test('V8: deleting the account a transfer decision names takes the record with it', async () => {
+    const txn = await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-06', amount: -4200 });
+    const savings = await newAccount(b.budgetId, 'Savings');
+    await pool.query(
+      `insert into public.categorize_decisions (transaction_id, budget_id, kind, transfer_account_id)
+       values ($1, $2, 'transfer', $3)`,
+      [txn, b.budgetId, savings],
+    );
+    // A cascade keeps the invariant; "set null" would fail the check instead.
+    await pool.query('delete from public.accounts where id = $1', [savings]);
+    const { rows } = await pool.query('select 1 from public.categorize_decisions where transaction_id = $1', [txn]);
+    expect(rows).toEqual([]);
   });
 });

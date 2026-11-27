@@ -80,6 +80,18 @@ export { suggestedCategoryForPayee } from './domain/categorization';
 /** The register's transfer plan (pending rows / suggestions), for features that read the same rows (categorize). */
 export { transferOverview } from './domain/transfer-links';
 
+/** The register's own transfer link/unlink, for categorize's transfer accept and undo. */
+export { freeTransferCounterpart, linkByUser, transferMarksOf, unlinkTransfers } from './domain/transfer-links';
+/** The row-level mark writer, for undo putting back exactly what a link replaced. */
+export { setTransferMarks } from './store/transfers';
+
+/**
+ * The one rule for "could this row be the other leg of that transfer" and the
+ * one window it is dated inside, for categorize's SQL (candidate rule, the facts
+ * given to Jev, the accept-time re-check), which adds its own refusals.
+ */
+export { freeCounterpart, TRANSFER_PAIR_DAYS } from './store/transfers';
+
 /** Ledger write API for the connections sync engine (imported rows, payees, balances, card payments). */
 export * as ledger from './ledger';
 

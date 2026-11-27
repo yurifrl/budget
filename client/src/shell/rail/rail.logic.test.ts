@@ -138,6 +138,13 @@ describe('showsTransactionFab', () => {
     }
   });
 
+  test('Categorize hides it: its accept toast is the page bottom', () => {
+    // The pill sat on the toast's amount and Undo at 375px: Undo was unreachable.
+    for (const p of ['/categorize', '/categorize/', '/categorize?view=one']) {
+      expect(showsTransactionFab(p)).toBe(false);
+    }
+  });
+
   test('only exact routes match, not prefixes', () => {
     expect(showsTransactionFab('/connection-history')).toBe(true);
   });

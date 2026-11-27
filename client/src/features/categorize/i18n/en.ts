@@ -12,19 +12,31 @@ export default {
     'Suggestions below {percent}% are hidden for everyone in this budget. Those rows land in “No suggestion”.',
   'header.left': 'left to categorize',
 
-  // Header subtitle: the queue size and how many rows already have a suggestion
+  // Header subtitle: the queue size, Jev's transfer answers and how many rows
+  // already have a suggestion. Each number names its own noun, and the catalog
+  // picks a plural branch from one `count` only, so each noun is its own message
+  // and the subtitle joins them.
   'queue.subtitle': {
     one: '{count} uncategorized transaction · suggestions ready for {ready}',
     other: '{count} uncategorized transactions · suggestions ready for {ready}',
   },
-
+  'queue.left': {
+    one: '{count} uncategorized transaction',
+    other: '{count} uncategorized transactions',
+  },
+  'queue.answers': {
+    one: '{count} transfer answer',
+    other: '{count} transfer answers',
+  },
+  /** With transfer answers waiting: they are counted apart from the queue. */
+  'queue.subtitleMixed': '{left} · {answers} · suggestions ready for {ready}',
   // Bulk accept banner
   'bundles.acceptAllTitle': {
     one: '{count} transaction in {bundles} bundle is at {percent}% or above',
     other: '{count} transactions in {bundles} bundles are at {percent}% or above',
   },
   'bundles.acceptAllBody':
-    'One click files them all. You can undo, and each one stays editable in the register.',
+    'One click files them all. Transfer rows are not included: answer them in Transfers above. You can undo, and each one stays editable in the register.',
   'bundles.acceptAll': {
     one: 'Accept all above threshold ({count} transaction)',
     other: 'Accept all above threshold ({count} transactions)',
@@ -56,6 +68,9 @@ export default {
     other: '{count} transactions · nothing reached {percent}%, pick by hand or lower the threshold',
   },
   'noSuggestion.truncated': 'Showing the first {shown} of {count}.',
+  'noSuggestion.showAll': 'Show all',
+  'noSuggestion.showAllLoading': 'Reading the rest…',
+  'noSuggestion.loadFailed': 'Could not read the rest of the queue.',
 
   // Rows
   'row.chooseCategory': 'Choose category…',
@@ -83,6 +98,8 @@ export default {
   // One by one
   'one.queueTitle': 'Queue',
   'one.queueLeft': '{count} left',
+  /** The same counter with Jev's transfer answers beside it: "12 left · 2 answers". */
+  'one.queueLeftMixed': '{left} · {answers}',
   'one.queueOrder': 'Highest confidence first',
   'one.progress': '{position} of {total}',
   'one.moreBelow': {
@@ -188,10 +205,17 @@ export default {
   'run.button': 'Run Jev',
   'run.confirmTitle': 'RUN JEV',
   'run.confirmBody': {
-    one: 'Ask Jev about {count} transaction? The suggestions land in this queue for you to accept or skip; nothing is applied automatically.',
-    other: 'Ask Jev about {count} transactions? The suggestions land in this queue for you to accept or skip; nothing is applied automatically.',
+    one: 'Ask Jev about {count} transaction? The answers land on this page for you to accept or skip — a category in the bundles and the queue, a transfer in Transfers; nothing is applied automatically.',
+    other: 'Ask Jev about {count} transactions? The answers land on this page for you to accept or skip — a category in the bundles and the queue, a transfer in Transfers; nothing is applied automatically.',
   },
-  'run.rest': 'One run asks about up to {batch} transactions; start another for the rest.',
+  'run.countLabel': 'How many to send',
+  'run.countAll': 'All waiting ({count})',
+  'run.countInvalid': 'Type a whole number from 1, or leave the field empty for everything waiting.',
+  'run.countClamped': 'Only {max} can go now: this run takes {max}.',
+  'run.checking': 'Checking what can be sent now…',
+  'run.hourSpent': 'The hourly limit is used up: in about {minutes} min a slot frees.',
+  'run.hourTrims':
+    'The hourly limit of {limit} transactions allows {count} now; the rest waits for a free slot.',
   'run.confirmStart': 'Start run',
   'run.never': 'No run yet.',
   'run.waiting': 'Queued…',
@@ -229,7 +253,38 @@ export default {
     'No Jev API key can be used: the owner of this budget has to save one, or the shared key has to be on.',
   'run.keyLink': 'Jev API key',
   'run.empty':
-    'Nothing to ask about right now: no transaction that needs a category is waiting for a Jev answer.',
+    'Nothing to ask about right now: no transaction waiting for a Jev answer, whether it needs a category or looks like a transfer.',
   'run.startFailed': 'Could not start the run.',
   'run.loadFailed': 'Could not read the run status.',
+
+  // Transfers: the matcher's pairs and Jev's "this is a transfer" answers, above
+  // the category bundles (Jev's are grouped by the account pair they name).
+  'transfer.title': 'TRANSFERS',
+  'transfer.jevHeading': 'JEV SAYS TRANSFER',
+  'transfer.matcherHeading': 'LOOKS LIKE A TRANSFER',
+  'transfer.to': 'Transfer to {account}',
+  'transfer.from': 'Transfer from {account}',
+  'transfer.pair': '{out} → {in}',
+  'transfer.percent': '{percent}%',
+  'transfer.accept': 'Accept',
+  'transfer.acceptPair': 'Accept all ({count})',
+  'transfer.refuse': 'Not a transfer',
+  'transfer.skip': 'Skip',
+  'transfer.subject': '{payee} · {amount}',
+  'transfer.filedTo': 'Transfer · {account}',
+  'transfer.refusedToast': 'Marked as not a transfer',
+  'transfer.linkedCount': { one: '{count} transfer linked', other: '{count} transfers linked' },
+  'transfer.loadFailed': 'Could not read Jev’s transfer suggestions.',
+  'transfer.matcherFailed': 'Could not read the transfer pairs found for you.',
+  'transfer.refuseFailed': 'Could not record “not a transfer”.',
+  'transfer.errorRefused': 'This row was answered “not a transfer”; link it in the register to make it one.',
+  'transfer.errorCategorized': 'This row is already categorized, so it is not a transfer any more.',
+  'transfer.errorNoCategory': 'This row no longer needs a category: it is a transfer already.',
+  /** One by one: the matcher's pairs are not answered there. */
+  'transfer.paneNote': {
+    one: '{count} pair looks like a transfer: review it in Bundles',
+    other: '{count} pairs look like transfers: review them in Bundles',
+  },
+  'transfer.focusLabel': 'TRANSFER',
+  'transfer.focusHint': 'Accepting links both sides and files no category.',
 } as const;

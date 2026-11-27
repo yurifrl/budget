@@ -11,6 +11,8 @@ import {
   categorizeSettingsGet,
   categorizeSettingsSet,
   categorizeSkip,
+  categorizeTransferRefuse,
+  categorizeTransferSuggestions,
   categorizeUndo,
 } from '@shared/contracts/categorize';
 
@@ -19,17 +21,28 @@ import { pool } from '../core/db';
 import { HttpError } from '../core/validate';
 import { JEV_MAX_OPTIONS, jevUnavailableError } from '../jev';
 import { requireUserId } from '../user';
-import { acceptBundle, acceptCategories, skipTransaction, undoAccept } from './decision-store';
+import { acceptBundle, acceptCategories, refuseTransfer, skipTransaction, undoAccept } from './decision-store';
 import { enqueueCategorizeRun } from './job';
 import { decodeBundleKey, getConfidenceThreshold, listQueue, setConfidenceThreshold } from './queue-store';
 import { runStatus } from './run-status';
-import { assignableCategories } from './run-store';
+import { offeredOptions } from './run-store';
+import { transferSuggestions } from './transfer-store';
 
 export const operations = [
   implement(categorizeQueueList, (_c, { budget_id: budgetId, limit, offset, bundle }) => {
     const key = bundle === undefined ? undefined : decodeBundleKey(bundle);
     if (key === null) throw new HttpError(400, 'invalid bundle key', 'invalid_input');
     return listQueue(pool, budgetId, { limit, offset, bundle: key });
+  }),
+
+  implement(categorizeTransferSuggestions, (_c, { budget_id: budgetId }) =>
+    transferSuggestions(pool, budgetId).then((groups) => ({ groups })),
+  ),
+
+  implement(categorizeTransferRefuse, (c, { budget_id: budgetId, transaction_id, transfer_account_id }) => {
+    const user = c.get('user');
+    if (!user) throw new HttpError(401, 'unauthorized');
+    return refuseTransfer(pool, budgetId, transaction_id, transfer_account_id, user.id);
   }),
 
   implement(categorizeAccept, (c, { budget_id: budgetId, items, bundle_key: bundleKey, expected_count: expectedCount }) => {
@@ -78,24 +91,46 @@ export const operations = [
    * never reaches the queue: the answer carries the same reason the page shows.
    * The category count is checked here too, so a run that cannot be answered
    * is refused before a job exists instead of failing after it starts.
+   *
+   * The size is the person's count trimmed by the hour's allowance, and it is
+   * fixed here: the run never re-reads the clock, so `done` cannot pass `total`.
    */
-  implement(categorizeRunStart, async (c, { budget_id: budgetId }) => {
+  implement(categorizeRunStart, async (c, { budget_id: budgetId, count }) => {
     const userId = requireUserId(c);
-    const before = await runStatus(pool, budgetId);
-    if (before.reason !== null) throw jevUnavailableError(before.reason);
-    const categories = await assignableCategories(pool, budgetId, JEV_MAX_OPTIONS + 1);
+    const status = await runStatus(pool, budgetId);
+    if (status.reason !== null) throw jevUnavailableError(status.reason);
+    // The same options the run would send, and the same ceiling: categories plus
+    // one transfer option per other open account. Refusing here (rather than
+    // after the job starts) is what the run's own check can only report later.
+    const { categories, ceiling } = await offeredOptions(pool, budgetId);
     if (categories.length === 0) {
       throw new HttpError(409, 'this budget has no category to suggest', 'categorize_no_categories');
     }
-    if (categories.length > JEV_MAX_OPTIONS) {
+    if (ceiling > JEV_MAX_OPTIONS) {
       throw new HttpError(
         409,
-        `this budget has more than ${JEV_MAX_OPTIONS} categories to suggest from, which is more than Jev accepts`,
+        `this budget offers ${ceiling} options (categories and accounts), more than the ${JEV_MAX_OPTIONS} Jev accepts`,
         'categorize_too_many_categories',
         { max: JEV_MAX_OPTIONS },
       );
     }
-    await enqueueCategorizeRun(pool, budgetId, userId);
+    // Starting again while a run is in flight answers that same run, whatever
+    // the hour says now: the run's size was fixed when it was first delivered.
+    if (status.run?.state === 'queued' || status.run?.state === 'running') return status;
+    const take = Math.min(status.candidates, count === 'all' ? Number.MAX_SAFE_INTEGER : count);
+    if (take === 0) {
+      // Nothing waiting is nothing to start; a queue with rows but no allowance
+      // waits for the hour, so the answer names the wait instead of a no-op run.
+      if (status.waiting === 0) return status;
+      const minutes = status.hourly.frees_in_minutes ?? 1;
+      throw new HttpError(
+        429,
+        `this budget already sent ${status.hourly.limit} transactions to Jev in the last hour; the allowance frees up in about ${minutes} minutes`,
+        'categorize_hourly_limit',
+        { limit: status.hourly.limit, minutes },
+      );
+    }
+    await enqueueCategorizeRun(pool, budgetId, userId, take);
     return runStatus(pool, budgetId);
   }),
 

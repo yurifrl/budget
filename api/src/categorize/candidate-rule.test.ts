@@ -16,16 +16,18 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { needsCategory, type CategoryNeedInput } from '@shared/domain/category-needs';
 import { isInternalTransferPayee, isTransferToOnBudget } from '@shared/domain/transfers';
-import { CATEGORIZE_RUN_LIMIT } from '@shared/contracts/categorize';
 
 import { transferOverview } from '../budget';
 import { pool } from '../core/db';
 import { dbReady } from '../core/test-gate';
 import { pendingTransferIds } from './store';
-import { runCandidates } from './run-store';
+import { openAccounts, runCandidates } from './run-store';
 import { cleanupFixtures, newAccount, newBudget, newCategory, newGroup, newPayee, newTransaction, type BudgetFixture } from './testing';
 
 const MAX_ATTEMPTS = 3;
+
+/** A page big enough that these fixtures fit in one, so the test reads every row. */
+const ALL_ROWS = 500;
 
 /** One transaction as the oracle rule reads it. */
 type Row = {
@@ -262,15 +264,19 @@ describe.skipIf(!dbReady)('the run candidate rule', () => {
       [...pending.keys()],
       MAX_ATTEMPTS,
       crypto.randomUUID(),
-      CATEGORIZE_RUN_LIMIT,
+      ALL_ROWS,
+      [],
     );
     const oracle = (await oracleInputs(b.budgetId, pending)).filter((row) => needsCategory(row.input));
     // The plain row, the zero amount, the pointer at an off-budget account, the
     // pointer at another budget's on-budget account, the pointer at the row's
     // own account and the payee that points off budget. Everything else above
-    // is excluded.
+    // is excluded. Outflows only: the run ALSO asks about an inflow that has a
+    // counterpart, which the shared rule deliberately calls "no category", so
+    // the agreement is scoped to the outflows both rules describe.
     expect(oracle).toHaveLength(6);
-    expect(asked.map((row) => row.transaction_id).sort()).toEqual(oracle.map((row) => row.id).sort());
+    const outflows = asked.filter((row) => row.amount <= 0);
+    expect(outflows.map((row) => row.transaction_id).sort()).toEqual(oracle.map((row) => row.id).sort());
   });
 
   test('rows of off-budget, closed and deleted accounts are never asked about', async () => {
@@ -280,9 +286,100 @@ describe.skipIf(!dbReady)('the run candidate rule', () => {
       await pendingTransferIds(pool, b.budgetId),
       MAX_ATTEMPTS,
       crypto.randomUUID(),
-      CATEGORIZE_RUN_LIMIT,
+      ALL_ROWS,
+      [],
     );
     const ids = asked.map((row) => row.transaction_id);
     for (const id of hiddenAccounts) expect(ids).not.toContain(id);
+  });
+
+  test('a row already handed out is not offered again before its call settles', async () => {
+    const all = await runCandidates(pool, b.budgetId, [], MAX_ATTEMPTS, crypto.randomUUID(), ALL_ROWS, []);
+    const taken = all.slice(0, 2).map((row) => row.transaction_id);
+    const again = await runCandidates(pool, b.budgetId, [], MAX_ATTEMPTS, crypto.randomUUID(), ALL_ROWS, taken);
+    expect(again.map((row) => row.transaction_id)).toEqual(all.slice(2).map((row) => row.transaction_id));
+  });
+  test('an inflow is asked about only while another account holds its other leg', async () => {
+    const savings = await newAccount(b.budgetId, 'Savings');
+    const out = await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-10', amount: -2500 });
+    const into = await newTransaction({ budgetId: b.budgetId, accountId: savings, date: '2026-11-11', amount: 2500 });
+    const alone = await newTransaction({ budgetId: b.budgetId, accountId: savings, date: '2026-11-12', amount: 9900 });
+
+    const asked = await runCandidates(pool, b.budgetId, [], MAX_ATTEMPTS, crypto.randomUUID(), ALL_ROWS, []);
+    const ids = asked.map((row) => row.transaction_id);
+    // Both sides of the movement are questions: either one may be confirmed.
+    expect(ids).toContain(out);
+    expect(ids).toContain(into);
+    // Money in with nothing on the other side needs no category, so no question.
+    expect(ids).not.toContain(alone);
+
+    // "Not a transfer" already answered the only question an inflow can have.
+    await pool.query(
+      `insert into public.transfer_marks (transaction_id, budget_id, state) values ($1, $2, 'dismissed')`,
+      [into, b.budgetId],
+    );
+    const after = await runCandidates(pool, b.budgetId, [], MAX_ATTEMPTS, crypto.randomUUID(), ALL_ROWS, []);
+    const afterIds = after.map((row) => row.transaction_id);
+    expect(afterIds).not.toContain(into);
+    // The outflow still needs a category, so it is asked as before.
+    expect(afterIds).toContain(out);
+  });
+
+  test('V1: an inflow is asked about only while another account holds a free leg, by the link rule', async () => {
+    const savings = await newAccount(b.budgetId, 'Savings');
+    const card = await newAccount(b.budgetId, 'Card');
+    const out = await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-10', amount: -1900 });
+    const leg = await newTransaction({ budgetId: b.budgetId, accountId: card, date: '2026-11-10', amount: 1900 });
+    await pool.query(
+      'update public.transactions set transfer_account_id = $2, transfer_transaction_id = $3 where id = $1',
+      [out, card, leg],
+    );
+    // Money in, same amount: the only leg it could pair with is already taken.
+    const into = await newTransaction({ budgetId: b.budgetId, accountId: savings, date: '2026-11-11', amount: 1900 });
+
+    const ids = async () =>
+      (await runCandidates(pool, b.budgetId, [], MAX_ATTEMPTS, crypto.randomUUID(), ALL_ROWS, [])).map(
+        (row) => row.transaction_id,
+      );
+    expect(await ids()).not.toContain(into);
+
+    // Free that leg and the same inflow becomes a question.
+    await pool.query(
+      'update public.transactions set transfer_account_id = null, transfer_transaction_id = null where id = any($1::uuid[])',
+      [[out, leg]],
+    );
+    expect(await ids()).toContain(into);
+  });
+
+  test('V2: only an inflow of an on-budget account is a transfer question, and no off-budget account is offered', async () => {
+    const broker = await newAccount(b.budgetId, 'Broker', { onBudget: false });
+    const savings = await newAccount(b.budgetId, 'Savings');
+    // Money moving inside the off-budget account is "just a transaction" here.
+    const left = await newTransaction({ budgetId: b.budgetId, accountId: broker, date: '2026-11-12', amount: -2700 });
+    const right = await newTransaction({ budgetId: b.budgetId, accountId: broker, date: '2026-11-12', amount: 2700 });
+    // A real pair: out of checking, into savings.
+    const out = await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-12', amount: -2700 });
+    const into = await newTransaction({ budgetId: b.budgetId, accountId: savings, date: '2026-11-12', amount: 2700 });
+
+    const asked = (
+      await runCandidates(pool, b.budgetId, [], MAX_ATTEMPTS, crypto.randomUUID(), ALL_ROWS, [])
+    ).map((row) => row.transaction_id);
+    expect(asked).not.toContain(left);
+    expect(asked).not.toContain(right);
+    expect(asked).toContain(out);
+    expect(asked).toContain(into);
+
+    const ids = (await openAccounts(pool, b.budgetId)).map((account) => account.id);
+    expect(ids).toContain(b.accountId);
+    expect(ids).toContain(savings);
+    expect(ids).not.toContain(broker);
+    // Every offered account is one the register accepts as a transfer's other
+    // side: open and counted by the budget.
+    const { rows } = await pool.query<{ id: string }>(
+      `select id from public.accounts
+        where budget_id = $1 and deleted = false and closed = false and on_budget = true`,
+      [b.budgetId],
+    );
+    expect(ids.sort()).toEqual(rows.map((row) => row.id).sort());
   });
 });

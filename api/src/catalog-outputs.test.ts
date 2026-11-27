@@ -250,6 +250,7 @@ function sampleInput(name: string): Record<string, unknown> | undefined {
     categorize_queue_list: { budget_id: B, limit: 10 },
     categorize_settings_get: { budget_id: B },
     categorize_run_status: { budget_id: B },
+    categorize_transfer_suggestions: { budget_id: B },
     // The bank-imported row, so the import record (raw payload included) is validated too.
     budget_transactions_get: { id: seeded.importedTxn, budget_id: B },
     budget_assignments_list: { budget_id: B },

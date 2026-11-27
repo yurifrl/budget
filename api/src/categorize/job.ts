@@ -12,16 +12,21 @@ registerJobType({ jobType: CATEGORIZE_RUN_JOB, workflow: 'categorizeRun' });
 /** One run per budget at a time: the budget IS the subject. */
 export const runSubjectKey = (budgetId: string): string => budgetId;
 
-/** Queue a run. A run already active for the budget is returned, not duplicated. */
+/**
+ * Queue a run for `take` transactions. A run already active for the budget is
+ * returned, not duplicated — and the size travels with the job, because it is
+ * the allowance the start check saw, not something a later delivery re-guesses.
+ */
 export function enqueueCategorizeRun(
   db: Queryable,
   budgetId: string,
   requestedBy: string,
+  take: number,
 ): Promise<{ run: JobRun; created: boolean }> {
   return enqueueJob(db, {
     jobType: CATEGORIZE_RUN_JOB,
     subjectKey: runSubjectKey(budgetId),
-    input: { budgetId },
+    input: { budgetId, take },
     requestedBy,
   });
 }

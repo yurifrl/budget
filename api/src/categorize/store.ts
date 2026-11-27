@@ -12,7 +12,7 @@ import type { Pool } from 'pg';
 import type { Queryable } from '../core/db';
 import { withTransaction } from '../core/db';
 import { HttpError } from '../core/validate';
-import { transferOverview } from '../budget';
+import { freeCounterpart, TRANSFER_PAIR_DAYS, transferOverview } from '../budget';
 
 import type { CategorizeFailureKind } from '../jev';
 
@@ -180,10 +180,92 @@ export const NEEDS_CATEGORY_FROM = `
  */
 export const BANK_FACTS_JOIN = `left join public.connection_transactions ct on ct.transaction_id = t.id and ct.budget_id = t.budget_id`;
 
-const NEEDS_CATEGORY_BODY = `
-    and t.deleted = false
+/**
+ * THE definition of "decided", the one every reader and writer of this feature
+ * uses: a decision row `d` of `categorize_decisions` about transaction `t` is the
+ * person's STANDING decision about the row while it is still in effect —
+ *  - a skip (whatever target column a released build left on it);
+ *  - a category accept while the row still carries a category;
+ *  - a transfer accept while the row still points at that account.
+ * A decision no longer in effect (the category cleared by hand, the link undone
+ * or edited in the register) is stale: the row is undecided again. Nothing else
+ * decides a row: a "not a transfer" answer ({@link REFUSED}) only ends the
+ * row's transfer question (an outflow still needs its category), and a
+ * suggestion dismissed as the by-product of another answer is a fact about one
+ * suggestion. Aliases: `t` the transaction, `d` the decision.
+ */
+const DECISION_IN_EFFECT = (d: string): string => `(
+      ${d}.kind = 'skip'
+      or (${d}.kind = 'accept' and t.category_id is not null)
+      -- Never null (a 'transfer' decision always names its account), so
+      -- \`not\` of this is exactly "stale".
+      or (${d}.kind = 'transfer' and t.transfer_account_id is not distinct from ${d}.transfer_account_id))`;
+
+/** Row `t` carries a standing decision ({@link DECISION_IN_EFFECT}). */
+export const DECIDED = `exists (
+      select 1 from public.categorize_decisions dd
+       where dd.transaction_id = t.id and dd.budget_id = t.budget_id and ${DECISION_IN_EFFECT('dd')}
+    )`;
+
+/**
+ * Row `t` carries a decision that is no longer in effect: the earlier CATEGORY
+ * suggestions it settled (all but the person's own `manual` row) are live again.
+ * Its transfer suggestions are not: the person already acted on the row (undid
+ * the link, or filed a category over the transfer), so offering that transfer
+ * again would undo their answer; a later run may propose one from scratch. The
+ * page's own Undo is different: it restores the row exactly
+ * ({@link restorePendingSuggestions}), so its suggestions are pending again.
+ */
+export const STALE_DECISION = `exists (
+      select 1 from public.categorize_decisions sd
+       where sd.transaction_id = t.id and sd.budget_id = t.budget_id and not ${DECISION_IN_EFFECT('sd')}
+    )`;
+
+/** Selects one boolean column per decision row `d` joined to its transaction `t`. */
+export const DECISION_IN_EFFECT_COLUMN = `${DECISION_IN_EFFECT('d')} as in_effect`;
+
+/**
+ * The person answered "not a transfer" for row `t`. The answer is about the ROW,
+ * whatever account the refused suggestion named (the refusal records it): no
+ * transfer is offered, suggested, listed or accepted for the row again. Only the
+ * person's own link in the register makes it a transfer after that.
+ */
+export const REFUSED = `exists (
+        select 1 from public.categorize_transfer_refusals rf
+         where rf.transaction_id = t.id and rf.budget_id = t.budget_id
+      )`;
+
+/**
+ * May row `t` be answered "a transfer to/from `account`" right now, apart from
+ * the account's own state (open, on budget, not the row's own — the register's
+ * link checks that, with its own codes)? No "not a transfer" or "outside the
+ * budget" mark on the row, no "not a transfer" answer about it ({@link REFUSED}),
+ * and for an INFLOW a free
+ * counterpart in THAT account (accept never invents a leg for money that
+ * arrived). The Transfers read, the queue's placement and accept all read this.
+ */
+export const TRANSFER_PAIR_OPEN = (account: string): string => `
+      not exists (
+        select 1 from public.transfer_marks m
+         where m.transaction_id = t.id and m.budget_id = t.budget_id
+           and m.state in ('dismissed', 'outside')
+      )
+      and not ${REFUSED}
+      and (t.amount <= 0 or exists (
+        select 1 from public.transactions o
+         where o.budget_id = t.budget_id and o.account_id = ${account}
+           and ${freeCounterpart({ row: 'o', amount: '-t.amount', date: 't.date', days: String(TRANSFER_PAIR_DAYS) })}
+      ))`;
+
+/**
+ * What every candidate shares: the row is live, not already a transfer the
+ * register recognizes (a linked pointer, a transfer payee, a transfer hint), and
+ * not split or refused by the person. Written without a leading `and`, so it can
+ * be a parenthesised branch of a bigger test.
+ */
+const CANDIDATE_BASE = `
+    t.deleted = false
     and t.upcoming = false
-    and t.amount <= 0
     -- A linked transfer keeps no category when its other side is an account
     -- still on budget: that is the register's own test (isTransferToOnBudget),
     -- read from the pointer rather than from the payee text.
@@ -198,9 +280,6 @@ const NEEDS_CATEGORY_BODY = `
          and ta.deleted = false
          and ta.on_budget = true
     )
-    and a.deleted = false
-    and a.closed = false
-    and a.on_budget = true
     and coalesce(p.name, t.import_payee_name, '') not in ('Reconciliation Adjustment', 'Balance Adjustment')
     and (
       p.transfer_account_id is null
@@ -227,7 +306,146 @@ const NEEDS_CATEGORY_BODY = `
     and not exists (select 1 from public.subtransactions s where s.transaction_id = t.id and s.deleted = false)
     and not (t.id = any($2::uuid[]))`;
 
+/** An outflow that still needs a category, in an account the budget still counts. */
+const CANDIDATE_OUTFLOW = `${CANDIDATE_BASE}
+    and t.amount <= 0
+    and a.deleted = false
+    and a.closed = false
+    and a.on_budget = true`;
+
+/**
+ * The incoming leg of a transfer: an inflow another account of the budget
+ * answered with an opposite-signed row of the same amount within `days` or
+ * less. Both sides are then candidates, so either one can be confirmed; the
+ * other side must be a live row of an account this budget still has, because a
+ * closed account cannot be the transfer's other side. `days` is a placeholder,
+ * so the same rule serves the run's batch query ($5) and the single-row
+ * re-check an accept does ($4).
+ */
+const candidateInflow = (days: string): string => `${CANDIDATE_BASE}
+    and t.amount > 0
+    and a.deleted = false
+    and a.closed = false
+    and a.on_budget = true
+    -- The person already answered the transfer question about this row: "not a
+    -- transfer" (the matcher's mark or Jev's refusal), or "a transfer to an
+    -- account outside the budget". An inflow has no other question, so there is
+    -- nothing left to ask.
+    and not exists (
+      select 1 from public.transfer_marks m
+       where m.transaction_id = t.id and m.budget_id = t.budget_id
+         and m.state in ('dismissed', 'outside')
+    )
+    and not ${REFUSED}
+    -- The other leg, by the ONE rule every lookup uses (see freeCounterpart):
+    -- a free, unlinked row of another open ON-BUDGET account, exact opposite
+    -- amount, inside the same window. A counterpart that is already someone's
+    -- transfer is not a pair, so the inflow is not a question at all.
+    and exists (
+      select 1
+        from public.transactions o
+        join public.accounts oa on oa.id = o.account_id and oa.budget_id = o.budget_id
+       where o.budget_id = t.budget_id
+         and o.account_id <> t.account_id
+         and oa.deleted = false
+         and oa.closed = false
+         and oa.on_budget = true
+         and ${freeCounterpart({ row: 'o', amount: '-t.amount', date: 't.date', days })}
+    )`;
+
+const CANDIDATE_INFLOW = candidateInflow('$5');
+
+/**
+ * A transaction's VISIBLE suggestions, best rank first: the ones the page could
+ * still apply — a category the budget may use, or a transfer accept would take
+ * now (an open on-budget account that is not the row's own, and
+ * {@link TRANSFER_PAIR_OPEN}) — live and at or above the threshold. Live is
+ * pending, or a category suggestion settled by a decision that is no longer in
+ * effect ({@link STALE_DECISION}). A transfer that is not actionable is simply not
+ * visible, so the row is placed by what is left. Arg: the threshold placeholder;
+ * aliases `t` (the transaction).
+ */
+export const VISIBLE_SUGGESTIONS = (threshold: string): string => `
+  select s.transaction_id, s.rank, s.category_id, s.transfer_account_id, s.confidence
+    from public.category_suggestions s
+    left join public.categories c on c.id = s.category_id and c.budget_id = s.budget_id
+    left join public.category_groups g on g.id = c.group_id and g.budget_id = s.budget_id
+    left join public.accounts ta on ta.id = s.transfer_account_id and ta.budget_id = s.budget_id
+   where s.transaction_id = t.id
+     and s.budget_id = t.budget_id
+     and (s.status = 'pending' or (s.source <> 'manual' and s.category_id is not null and ${STALE_DECISION}))
+     and s.confidence >= ${threshold}
+     and (
+       (s.category_id is not null and ${ASSIGNABLE})
+       or (s.category_id is null
+           and s.transfer_account_id is not null
+           and ta.deleted = false and ta.closed = false and ta.on_budget = true
+           and ta.id <> t.account_id
+           and ${TRANSFER_PAIR_OPEN('s.transfer_account_id')})
+     )
+   order by s.rank`;
+
+/**
+ * The kind of a transaction's TOP visible suggestion ({@link VISIBLE_SUGGESTIONS}),
+ * `category` or `transfer`, null when nothing is visible. A row belongs to the
+ * Transfers section when this says `transfer` and to the category queue otherwise,
+ * never both: the two sections page the same rows, so both count it once. Arg: the
+ * threshold placeholder.
+ */
+export const TOP_SUGGESTION_KIND = (threshold: string): string => `(
+  select case when top.category_id is not null then 'category' else 'transfer' end
+    from (${VISIBLE_SUGGESTIONS(threshold)} limit 1) top
+)`;
+
+/**
+ * The register's rule as the queue reads it: outflows that still need a
+ * category. Inflows are never the queue's business (they are either transfers or
+ * money arriving, and neither takes a category), so this fragment stays
+ * outflow-only — the run's own rule below is the one that also asks about them.
+ */
+const NEEDS_CATEGORY_BODY = `
+    and (${CANDIDATE_OUTFLOW})`;
+
 export const NEEDS_CATEGORY_WHERE = `where t.budget_id = $1 and t.category_id is null ${NEEDS_CATEGORY_BODY}`;
+
+/**
+ * What a run may ask about: an outflow that needs a category, or an inflow whose
+ * transfer counterpart exists. Args: $1 budget, $2 pending transfer ids,
+ * $5 the counterpart window in days.
+ */
+export const RUN_CANDIDATE_WHERE = `
+  where t.budget_id = $1
+    and t.category_id is null
+    and ((${CANDIDATE_OUTFLOW})
+      or (${CANDIDATE_INFLOW}))`;
+
+/**
+ * May this row still be answered as a transfer? ONE rule, read by the Transfers
+ * section and re-checked by accept, so the list cannot offer a row accept would
+ * refuse: the run's candidate rule (an outflow needing a category, or an inflow
+ * whose other leg is free) and no standing decision ({@link DECIDED}). The
+ * per-account half (marks, refusals, an inflow's leg) is {@link TRANSFER_PAIR_OPEN}.
+ *
+ * Args: $1 budget, $2 the rows the transfer matcher holds, `days` the
+ * counterpart window in days. Callers add their own predicates (a row id, a
+ * confidence threshold) afterwards.
+ */
+export const TRANSFER_ASKABLE_WHERE = (days: string): string => `
+  where t.budget_id = $1
+    and t.category_id is null
+    and ((${CANDIDATE_OUTFLOW})
+      or (${candidateInflow(days)}))
+    and not ${DECIDED}`;
+
+/**
+ * The same rule for ONE row and ONE account, which accept re-checks before
+ * turning a suggestion into a transfer. Args: $1 budget, $2 the rows the
+ * transfer matcher holds, $3 transaction id, $4 the counterpart window in days,
+ * $5 the account.
+ */
+export const TRANSFER_OPEN_FOR_ROW = `${TRANSFER_ASKABLE_WHERE('$4')}
+    and t.id = $3
+    and ${TRANSFER_PAIR_OPEN('$5::uuid')}`;
 
 /**
  * The same rule without the "still uncategorized" term. Undo re-checks it so a
@@ -235,25 +453,33 @@ export const NEEDS_CATEGORY_WHERE = `where t.budget_id = $1 and t.category_id is
  */
 export const NEEDS_CATEGORY_WHERE_IGNORING_CATEGORY = `where t.budget_id = $1 ${NEEDS_CATEGORY_BODY}`;
 
-/**
- * An accept decision whose transaction has no category again: the person
- * cleared it by hand after accepting. `public.transactions` is shared with the
- * syscd-app, so no trigger cleans the record; readers treat it as no decision
- * and accept/skip replace it. Every query using this fragment already requires
- * `t.category_id is null`, so an accept decision there can only be stale.
- */
-export const STALE_ACCEPT = `exists (
-      select 1 from public.categorize_decisions sd
-       where sd.transaction_id = t.id and sd.budget_id = t.budget_id and sd.kind = 'accept'
-    )`;
-
 /** The ids the app's transfer plan marks pending for this budget (register `transferPending`). */
 export async function pendingTransferIds(db: Queryable, budgetId: string): Promise<string[]> {
   return [...(await transferOverview(db, budgetId)).pending.keys()];
 }
 
+/**
+ * Every row the transfer matcher holds an opinion about: its current suggestions
+ * and its pending rows. Those rows are shown — and decided — in the transfer
+ * lists, so neither the Jev run nor Jev's own transfer read asks about them
+ * again: a row appears once, where the person can see both of its sides.
+ */
+export async function matcherRowIds(db: Queryable, budgetId: string): Promise<string[]> {
+  const overview = await transferOverview(db, budgetId);
+  return [...new Set([...overview.rows.keys(), ...overview.pending.keys()])];
+}
+
+/**
+ * One suggestion to store: a category, or a transfer to one of the budget's own
+ * accounts. The target is what the suggestion means; the insert turns it into
+ * `category_id` or `transfer_account_id` (the table's check allows exactly one).
+ */
+export type SuggestionTarget =
+  | { kind: 'category'; categoryId: string }
+  | { kind: 'transfer'; accountId: string };
+
 export type NewSuggestion = {
-  categoryId: string;
+  target: SuggestionTarget;
   confidence: number;
   reason: string | null;
   source: SuggestionSource;
@@ -303,8 +529,10 @@ export async function recordAttempt(
 ): Promise<boolean> {
   const { rowCount } = await db.query(
     `insert into public.categorize_attempts
-       (transaction_id, budget_id, outcome, error_kind, attempts, model, input_fingerprint, last_run_id, last_attempt_at)
-    select t.id, t.budget_id, $3, $4, case when $6 = 'count' then 1 else 0 end, $5, ${ATTEMPT_FINGERPRINT}, $7, now()
+       (transaction_id, budget_id, outcome, error_kind, attempts, model, input_fingerprint, last_run_id, last_attempt_at,
+        hour_calls, hour_started_at)
+    select t.id, t.budget_id, $3, $4, case when $6 = 'count' then 1 else 0 end, $5, ${ATTEMPT_FINGERPRINT}, $7, now(),
+           case when $5::text is null then 0 else 1 end, case when $5::text is null then null else now() end
        from public.transactions t
        left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id
        left join public.connection_transactions ct
@@ -322,7 +550,17 @@ export async function recordAttempt(
            model = excluded.model,
            input_fingerprint = excluded.input_fingerprint,
            last_run_id = excluded.last_run_id,
-           last_attempt_at = now()`,
+           last_attempt_at = now(),
+           -- The hourly allowance (run-store hourlyUse): a call that cost adds
+           -- one inside the row's window, or opens a new window at 1.
+           hour_calls = case
+             when public.categorize_attempts.hour_started_at > now() - interval '1 hour'
+               then public.categorize_attempts.hour_calls + excluded.hour_calls
+             else excluded.hour_calls end,
+           hour_started_at = case
+             when public.categorize_attempts.hour_started_at > now() - interval '1 hour'
+               then public.categorize_attempts.hour_started_at
+             else excluded.hour_started_at end`,
     [transactionId, budgetId, attempt.outcome, attempt.errorKind, attempt.model, attempt.attempts, runId],
   );
   return (rowCount ?? 0) > 0;
@@ -399,83 +637,85 @@ export async function restorePendingSuggestions(db: Queryable, budgetId: string,
   await db.query(
     `update public.category_suggestions
         set status = 'pending', updated_at = now()
-      where transaction_id = $1 and budget_id = $2 and status <> 'pending'`,
+      where transaction_id = $1 and budget_id = $2 and status <> 'pending'
+        -- A row the person answered "not a transfer" stays refused: reviving a
+        -- transfer suggestion would put it back in the Transfers list they answered.
+        and (transfer_account_id is null
+          or not exists (
+            select 1 from public.categorize_transfer_refusals rf
+             where rf.transaction_id = $1 and rf.budget_id = $2
+          ))`,
     [transactionId, budgetId],
   );
 }
 
 /**
  * Replace one transaction's suggestion set atomically, and only while the
- * transaction is still live, uncategorized and in this budget: the row lock
- * makes a concurrent categorization win (then nothing is written).
+ * transaction is still live, uncategorized, in this budget and UNDECIDED
+ * ({@link DECIDED}): the row lock makes a concurrent categorization or decision
+ * win. Returns null when nothing was written for that reason — the answer is
+ * dropped, and the caller must not count it as an answer.
  *
- * A transaction with any live decision is left alone: the person already
- * answered it, so no new suggestion may overwrite a decided one at its rank,
- * hide it behind a pending row, or resurrect a category they dismissed. The
- * exception is a STALE accept (its category was cleared by hand): its
- * suggestions are restored to pending and the run may answer again. Callers
- * skip such transactions too (`RUN_SKIP_WHERE`); this is the last line of
- * defence.
+ * An undecided row's earlier suggestions are no decision of the person's (a
+ * refused transfer is remembered in its own table, a suggestion a stale
+ * decision settled is not in effect), so the new answer replaces them all.
  *
  * Each row is inserted by SELECT over the transaction and the category, so a
  * category deleted or hidden between the call and this write is simply not
  * stored (R9) and the fingerprint written with it is the facts it answers.
- * Ranks above the new answer are dropped while pending only. Returns how many
- * pending suggestions are in place afterwards (0 when the answer named no
- * category the budget may still use).
+ * Returns how many suggestions were written (0 when the answer named no target
+ * the budget may still use).
  */
 export async function replaceSuggestions(
   pool: Pool,
   budgetId: string,
   transactionId: string,
   suggestions: readonly NewSuggestion[],
-): Promise<number> {
+): Promise<number | null> {
   return withTransaction(pool, async (client) => {
-    const locked = await client.query(
-      'select 1 from public.transactions where id = $1 and budget_id = $2 and category_id is null and deleted = false for update',
+    const locked = await client.query<{ decided: boolean }>(
+      `select ${DECIDED} as decided from public.transactions t
+        where t.id = $1 and t.budget_id = $2 and t.category_id is null and t.deleted = false
+        for update`,
       [transactionId, budgetId],
     );
-    if (locked.rowCount === 0) return 0;
-    const decisions = await client.query<{ kind: string }>(
-      'select kind from public.categorize_decisions where transaction_id = $1 and budget_id = $2 for update',
-      [transactionId, budgetId],
-    );
-    if (decisions.rows.some((row) => row.kind !== 'accept')) return 0;
-    if (decisions.rows.length > 0) {
-      await restorePendingSuggestions(client, budgetId, transactionId);
-    } else {
-      const existing = await client.query<{ status: string }>(
-        'select status from public.category_suggestions where transaction_id = $1 and budget_id = $2',
-        [transactionId, budgetId],
-      );
-      if (existing.rows.some((row) => row.status !== 'pending')) return 0;
-    }
+    if (locked.rows[0] === undefined || locked.rows[0].decided) return null;
+    await client.query('delete from public.category_suggestions where transaction_id = $1 and budget_id = $2', [
+      transactionId,
+      budgetId,
+    ]);
     let written = 0;
     // The rank counts the rows that land, so a category the budget may not use
-    // (dropped by the SQL below) never leaves a hole in the set.
     for (const suggestion of suggestions) {
+      const { target } = suggestion;
+      // Two selects, one row: a category suggestion is stored only while the
+      // category is one the budget may still use, a transfer suggestion only
+      // while the account is open and is not the row's own.
+      const source =
+        target.kind === 'category'
+          ? `join public.categories c on c.id = $4 and c.budget_id = t.budget_id
+             join public.category_groups g on g.id = c.group_id and g.budget_id = t.budget_id
+             where t.id = $1 and t.budget_id = $2 and ${ASSIGNABLE}`
+          : `join public.accounts ta on ta.id = $4 and ta.budget_id = t.budget_id
+             where t.id = $1 and t.budget_id = $2
+               and ta.deleted = false and ta.closed = false and ta.on_budget = true
+               and ta.id <> t.account_id`;
+      const targetColumn = target.kind === 'category' ? 'category_id' : 'transfer_account_id';
+      const targetId = target.kind === 'category' ? target.categoryId : target.accountId;
       const inserted = await client.query(
         `insert into public.category_suggestions
-           (transaction_id, budget_id, rank, category_id, confidence, reason, source, provider, model, input_fingerprint)
-         select t.id, t.budget_id, $3, c.id, $5, $6, $7, $8, $9, ${ATTEMPT_FINGERPRINT}
+           (transaction_id, budget_id, rank, ${targetColumn}, confidence, reason, source, provider, model, input_fingerprint)
+         select t.id, t.budget_id, $3, ${target.kind === 'category' ? 'c.id' : 'ta.id'}, $5, $6, $7, $8, $9, ${ATTEMPT_FINGERPRINT}
            from public.transactions t
-           join public.categories c on c.id = $4 and c.budget_id = t.budget_id
-           join public.category_groups g on g.id = c.group_id and g.budget_id = t.budget_id
            left join public.payees p on p.id = t.payee_id and p.budget_id = t.budget_id
            left join public.connection_transactions ct
                   on ct.transaction_id = t.id and ct.budget_id = t.budget_id
-          where t.id = $1 and t.budget_id = $2 and ${ASSIGNABLE}
-         on conflict (transaction_id, rank) do update
-           set category_id = excluded.category_id, confidence = excluded.confidence,
-               reason = excluded.reason, source = excluded.source,
-               provider = excluded.provider, model = excluded.model,
-               input_fingerprint = excluded.input_fingerprint, updated_at = now()
-           where public.category_suggestions.status = 'pending'`,
+           ${source}`,
         [
           transactionId,
           budgetId,
           written + 1,
-          suggestion.categoryId,
+          targetId,
           suggestion.confidence,
           suggestion.reason,
           suggestion.source,
@@ -485,11 +725,6 @@ export async function replaceSuggestions(
       );
       written += inserted.rowCount ?? 0;
     }
-    await client.query(
-      `delete from public.category_suggestions
-        where transaction_id = $1 and rank > $2 and status = 'pending'`,
-      [transactionId, written],
-    );
     return written;
   });
 }

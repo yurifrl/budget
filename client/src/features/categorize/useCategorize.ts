@@ -17,6 +17,7 @@ import { budgetApi, CATEGORIZE_COUNT_LIMIT, useGetCategorizeQueueQuery } from '@
 import { useAppSelector } from '@/state/hooks';
 import { selectActiveBudgetId } from '@/state/ui';
 
+import { queueLeaving } from './accept.logic';
 import { leaveStore } from './leave.store';
 
 type ZeroSync = { budgetId: string; revision: number };
@@ -44,10 +45,12 @@ export function useCategorizeLeft(): number | undefined {
   }, [budgetId, revision, query.data]);
 
   // Rows waiting in the "Leaving uncategorized" strip are still counted by the
-  // server until Done; the header leaves them out, so the badge does too.
+  // server until Done; the header leaves them out, so the badge does too — by
+  // the same rule, so a skipped Jev transfer answer (never in the queue) moves
+  // neither of them.
   const leaving = useSyncExternalStore(
     leaveStore.subscribe,
-    () => (budgetId ? leaveStore.getState().live[budgetId] : undefined)?.length ?? 0,
+    () => (budgetId ? queueLeaving(leaveStore.getState().live[budgetId] ?? []).length : 0),
   );
   if (zeroStillFresh) return 0;
   const left = query.data?.counts.left_to_categorize;

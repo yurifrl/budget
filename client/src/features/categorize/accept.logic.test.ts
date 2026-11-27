@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   acceptIdle,
   acceptReducer,
+  answeredIdSet,
   canUndo,
   filedCountLabel,
   filedLabel,
@@ -10,6 +11,7 @@ import {
   insertBySeq,
   initialAcceptState,
   pendingSkips,
+  queueLeaving,
   sendingCount,
   skippedLabel,
   toastActionable,
@@ -224,6 +226,19 @@ describe('prune and visibility', () => {
     expect(state.hiddenIds.sort()).toEqual(['s1', 't2', 't3']);
   });
 
+  test('a transfer answer stays hidden across a queue re-read that never lists it', () => {
+    // Jev's transfer answers are not in the category queue, so the queue is no
+    // witness for them: they live in their own set, which no queue re-read
+    // touches, and the queue's counts never see them.
+    const state = run([
+      { type: 'acceptStarted', items: [filed('x1')], entry: { ...acceptEntry(1, ['x1']), fromTransfer: true } },
+      { type: 'acceptSucceeded', seq: 1, transactionIds: ['x1'], requestIds: ['x1'], label: 'A1' },
+      { type: 'prune', presentIds: [] },
+    ]);
+    expect(state.transferIds).toEqual(['x1']);
+    expect(state.hiddenIds).toEqual([]);
+  });
+
   test('returns the same state when nothing is dropped', () => {
     const state = run([start(1, 't1'), ok(1, 't1')]);
     expect(acceptReducer(state, { type: 'prune', presentIds: ['t1'] })).toBe(state);
@@ -403,5 +418,44 @@ describe('Done locks the rows it will send', () => {
     const back = state.stack.find((e) => e.seq === 2) as Extract<UndoEntry, { kind: 'skip' }>;
     expect(back.sending).toBeUndefined();
     expect(state.hiddenIds).toContain('s1');
+  });
+});
+
+describe('queue rows and Jev transfer answers hide in their own sets', () => {
+  const transferSkip = (seq: number, id: string) =>
+    ({ ...skipEntry(seq, id), fromTransfer: true }) as Extract<UndoEntry, { kind: 'skip' }>;
+
+  test('refusing an answer moves no queue count: only the transfer list hides it', () => {
+    // W2: the queue's counts are the server's and the queue never listed it, so
+    // the optimistic hide must not touch the set the counter subtracts.
+    let state = run([{ type: 'refuseStarted', ids: ['x1'] }]);
+    expect(state.transferIds).toEqual(['x1']);
+    expect(state.hiddenIds).toEqual([]);
+    state = run([{ type: 'refuseFinished', ids: ['x1'] }], state);
+    expect(state.transferIds).toEqual(['x1']);
+    expect(state.hiddenIds).toEqual([]);
+  });
+
+  test('a failed refusal gives the answer back to both sets', () => {
+    const state = run([{ type: 'refuseStarted', ids: ['x1'] }, { type: 'refuseFailed', ids: ['x1'] }]);
+    expect(state.transferIds).toEqual([]);
+    expect(state.hiddenIds).toEqual([]);
+  });
+
+  test('a skipped queue row hides from the queue; a skipped answer hides from the answers', () => {
+    const state = run([
+      skipStart(1, 'q1'),
+      { type: 'skipStarted', entry: transferSkip(2, 'x1') },
+    ]);
+    expect(state.hiddenIds).toEqual(['q1']);
+    expect(state.transferIds).toEqual(['x1']);
+    // Both lists filter on the union, so neither row shows twice.
+    expect([...answeredIdSet(state)].sort()).toEqual(['q1', 'x1']);
+  });
+
+  test('only the skips the queue counts move the badge (W3)', () => {
+    const state = run([skipStart(1, 'q1'), { type: 'skipStarted', entry: transferSkip(2, 'x1') }]);
+    expect(pendingSkips(state)).toHaveLength(2);
+    expect(queueLeaving(pendingSkips(state)).map((e) => e.item.transactionId)).toEqual(['q1']);
   });
 });

@@ -10,6 +10,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type ViewInsta
 import { tCommon } from '@shared/i18n/common';
 
 import { useGetBudgetsQuery } from '@/budget/data/api';
+import { TransferToast } from '@/features/transfers';
 import { useBudgetShell } from '@/shell/context';
 import { useAppSelector } from '@/state/hooks';
 import { selectActiveBudgetId } from '@/state/ui';
@@ -28,6 +29,7 @@ import { pageKey } from './page.logic';
 import { useBlurAfterPointerPress, useFieldFocused } from './useCategorizeKeys';
 import { useCategorizeRun } from './useCategorizeRun';
 import { useCategorizePage, type CategorizeViewMode } from './useCategorizePage';
+import { TransferSection } from './TransferSection';
 
 /**
  * Keyed by the active budget: switching budget in place (Settings, Open budget)
@@ -47,7 +49,7 @@ function CategorizePage() {
   useBlurAfterPointerPress();
   const fieldFocused = useFieldFocused();
   const counts = page.queue.counts;
-  const run = useCategorizeRun({ budgetId: page.budgetId, onFinished: page.retryQueue });
+  const run = useCategorizeRun({ budgetId: page.budgetId, onFinished: page.refresh });
   // A run uses the budget owner's Jev key, so a member is told to ask them.
   const isOwner = useGetBudgetsQuery().data?.find((row) => row.id === page.budgetId)?.is_owner ?? false;
 
@@ -78,7 +80,7 @@ function CategorizePage() {
           <SettingsCardFailed
             message={t('queue.failed')}
             retryLabel={tCommon('retry')}
-            onRetry={page.retryQueue}
+            onRetry={page.refresh}
           />
         ) : null}
 
@@ -91,6 +93,10 @@ function CategorizePage() {
 
         {page.reloading ? <Text style={styles.note}>{t('queue.updating')}</Text> : null}
         <View pointerEvents={page.reloading ? 'none' : 'auto'} style={page.reloading ? styles.reloading : undefined}>
+
+        {page.view === 'bundles' ? (
+          <TransferSection budgetId={page.budgetId} transfers={page.transfers} isPhone={!shell.isDesktop} />
+        ) : null}
 
         {page.viewModel && page.view === 'bundles' ? (
           <BundlesView
@@ -107,6 +113,8 @@ function CategorizePage() {
             onAcceptAll={() => void page.accept.acceptAll(page.viewModel?.all ?? [])}
             onFileRow={(row, suggestion) => void page.accept.fileRow(row, suggestion)}
             onPickCategory={(row, category) => void page.accept.pickCategory(row, category)}
+            onShowAll={page.loadAllRows}
+            loadingAll={page.growing}
           />
         ) : null}
 
@@ -114,14 +122,20 @@ function CategorizePage() {
           <OneByOneView
             budgetId={page.budgetId}
             flow={page.oneByOne}
-            total={counts?.left_to_categorize ?? 0}
+            queueLeft={counts?.left_to_categorize ?? 0}
+            matcherPairs={page.transfers.matcher.length}
             loadedRows={page.queue.data.rows.length}
           />
         ) : null}
 
         </View>
 
-        {page.view === 'bundles' && page.viewModel && page.viewModel.acceptAllCount === 0 && counts?.left_to_categorize === 0 ? (
+        {page.view === 'bundles' &&
+        page.viewModel &&
+        page.viewModel.acceptAllCount === 0 &&
+        counts?.left_to_categorize === 0 &&
+        page.transfers.items.length === 0 &&
+        page.transfers.matcher.length === 0 ? (
           <Text style={styles.note}>{t('queue.empty')}</Text>
         ) : null}
       </ScrollView>
@@ -134,6 +148,20 @@ function CategorizePage() {
           actionKey={page.view === 'one' && Platform.OS === 'web' && !fieldFocused ? 'Z' : undefined}
           onAction={page.undoLast}
         />
+      ) : null}
+      {/*
+       * The matcher's own toast (linked · Undo) lives at screen level, outside
+       * the scroll: it must stay put while the page scrolls. The shell's
+       * floating + Transaction pill is hidden on this route, so the only thing
+       * it must clear is the accept toast: when both are up, this one goes above
+       * it instead of over it.
+       */}
+      {page.transfers.matcherState.toast ? (
+        <View
+          pointerEvents="box-none"
+          style={[styles.toastHost, page.accept.state.toast ? styles.toastHostStacked : null]}>
+          <TransferToast toast={page.transfers.matcherState.toast} />
+        </View>
       ) : null}
     </View>
   );
@@ -173,7 +201,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 22, paddingBottom: 88, gap: 14, width: '100%', maxWidth: 1400, alignSelf: 'center' },
   head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' },
-  headText: { gap: 3 },
+  headText: { gap: 3, flexBasis: 260, flexGrow: 1, minWidth: 0 },
   title: { color: colors.text, fontSize: 24, fontWeight: '700', letterSpacing: -0.5 },
   subtitle: { color: colors.muted, fontSize: 12.5 },
   segments: {
@@ -191,4 +219,8 @@ const styles = StyleSheet.create({
   segmentTextActive: { color: colors.white },
   reloading: { opacity: 0.45 },
   note: { color: colors.muted, fontSize: 13, paddingVertical: 8 },
+  /** The matcher's toast host: full-bleed, so the toast keeps its own placement. */
+  toastHost: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  /** Both toasts at once: the matcher's goes above the accept one (≈38 + 18 gap) instead of over it. */
+  toastHostStacked: { bottom: 64 },
 });

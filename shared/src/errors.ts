@@ -98,6 +98,12 @@ export const SPECIFIC_ERROR_CODES = [
   // A run needs between one and JEV_MAX_OPTIONS assignable categories.
   'categorize_no_categories',
   'categorize_too_many_categories',
+  /** The rolling hour's sending allowance is used up. */
+  'categorize_hourly_limit',
+  /** A Jev transfer suggestion's other leg is gone (it was linked or deleted since). */
+  'categorize_transfer_pair_gone',
+  /** The row was already answered "not a transfer" for that account. */
+  'categorize_transfer_refused',
   // Budget: accounts, transactions, transfers, repeats.
   'cannot_transfer_to_same_account',
   'transfer_account_not_in_budget',

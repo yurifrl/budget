@@ -42,6 +42,12 @@ export type UndoEntry =
       /** Known up front for a single row, filled from the server's answer for batches. */
       transactionIds: string[];
       confirmed: boolean;
+      /**
+       * The rows are Jev transfer answers, not category-queue rows: they are
+       * never in the category queue, so its re-read can tell nothing about them
+       * and must not un-hide them.
+       */
+      fromTransfer?: boolean;
     }
   | {
       seq: number;
@@ -51,6 +57,11 @@ export type UndoEntry =
       meta: LeavingMeta;
       /** Done (or "Send and leave") reached for it: Undo is off, the request is queued or out. */
       sending?: boolean;
+      /**
+       * The row is a Jev transfer answer, not a category-queue row: it is never in
+       * the category queue, so the queue re-read can tell nothing about it.
+       */
+      fromTransfer?: boolean;
     };
 
 export interface ToastState {
@@ -61,8 +72,15 @@ export interface ToastState {
 }
 
 export interface AcceptState {
-  /** Rows hidden from the queue while a request is in flight, confirmed or a skip is pending. */
+  /** Queue rows hidden while a request is in flight, confirmed or a skip is pending. */
   hiddenIds: string[];
+  /**
+   * Jev's transfer answers hidden from Jev's own lists (refused or skipped, in
+   * flight or landed). They are never in the category queue, so no queue count
+   * and no queue re-read may see them: hiding one there subtracted a row the
+   * queue's counts still listed.
+   */
+  transferIds: string[];
   /** Rows of the requests still in flight (single-row filings may overlap). */
   pending: FiledItem[];
   /** Requests in flight: accepts, skip sends and undos. Idle at 0. */
@@ -83,6 +101,7 @@ export interface AcceptState {
 
 export const initialAcceptState: AcceptState = {
   hiddenIds: [],
+  transferIds: [],
   pending: [],
   busy: 0,
   toast: null,
@@ -103,6 +122,12 @@ export type AcceptAction =
       error?: string;
     }
   | { type: 'acceptFailed'; seq: number; requestIds: string[]; error: string }
+  /** A Jev transfer answer is hidden while its refusal is on its way: no stack entry, no toast. */
+  | { type: 'refuseStarted'; ids: string[] }
+  /** The refusal landed: the row stays hidden from Jev's lists until they are re-read. */
+  | { type: 'refuseFinished'; ids: string[] }
+  /** The refusal failed: the row comes back. */
+  | { type: 'refuseFailed'; ids: string[] }
   /** A skip begins: the row is hidden and the toast offers Undo; nothing is sent yet. */
   | { type: 'skipStarted'; entry: Extract<UndoEntry, { kind: 'skip' }> }
   /** Undone (or cancelled) inside its window: the row comes back. */
@@ -148,6 +173,26 @@ function without(ids: readonly string[], remove: readonly string[]): string[] {
 
 function union(ids: readonly string[], add: readonly string[]): string[] {
   return [...new Set([...ids, ...add])];
+}
+
+/**
+ * Hide rows in the set their list belongs to: a queue row leaves the queue's
+ * lists and counts, a Jev transfer answer leaves Jev's lists only.
+ */
+function hide(
+  state: AcceptState,
+  ids: readonly string[],
+  fromTransfer: boolean | undefined,
+): AcceptState {
+  if (ids.length === 0) return state;
+  return fromTransfer
+    ? { ...state, transferIds: union(state.transferIds, ids) }
+    : { ...state, hiddenIds: union(state.hiddenIds, ids) };
+}
+
+/** Put rows back in whichever set hid them: one row is only ever in one. */
+function release(state: AcceptState, ids: readonly string[]): AcceptState {
+  return { ...state, hiddenIds: without(state.hiddenIds, ids), transferIds: without(state.transferIds, ids) };
 }
 
 function settle(pending: FiledItem[], requestIds: readonly string[]): FiledItem[] {
@@ -201,69 +246,85 @@ function toastAfterRemoval(state: AcceptState, stack: UndoEntry[], removedSeq: n
 export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptState {
   switch (action.type) {
     case 'acceptStarted':
-      return {
-        ...state,
-        hiddenIds: union(state.hiddenIds, action.items.map((item) => item.transactionId)),
-        pending: [...state.pending, ...action.items],
-        busy: state.busy + 1,
-        stack: [...state.stack, action.entry],
-        toast: null,
-        error: null,
-      };
+      return hide(
+        {
+          ...state,
+          pending: [...state.pending, ...action.items],
+          busy: state.busy + 1,
+          stack: [...state.stack, action.entry],
+          toast: null,
+          error: null,
+        },
+        action.items.map((item) => item.transactionId),
+        action.entry.fromTransfer,
+      );
     case 'acceptSucceeded': {
+      const sent = state.stack.find((entry) => entry.kind === 'accept' && entry.seq === action.seq);
       const stack = state.stack.map((entry) =>
         entry.kind === 'accept' && entry.seq === action.seq
           ? { ...entry, label: action.label, transactionIds: action.transactionIds, confirmed: true }
           : entry,
       );
       const latest = stack[stack.length - 1]?.seq === action.seq;
-      return {
-        ...state,
-        hiddenIds: union(state.hiddenIds, action.transactionIds),
-        pending: settle(state.pending, action.requestIds),
-        busy: less(state.busy),
-        stack,
-        // A late answer for an earlier press leaves the later press's toast alone.
-        toast: latest ? { label: action.label, seq: action.seq } : state.toast,
-        error: action.error ?? null,
-      };
+      return hide(
+        {
+          ...state,
+          pending: settle(state.pending, action.requestIds),
+          busy: less(state.busy),
+          stack,
+          // A late answer for an earlier press leaves the later press's toast alone.
+          toast: latest ? { label: action.label, seq: action.seq } : state.toast,
+          error: action.error ?? null,
+        },
+        action.transactionIds,
+        sent?.fromTransfer,
+      );
     }
     case 'acceptFailed': {
       const stack = state.stack.filter((entry) => entry.seq !== action.seq);
-      return {
-        ...state,
-        hiddenIds: without(state.hiddenIds, action.requestIds),
-        pending: settle(state.pending, action.requestIds),
-        busy: less(state.busy),
-        stack,
-        toast: toastAfterRemoval(state, stack, action.seq),
-        error: action.error,
-      };
+      return release(
+        {
+          ...state,
+          pending: settle(state.pending, action.requestIds),
+          busy: less(state.busy),
+          stack,
+          toast: toastAfterRemoval(state, stack, action.seq),
+          error: action.error,
+        },
+        action.requestIds,
+      );
     }
+    case 'refuseStarted':
+      return hide({ ...state, busy: state.busy + 1 }, action.ids, true);
+    case 'refuseFinished':
+      return { ...state, busy: less(state.busy) };
+    case 'refuseFailed':
+      return { ...release(state, action.ids), busy: less(state.busy) };
     case 'skipStarted':
-      return {
-        ...state,
-        hiddenIds: union(state.hiddenIds, [action.entry.item.transactionId]),
-        stack: [...state.stack, action.entry],
-        toast: toastFor(action.entry),
-        error: null,
-      };
-    case 'skipsRestored':
-      return {
-        ...state,
-        hiddenIds: union(state.hiddenIds, action.entries.map((e) => e.item.transactionId)),
-        stack: [...action.entries, ...state.stack],
-      };
+      return hide(
+        { ...state, stack: [...state.stack, action.entry], toast: toastFor(action.entry), error: null },
+        [action.entry.item.transactionId],
+        action.entry.fromTransfer,
+      );
+    case 'skipsRestored': {
+      const restored = { ...state, stack: [...action.entries, ...state.stack] };
+      return action.entries.reduce(
+        (next, entry) => hide(next, [entry.item.transactionId], entry.fromTransfer),
+        restored,
+      );
+    }
     case 'acceptEmpty': {
       const stack = state.stack.filter((entry) => entry.seq !== action.seq);
-      return {
-        ...state,
-        hiddenIds: without(state.hiddenIds, action.requestIds),
-        pending: settle(state.pending, action.requestIds),
-        busy: less(state.busy),
-        stack,
-        toast: toastAfterRemoval(state, stack, action.seq),
-      };
+      return release(
+        {
+          ...state,
+          pending: settle(state.pending, action.requestIds),
+          busy: less(state.busy),
+          stack,
+          toast: toastAfterRemoval(state, stack, action.seq),
+        },
+        action.requestIds,
+      );
     }
     case 'skipsLocked': {
       const locked = new Set(action.seqs);
@@ -289,12 +350,14 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
       if (locked) return state;
       const gone = state.stack.find((e) => e.kind === 'skip' && e.item.transactionId === action.transactionId);
       const stack = state.stack.filter((e) => e !== gone);
-      return {
-        ...state,
-        hiddenIds: without(state.hiddenIds, [action.transactionId]),
-        stack,
-        toast: gone ? toastAfterRemoval(state, stack, gone.seq) : state.toast,
-      };
+      return release(
+        {
+          ...state,
+          stack,
+          toast: gone ? toastAfterRemoval(state, stack, gone.seq) : state.toast,
+        },
+        [action.transactionId],
+      );
     }
     case 'skipSending': {
       const entry = state.stack.find((e) => e.seq === action.seq);
@@ -312,25 +375,29 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
     case 'skipDone':
       return { ...state, pending: settle(state.pending, [action.requestId]), busy: less(state.busy) };
     case 'skipFailed':
-      return {
-        ...state,
-        hiddenIds: without(state.hiddenIds, [action.requestId]),
-        pending: settle(state.pending, [action.requestId]),
-        busy: less(state.busy),
-        error: action.error,
-        reverted: [...state.reverted, action.requestId],
-      };
+      return release(
+        {
+          ...state,
+          pending: settle(state.pending, [action.requestId]),
+          busy: less(state.busy),
+          error: action.error,
+          reverted: [...state.reverted, action.requestId],
+        },
+        [action.requestId],
+      );
     case 'skipDropped': {
       const gone = state.stack.find((e) => e.kind === 'skip' && e.item.transactionId === action.transactionId);
       if (!gone) return state;
       const stack = state.stack.filter((e) => e !== gone);
-      return {
-        ...state,
-        hiddenIds: without(state.hiddenIds, [action.transactionId]),
-        stack,
-        toast: toastAfterRemoval(state, stack, gone.seq),
-        reverted: [...state.reverted, action.transactionId],
-      };
+      return release(
+        {
+          ...state,
+          stack,
+          toast: toastAfterRemoval(state, stack, gone.seq),
+          reverted: [...state.reverted, action.transactionId],
+        },
+        [action.transactionId],
+      );
     }
     case 'undoClaimed': {
       const stack = state.stack.filter((entry) => entry.seq !== action.seq);
@@ -339,14 +406,16 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
     case 'undoStarted':
       return { ...state, busy: state.busy + 1, error: null };
     case 'undoFinished':
-      return {
-        ...state,
-        hiddenIds: without(state.hiddenIds, action.restoredIds),
-        busy: less(state.busy),
-        stack: action.remaining ? insertBySeq(state.stack, action.remaining) : state.stack,
-        toast: action.tone === 'ok' ? { label: action.message, seq: 0 } : null,
-        error: action.tone === 'problem' ? action.message : null,
-      };
+      return release(
+        {
+          ...state,
+          busy: less(state.busy),
+          stack: action.remaining ? insertBySeq(state.stack, action.remaining) : state.stack,
+          toast: action.tone === 'ok' ? { label: action.message, seq: 0 } : null,
+          error: action.tone === 'problem' ? action.message : null,
+        },
+        action.restoredIds,
+      );
     case 'notice':
       return { ...state, toast: { label: action.label, seq: 0 } };
     case 'dismissToast':
@@ -360,7 +429,9 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
       const pendingSkips = new Set(
         state.stack.flatMap((entry) => (entry.kind === 'skip' ? [entry.item.transactionId] : [])),
       );
-      const hiddenIds = state.hiddenIds.filter((id) => present.has(id) || inFlight.has(id) || pendingSkips.has(id));
+      const hiddenIds = state.hiddenIds.filter(
+        (id) => present.has(id) || inFlight.has(id) || pendingSkips.has(id),
+      );
       return hiddenIds.length === state.hiddenIds.length ? state : { ...state, hiddenIds };
     }
     case 'reset':
@@ -368,9 +439,19 @@ export function acceptReducer(state: AcceptState, action: AcceptAction): AcceptS
   }
 }
 
-/** Rows hidden from the visible queue (optimistically filed or pending a skip). */
+/** Queue rows hidden from the queue's own lists and counts (filed, or a skip pending). */
 export function hiddenIdSet(state: Pick<AcceptState, 'hiddenIds'>): ReadonlySet<string> {
   return new Set(state.hiddenIds);
+}
+
+/**
+ * Every row answered optimistically, queue rows and Jev's transfer answers
+ * alike: what a list of rows must leave out whatever list it is.
+ */
+export function answeredIdSet(state: Pick<AcceptState, 'hiddenIds' | 'transferIds'>): ReadonlySet<string> {
+  return state.transferIds.length === 0
+    ? new Set(state.hiddenIds)
+    : new Set([...state.hiddenIds, ...state.transferIds]);
 }
 
 export function visibleRows<T extends { transaction_id: string }>(
@@ -419,6 +500,15 @@ export function toastActionable(state: Pick<AcceptState, 'toast' | 'stack'>): bo
 /** The skips waiting in the strip for Done, oldest first. */
 export function pendingSkips(state: Pick<AcceptState, 'stack'>): SkipEntry[] {
   return state.stack.filter((entry): entry is SkipEntry => entry.kind === 'skip');
+}
+
+/**
+ * The skips that move the queue's count: a Jev transfer answer is never in the
+ * category queue, so skipping it changes no "left to categorize" number. The
+ * header, the badge and the strip's own count all read this one rule.
+ */
+export function queueLeaving(entries: readonly SkipEntry[]): SkipEntry[] {
+  return entries.filter((entry) => !entry.fromTransfer);
 }
 
 /** "Uber · –R$ 18,90 → Transport" for a single filed row. */

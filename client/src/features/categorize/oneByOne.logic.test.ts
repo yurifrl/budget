@@ -2,15 +2,22 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   dropFiled,
+  entriesOf,
+  filedLine,
+  filedLineOf,
   filedToText,
   orderQueue,
+  paneLine,
   progressLabel,
   progressView,
   noSuggestionHint,
+  queueCounterLabel,
   queueRowSubline,
   recordFiled,
   remainingCount,
   resolveFocus,
+  transferFiledTo,
+  transferSubline,
 } from './oneByOne.logic';
 
 const sugg = (confidence: number, name = 'Fuel') => ({
@@ -111,29 +118,97 @@ describe('noSuggestionHint', () => {
 });
 
 describe('filed lines', () => {
-  const entry = (id: string, text = 'filed to Fuel') => ({ row: { transaction_id: id } as never, text });
+  const entry = (id: string, text = 'filed to Fuel') =>
+    filedLine({ transaction_id: id, payee: `payee ${id}`, amount: -100, date: '2026-11-21' }, text);
 
   test('newest last; filing the same row again replaces its line', () => {
     const list = recordFiled(recordFiled([], entry('a')), entry('b'));
-    expect(list.map((e) => e.row.transaction_id)).toEqual(['a', 'b']);
+    expect(list.map((e) => e.transaction_id)).toEqual(['a', 'b']);
     const again = recordFiled(list, entry('a', 'filed to Travel'));
-    expect(again.map((e) => e.row.transaction_id)).toEqual(['b', 'a']);
+    expect(again.map((e) => e.transaction_id)).toEqual(['b', 'a']);
     expect(again[1]!.text).toBe('filed to Travel');
   });
 
   test('only the last few are kept', () => {
     let list = [] as ReturnType<typeof recordFiled>;
     for (let i = 0; i < 5; i += 1) list = recordFiled(list, entry(`r${i}`), 3);
-    expect(list.map((e) => e.row.transaction_id)).toEqual(['r2', 'r3', 'r4']);
+    expect(list.map((e) => e.transaction_id)).toEqual(['r2', 'r3', 'r4']);
   });
 
   test('rows that came back lose their line', () => {
     const list = [entry('a'), entry('b'), entry('c')];
-    expect(dropFiled(list, ['b']).map((e) => e.row.transaction_id)).toEqual(['a', 'c']);
+    expect(dropFiled(list, ['b']).map((e) => e.transaction_id)).toEqual(['a', 'c']);
     expect(dropFiled(list, [])).toEqual(list);
   });
 
   test('the line names the category', () => {
     expect(filedToText('Fuel')).toBe('filed to Fuel');
+  });
+});
+
+describe('transfer lines in the pane', () => {
+  const item = {
+    transaction_id: 't1',
+    date: '2026-11-21',
+    amount: -4200,
+    account_id: 'a-checking',
+    account_name: 'Checking',
+    payee_id: null,
+    payee: 'Landlord',
+    confidence: 0.83,
+    transferAccountId: 'a-savings',
+    transferAccountName: 'Savings',
+    side: 'to' as const,
+    onBudget: true,
+  };
+  const asRow = row('r1', [0.4]) as never;
+
+  test('Jev’s answers lead the list, the queue rows follow in their own order', () => {
+    // The caller hands in rows already ordered; the answers just lead them.
+    const entries = entriesOf([asRow, row('r2', [0.9]) as never], [item]);
+    expect(entries.map((entry) => entry.transaction_id)).toEqual(['t1', 'r1', 'r2']);
+    expect(entries[0]!.kind).toBe('transfer');
+    expect(entries[1]!.kind).toBe('queue');
+  });
+
+  test('a transfer line names the account the money went to and its certainty', () => {
+    const line = paneLine(entriesOf([], [item])[0]!, (iso) => `date ${iso}`);
+    expect(line).toEqual({
+      payee: 'Landlord',
+      subline: 'date 2026-11-21 · Transfer to Savings',
+      amount: -4200,
+      confidence: 0.83,
+    });
+    expect(transferSubline('Transfer to Savings', '21 Nov')).toBe('21 Nov · Transfer to Savings');
+  });
+
+  test('a filed transfer leaves the same kind of dimmed line as a filed category', () => {
+    const transferLine = filedLineOf(entriesOf([], [item])[0]!, transferFiledTo('Savings'));
+    expect(transferLine).toEqual({
+      transaction_id: 't1',
+      payee: 'Landlord',
+      amount: -4200,
+      date: '2026-11-21',
+      text: 'Transfer · Savings',
+    });
+  });
+
+  test('a row already answered as a transfer is not listed twice while the queue catches up', () => {
+    const entries = entriesOf([asRow, row('t1', [0.9]) as never], [item]);
+    expect(entries.map((entry) => entry.transaction_id)).toEqual(['t1', 'r1']);
+    expect(entries.filter((entry) => entry.transaction_id === 't1')).toHaveLength(1);
+    expect(entries[0]!.kind).toBe('transfer');
+  });
+});
+
+describe('queueCounterLabel', () => {
+  test('the queue count alone when Jev lists no answers', () => {
+    expect(queueCounterLabel(0, 0)).toBe('0 left');
+    expect(queueCounterLabel(12, 0)).toBe('12 left');
+  });
+
+  test('each number agrees with its own noun', () => {
+    expect(queueCounterLabel(12, 1)).toBe('12 left · 1 transfer answer');
+    expect(queueCounterLabel(0, 2)).toBe('0 left · 2 transfer answers');
   });
 });

@@ -4,8 +4,9 @@
  * field has focus; everything the keys mean lives here.
  *
  * 1/2/3 file with that chip, Enter files the top chip, S leaves the row
- * uncategorized (pending for 10 s, so it can be undone), / focuses the category
- * search, Z undoes the last action. Nothing else is a shortcut: other letters do
+ * uncategorized (pending for 10 s, so it can be undone), N says a focused Jev
+ * transfer answer is not a transfer, / focuses the category search, Z undoes
+ * the last action. Nothing else is a shortcut: other letters do
  * nothing, so typing a category name never skips or files anything; only "/"
  * opens the search. While a field is focused every key belongs to the field (S,
  * Z and the digits type), except Escape, which leaves the field.
@@ -15,6 +16,8 @@ export type CategorizeKeyAction =
   | { kind: 'file'; index: number }
   | { kind: 'fileTop' }
   | { kind: 'skip' }
+  /** The focused line is a Jev transfer answer: say it is not a transfer. */
+  | { kind: 'notTransfer' }
   | { kind: 'focusSearch' }
   | { kind: 'undo' }
   /** Escape in a field: leave it and return to the shortcuts. */
@@ -26,6 +29,8 @@ export type KeyScope = 'row' | 'undoOnly';
 export interface CategorizeKeyContext {
   /** Suggestion chips on the focused row (0..3). */
   suggestions: number;
+  /** The focused line is a Jev transfer answer (its answers are accept / not a transfer / skip). */
+  transfer?: boolean;
   /** A text input has focus. */
   typing: boolean;
   /** The undo toast is up (something was accepted). */
@@ -46,6 +51,9 @@ export function categorizeKeyAction(key: string, ctx: CategorizeKeyContext): Cat
   switch (key) {
     case 'Enter':
       return ctx.suggestions > 0 && !ctx.onControl ? { kind: 'fileTop' } : null;
+    case 'n':
+    case 'N':
+      return ctx.transfer ? { kind: 'notTransfer' } : null;
     case 's':
     case 'S':
       return { kind: 'skip' };

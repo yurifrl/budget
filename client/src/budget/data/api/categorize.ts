@@ -18,6 +18,8 @@ import {
   categorizeSettingsGet,
   categorizeSettingsSet,
   categorizeSkip,
+  categorizeTransferRefuse,
+  categorizeTransferSuggestions,
   categorizeUndo,
 } from '@shared/contracts/categorize';
 import type { OperationOutput } from '@shared/operation-contract';
@@ -33,6 +35,11 @@ export type CategorizeQueueState = CategorizeQueueRow['state'];
 export type CategorizeSuggestion = CategorizeQueueRow['suggestions'][number];
 export type CategorizeMerchantPanel = NonNullable<CategorizeQueueRow['merchant']>;
 export type CategorizeSettings = OperationOutput<typeof categorizeSettingsGet>;
+export type CategorizeTransfers = OperationOutput<typeof categorizeTransferSuggestions>;
+/** One account-pair group of Jev's transfer answers, and one of its rows. */
+export type CategorizeTransferGroup = CategorizeTransfers['groups'][number];
+export type CategorizeTransferRow = CategorizeTransferGroup['rows'][number];
+export type CategorizeTransferRefusal = OperationOutput<typeof categorizeTransferRefuse>;
 export type CategorizeAcceptResult = OperationOutput<typeof categorizeAccept>;
 export type CategorizeDecisionItem = CategorizeAcceptResult['items'][number];
 export type CategorizeUndoResult = OperationOutput<typeof categorizeUndo>;
@@ -67,6 +74,22 @@ export function queueProvidedTags(
   return (badge ? ['Categorize' as const] : CATEGORIZE_QUEUE_TAGS).map((type) => ({ type, id: budgetId })); // eslint-disable-line budget-i18n/no-untranslated-string -- RTK cache tag name, never rendered
 }
 
+/** The tags a decision on the Categorize page invalidates (RTK cache names, never rendered). */
+const CATEGORIZE_PAGE_TAGS = ['Categorize', 'Transactions', 'CategorizeRun'] as const; // eslint-disable-line budget-i18n/no-untranslated-string -- RTK cache tag names, never rendered
+
+/**
+ * Every read the Categorize page and its badges show: the queue (and its
+ * counts), Jev's transfer answers, the matcher's pairs, the run card and the
+ * rail badge. A decision changes what waits, so it invalidates all of them and
+ * no view is left showing the state before the press.
+ */
+export function categorizePageTags(budgetId: string): {
+  type: 'Categorize' | 'Transactions' | 'CategorizeRun';
+  id: string;
+}[] {
+  return CATEGORIZE_PAGE_TAGS.map((type) => ({ type, id: budgetId }));
+}
+
 export const categorizeApi = transfersApi.injectEndpoints({
   endpoints: (b) => ({
     /** One queue page; counts and bundles cover the whole queue. `bundle` pages one bundle's rows. */
@@ -91,27 +114,56 @@ export const categorizeApi = transfersApi.injectEndpoints({
           bundle_key: bundleKey,
           expected_count: expectedCount,
         }),
-      invalidatesTags: (_r, _e, { budgetId }) => [
-        { type: 'Categorize', id: budgetId },
-        { type: 'Transactions', id: budgetId },
-      ],
+      invalidatesTags: (_r, _e, { budgetId }) => categorizePageTags(budgetId),
     }),
 
     /** Reverse a recorded accept; skips are never touched. */
     undoCategorize: b.mutation<CategorizeUndoResult, BudgetScope & { transactionIds: string[] }>({
       query: ({ budgetId, transactionIds }) =>
         contractRequest(categorizeUndo, { budget_id: budgetId, transaction_ids: transactionIds }),
-      invalidatesTags: (_r, _e, { budgetId }) => [
+      invalidatesTags: (_r, _e, { budgetId }) => categorizePageTags(budgetId),
+    }),
+
+    /**
+     * Leave a row without a category; the engine never re-classifies it. Both the
+     * queue and Jev's transfer answers are refreshed: a row skipped as a transfer
+     * leaves that list too.
+     */
+    skipCategorize: b.mutation<CategorizeSkipResult, BudgetScope & { transactionId: string }>({
+      query: ({ budgetId, transactionId }) =>
+        contractRequest(categorizeSkip, { budget_id: budgetId, transaction_id: transactionId }),
+      invalidatesTags: (_r, _e, { budgetId }) => categorizePageTags(budgetId),
+    }),
+
+    /**
+     * Jev's transfer answers, grouped by the account they name and by direction.
+     * A row here is never in the category queue: it is answered (or refused) as a
+     * transfer, not filed under a category.
+     */
+    getCategorizeTransfers: b.query<CategorizeTransfers, BudgetScope>({
+      query: ({ budgetId }) => contractRequest(categorizeTransferSuggestions, { budget_id: budgetId }),
+      providesTags: (_r, _e, { budgetId }) => [
         { type: 'Categorize', id: budgetId },
         { type: 'Transactions', id: budgetId },
       ],
     }),
 
-    /** Leave a queue row without a category; the engine never re-classifies it. */
-    skipCategorize: b.mutation<CategorizeSkipResult, BudgetScope & { transactionId: string }>({
-      query: ({ budgetId, transactionId }) =>
-        contractRequest(categorizeSkip, { budget_id: budgetId, transaction_id: transactionId }),
-      invalidatesTags: (_r, _e, { budgetId }) => [{ type: 'Categorize', id: budgetId }],
+    /**
+     * "Not a transfer" for one row and one account: the pair is recorded so a
+     * later run never offers that account again, and an outflow goes back to the
+     * category side of the page.
+     */
+    refuseCategorizeTransfer: b.mutation<
+      CategorizeTransferRefusal,
+      BudgetScope & { transactionId: string; transferAccountId: string }
+    >({
+      query: ({ budgetId, transactionId, transferAccountId }) =>
+        contractRequest(categorizeTransferRefuse, {
+          budget_id: budgetId,
+          transaction_id: transactionId,
+          transfer_account_id: transferAccountId,
+        }),
+      invalidatesTags: (_r, _e, { budgetId }) => categorizePageTags(budgetId),
     }),
 
     getCategorizeSettings: b.query<CategorizeSettings, BudgetScope>({
@@ -138,9 +190,13 @@ export const categorizeApi = transfersApi.injectEndpoints({
       providesTags: (_r, _e, { budgetId }) => [{ type: 'CategorizeRun', id: budgetId }],
     }),
 
-    /** Queue a run; while one is in flight the server answers that same run. */
-    startCategorizeRun: b.mutation<CategorizeRunStatus, BudgetScope>({
-      query: ({ budgetId }) => contractRequest(categorizeRunStart, { budget_id: budgetId }),
+    /**
+     * Queue a run for `count` transactions (or everything waiting); while one is
+     * in flight the server answers that same run.
+     */
+    startCategorizeRun: b.mutation<CategorizeRunStatus, BudgetScope & { count: 'all' | number }>({
+      query: ({ budgetId, count }) =>
+        contractRequest(categorizeRunStart, { budget_id: budgetId, count }),
       invalidatesTags: (_r, _e, { budgetId }) => [
         { type: 'CategorizeRun', id: budgetId },
         { type: 'Categorize', id: budgetId },

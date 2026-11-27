@@ -98,6 +98,18 @@ const MIGRATION_SIGNATURES: Record<string, string | readonly string[]> = {
   // re-creates it (a previous release booting after this one re-runs its 0109),
   // the next boot unmarks 0127 and drops the table again.
   '0127_drop_ai_credentials.sql': 'absent:public.ai_credentials',
+  '0129_category_suggestions_transfer_target.sql': [
+    'column:public.category_suggestions.transfer_account_id',
+    'column:public.categorize_decisions.transfer_account_id',
+  ],
+  '0130_categorize_transfer_refusals.sql': [
+    'table:public.categorize_transfer_refusals',
+    'column:public.categorize_decisions.prev_marks',
+  ],
+  '0131_categorize_hourly_calls.sql': [
+    'column:public.categorize_attempts.hour_calls',
+    'column:public.categorize_attempts.hour_started_at',
+  ],
 };
 
 /**

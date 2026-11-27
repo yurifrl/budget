@@ -8,6 +8,7 @@ import type { CategorizeCounts, CategorizeQueueRow } from '@/budget/data/api';
 
 import { t } from './i18n';
 import { manualStateLabel } from './queue.logic';
+import { transferHeading, type TransferItem } from './transfer.logic';
 
 /** The row's best suggestion confidence; -1 when it has none. */
 function topConfidence(row: Pick<CategorizeQueueRow, 'suggestions'>): number {
@@ -83,6 +84,18 @@ export function progressLabel(progress: ProgressView): string {
   return t('one.progress', { position: progress.position, total: progress.total });
 }
 
+/**
+ * The pane's counter: the queue's own rows still to answer and, beside them,
+ * the transfer answers its read lists. Both numbers come from their reads, so
+ * the counter always adds what the header adds; each names its own noun, since
+ * the catalog pluralizes on one `count` per message.
+ */
+export function queueCounterLabel(queueLeft: number, answers: number): string {
+  const left = t('one.queueLeft', { count: queueLeft });
+  if (answers <= 0) return left;
+  return t('one.queueLeftMixed', { left, answers: t('queue.answers', { count: answers }) });
+}
+
 /** The second line of a queue-pane row: its date and the best category or why it has none. */
 export function queueRowSubline(
   row: Pick<CategorizeQueueRow, 'suggestions' | 'state'>,
@@ -91,6 +104,74 @@ export function queueRowSubline(
   const top = row.suggestions[0];
   const what = top ? top.category_name : manualStateLabel(row.state);
   return what ? `${formattedDate} · ${what}` : formattedDate;
+}
+
+/**
+ * One line of the pane: a queue row, or a Jev transfer answer. Both carry the
+ * transaction's id, so focus resolution and the filed lines work on either.
+ */
+export type OneEntry =
+  | { kind: 'queue'; transaction_id: string; row: CategorizeQueueRow }
+  | { kind: 'transfer'; transaction_id: string; item: TransferItem };
+
+/**
+ * The pane's order: Jev's transfer answers first (highest confidence first, so
+ * the surest money movement is answered before the queue), then the queue rows
+ * in their own order. Stable for a re-read of the same data.
+ */
+export function entriesOf(
+  rows: readonly CategorizeQueueRow[],
+  transfers: readonly TransferItem[],
+): OneEntry[] {
+  const surest = [...transfers].sort((a, b) => b.confidence - a.confidence);
+  // The server answers a row as a transfer OR as a category, never both; a
+  // stale read of the other list (refetched a moment later) must not list it
+  // twice, and the transfer answer is the more specific one.
+  const answered = new Set(surest.map((item) => item.transaction_id));
+  return [
+    ...surest.map((item): OneEntry => ({ kind: 'transfer', transaction_id: item.transaction_id, item })),
+    ...rows
+      .filter((row) => !answered.has(row.transaction_id))
+      .map((row): OneEntry => ({ kind: 'queue', transaction_id: row.transaction_id, row })),
+  ];
+}
+
+/** The second line of a transfer line: its date and the account it names. */
+export function transferSubline(heading: string, formattedDate: string): string {
+  return `${formattedDate} · ${heading}`;
+}
+
+/** "Transfer · Savings" for the dimmed line a filed transfer leaves behind. */
+export function transferFiledTo(accountName: string): string {
+  return t('transfer.filedTo', { account: accountName });
+}
+
+/**
+ * What a pane line shows: the payee, the second line, the amount and the
+ * certainty to show beside it (null when the line has none to show). The date
+ * formatter comes in so a pure test can pin the sentence without a UI provider.
+ */
+export function paneLine(
+  entry: OneEntry,
+  formatDate: (isoDate: string) => string,
+): { payee: string; subline: string; amount: number; confidence: number | null } {
+  if (entry.kind === 'transfer') {
+    const { item } = entry;
+    return {
+      payee: item.payee.trim() || t('row.unnamed'),
+      subline: transferSubline(transferHeading(item), formatDate(item.date)),
+      amount: item.amount,
+      confidence: item.confidence,
+    };
+  }
+  const { row } = entry;
+  const top = row.suggestions[0];
+  return {
+    payee: row.payee?.trim() || row.raw_bank_description?.trim() || t('row.unnamed'),
+    subline: queueRowSubline(row, formatDate(row.date)),
+    amount: row.amount,
+    confidence: top ? top.confidence : null,
+  };
 }
 
 /**
@@ -108,9 +189,19 @@ export function keyHint(index: number): string {
   return String(index + 1);
 }
 
-/** A row this visit filed or left out: it stays in the queue pane as a dimmed "✓ filed to X" line. */
+/**
+ * A line this visit filed or left out: it stays in the queue pane as a dimmed
+ * "✓ filed to X" line. Display fields only, so a transfer answer (which is not
+ * a queue row) leaves the same kind of line as a category filing.
+ */
 export interface FiledEntry {
-  row: CategorizeQueueRow;
+  transaction_id: string;
+  /** The payee as the pane writes it; null when the row has none. */
+  payee: string | null;
+  /** Integer milliunits. */
+  amount: number;
+  /** YYYY-MM-DD. */
+  date: string;
   /** "filed to Transport" / "left uncategorized", already translated. */
   text: string;
 }
@@ -118,19 +209,51 @@ export interface FiledEntry {
 /** Filed lines kept for the visit (the oldest scroll away first). */
 export const FILED_KEPT = 30;
 
-/** Add (or replace) the line for `row`, newest last, bounded. */
+/** The dimmed line a finished pane line leaves behind: a filing, a transfer, a skip. */
+export function filedLine(
+  source: Pick<CategorizeQueueRow, 'transaction_id' | 'payee' | 'amount' | 'date'> & {
+    raw_bank_description?: string | null;
+  },
+  text: string,
+): FiledEntry {
+  return {
+    transaction_id: source.transaction_id,
+    payee: source.payee?.trim() || source.raw_bank_description?.trim() || null,
+    amount: source.amount,
+    date: source.date,
+    text,
+  };
+}
+
+/** Add (or replace) the line for one transaction, newest last, bounded. */
 export function recordFiled(entries: readonly FiledEntry[], entry: FiledEntry, keep = FILED_KEPT): FiledEntry[] {
-  const next = entries.filter((e) => e.row.transaction_id !== entry.row.transaction_id);
+  const next = entries.filter((e) => e.transaction_id !== entry.transaction_id);
   next.push(entry);
   return next.slice(-keep);
+}
+
+/** The dimmed line one pane entry leaves behind, whichever kind it is. */
+export function filedLineOf(entry: OneEntry, text: string): FiledEntry {
+  return entry.kind === 'transfer'
+    ? filedLine(
+        {
+          transaction_id: entry.item.transaction_id,
+          payee: entry.item.payee,
+          amount: entry.item.amount,
+          date: entry.item.date,
+        },
+        text,
+      )
+    : filedLine(entry.row, text);
 }
 
 /** Drop the lines of rows that came back (undone, cancelled or failed). */
 export function dropFiled(entries: readonly FiledEntry[], ids: readonly string[]): FiledEntry[] {
   if (ids.length === 0) return [...entries];
   const gone = new Set(ids);
-  return entries.filter((e) => !gone.has(e.row.transaction_id));
+  return entries.filter((e) => !gone.has(e.transaction_id));
 }
+
 
 /** "filed to Transport" for a row filed with a category. */
 export function filedToText(categoryName: string): string {

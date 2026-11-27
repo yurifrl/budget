@@ -31,7 +31,11 @@ export const categorizeQueueStateSchema = z.enum([
   'not_classified',
 ]);
 
-/** One suggestion at/above the budget threshold. */
+/**
+ * One category suggestion at/above the budget threshold. Jev's transfer answers
+ * are read through `categorize_transfers` instead: they name an account, not a
+ * category, and the queue shows them in its own section.
+ */
 export const categorizeSuggestionSchema = z.object({
   category_id: uuidSchema,
   category_name: z.string(),
@@ -117,11 +121,62 @@ export const categorizeQueueSchema = z.object({
   bundles: z.array(categorizeBundleSchema),
 });
 
-/** One accepted category; the same pair undoes it. */
-export const categorizeDecisionItemSchema = z.object({
+/** One row of a transfer group: the transaction Jev judged to be a transfer. */
+export const categorizeTransferRowSchema = z.object({
   transaction_id: uuidSchema,
-  category_id: uuidSchema,
+  date: isoDateSchema,
+  /** Integer milliunits; an outflow is negative. */
+  amount: milliunitsSchema,
+  /** The transaction's own account. */
+  account_id: uuidSchema,
+  account_name: z.string(),
+  payee_id: uuidSchema.nullable(),
+  payee: z.string(),
+  /** 0..1. */
+  confidence: z.number().min(0).max(1),
 });
+
+/**
+ * Jev's transfer suggestions for one account pair: which way the money moved
+ * (`to` the transfer account on an outflow, `from` it on an inflow), whether that
+ * account is on budget, and the rows that would become transfers.
+ */
+export const categorizeTransferGroupSchema = z.object({
+  transfer_account_id: uuidSchema,
+  transfer_account_name: z.string(),
+  direction: z.enum(['to', 'from']),
+  on_budget: z.boolean(),
+  /** Sum of the group's amounts, integer milliunits. */
+  total: milliunitsSchema,
+  rows: z.array(categorizeTransferRowSchema),
+});
+
+export const categorizeTransferSuggestionsSchema = z.object({
+  groups: z.array(categorizeTransferGroupSchema),
+});
+
+export type CategorizeTransferSuggestions = z.infer<typeof categorizeTransferSuggestionsSchema>;
+
+/** One account-pair group of Jev's transfer suggestions. */
+export type CategorizeTransferGroup = CategorizeTransferSuggestions['groups'][number];
+
+/**
+ * One accepted target; the same pair undoes it. A category (`category_id`) or a
+ * transfer to one of the budget's accounts (`transfer_account_id`) — exactly one
+ * of the two, since a transfer between own accounts carries no category.
+ */
+export const categorizeDecisionItemSchema = z
+  .object({
+    transaction_id: uuidSchema,
+    category_id: uuidSchema.nullable().optional(),
+    transfer_account_id: uuidSchema.nullable().optional(),
+  })
+  .refine((item) => (item.category_id ?? null) !== null || (item.transfer_account_id ?? null) !== null, {
+    message: 'a decision names a category or a transfer account',
+  })
+  .refine((item) => (item.category_id ?? null) === null || (item.transfer_account_id ?? null) === null, {
+    message: 'a decision names a category or a transfer account, not both',
+  });
 
 export const categorizeAcceptResultSchema = z.object({
   accepted: z.number().int().min(0),
@@ -150,6 +205,13 @@ export const categorizeUndoResultSchema = z.object({
 
 export const categorizeSkipResultSchema = z.object({
   /** Suggestions moved to dismissed (0 on a repeated skip). */
+  dismissed: z.number().int().min(0),
+});
+
+export const categorizeTransferRefusalResultSchema = z.object({
+  /** The answer is on record (a repeat answers true again). */
+  refused: z.boolean(),
+  /** Transfer suggestions removed from the row (0 on a repeated answer). */
   dismissed: z.number().int().min(0),
 });
 
@@ -186,11 +248,13 @@ export const categorizeRunFailureSchema = z.enum([
 export type CategorizeRunFailure = z.infer<typeof categorizeRunFailureSchema>;
 
 /**
- * How many transactions one run asks about. The page shows the confirmation,
- * the disabled state and the empty state from it, so it is stated once here
- * and the API takes it from this constant.
+ * The safety rate limit, NOT a run size: one budget may send at most this many
+ * transactions to Jev per rolling hour, across every run. A run itself has no
+ * size cap — the person chooses how many it takes, and the hour trims it. It
+ * protects the person's credits from a runaway loop; it is stated once here and
+ * both the API and the page take the number from this constant.
  */
-export const CATEGORIZE_RUN_LIMIT = 100;
+export const CATEGORIZE_HOURLY_LIMIT = 5000;
 
 /**
  * The Categorize run, as the page shows it: whether a key is available, what a
@@ -203,14 +267,31 @@ export const categorizeRunStatusSchema = z.object({
   /** A Jev key can be used for this budget right now (own, or the shared one). */
   configured: z.boolean(),
   /**
-   * Rows a run started now would ask about: the run's own candidate rule,
-   * capped at {@link CATEGORIZE_RUN_LIMIT}. This is what the confirmation
-   * counts and what the empty state means, not the queue's size (the queue
-   * also shows rows that already have suggestions).
+   * Transactions waiting for a Jev question right now, uncapped: the run's own
+   * candidate rule with no allowance applied (outflows that need a category and
+   * the inflows of a possible transfer). The run-size input and the empty state
+   * read this, never the queue's size (the queue also shows rows that already
+   * carry suggestions).
+   */
+  waiting: z.number().int().min(0),
+  /**
+   * What a run started in this moment would send: `waiting` trimmed by the
+   * hour's free allowance. The confirmation counts this, and 0 disables the
+   * button.
    */
   candidates: z.number().int().min(0),
   /** Why no key can be used; null when one can. */
   reason: jevKeyProblemSchema.nullable(),
+  /**
+   * The rolling hour's sending allowance, so the page can wait instead of
+   * promising a run the API will refuse.
+   */
+  hourly: z.object({
+    limit: z.number().int().min(0),
+    used: z.number().int().min(0),
+    /** Minutes until the hour frees a slot; null when nothing was sent lately. */
+    frees_in_minutes: z.number().int().min(0).nullable(),
+  }),
   /** The run in flight, or the most recent one; null when this budget never ran. */
   run: z
     .object({

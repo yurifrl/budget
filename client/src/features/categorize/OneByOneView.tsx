@@ -7,7 +7,6 @@
 import { useEffect } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import type { CategorizeQueueRow } from '@/budget/data/api';
 import { colors } from '@/ui/theme';
 
 import { KeyCap } from './CategorizeBits';
@@ -15,6 +14,7 @@ import { FocusPane } from './FocusPane';
 import { t } from './i18n';
 import { progressLabel } from './oneByOne.logic';
 import { QueuePane } from './QueuePane';
+import { TransferFocus } from './TransferFocus';
 import type { OneByOne } from './useOneByOne';
 
 const SHOW_KEYS = Platform.OS === 'web';
@@ -26,13 +26,16 @@ const LEGEND_MIN = 760;
 export function OneByOneView({
   budgetId,
   flow,
-  total,
+  queueLeft,
+  matcherPairs,
   loadedRows,
 }: {
   budgetId: string | null;
   flow: OneByOne;
-  /** Whole-queue size, for the list header. */
-  total: number;
+  /** Rows the category queue holds, for the "more below" note. */
+  queueLeft: number;
+  /** The matcher's pairs waiting: answered in Bundles, never here. */
+  matcherPairs: number;
   /** Rows the page holds (the queue is read in pages). */
   loadedRows: number;
 }) {
@@ -50,16 +53,17 @@ export function OneByOneView({
   if (!focused) {
     return <Text style={styles.empty}>{t('one.allDone')}</Text>;
   }
-  const row: CategorizeQueueRow = focused;
   const queue = (
     <View style={[styles.queueCol, stacked && styles.queueColStacked]} key="queue">
       <QueuePane
-        rows={flow.rows}
+        entries={flow.entries}
         filed={flow.filed}
-        focusedId={row.transaction_id}
-        total={total}
-        hiddenBelow={Math.max(0, total - loadedRows)}
-        onFocus={flow.focusRow}
+        focusedId={focused.transaction_id}
+        queueLeft={flow.queueRemaining}
+        answers={flow.answers}
+        matcherPairs={matcherPairs}
+        hiddenBelow={Math.max(0, queueLeft - loadedRows)}
+        onFocus={flow.focusEntry}
       />
     </View>
   );
@@ -72,17 +76,28 @@ export function OneByOneView({
         </View>
         {SHOW_KEYS && width >= LEGEND_MIN ? <Legend /> : null}
       </View>
-      <FocusPane
-        row={row}
-        budgetId={budgetId}
-        canUndo={flow.canUndo}
-        searchReset={flow.searchReset}
-        searchRef={flow.searchRef}
-        onFile={flow.file}
-        onPick={flow.pick}
-        onSkip={flow.skip}
-        onUndo={flow.undo}
-      />
+      {focused.kind === 'transfer' ? (
+        <TransferFocus
+          item={focused.item}
+          canUndo={flow.canUndo}
+          onAccept={() => flow.file(0)}
+          onRefuse={flow.refuse}
+          onSkip={flow.skip}
+          onUndo={flow.undo}
+        />
+      ) : (
+        <FocusPane
+          row={focused.row}
+          budgetId={budgetId}
+          canUndo={flow.canUndo}
+          searchReset={flow.searchReset}
+          searchRef={flow.searchRef}
+          onFile={flow.file}
+          onPick={flow.pick}
+          onSkip={flow.skip}
+          onUndo={flow.undo}
+        />
+      )}
     </View>
   );
   return <View style={[styles.wrap, stacked && styles.wrapStacked]}>{stacked ? [detail, queue] : [queue, detail]}</View>;

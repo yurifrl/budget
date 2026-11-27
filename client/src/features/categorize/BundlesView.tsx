@@ -31,6 +31,8 @@ export function BundlesView({
   onAcceptAll,
   onFileRow,
   onPickCategory,
+  onShowAll,
+  loadingAll,
 }: {
   budgetId: string | null;
   view: BundleView;
@@ -45,6 +47,9 @@ export function BundlesView({
   onAcceptAll: () => void;
   onFileRow: (row: CategorizeQueueRow, suggestion: CategorizeSuggestion) => void;
   onPickCategory: (row: CategorizeQueueRow, category: PickedCategory) => void;
+  /** Read the rest of the queue: the page holds one read, the counts hold all of it. */
+  onShowAll: () => void;
+  loadingAll: boolean;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -147,9 +152,16 @@ export function BundlesView({
               />
             ))}
             {manualRows.length < manualCount ? (
-              <Text style={styles.truncated}>
-                {t('noSuggestion.truncated', { shown: manualRows.length, count: manualCount })}
-              </Text>
+              <View style={styles.truncated}>
+                <Text style={styles.truncatedText}>
+                  {t('noSuggestion.truncated', { shown: manualRows.length, count: manualCount })}
+                </Text>
+                <GhostButton
+                  label={loadingAll ? t('noSuggestion.showAllLoading') : t('noSuggestion.showAll')}
+                  onPress={onShowAll}
+                  disabled={!idle || loadingAll}
+                />
+              </View>
             ) : null}
           </View>
         </View>
@@ -189,5 +201,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     overflow: 'hidden',
   },
-  truncated: { color: colors.faint, fontSize: 11, padding: 12 },
+  truncated: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    padding: 12,
+  },
+  truncatedText: { color: colors.faint, fontSize: 11, flexShrink: 1, flexBasis: 240 },
 });

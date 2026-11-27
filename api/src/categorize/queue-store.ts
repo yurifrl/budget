@@ -9,7 +9,16 @@
  */
 import { createHash } from 'crypto';
 import type { Queryable } from '../core/db';
-import { ASSIGNABLE, merchantPanel, NEEDS_CATEGORY_FROM, NEEDS_CATEGORY_WHERE, pendingTransferIds, type SuggestionSource } from './store';
+import {
+  ASSIGNABLE,
+  DECISION_IN_EFFECT_COLUMN,
+  merchantPanel,
+  NEEDS_CATEGORY_FROM,
+  NEEDS_CATEGORY_WHERE,
+  matcherRowIds,
+  TOP_SUGGESTION_KIND,
+  type SuggestionSource,
+} from './store';
 import type { MerchantPanel } from './store';
 
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.8;
@@ -54,12 +63,18 @@ export type QueueBundle = {
 };
 
 /**
- * The decoded bundle key. The category is the bundle's top suggestion. A
- * payee row is identified by its id; an unlinked payee has no id, so its name
- * is represented by a hash (the key never carries the name itself, which has
- * no length or charset bound).
+ * The decoded bundle key: a payee and the category its rows share (a bundle is
+ * a category suggestion repeated across one payee's rows). A payee row is
+ * identified by its id; an unlinked payee has no id, so its name is represented
+ * by a hash (the key never carries the name itself, which has no length or
+ * charset bound). Jev's transfer suggestions are not bundles: they live in the
+ * Transfers section, so no key names an account.
  */
-export type BundleKey = { payee_id: string | null; payee_hash: string | null; category_id: string };
+export type BundleKey = {
+  payee_id: string | null;
+  payee_hash: string | null;
+  category_id: string;
+};
 
 export type QueueCounts = {
   left_to_categorize: number;
@@ -113,41 +128,81 @@ const bundlePayeeMatch = (alias: string): string => `(
 )`;
 
 /**
- * The queue: live transactions of this budget that the shared rule says need a
- * category, minus the ones a person decided. A skip decision always leaves the
- * queue; an accept whose category was later cleared by hand is STALE and comes
- * back with its earlier suggestions (nothing on the shared transactions table
- * cleans the record). Args: $1 budget, $2 pending transfer ids. The threshold
- * is $3 in every query that uses this CTE; the page's limit/offset are the last
- * two args.
+ * A transaction's decisions and its suggestion facts, folded once per
+ * transaction. The queue is read three times per page (its rows, the counts,
+ * the bundles) and a backlog of thousands of uncategorized rows made the
+ * per-row correlated EXISTS form take seconds; here every consumer joins these
+ * two sets instead.
+ *
+ * `decided` is the one definition of a standing decision (store.ts
+ * `DECISION_IN_EFFECT`); `stale` is a decision no longer in effect. `p_*`
+ * (plain) is the pending view, `r_*` (revived) adds the earlier CATEGORY rows a
+ * stale decision settled (store.ts `STALE_DECISION`: never its transfer rows) —
+ * a manual row there is the person's removed choice, so `r_*` is the union of
+ * pending and non-manual, never just non-manual.
  */
-const QUEUE_CTE = `with q as (
+const QUEUE_FACTS = `decisions as (
+  select d.transaction_id, ${DECISION_IN_EFFECT_COLUMN}
+    from public.categorize_decisions d
+    join public.transactions t on t.id = d.transaction_id and t.budget_id = d.budget_id
+   where d.budget_id = $1
+), decided as (
+  select transaction_id, bool_or(in_effect) as decided, bool_or(not in_effect) as stale
+    from decisions
+   group by 1
+), sugg as (
+  select s.transaction_id,
+         bool_or(s.status = 'pending' and ${ASSIGNABLE}) as p_vis,
+         bool_or(s.status = 'pending' and s.confidence >= $3 and ${ASSIGNABLE}) as p_above,
+         bool_or(s.status = 'pending') as p_any,
+         bool_or((s.status = 'pending' or s.source <> 'manual') and ${ASSIGNABLE}) as r_vis,
+         bool_or((s.status = 'pending' or s.source <> 'manual') and s.confidence >= $3 and ${ASSIGNABLE}) as r_above,
+         bool_or(s.status = 'pending' or (s.source <> 'manual' and s.category_id is not null)) as r_any
+    from public.category_suggestions s
+    left join public.categories c on c.id = s.category_id and c.budget_id = $1
+    left join public.category_groups g on g.id = c.group_id and g.budget_id = $1
+   where s.budget_id = $1
+   group by 1
+)`;
+
+/**
+ * The queue: live transactions of this budget that the shared rule says need a
+ * category, minus the ones with a standing decision. A decision no longer in
+ * effect (an accept whose category was cleared by hand, a transfer accept the
+ * register unlinked) is STALE and the row comes back with its earlier
+ * suggestions (nothing on the shared transactions table cleans the record). `has_visible` / `has_above` / `has_any` are the three
+ * questions the counts and the page ask of a row, answered from the folded
+ * facts. Args: $1 budget, $2 the rows the transfer matcher holds
+ * (`matcherRowIds`). The threshold is $3 in every
+ * query that uses this CTE; the page's limit/offset are the last two args.
+ */
+const QUEUE_CTE = `with ${QUEUE_FACTS}, q as (
   select t.id as transaction_id, t.date::text as date, t.amount as amount,
          t.account_id, a.name as account_name,
          t.payee_id, coalesce(p.name, t.import_payee_name) as payee, t.memo,
-         ct.raw_payload, r.revived
+         ct.raw_payload,
+         coalesce(d.stale, false) as revived,
+         case when coalesce(d.stale, false) then coalesce(sg.r_vis, false)
+              else coalesce(sg.p_vis, false) end as has_visible,
+         case when coalesce(d.stale, false) then coalesce(sg.r_above, false)
+              else coalesce(sg.p_above, false) end as has_above,
+         case when coalesce(d.stale, false) then coalesce(sg.r_any, false)
+              else coalesce(sg.p_any, false) end as has_any
     ${NEEDS_CATEGORY_FROM}
     left join public.connection_transactions ct on ct.transaction_id = t.id and ct.budget_id = t.budget_id
-    cross join lateral (
-      select exists (
-        select 1 from public.categorize_decisions sd
-         where sd.transaction_id = t.id and sd.budget_id = t.budget_id and sd.kind = 'accept'
-      ) as revived
-    ) r
+    left join decided d on d.transaction_id = t.id
+    left join sugg sg on sg.transaction_id = t.id
    ${NEEDS_CATEGORY_WHERE}
-     and (r.revived or not exists (
-       select 1 from public.category_suggestions ds
-        where ds.transaction_id = t.id and ds.status <> 'pending'
-     ))
-     and not exists (
-       select 1 from public.categorize_decisions cd
-        where cd.transaction_id = t.id and cd.budget_id = t.budget_id and cd.kind = 'skip'
-     )
+     and not coalesce(d.decided, false)
+     -- A row whose best visible suggestion is a transfer belongs to the
+     -- Transfers section (Jev's or the matcher's); listing it here too would
+     -- count the same row twice on one page.
+     and ${TOP_SUGGESTION_KIND('$3')} is distinct from 'transfer'
 )`;
 
 /**
  * What the queue shows as a pending suggestion: a pending row, or — for a
- * stale accept, whose earlier rows are accepted/dismissed — the suggested rows
+ * stale decision, whose earlier rows are accepted/dismissed — the suggested rows
  * again (a manual row is the person's removed choice, not a suggestion).
  */
 const QUEUE_PENDING = (alias: string): string =>
@@ -169,30 +224,6 @@ const SUGGESTIONS_JSON = `(
      and ${ASSIGNABLE}
 )`;
 
-/** At least one visible pending suggestion, whatever its confidence. */
-const HAS_VISIBLE = `exists (
-  select 1 from public.category_suggestions b
-    join public.categories c on c.id = b.category_id and c.budget_id = $1
-    join public.category_groups g on g.id = c.group_id and g.budget_id = $1
-   where b.transaction_id = q.transaction_id and ${QUEUE_PENDING('b')}
-     and ${ASSIGNABLE}
-)`;
-
-/** Any pending suggestion, even one whose category is not usable. */
-const HAS_ANY = `exists (
-  select 1 from public.category_suggestions b
-   where b.transaction_id = q.transaction_id and ${QUEUE_PENDING('b')}
-)`;
-
-/** At least one visible pending suggestion at/above the threshold. */
-const HAS_ABOVE = `exists (
-  select 1 from public.category_suggestions s
-    join public.categories c on c.id = s.category_id and c.budget_id = $1
-    join public.category_groups g on g.id = c.group_id and g.budget_id = $1
-   where s.transaction_id = q.transaction_id and ${QUEUE_PENDING('s')}
-     and s.confidence >= $3 and ${ASSIGNABLE}
-)`;
-
 /** The top visible suggestion of each queue row (the bundle's grouping key). */
 const TOP_CTE = `${QUEUE_CTE}, top as (
   select q.transaction_id, q.payee_id, q.payee, q.date, q.amount as amount,
@@ -211,9 +242,9 @@ const TOP_CTE = `${QUEUE_CTE}, top as (
 )`;
 
 const STATE_SQL = `case
-  when ${HAS_ABOVE} then 'has_suggestions'
-  when ${HAS_VISIBLE} then 'below_threshold'
-  when ${HAS_ANY} then 'no_suggestion'
+  when q.has_above then 'has_suggestions'
+  when q.has_visible then 'below_threshold'
+  when q.has_any then 'no_suggestion'
   when ca.outcome = 'failed' then 'failed'
   when ca.outcome is null then 'not_classified'
   else 'no_suggestion'
@@ -282,9 +313,12 @@ export async function listQueue(
   budgetId: string,
   options: { limit: number; offset: number; bundle?: BundleKey },
 ): Promise<QueuePage> {
-  const pending = await pendingTransferIds(db, budgetId);
+  // The rows the transfer matcher holds (suggested or pending) are shown and
+  // decided in its own list, as the run, the status and the Transfers read
+  // treat them: one row, one place, counted once.
+  const matcherRows = await matcherRowIds(db, budgetId);
   const threshold = await thresholdOf(db, budgetId);
-  const scope = [budgetId, pending, threshold];
+  const scope = [budgetId, matcherRows, threshold];
   const bundle = options.bundle;
 
   const bundleFilter = bundle
@@ -312,8 +346,8 @@ export async function listQueue(
      select q.transaction_id, q.date, q.amount, q.account_id, q.account_name,
             q.payee_id, q.payee, q.memo, q.raw_payload,
             ${SUGGESTIONS_JSON} as suggestions,
-            ${HAS_VISIBLE} as has_pending,
-            ${HAS_ANY} as has_any_pending,
+            q.has_visible as has_pending,
+            q.has_any as has_any_pending,
             ca.outcome as attempt_outcome
        from ${source} q
        left join public.categorize_attempts ca
@@ -399,16 +433,14 @@ export async function listQueue(
 }
 
 /**
- * The transaction ids of one bundle, resolved inside the caller's transaction.
- * One extra row is fetched so accept can refuse a bundle above its 1000 cap.
+ * The transaction ids of one bundle, resolved inside the caller's transaction
+ * over the same rows the queue lists (matcher rows excluded), so the count
+ * matches the bundle the page showed. One extra row is fetched so accept can
+ * refuse a bundle above its 1000 cap.
  */
-export async function bundleTransactionIds(
-  db: Queryable,
-  budgetId: string,
-  key: BundleKey,
-  pending: readonly string[],
-): Promise<string[]> {
+export async function bundleTransactionIds(db: Queryable, budgetId: string, key: BundleKey): Promise<string[]> {
   const threshold = await thresholdOf(db, budgetId);
+  const matcherRows = await matcherRowIds(db, budgetId);
   const { rows } = await db.query<{ transaction_id: string }>(
     `${TOP_CTE}
      select transaction_id from top
@@ -416,7 +448,7 @@ export async function bundleTransactionIds(
         and top.category_id = $6
       order by date desc, transaction_id desc
       limit 1001`,
-    [budgetId, pending, threshold, key.payee_id, key.payee_hash, key.category_id],
+    [budgetId, matcherRows, threshold, key.payee_id, key.payee_hash, key.category_id],
   );
   return rows.map((row) => row.transaction_id);
 }

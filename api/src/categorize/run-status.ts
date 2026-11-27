@@ -6,13 +6,15 @@
  */
 import type { CategorizeRunStatus } from '@shared/contracts/categorize';
 
+import { CATEGORIZE_HOURLY_LIMIT } from '@shared/contracts/categorize';
+
 import type { Queryable } from '../core/db';
 import { runsForSubjects } from '../jobs';
 import { resolveJevKey } from '../jev';
 import { CATEGORIZE_RUN_JOB, runSubjectKey } from './job';
-import { budgetOwnerId, candidateCount, readProgress } from './run-store';
+import { budgetOwnerId, candidateWaiting, hourlyUse, readProgress } from './run-store';
 import { MAX_ATTEMPTS_PER_TRANSACTION } from './run';
-import { pendingTransferIds } from './store';
+import { matcherRowIds } from './store';
 
 /**
  * Resolution uses the budget OWNER's key, exactly like the run itself (the two
@@ -25,19 +27,24 @@ export async function runStatus(db: Queryable, budgetId: string): Promise<Catego
   const { active, lastFinished } = await runsForSubjects(db, CATEGORIZE_RUN_JOB, [runSubjectKey(budgetId)]);
   const run = active[0] ?? lastFinished[0] ?? null;
   const progress = run ? await readProgress(db, run.id) : null;
-  // What a run started now would ask about: the page counts the confirmation
-  // from it, so it is the run's own rule, not the queue's size.
-  const candidates = await candidateCount(
+  // What is waiting right now, by the run's own rule and the run's own excluded
+  // rows (not the queue's size, which also holds rows that already carry
+  // suggestions): the count the page shows is the count a run sends.
+  const waiting = await candidateWaiting(
     db,
     budgetId,
-    await pendingTransferIds(db, budgetId),
+    await matcherRowIds(db, budgetId),
     MAX_ATTEMPTS_PER_TRANSACTION,
   );
+  const hourly = await hourlyUse(db, budgetId);
   return {
     budget_id: budgetId,
     configured: access.ok,
-    candidates,
+    waiting,
+    // A run has no size of its own: everything waiting, trimmed by the hour.
+    candidates: Math.max(0, Math.min(waiting, CATEGORIZE_HOURLY_LIMIT - hourly.used)),
     reason: access.ok ? null : access.problem,
+    hourly: { limit: CATEGORIZE_HOURLY_LIMIT, used: hourly.used, frees_in_minutes: hourly.freesInMinutes },
     run: run
       ? {
           run_id: run.id,

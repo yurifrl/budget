@@ -1,20 +1,20 @@
 /**
- * The left side of the One by one view: the queue as a compact list (payee,
- * date and best category, amount, best confidence), the row in focus marked.
- * The list scrolls inside its own column; the page itself does not move while
- * rows are filed.
+ * The left side of the One by one view: the lines still to answer as a compact
+ * list (payee, date and what it looks like, amount, best confidence), the line
+ * in focus marked. Jev's transfer answers lead the list; the queue rows follow
+ * in their own order. The list scrolls inside its own column; the page itself
+ * does not move while lines are filed.
  */
 
 import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 
-import type { CategorizeQueueRow } from '@/budget/data/api';
 import { milliToCents } from '@/budget/data/mapping';
 import { useMoneyFormat } from '@/ui/moneyFormat';
 import { colors } from '@/ui/theme';
 
 import { t } from './i18n';
-import { queueRowSubline, type FiledEntry } from './oneByOne.logic';
+import { paneLine, queueCounterLabel, type FiledEntry, type OneEntry } from './oneByOne.logic';
 import { thresholdPercent } from './page.logic';
 import { confidenceBand, type ConfidenceBand } from './queue.logic';
 
@@ -28,22 +28,29 @@ const BAND_COLOR: Record<ConfidenceBand, string> = {
 const ROWS_ABOVE = 2;
 
 export function QueuePane({
-  rows,
+  entries,
   filed,
   focusedId,
-  total,
+  queueLeft,
+  answers,
+  matcherPairs,
   hiddenBelow,
   onFocus,
 }: {
-  rows: readonly CategorizeQueueRow[];
-  /** Rows done this visit: dimmed lines above the queue, not focusable. */
+  /** The lines to answer: Jev's transfer answers, then the queue rows. */
+  entries: readonly OneEntry[];
+  /** Lines done this visit: dimmed above the list, not focusable. */
   filed: readonly FiledEntry[];
   focusedId: string | null;
-  /** Rows the queue holds (all of them, not only this page). */
-  total: number;
+  /** The category queue's rows still to answer (its own count, from the read). */
+  queueLeft: number;
+  /** Jev's transfer answers still listed (from the read that lists them). */
+  answers: number;
+  /** The matcher's pairs waiting: they are answered in Bundles, never here. */
+  matcherPairs: number;
   /** Rows beyond the loaded page. */
   hiddenBelow: number;
-  onFocus: (row: CategorizeQueueRow) => void;
+  onFocus: (entry: OneEntry) => void;
 }) {
   const { formatMoney, formatDateShort } = useMoneyFormat();
   const scroll = useRef<ScrollViewInstance>(null);
@@ -72,56 +79,57 @@ export function QueuePane({
         <Text style={styles.title}>
           {t('one.queueTitle')}{' '}
           <Text style={styles.count}>
-            {t('one.queueLeft', { count: total })}
+            {queueCounterLabel(queueLeft, answers)}
           </Text>
         </Text>
         <Text style={styles.order}>{t('one.queueOrder')}</Text>
       </View>
+      {matcherPairs > 0 ? (
+        <Text style={styles.matcherNote}>{t('transfer.paneNote', { count: matcherPairs })}</Text>
+      ) : null}
       <ScrollView ref={scroll} style={styles.list} nestedScrollEnabled>
-        {filed.map(({ row, text }) => {
-          const payee = row.payee?.trim() || row.raw_bank_description?.trim() || t('row.unnamed');
-          const cents = milliToCents(row.amount);
+        {filed.map((entry) => {
+          const cents = milliToCents(entry.amount);
           return (
-            <View key={`filed-${row.transaction_id}`} style={[styles.row, styles.rowFiled]}>
+            <View key={`filed-${entry.transaction_id}`} style={[styles.row, styles.rowFiled]}>
               <View style={styles.rowText}>
                 <Text style={styles.payeeFiled} numberOfLines={1}>
-                  {payee}
+                  {entry.payee ?? t('row.unnamed')}
                 </Text>
                 <Text style={styles.sub} numberOfLines={1}>
-                  {formatDateShort(row.date)} · ✓ {text}
+                  {formatDateShort(entry.date)} · ✓ {entry.text}
                 </Text>
               </View>
               <Text style={styles.amountFiled}>{formatMoney(cents)}</Text>
             </View>
           );
         })}
-        {rows.map((row) => {
-          const focused = row.transaction_id === focusedId;
-          const payee = row.payee?.trim() || row.raw_bank_description?.trim() || t('row.unnamed');
-          const cents = milliToCents(row.amount);
-          const top = row.suggestions[0];
+        {entries.map((entry) => {
+          const focused = entry.transaction_id === focusedId;
+          const line = paneLine(entry, formatDateShort);
+          const cents = milliToCents(line.amount);
           return (
             <Pressable
-              key={row.transaction_id}
-              onLayout={track(row.transaction_id)}
-              onPress={() => onFocus(row)}
+              key={entry.transaction_id}
+              onLayout={track(entry.transaction_id)}
+              onPress={() => onFocus(entry)}
               accessibilityRole="button"
               accessibilityState={{ selected: focused }}
-              accessibilityLabel={t('one.rowA11y', { payee, amount: formatMoney(cents) })}
+              accessibilityLabel={t('one.rowA11y', { payee: line.payee, amount: formatMoney(cents) })}
               style={[styles.row, focused && styles.rowFocused]}>
               <View style={styles.rowText}>
                 <Text style={styles.payee} numberOfLines={1}>
-                  {payee}
+                  {line.payee}
                 </Text>
                 <Text style={styles.sub} numberOfLines={1}>
-                  {queueRowSubline(row, formatDateShort(row.date))}
+                  {line.subline}
                 </Text>
               </View>
               <View style={styles.rowEnd}>
                 <Text style={[styles.amount, cents > 0 && styles.in]}>{formatMoney(cents)}</Text>
-                {top ? (
-                  <Text style={[styles.percent, { color: BAND_COLOR[confidenceBand(top.confidence)] }]}>
-                    {thresholdPercent(top.confidence)}%
+                {line.confidence !== null ? (
+                  <Text style={[styles.percent, { color: BAND_COLOR[confidenceBand(line.confidence)] }]}>
+                    {thresholdPercent(line.confidence)}%
                   </Text>
                 ) : null}
               </View>
@@ -154,6 +162,15 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 13, fontWeight: '700' },
   count: { color: colors.muted, fontWeight: '500' },
   order: { color: colors.muted, fontSize: 11.5 },
+  matcherNote: {
+    color: colors.muted,
+    fontSize: 11.5,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 8,
+  },
   list: { maxHeight: 640 },
   row: {
     flexDirection: 'row',

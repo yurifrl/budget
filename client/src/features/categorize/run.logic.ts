@@ -7,13 +7,27 @@
 import type { CategorizeRunStatus } from '@/budget/data/api';
 import { apiErrorMessage, apiErrorParam } from '@/platform/api/baseQuery';
 
-import { CATEGORIZE_RUN_LIMIT } from '@shared/contracts/categorize';
+import { CATEGORIZE_HOURLY_LIMIT } from '@shared/contracts/categorize';
 import { jevKeyProblemSchema, type JevKeyProblem } from '@shared/contracts/jev';
 
 import { t } from './i18n';
 
-/** Rows one run asks about: the one constant the contract, the API and this page share. */
-export const RUN_BATCH = CATEGORIZE_RUN_LIMIT;
+/**
+ * What the person asked the run to take: everything waiting, or a number they
+ * typed. The hour trims either one, so this is a wish, not a promise.
+ */
+export type RunCountChoice = 'all' | number;
+
+/**
+ * What the count field says. Empty asks for everything waiting; a whole number
+ * from 1 is a count, trimmed to what this start really sends (the hour's free
+ * allowance decides that — the page itself has no cap); anything else is not a
+ * size, so Start stays off instead of quietly sending everything.
+ */
+export type RunCountField =
+  | { kind: 'all' }
+  | { kind: 'count'; count: number; clamped: boolean }
+  | { kind: 'invalid' };
 
 export type RunPhase = 'never' | 'waiting' | 'running' | 'finished' | 'failed' | 'cancelled';
 
@@ -41,12 +55,42 @@ export function runPollMs(status: CategorizeRunStatus | undefined): number {
 }
 
 /**
- * How many rows this run will send. The server counts them with the run's own
- * rule (not the queue's size: a queue row may already carry suggestions), so
- * the page never promises more than it sends.
+ * The rows this start really sends: the person's choice, trimmed by the hour's
+ * free allowance. The server counts the allowance with the run's own rule (not
+ * the queue's size: a queue row may already carry suggestions), so the page
+ * never promises more than it sends.
  */
-export function runSendCount(status: CategorizeRunStatus | undefined): number {
-  return status?.candidates ?? 0;
+export function runSendCount(
+  status: CategorizeRunStatus | undefined,
+  choice: RunCountChoice = 'all',
+): number {
+  const sendable = status?.candidates ?? 0;
+  return choice === 'all' ? sendable : Math.min(choice, sendable);
+}
+
+/** Reads the count field: only empty means "everything waiting". */
+export function runCountField(text: string, sendable: number): RunCountField {
+  const trimmed = text.trim();
+  if (trimmed === '') return { kind: 'all' };
+  // Digits only in a number-pad field; a paste can still carry sign, dot or letters.
+  if (!/^\d+$/.test(trimmed)) return { kind: 'invalid' };
+  const typed = Number(trimmed);
+  if (!Number.isSafeInteger(typed) || typed <= 0) return { kind: 'invalid' };
+  if (sendable > 0 && typed > sendable) return { kind: 'count', count: sendable, clamped: true };
+  return { kind: 'count', count: typed, clamped: false };
+}
+
+/** The size to send; a field that is not a size sends nothing (Start is off). */
+export function runCountChoice(field: RunCountField): RunCountChoice {
+  if (field.kind === 'count') return field.count;
+  return field.kind === 'all' ? 'all' : 0;
+}
+
+/** The short cue under the field, or null while the entry is usable and unclamped. */
+export function runCountCue(field: RunCountField): string | null {
+  if (field.kind === 'invalid') return t('run.countInvalid');
+  if (field.kind === 'count' && field.clamped) return t('run.countClamped', { max: field.count });
+  return null;
 }
 
 /** The sentence for the card's headline. A finished run names its own result. */
@@ -77,7 +121,26 @@ export function runProgressLabel(status: CategorizeRunStatus | undefined): strin
   return t('run.progress', { done: run.done, total: run.total, count: run.total });
 }
 
-/** The failures summary, or null when nothing failed. */
+/**
+ * What the hourly safety limit does to this choice, in a sentence, or null when
+ * the whole choice fits: the allowance is spent (and when it frees), or it trims
+ * the run below what the person asked for. The limit protects the person's Jev
+ * credits, not the run: a run has no size of its own.
+ */
+export function runHourlyHint(
+  status: CategorizeRunStatus | undefined,
+  choice: RunCountChoice = 'all',
+): string | null {
+  const asked = choice === 'all' ? (status?.waiting ?? 0) : choice;
+  const sendable = status?.candidates ?? 0;
+  if (asked === 0 || asked <= sendable) return null;
+  if (sendable === 0) {
+    return t('run.hourSpent', { minutes: status?.hourly.frees_in_minutes ?? 60 });
+  }
+  return t('run.hourTrims', { count: sendable, limit: CATEGORIZE_HOURLY_LIMIT });
+}
+
+/** The failures line of a finished run, or null when every row was answered. */
 export function runFailuresLabel(status: CategorizeRunStatus | undefined): string | null {
   const failures = status?.run?.failures ?? 0;
   return failures > 0 ? t('run.failures', { count: failures }) : null;
@@ -158,13 +221,4 @@ export function runStartErrorMessage(error: unknown, options: { isOwner: boolean
   const problem = jevKeyProblemSchema.safeParse(apiErrorParam(error, 'reason'));
   if (problem.success) return runKeyProblemLabel(problem.data, options);
   return apiErrorMessage(error, t('run.startFailed'));
-}
-
-/**
- * The hint under the confirmation, or null when one run can take everything
- * waiting. A run that comes back with exactly the limit may have more behind
- * it, which is all this sentence claims ("up to").
- */
-export function runRestLabel(status: CategorizeRunStatus | undefined): string | null {
-  return (status?.candidates ?? 0) >= RUN_BATCH ? t('run.rest', { batch: RUN_BATCH }) : null;
 }

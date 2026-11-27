@@ -120,8 +120,23 @@ export function bundleView(queue: CategorizeQueue, leaving: readonly LeavingMeta
   };
 }
 
-/** "480 uncategorized transactions · suggestions ready for 120". */
-export function queueSubtitle(counts: Pick<CategorizeCounts, 'left_to_categorize' | 'above_threshold'>): string {
+/**
+ * "480 uncategorized transactions · suggestions ready for 120". Jev's transfer
+ * answers are counted apart: they are not rows of the category queue. Each
+ * number names its own noun, so each is its own message and the subtitle joins
+ * them — the catalog picks one plural branch per message, from its `count`.
+ */
+export function queueSubtitle(
+  counts: Pick<CategorizeCounts, 'left_to_categorize' | 'above_threshold'>,
+  transfers = 0,
+): string {
+  if (transfers > 0) {
+    return t('queue.subtitleMixed', {
+      left: t('queue.left', { count: counts.left_to_categorize }),
+      answers: t('queue.answers', { count: transfers }),
+      ready: counts.above_threshold,
+    });
+  }
   return t('queue.subtitle', { count: counts.left_to_categorize, ready: counts.above_threshold });
 }
 

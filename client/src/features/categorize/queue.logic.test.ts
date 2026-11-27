@@ -139,6 +139,20 @@ describe('queueSubtitle', () => {
       '1 uncategorized transaction · suggestions ready for 0',
     );
   });
+
+  test('each number agrees with its own noun: one transfer answer, many answers', () => {
+    // The catalog pluralizes on `count` alone, so a second number in the same
+    // message could never agree: the answers are their own message.
+    expect(queueSubtitle({ left_to_categorize: 56, above_threshold: 0 }, 1)).toBe(
+      '56 uncategorized transactions · 1 transfer answer · suggestions ready for 0',
+    );
+    expect(queueSubtitle({ left_to_categorize: 56, above_threshold: 0 }, 2)).toBe(
+      '56 uncategorized transactions · 2 transfer answers · suggestions ready for 0',
+    );
+    expect(queueSubtitle({ left_to_categorize: 1, above_threshold: 0 }, 1)).toBe(
+      '1 uncategorized transaction · 1 transfer answer · suggestions ready for 0',
+    );
+  });
 });
 
 describe('bundle date range and accept input', () => {

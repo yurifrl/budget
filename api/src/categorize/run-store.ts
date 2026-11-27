@@ -16,15 +16,16 @@
  */
 import type { CategorizeRunFailure } from '@shared/contracts/categorize';
 
-import { CATEGORIZE_RUN_LIMIT } from '@shared/contracts/categorize';
-
 import type { Queryable } from '../core/db';
 
-import { ATTEMPT_FINGERPRINT, BANK_FACTS_JOIN, NEEDS_CATEGORY_FROM, NEEDS_CATEGORY_WHERE } from './store';
+import { freeCounterpart, TRANSFER_PAIR_DAYS } from '../budget';
+import { JEV_MAX_OPTIONS } from '../jev';
+
+import { ATTEMPT_FINGERPRINT, BANK_FACTS_JOIN, DECIDED, NEEDS_CATEGORY_FROM, REFUSED, RUN_CANDIDATE_WHERE } from './store';
 import { CATEGORIZE_RUN_JOB } from './job';
 
-/** How many transactions one run asks about (the contract owns the number). */
-export const RUN_LIMIT = CATEGORIZE_RUN_LIMIT;
+/** How far apart the two legs of one transfer may be dated: the budget's one window. */
+export const TRANSFER_WINDOW_DAYS = TRANSFER_PAIR_DAYS;
 
 export type RunCandidate = {
   transaction_id: string;
@@ -35,18 +36,31 @@ export type RunCandidate = {
   payee_id: string | null;
   payee: string | null;
   account_name: string;
+  /** What kind of account the row sits in (`transactions` account `type`). */
+  account_kind: string;
   account_id: string;
   memo: string | null;
   /** The bank's own text for the row (`connection_transactions.bank_text`). */
   bank_text: string | null;
   raw_payload: Record<string, unknown> | null;
+  /**
+   * The person already answered the transfer question for this row with "not a
+   * transfer" (the matcher's `dismissed` mark or Jev's refusal, `REFUSED`) or "a
+   * transfer outside the budget" (`outside`), so a transfer is never offered for
+   * it again. A `manual` mark (a link they undid) is only "suggest, never
+   * auto-link": the row is still asked.
+   */
+  transfer_refused: boolean;
 };
 
 /**
- * The run's half of the candidate rule. Args: $1 budget, $2 pending transfer
- * ids, $3 max attempts per transaction, $4 the run that is asking.
+ * The run's half of the candidate rule. Args: $1 budget, $2 the rows the
+ * transfer matcher holds, $3 max attempts per transaction, $4 the run that is
+ * asking.
  *
- * A row is skipped when (a) a person decided or skipped it, (b) it already has
+ * A row is skipped when (a) it carries a standing decision ({@link DECIDED}: a
+ * stale one, whose category or link is gone, no longer answers for the row),
+ * (b) it already has
  * pending suggestions made from the facts it still carries, (c) its last
  * answer was "no suggestion" for those same facts, (d) its recorded failures
  * reached the cap **for the facts it still carries**, or (e) THIS run already
@@ -56,10 +70,7 @@ export type RunCandidate = {
  * it forever would bury it.
  */
 export const RUN_SKIP_WHERE = `
-    and not exists (
-      select 1 from public.categorize_decisions d
-       where d.transaction_id = t.id and d.budget_id = t.budget_id
-    )
+    and not ${DECIDED}
     and not exists (
       select 1 from public.category_suggestions s
        where s.transaction_id = t.id and s.budget_id = t.budget_id
@@ -87,8 +98,12 @@ export const RUN_SKIP_WHERE = `
     )`;
 
 /**
- * The rows this run may send. Args: $1 budget, $2 pending transfer ids,
- * $3 max attempts per transaction, $4 the run id.
+ * `taken` is every row this delivery already handed to a worker. A row is only
+ * stamped (its attempt row written) once its call settles, so a page fetched
+ * while rows are in flight would otherwise return them again; excluding them
+ * keeps "handed out once" true even though 4 calls overlap. Args: $1 budget,
+ * $2 pending transfer ids, $3 max attempts per transaction, $4 the run id,
+ * $5 the counterpart window in days, $6 page size, $7 rows already handed out.
  */
 export async function runCandidates(
   db: Queryable,
@@ -96,31 +111,37 @@ export async function runCandidates(
   transferIds: string[],
   maxAttempts: number,
   runId: string,
-  limit: number,
+  pageSize: number,
+  taken: string[],
 ): Promise<RunCandidate[]> {
   const { rows } = await db.query<RunCandidate>(
     `select t.id as transaction_id, t.date::text as date, t.amount,
             t.payee_id, coalesce(p.name, t.import_payee_name) as payee,
-            a.name as account_name, t.account_id, t.memo,
-            ct.bank_text, ct.raw_payload
+            a.name as account_name, a.type as account_kind, t.account_id, t.memo,
+            ct.bank_text, ct.raw_payload,
+            (coalesce(m.state in ('dismissed', 'outside'), false) or ${REFUSED}) as transfer_refused
        ${NEEDS_CATEGORY_FROM}
        ${BANK_FACTS_JOIN}
-      ${NEEDS_CATEGORY_WHERE}
+       left join public.transfer_marks m on m.transaction_id = t.id and m.budget_id = t.budget_id
+      ${RUN_CANDIDATE_WHERE}
       ${RUN_SKIP_WHERE}
+        and not (t.id = any($7::uuid[]))
       order by t.date desc, t.id
-      limit $5`,
-    [budgetId, transferIds, maxAttempts, runId, limit],
+      limit $6`,
+    [budgetId, transferIds, maxAttempts, runId, TRANSFER_WINDOW_DAYS, pageSize, taken],
   );
   return rows;
 }
 
 /**
- * How many rows a run started NOW would ask about, capped at the limit. Same
- * rule as runCandidates with the run id left null: no attempt carries a null
+ * How many rows are waiting right now, uncapped: the same rule as
+ * runCandidates with the run id left null (no attempt carries a null
  * last_run_id, so only the other predicates apply — exactly what a fresh run
- * would take. Feeds the confirmation, the empty state and the disabled button.
+ * would find). It counts TRANSFER candidates too, so it is what a run started
+ * now would ask about; the page sizes its run input and its empty state from
+ * this, and the hour's allowance trims it separately.
  */
-export async function candidateCount(
+export async function candidateWaiting(
   db: Queryable,
   budgetId: string,
   transferIds: string[],
@@ -132,13 +153,118 @@ export async function candidateCount(
          select t.id
            ${NEEDS_CATEGORY_FROM}
           ${BANK_FACTS_JOIN}
-          ${NEEDS_CATEGORY_WHERE}
+          ${RUN_CANDIDATE_WHERE}
            ${RUN_SKIP_WHERE}
-          limit ${RUN_LIMIT}
        ) rows`,
-    [budgetId, transferIds, maxAttempts, null],
+    [budgetId, transferIds, maxAttempts, null, TRANSFER_WINDOW_DAYS],
   );
   return rows[0]?.n ?? 0;
+}
+
+/**
+ * The possible other sides of a transfer for one row, closest first, by the ONE
+ * counterpart rule ({@link freeCounterpart}), none for a row the person
+ * answered "not a transfer" ({@link REFUSED}) — the same rules the candidate rule and the accept use, so the fact Jev is told is
+ * the pair accept would find and the accounts an inflow is offered are exactly
+ * the ones accept would take. Asked for inflows only (an outflow's counterpart
+ * is the incoming leg, which the same rule finds).
+ */
+export async function transferCounterparts(
+  db: Queryable,
+  budgetId: string,
+  transactionId: string,
+): Promise<{ transaction_id: string; account_id: string; account_name: string }[]> {
+  const { rows } = await db.query<{ transaction_id: string; account_id: string; account_name: string }>(
+    `select o.id as transaction_id, o.account_id, oa.name as account_name
+       from public.transactions t
+       join public.transactions o
+         on o.budget_id = t.budget_id and o.account_id <> t.account_id
+       join public.accounts oa on oa.id = o.account_id and oa.budget_id = o.budget_id
+      where t.id = $1 and t.budget_id = $2
+        and oa.deleted = false and oa.closed = false and oa.on_budget = true
+        and ${freeCounterpart({ row: 'o', amount: '-t.amount', date: 't.date', days: '$3' })}
+        and not ${REFUSED}
+      order by abs(o.date - t.date), o.date desc, o.id`,
+    [transactionId, budgetId, TRANSFER_WINDOW_DAYS],
+  );
+  return rows;
+}
+
+export type AccountOption = { id: string; name: string };
+
+/**
+ * Every open ON-BUDGET account of the budget, in the page's own order: a transfer
+ * option names one of these (all of them but the row's own). An off-budget
+ * account is never a transfer target here — the register refuses to link one —
+ * so offering it would promise an accept that cannot happen.
+ */
+export async function openAccounts(db: Queryable, budgetId: string): Promise<AccountOption[]> {
+  const { rows } = await db.query<AccountOption>(
+    `select id, name
+       from public.accounts
+      where budget_id = $1 and deleted = false and closed = false and on_budget = true
+      order by sort_order, name`,
+    [budgetId],
+  );
+  return rows;
+}
+
+/** What one call may offer, and the ceiling those options must fit in. */
+export type OfferedOptions = {
+  categories: CategoryOption[];
+  accounts: AccountOption[];
+  /**
+   * The most options one call can carry: every category plus every open account
+   * but the row's own. Jev takes {@link JEV_MAX_OPTIONS}, so a run whose budget
+   * exceeds this cannot be answered and says so instead of sending a truncated
+   * list. The run refuses on it and the start check refuses with it, so both
+   * read one number.
+   */
+  ceiling: number;
+};
+
+/**
+ * What this budget may offer one call. Categories are read one past Jev's limit,
+ * so "too many" is a fact rather than a guess; the ceiling counts the accounts
+ * too, because each is a transfer option of its own.
+ */
+export async function offeredOptions(db: Queryable, budgetId: string): Promise<OfferedOptions> {
+  const categories = await assignableCategories(db, budgetId, JEV_MAX_OPTIONS + 1);
+  const accounts = await openAccounts(db, budgetId);
+  return { categories, accounts, ceiling: categories.length + Math.max(0, accounts.length - 1) };
+}
+
+/** The rolling hour's sending allowance, as the page and the start check read it. */
+export type HourlyUse = {
+  /** Transactions sent in the last hour, across every run of this budget. */
+  used: number;
+  /** Minutes until the hour frees a slot; null when nothing was sent. */
+  freesInMinutes: number | null;
+};
+
+/**
+ * What this budget spent of its hourly allowance: the CALLS made in the rolling
+ * hour, from each row's call counter (`categorize_attempts.hour_calls`, the calls
+ * since `hour_started_at`; see recordAttempt). A row sent twice in the hour
+ * counts twice. Every counted call happened at or after its window's start,
+ * which is inside the hour, so the figure can only under-count (calls of a
+ * window that started more than an hour ago are dropped whole), never
+ * over-count — right for a safety limit. A call whose answer was never used
+ * (nothing to ask, or the row was decided while Jev answered) is stamped with no
+ * model and costs nothing.
+ */
+export async function hourlyUse(db: Queryable, budgetId: string): Promise<HourlyUse> {
+  const { rows } = await db.query<{ n: number; frees_in_minutes: number | null }>(
+    `select coalesce(sum(hour_calls), 0)::int as n,
+            ceil(extract(epoch from (min(hour_started_at) + interval '1 hour' - now())) / 60)::int
+              as frees_in_minutes
+       from public.categorize_attempts
+      where budget_id = $1 and hour_started_at > now() - interval '1 hour' and hour_calls > 0`,
+    [budgetId],
+  );
+  const used = rows[0]?.n ?? 0;
+  const frees = rows[0]?.frees_in_minutes ?? null;
+  return { used, freesInMinutes: used === 0 || frees === null ? null : Math.max(0, frees) };
 }
 
 export type CategoryOption = { id: string; label: string };

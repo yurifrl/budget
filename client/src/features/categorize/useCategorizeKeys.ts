@@ -34,6 +34,7 @@ export function useCategorizeKeys({
   scope = 'row',
   rootRef,
   suggestions,
+  transfer = false,
   undoAvailable,
   onAction,
 }: {
@@ -44,12 +45,14 @@ export function useCategorizeKeys({
   rootRef: { current: unknown };
   /** Suggestion chips on the focused row. */
   suggestions: number;
+  /** The focused line is a Jev transfer answer: N says it is not a transfer. */
+  transfer?: boolean;
   undoAvailable: boolean;
   onAction: (action: CategorizeKeyAction) => void;
 }): void {
   // The listener reads the latest values without being re-attached per render.
-  const latest = useRef({ suggestions, undoAvailable, onAction, scope });
-  latest.current = { suggestions, undoAvailable, onAction, scope };
+  const latest = useRef({ suggestions, transfer, undoAvailable, onAction, scope });
+  latest.current = { suggestions, transfer, undoAvailable, onAction, scope };
 
   useEffect(() => {
     if (!enabled || process.env.EXPO_OS !== 'web' || typeof document === 'undefined') return undefined;
@@ -60,6 +63,7 @@ export function useCategorizeKeys({
       const action = categorizeKeyAction(e.key, {
         scope: latest.current.scope,
         suggestions: latest.current.suggestions,
+        transfer: latest.current.transfer,
         undoAvailable: latest.current.undoAvailable,
         typing: isTypingTarget(target),
         onControl: isControlTarget(target),

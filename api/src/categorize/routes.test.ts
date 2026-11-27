@@ -6,6 +6,8 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { Hono } from 'hono';
 
+import { CATEGORIZE_HOURLY_LIMIT } from '@shared/contracts/categorize';
+
 import { pool } from '../core/db';
 import { configureSecretBox } from '../core/secret-box';
 import { dbReady } from '../core/test-gate';
@@ -120,7 +122,9 @@ describe.skipIf(!dbReady)('queue', () => {
     await suggest(below, a.food, { confidence: 0.5 });
     await attempt(none, 'no_suggestion');
     await attempt(failed, 'failed', 'timeout');
-    await suggest(dismissed, a.food, { status: 'dismissed' });
+    // Skipped by the person: the skip decision is what takes it out.
+    await suggest(dismissed, a.food);
+    expect((await skip(ownerUser(), dismissed)).status).toBe(200);
     await suggest(categorized, a.food, { confidence: 0.99 });
 
     const page = await queueJson(memberUser());
@@ -568,7 +572,7 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     // restored to pending and the fresh answer replaces them.
     expect(
       await replaceSuggestions(pool, a.budgetId, t, [
-        { categoryId: a.dining, confidence: 0.95, reason: 'fresh', source: 'jev', provider: null, model: null },
+        { target: { kind: 'category', categoryId: a.dining }, confidence: 0.95, reason: 'fresh', source: 'jev', provider: null, model: null },
       ]),
     ).toBe(1);
     const page = await queueJson(ownerUser());
@@ -583,9 +587,9 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     expect((await queueJson(ownerUser())).rows).toEqual([]);
     expect(
       await replaceSuggestions(pool, a.budgetId, t, [
-        { categoryId: a.food, confidence: 0.9, reason: 'late', source: 'jev', provider: null, model: null },
+        { target: { kind: 'category', categoryId: a.food }, confidence: 0.9, reason: 'late', source: 'jev', provider: null, model: null },
       ]),
-    ).toBe(0);
+    ).toBeNull();
   });
 
   test('an accepted row whose category was changed by hand stays out of the queue and undo reports category_changed', async () => {
@@ -704,9 +708,9 @@ describe.skipIf(!dbReady)('accept, undo and skip', () => {
     await skip(ownerUser(), t);
     expect(
       await replaceSuggestions(pool, a.budgetId, t, [
-        { categoryId: a.food, confidence: 0.9, reason: 'late', source: 'jev', provider: null, model: null },
+        { target: { kind: 'category', categoryId: a.food }, confidence: 0.9, reason: 'late', source: 'jev', provider: null, model: null },
       ]),
-    ).toBe(0);
+    ).toBeNull();
     expect((await pool.query('select count(*)::int as n from public.category_suggestions where transaction_id = $1', [t])).rows[0].n).toBe(0);
   });
 
@@ -838,18 +842,17 @@ describe.skipIf(!dbReady)('access', () => {
  * The API's error body, read field by field: a test asserting on a refusal is
  * the boundary here, so its shape is checked rather than assumed.
  */
-async function refusal(res: Response): Promise<{ error: string; code: string; reason: unknown; max: unknown }> {
+async function refusal(res: Response): Promise<{ error: string; code: string; reason: unknown; max: unknown; minutes: unknown }> {
   const raw: unknown = await res.json();
   if (typeof raw !== 'object' || raw === null) throw new Error('the response body is not an object');
   if (!('error' in raw) || typeof raw.error !== 'string') throw new Error('the error body has no message');
   if (!('code' in raw) || typeof raw.code !== 'string') throw new Error('the error body has no code');
   const params = 'params' in raw ? raw.params : undefined;
-  const param = (key: 'reason' | 'max'): unknown => {
+  const param = (key: 'reason' | 'max' | 'minutes'): unknown => {
     if (typeof params !== 'object' || params === null) return undefined;
-    if (key === 'reason') return 'reason' in params ? params.reason : undefined;
-    return 'max' in params ? params.max : undefined;
+    return key in params ? (params as Record<string, unknown>)[key] : undefined;
   };
-  return { error: raw.error, code: raw.code, reason: param('reason'), max: param('max') };
+  return { error: raw.error, code: raw.code, reason: param('reason'), max: param('max'), minutes: param('minutes') };
 }
 
 describe.skipIf(!dbReady)('starting a run', () => {
@@ -900,5 +903,489 @@ describe.skipIf(!dbReady)('starting a run', () => {
     } finally {
       configureSecretBox(null);
     }
+  });
+});
+
+/**
+ * The run's size: what the person chose, trimmed by the rolling hour's safety
+ * allowance. Each case gets its own budget so a run in flight from a previous
+ * case cannot answer for it.
+ */
+describe.skipIf(!dbReady)('the size of a run', () => {
+  const start = (body: Record<string, unknown>) => call(ownerUser(), 'POST', '/categorize/run', body);
+
+  /** The take the queued run carries, as the worker will receive it. */
+  async function takeOf(budgetId: string): Promise<number | null> {
+    const { rows } = await pool.query<{ take: number | null }>(
+      `select (input->>'take')::int as take from jobs.job_runs
+        where job_type = 'categorize_run' and subject_key = $1
+        order by created_at desc limit 1`,
+      [budgetId],
+    );
+    return rows[0]?.take ?? null;
+  }
+
+  async function jobsOf(budgetId: string): Promise<number> {
+    const { rowCount } = await pool.query("select 1 from jobs.job_runs where job_type = 'categorize_run' and subject_key = $1", [
+      budgetId,
+    ]);
+    return rowCount ?? 0;
+  }
+
+  /**
+   * `count` transactions with one counted call each, aged `minutesAgo` (the
+   * per-row call counter the hour's allowance is derived from). They stay waiting rows themselves (a
+   * fingerprint that matches nothing), so the queue is never empty by accident.
+   */
+  async function seedSent(b: BudgetFixture, count: number, minutesAgo: number): Promise<void> {
+    await pool.query(
+      `with made as (
+         insert into public.transactions (id, budget_id, account_id, date, amount)
+         select gen_random_uuid(), $1, $2, date '2026-10-01', -1 from generate_series(1, $3::int)
+         returning id
+       )
+       insert into public.categorize_attempts
+         (transaction_id, budget_id, outcome, model, input_fingerprint, last_attempt_at, hour_calls, hour_started_at)
+       select id, $1, 'suggested', 'typesafe/jev', 'allowance-probe', now() - make_interval(mins => $4::int),
+              1, now() - make_interval(mins => $4::int) from made`,
+      [b.budgetId, b.accountId, count, minutesAgo],
+    );
+  }
+
+  async function waiting(b: BudgetFixture, count: number): Promise<void> {
+    for (let i = 0; i < count; i++) {
+      await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-21', amount: -100 - i });
+    }
+  }
+
+  beforeEach(async () => {
+    configureSecretBox({ current: 1, keys: new Map([[1, new Uint8Array(32).fill(7)]]) });
+    await saveOwnKey(pool, a.userId, 'sk-or-v1-0123456789abcdef');
+  });
+
+  afterAll(() => {
+    configureSecretBox(null);
+  });
+
+  test('a run takes the number the person chose', async () => {
+    await waiting(a, 5);
+    const res = await start({ budget_id: a.budgetId, count: 3 });
+    expect(res.status).toBe(200);
+    const status = (await res.json()) as { candidates: number; waiting: number };
+    expect(status.waiting).toBe(5);
+    expect(status.candidates).toBe(5);
+    expect(await takeOf(a.budgetId)).toBe(3);
+  });
+
+  test('with no count asked for, a run takes everything waiting', async () => {
+    await waiting(a, 4);
+    const res = await start({ budget_id: a.budgetId });
+    expect(res.status).toBe(200);
+    expect(await takeOf(a.budgetId)).toBe(4);
+  });
+
+  test('the hour trims a start to what is left of its allowance', async () => {
+    await seedSent(a, CATEGORIZE_HOURLY_LIMIT - 2, 0);
+    await waiting(a, 3);
+    const res = await start({ budget_id: a.budgetId, count: 100 });
+    expect(res.status).toBe(200);
+    const status = (await res.json()) as {
+      candidates: number;
+      hourly: { limit: number; used: number; frees_in_minutes: number | null };
+    };
+    expect(status.hourly.limit).toBe(CATEGORIZE_HOURLY_LIMIT);
+    expect(status.hourly.used).toBe(CATEGORIZE_HOURLY_LIMIT - 2);
+    expect(status.hourly.frees_in_minutes).toBeGreaterThan(0);
+    expect(status.hourly.frees_in_minutes).toBeLessThanOrEqual(60);
+    // What is left of the hour, not the 100 asked for.
+    expect(status.candidates).toBe(2);
+    expect(await takeOf(a.budgetId)).toBe(2);
+  });
+
+  test('with nothing left in the hour, a start is refused naming when it frees', async () => {
+    await seedSent(a, CATEGORIZE_HOURLY_LIMIT, 30);
+    await waiting(a, 2);
+    const res = await start({ budget_id: a.budgetId });
+    expect(res.status).toBe(429);
+    const denied = await refusal(res);
+    expect(denied.code).toBe('categorize_hourly_limit');
+    expect(denied.minutes).toBeGreaterThan(0);
+    expect(denied.minutes).toBeLessThanOrEqual(30);
+    expect(denied.error).toContain('hour');
+    expect(await jobsOf(a.budgetId)).toBe(0);
+  });
+
+  test('starting again while a run is in flight answers that same run, even with the hour spent', async () => {
+    await waiting(a, 2);
+    const first = await start({ budget_id: a.budgetId, count: 2 });
+    expect(first.status).toBe(200);
+    const firstStatus = (await first.json()) as { run: { run_id: string } | null };
+
+    await seedSent(a, CATEGORIZE_HOURLY_LIMIT, 0);
+    const again = await start({ budget_id: a.budgetId, count: 2 });
+    expect(again.status).toBe(200);
+    const againStatus = (await again.json()) as { run: { run_id: string } | null };
+    expect(againStatus.run?.run_id).toBe(firstStatus.run?.run_id);
+    expect(await jobsOf(a.budgetId)).toBe(1);
+  });
+});
+
+/**
+ * Jev's transfer answers and what the page does with them: the read that feeds
+ * the Transfers section, and accept/undo through the same transaction PATCH path
+ * the register uses (payee becomes the account's system payee, the category is
+ * cleared, the other leg is paired).
+ */
+describe.skipIf(!dbReady)('transfers Jev suggested', () => {
+  const transfers = (who: IdentityUser, budgetId = a.budgetId) =>
+    call(who, 'GET', `/categorize/transfers?budget_id=${budgetId}`);
+
+  /** A pending suggestion that names an account instead of a category. */
+  async function suggestTransfer(transactionId: string, accountId: string, confidence = 0.9): Promise<void> {
+    await pool.query(
+      `insert into public.category_suggestions
+         (transaction_id, budget_id, rank, transfer_account_id, confidence, reason, source, status)
+       values ($1, $2, 1, $3, $4, null, 'jev', 'pending')
+       on conflict (transaction_id, rank) do update
+         set category_id = null, transfer_account_id = excluded.transfer_account_id,
+             confidence = excluded.confidence, status = 'pending'`,
+      [transactionId, a.budgetId, accountId, confidence],
+    );
+  }
+
+  async function rowOf(id: string): Promise<{
+    category_id: string | null;
+    payee_id: string | null;
+    transfer_account_id: string | null;
+    transfer_transaction_id: string | null;
+  }> {
+    const { rows } = await pool.query<{
+      category_id: string | null;
+      payee_id: string | null;
+      transfer_account_id: string | null;
+      transfer_transaction_id: string | null;
+    }>('select category_id, payee_id, transfer_account_id, transfer_transaction_id from public.transactions where id = $1', [id]);
+    return rows[0]!;
+  }
+
+  /** The account's system transfer payee. The read creates it on first use. */
+  async function transferPayeeOf(accountId: string): Promise<string | null> {
+    const { rows } = await pool.query<{ transfer_payee_id: string | null }>(
+      'select transfer_payee_id from public.accounts where id = $1',
+      [accountId],
+    );
+    return rows[0]?.transfer_payee_id ?? null;
+  }
+
+  test('the read groups pending suggestions by the account they name and by direction', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const closed = await newAccount(a.budgetId, 'Closed', { closed: true });
+    // A pair: the outflow sits here and the inflow in Savings, so each row's
+    // answer names the OTHER account (the one the money moved to / came from).
+    // Four days apart: still one pair for Jev (a week's window), but beyond the
+    // matcher's three-day rule, whose suspects it lists itself instead.
+    const out = await txn({ amount: -4200 });
+    const into = await txn({ accountId: savings, amount: 4200, date: '2026-11-16' });
+    await suggestTransfer(out, savings);
+    await suggestTransfer(into, a.accountId);
+    // Never shown: below the budget threshold, naming a closed account, on a row
+    // that already has a category, and on a row the person already refused.
+    await suggestTransfer(await txn({ amount: -100 }), savings, 0.4);
+    await suggestTransfer(await txn({ amount: -200 }), closed);
+    await suggestTransfer(await txn({ amount: -300, categoryId: a.food }), savings);
+    const refused = await txn({ amount: -400 });
+    await suggestTransfer(refused, savings);
+    await pool.query(
+      "update public.category_suggestions set status = 'dismissed' where transaction_id = $1",
+      [refused],
+    );
+
+    const res = await transfers(ownerUser());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      groups: {
+        transfer_account_id: string;
+        transfer_account_name: string;
+        direction: 'to' | 'from';
+        total: number;
+        rows: { transaction_id: string; account_name: string }[];
+      }[];
+    };
+    expect(body.groups).toHaveLength(2);
+    const to = body.groups.find((group) => group.direction === 'to')!;
+    expect(to.transfer_account_id).toBe(savings);
+    expect(to.transfer_account_name).toBe('Savings');
+    expect(to.total).toBe(-4200);
+    expect(to.rows.map((row) => row.transaction_id)).toEqual([out]);
+    // Both accounts are named: the row's own and the one it would move to.
+    expect(to.rows[0]!.account_name).toBe('Checking');
+    const from = body.groups.find((group) => group.direction === 'from')!;
+    expect(from.transfer_account_id).toBe(a.accountId);
+    expect(from.transfer_account_name).toBe('Checking');
+    expect(from.total).toBe(4200);
+    expect(from.rows.map((row) => row.transaction_id)).toEqual([into]);
+    // "Came from": the row's own account is the one that received the money.
+    expect(from.rows[0]!.account_name).toBe('Savings');
+  });
+
+  test('accepting one makes the row a transfer: that account\u2019s payee, no category, the other side paired', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const landlord = await newPayee('Landlord');
+    const out = await txn({ amount: -7000, payeeId: landlord });
+    const into = await txn({ accountId: savings, amount: 7000 });
+    await suggestTransfer(out, savings);
+
+    const res = await accept(ownerUser(), [{ transaction_id: out, transfer_account_id: savings }]);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      accepted: number;
+      items: { transaction_id: string; transfer_account_id?: string | null }[];
+    };
+    expect(body.accepted).toBe(1);
+    expect(body.items).toEqual([{ transaction_id: out, transfer_account_id: savings }]);
+
+    expect(await rowOf(out)).toEqual({
+      category_id: null,
+      payee_id: await transferPayeeOf(savings),
+      transfer_account_id: savings,
+      transfer_transaction_id: into,
+    });
+    // The other leg was found and is a transfer too: no category, its own side.
+    const other = await rowOf(into);
+    expect(other.category_id).toBeNull();
+    expect(other.transfer_transaction_id).toBe(out);
+    expect(other.payee_id).toBe(await transferPayeeOf(a.accountId));
+
+    const { rows } = await pool.query<{ status: string }>(
+      'select status from public.category_suggestions where transaction_id = $1 order by rank',
+      [out],
+    );
+    expect(rows.map((row) => row.status)).toEqual(['accepted']);
+  });
+
+  test('a key naming a transfer account is not a bundle key: the queue refuses it', async () => {
+    // Jev's transfer suggestions live in the Transfers section and are accepted
+    // one by one; only a category suggestion repeats as a bundle.
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const key = Buffer.from(
+      JSON.stringify({ payee_id: null, payee_hash: 'a'.repeat(32), category_id: null, transfer_account_id: savings }),
+    ).toString('base64url');
+    const res = await call(ownerUser(), 'POST', '/categorize/accept', { budget_id: a.budgetId, bundle_key: key });
+    expect(res.status).toBe(400);
+    expect((await refusal(res)).code).toBe('invalid_input');
+  });
+
+  test('undo puts the row back: its own payee again, no other side linked', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const landlord = await newPayee('Landlord');
+    const out = await txn({ amount: -7000, payeeId: landlord });
+    const into = await txn({ accountId: savings, amount: 7000 });
+    await suggestTransfer(out, savings);
+    expect((await accept(ownerUser(), [{ transaction_id: out, transfer_account_id: savings }])).status).toBe(200);
+
+    const res = await undo(ownerUser(), [out]);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { restored: number; transaction_ids: string[] };
+    expect(body.restored).toBe(1);
+    expect(body.transaction_ids).toEqual([out]);
+
+    expect(await rowOf(out)).toEqual({
+      category_id: null,
+      payee_id: landlord,
+      transfer_account_id: null,
+      transfer_transaction_id: null,
+    });
+    const other = await rowOf(into);
+    expect(other.transfer_transaction_id).toBeNull();
+    expect(other.transfer_account_id).toBeNull();
+  });
+
+  test('accepting a transfer whose other leg is gone is refused, and writes nothing', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const into = await txn({ amount: 4200 });
+    await suggestTransfer(into, savings);
+
+    const res = await accept(ownerUser(), [{ transaction_id: into, transfer_account_id: savings }]);
+    expect(res.status).toBe(409);
+    expect((await refusal(res)).code).toBe('categorize_transfer_pair_gone');
+    expect(await rowOf(into)).toEqual({
+      category_id: null,
+      payee_id: null,
+      transfer_account_id: null,
+      transfer_transaction_id: null,
+    });
+  });
+
+  test('the option ceiling counts the accounts too, and a start above it is refused', async () => {
+    configureSecretBox({ current: 1, keys: new Map([[1, new Uint8Array(32).fill(7)]]) });
+    try {
+      await saveOwnKey(pool, a.userId, 'sk-or-v1-0123456789abcdef');
+      const b = await newBudget('ceiling', a.userId);
+      // A second open account is one more option per row (the row's own is not).
+      await newAccount(b.budgetId, 'Savings');
+      // The fixture brings two assignable categories; fill up to the limit while
+      // leaving room for exactly one transfer option.
+      await pool.query(
+        `insert into public.categories (id, budget_id, group_id, name)
+         select gen_random_uuid(), $1, $2, 'Filler ' || n from generate_series(1, $3::int) n`,
+        [b.budgetId, b.groupId, JEV_MAX_OPTIONS - 3],
+      );
+      const atLimit = await call(ownerUser(), 'POST', '/categorize/run', { budget_id: b.budgetId });
+      expect(atLimit.status).toBe(200);
+      // One more category pushes the widest question past what Jev accepts.
+      await newCategory(b.budgetId, b.groupId, 'One more');
+      const over = await call(ownerUser(), 'POST', '/categorize/run', { budget_id: b.budgetId });
+      expect(over.status).toBe(409);
+      const capped = await refusal(over);
+      expect(capped.code).toBe('categorize_too_many_categories');
+      expect(capped.max).toBe(JEV_MAX_OPTIONS);
+    } finally {
+      configureSecretBox(null);
+    }
+  });
+
+  /*
+   * V1..V9 of the server review, each with the case it probes.
+   */
+  const refuse = (who: IdentityUser, transactionId: string, accountId: string, budgetId = a.budgetId) =>
+    call(who, 'POST', '/categorize/transfers/refuse', {
+      budget_id: budgetId,
+      transaction_id: transactionId,
+      transfer_account_id: accountId,
+    });
+
+  test('V1: a counterpart that is already another pair’s leg is not a pair, and accept invents no leg', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const card = await newAccount(a.budgetId, 'Card');
+    const out = await txn({ amount: -3300, date: '2026-11-10' });
+    const leg = await txn({ accountId: card, amount: 3300, date: '2026-11-10' });
+    await pool.query(
+      'update public.transactions set transfer_account_id = $2, transfer_transaction_id = $3 where id = $1',
+      [out, card, leg],
+    );
+    // Unrelated money in, same amount: the only leg it could pair with is taken.
+    const into = await txn({ accountId: savings, amount: 3300, date: '2026-11-11' });
+    await suggestTransfer(into, a.accountId);
+
+    const read = (await (await transfers(ownerUser())).json()) as { groups: unknown[] };
+    expect(read.groups).toEqual([]);
+
+    const res = await accept(ownerUser(), [{ transaction_id: into, transfer_account_id: a.accountId }]);
+    expect(res.status).toBe(409);
+    expect((await refusal(res)).code).toBe('categorize_transfer_pair_gone');
+    // No phantom leg appeared in the account it named.
+    const { rows } = await pool.query<{ id: string }>(
+      'select id from public.transactions where account_id = $1 and budget_id = $2',
+      [a.accountId, a.budgetId],
+    );
+    expect(rows.map((row) => row.id)).toEqual([out]);
+  });
+
+  test('V5/V6: a row whose best answer is a transfer is only in the Transfers section; refusing it puts an outflow back in the queue', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const out = await txn({ amount: -5400, date: '2026-11-11' });
+    await suggestTransfer(out, savings);
+
+    const page = await queueJson(ownerUser());
+    expect(page.rows.map((row: { transaction_id: string }) => row.transaction_id)).not.toContain(out);
+    const read = (await (await transfers(ownerUser())).json()) as { groups: { rows: { transaction_id: string }[] }[] };
+    expect(read.groups.flatMap((group) => group.rows.map((row) => row.transaction_id))).toEqual([out]);
+
+    const res = await refuse(ownerUser(), out, savings);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ refused: true, dismissed: 1 });
+    // Gone from the Transfers section, back among the rows that need a category.
+    const after = (await (await transfers(ownerUser())).json()) as { groups: unknown[] };
+    expect(after.groups).toEqual([]);
+    const queue = await queueJson(ownerUser());
+    expect(queue.rows.map((row: { transaction_id: string }) => row.transaction_id)).toContain(out);
+    // On record, so a later run never offers that account for this row again.
+    const stored = await pool.query(
+      'select 1 from public.categorize_transfer_refusals where transaction_id = $1 and transfer_account_id = $2 and budget_id = $3',
+      [out, savings, a.budgetId],
+    );
+    expect(stored.rowCount).toBe(1);
+    // Asking again is the same answer, with nothing left to remove.
+    const again = await refuse(ownerUser(), out, savings);
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual({ refused: true, dismissed: 0 });
+  });
+
+  test('V7: a transfer decision goes stale with its link: the row is visible again and a category accept works', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const out = await txn({ amount: -6100, date: '2026-11-12' });
+    await suggestTransfer(out, savings);
+    expect((await accept(ownerUser(), [{ transaction_id: out, transfer_account_id: savings }])).status).toBe(200);
+    const linked = await rowOf(out);
+    const peer = linked.transfer_transaction_id!;
+
+    // The register's own Undo: both legs lose the pointers (the unlink path is
+    // exercised in the transfers feature; here its effect is what matters).
+    // (payee included: the link pointed it at the account's transfer payee, and
+    // the register's Undo puts back the payee the row had — none here.)
+    await pool.query(
+      'update public.transactions set transfer_account_id = null, transfer_transaction_id = null, payee_id = null where id = any($1::uuid[])',
+      [[out, peer]],
+    );
+    await pool.query(
+      `insert into public.transfer_marks (transaction_id, budget_id, state)
+       values ($1, $2, 'manual'), ($3, $2, 'manual')
+       on conflict (transaction_id) do update set state = 'manual'`,
+      [out, a.budgetId, peer],
+    );
+
+    // The other leg leaves (a deleted row the matcher can no longer propose), so
+    // the only thing that could still keep this row out of the category queue is
+    // its own transfer decision — and a stale one must not.
+    await pool.query('update public.transactions set deleted = true where id = $1', [peer]);
+    // The stale decision answers for nothing, and the transfer the person
+    // undid is not offered again (a stale decision revives category
+    // suggestions only): the row is in the category queue, not in Transfers.
+    const listed = (await (await transfers(ownerUser())).json()) as { groups: { rows: { transaction_id: string }[] }[] };
+    expect(listed.groups.flatMap((group) => group.rows.map((row) => row.transaction_id))).toEqual([]);
+    const page = await queueJson(ownerUser());
+    expect(page.rows.map((row: { transaction_id: string }) => row.transaction_id)).toContain(out);
+
+    const res = await accept(ownerUser(), [{ transaction_id: out, category_id: a.food }]);
+    expect(res.status).toBe(200);
+    expect((await rowOf(out)).category_id).toBe(a.food);
+  });
+
+  test('V9: undo removes the mark the accept’s unlink created', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const out = await txn({ amount: -7200, date: '2026-11-14' });
+    await suggestTransfer(out, savings);
+    expect((await accept(ownerUser(), [{ transaction_id: out, transfer_account_id: savings }])).status).toBe(200);
+
+    expect((await undo(ownerUser(), [out])).status).toBe(200);
+    const { rows } = await pool.query('select state from public.transfer_marks where transaction_id = $1', [out]);
+    expect(rows).toEqual([]);
+  });
+
+  test('V9: undo puts back a mark the row already had', async () => {
+    const savings = await newAccount(a.budgetId, 'Savings');
+    const out = await txn({ amount: -7300, date: '2026-11-15' });
+    await pool.query(`insert into public.transfer_marks (transaction_id, budget_id, state) values ($1, $2, 'manual')`, [
+      out,
+      a.budgetId,
+    ]);
+    await suggestTransfer(out, savings);
+    expect((await accept(ownerUser(), [{ transaction_id: out, transfer_account_id: savings }])).status).toBe(200);
+
+    expect((await undo(ownerUser(), [out])).status).toBe(200);
+    const { rows } = await pool.query<{ state: string }>('select state from public.transfer_marks where transaction_id = $1', [out]);
+    expect(rows.map((row) => row.state)).toEqual(['manual']);
+  });
+
+  test('V2: an off-budget or closed account is never the transfer answer the page shows', async () => {
+    const broker = await newAccount(a.budgetId, 'Broker', { onBudget: false });
+    const closed = await newAccount(a.budgetId, 'Old card', { closed: true });
+    const outBroker = await txn({ amount: -2600, date: '2026-11-16' });
+    const outClosed = await txn({ amount: -2700, date: '2026-11-16' });
+    await suggestTransfer(outBroker, broker);
+    await suggestTransfer(outClosed, closed);
+
+    const read = (await (await transfers(ownerUser())).json()) as { groups: unknown[] };
+    expect(read.groups).toEqual([]);
   });
 });

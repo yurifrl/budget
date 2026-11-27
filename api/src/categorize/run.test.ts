@@ -13,22 +13,24 @@ import {
   JEV_MAX_OPTIONS,
   JEV_MODEL,
   JevFailure,
+  NOT_TRANSFER_OPTION,
   saveOwnKey,
+  TRANSFER_OPTION,
   type JevAnswer,
   type JevCall,
   type JevSuggestion,
 } from '../jev';
-import { CATEGORIZE_RUN_LIMIT } from '@shared/contracts/categorize';
 
 import { enqueueCategorizeRun } from './job';
 import {
   MAX_ATTEMPTS_PER_TRANSACTION,
   RUN_CONCURRENCY,
+  RUN_PAGE,
   RunFailure,
   runCategorize,
   TRANSIENT_STREAK_LIMIT,
 } from './run';
-import { failProgress, markInternalFailure, readProgress, RUN_LIMIT, type RunProgress } from './run-store';
+import { candidateWaiting, failProgress, markInternalFailure, readProgress, type RunProgress } from './run-store';
 import { runStatus } from './run-status';
 import {
   cleanupFixtures,
@@ -46,6 +48,8 @@ import {
 
 const KEY = 'sk-or-v1-0123456789abcdef';
 const jobRuns: string[] = [];
+/** A small run size, for the tests that would otherwise need thousands of rows. */
+const SMALL_LIMIT = 100;
 
 /** A finished `categorize_run` row of the given budget (one per simulated run). */
 async function jobRun(budgetId: string): Promise<string> {
@@ -528,8 +532,8 @@ describe.skipIf(!dbReady)('the categorize run', () => {
   });
 
   test('one run per budget at a time: a second start joins the running one', async () => {
-    const first = await enqueueCategorizeRun(pool, b.budgetId, b.userId);
-    const second = await enqueueCategorizeRun(pool, b.budgetId, b.userId);
+    const first = await enqueueCategorizeRun(pool, b.budgetId, b.userId, SMALL_LIMIT);
+    const second = await enqueueCategorizeRun(pool, b.budgetId, b.userId, SMALL_LIMIT);
     expect(first.created).toBe(true);
     expect(second.created).toBe(false);
     expect(second.run.id).toBe(first.run.id);
@@ -538,14 +542,14 @@ describe.skipIf(!dbReady)('the categorize run', () => {
 
 
   test('a redelivered run keeps its own size: it asks only what the total leaves, and done never passes it', async () => {
-    for (let i = 0; i < RUN_LIMIT + 2; i++) {
+    for (let i = 0; i < SMALL_LIMIT + 2; i++) {
       await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-01', amount: -100 - i });
     }
     const runId = await jobRun(b.budgetId);
     let calls = 0;
     // Second call crashes the activity: the first delivery leaves a frozen
     // total with a few rows answered, and plenty of rows still available.
-    const crashed = await runCategorize(pool, { runId, budgetId: b.budgetId }, {
+    const crashed = await runCategorize(pool, { runId, budgetId: b.budgetId, take: SMALL_LIMIT }, {
       classify: async () => {
         calls += 1;
         if (calls === 2) throw new Error('database exploded');
@@ -557,17 +561,86 @@ describe.skipIf(!dbReady)('the categorize run', () => {
       'select done, total, failures, failure from public.categorize_run_progress where run_id = $1',
       [runId],
     );
-    expect(first.rows[0]!.total).toBe(CATEGORIZE_RUN_LIMIT);
+    expect(first.rows[0]!.total).toBe(SMALL_LIMIT);
 
     // Redelivery: the same run, the same frozen total.
-    const again = await runCategorize(pool, { runId, budgetId: b.budgetId }, { classify: alwaysFood });
-    expect(again.total).toBe(CATEGORIZE_RUN_LIMIT);
-    expect(again.done).toBe(CATEGORIZE_RUN_LIMIT);
+    const again = await runCategorize(pool, { runId, budgetId: b.budgetId, take: SMALL_LIMIT }, { classify: alwaysFood });
+    expect(again.total).toBe(SMALL_LIMIT);
+    expect(again.done).toBe(SMALL_LIMIT);
     const asked = await pool.query<{ n: number }>(
       'select count(*)::int as n from public.categorize_attempts where last_run_id = $1',
       [runId],
     );
-    expect(asked.rows[0]!.n).toBeLessThanOrEqual(CATEGORIZE_RUN_LIMIT);
+    expect(asked.rows[0]!.n).toBeLessThanOrEqual(SMALL_LIMIT);
+  });
+
+  test('one run asks about every waiting transaction, past the old 100, not a batch of them', async () => {
+    const count = 130;
+    for (let i = 0; i < count; i++) {
+      await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-25', amount: -100 - i });
+    }
+    expect(await candidateWaiting(pool, b.budgetId, [], MAX_ATTEMPTS_PER_TRANSACTION)).toBe(count);
+    const asked = new Set<number>();
+    const run = await runCategorize(pool, { runId: await jobRun(b.budgetId), budgetId: b.budgetId }, {
+      classify: async (call) => {
+        asked.add(call.facts.amount);
+        return answer({ categoryId: b.food, confidence: 0.9 });
+      },
+    });
+    expect(run).toMatchObject({ total: count, done: count, failures: 0 });
+    expect(asked.size).toBe(count);
+  });
+
+  test('a run takes the number the person chose, not everything waiting', async () => {
+    for (let i = 0; i < 20; i++) {
+      await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-26', amount: -100 - i });
+    }
+    const asked = new Set<number>();
+    const run = await runCategorize(pool, { runId: await jobRun(b.budgetId), budgetId: b.budgetId, take: 5 }, {
+      classify: async (call) => {
+        asked.add(call.facts.amount);
+        return answer({ categoryId: b.food, confidence: 0.9 });
+      },
+    });
+    expect(run).toMatchObject({ total: 5, done: 5, failures: 0 });
+    expect(asked.size).toBe(5);
+    expect(await candidateWaiting(pool, b.budgetId, [], MAX_ATTEMPTS_PER_TRANSACTION)).toBe(15);
+  });
+
+  test('a run larger than one page loses nothing and repeats nothing across page loads', async () => {
+    const count = RUN_PAGE * 2 + 1;
+    for (let i = 0; i < count; i++) {
+      await newTransaction({
+        budgetId: b.budgetId,
+        accountId: b.accountId,
+        date: '2026-11-26',
+        amount: -100 - i,
+        memo: `row ${i}`,
+      });
+    }
+    const runId = await jobRun(b.budgetId);
+    // Three calls stay unanswered until a row of the second page has been handed
+    // out. Their attempt rows are therefore guaranteed to be unwritten when the
+    // page fetched as the first one runs out queries: the case that used to
+    // return those rows again (one transaction asked twice, another never asked
+    // at all) instead of losing nothing.
+    const pageTwoStarted = Promise.withResolvers<void>();
+    const asked = new Set<string>();
+    let calls = 0;
+    const run = await runCategorize(pool, { runId, budgetId: b.budgetId }, {
+      classify: async (call) => {
+        calls++;
+        asked.add(call.facts.memo ?? 'no memo');
+        if (calls > 1 && calls <= RUN_CONCURRENCY) await pageTwoStarted.promise;
+        if (calls > RUN_PAGE) pageTwoStarted.resolve();
+        return answer({ categoryId: b.food, confidence: 0.9 });
+      },
+    });
+    expect(run).toMatchObject({ total: count, done: count, failures: 0 });
+    // Every row exactly once: 201 calls, 201 distinct memos (the fixture's own
+    // per-row identity), and no row left unanswered.
+    expect(calls).toBe(count);
+    expect(asked.size).toBe(count);
   });
 
   test('a success resets the attempt count; only row-level failures climb it', async () => {
@@ -679,7 +752,7 @@ describe.skipIf(!dbReady)('the categorize run', () => {
   });
 
   test('across deliveries a run asks no more distinct rows than its total, even with transient answers', async () => {
-    // 150 rows against a run limit of 100, every second call rate limited and a
+    // 150 rows against a run ceiling of 100 (SMALL_LIMIT), every second call rate limited and a
     // crash on the 51st: a transient answer stamps its row but adds nothing to
     // `done`, so sizing the redelivery by `done` asks 75 more rows and the run
     // asks 125 distinct rows for a total of 100.
@@ -697,12 +770,12 @@ describe.skipIf(!dbReady)('the categorize run', () => {
       return answer({ categoryId: b.food, confidence: 0.9 });
     };
 
-    const first = await runCategorize(pool, { runId, budgetId: b.budgetId }, { classify }).catch((err: unknown) => err);
+    const first = await runCategorize(pool, { runId, budgetId: b.budgetId, take: SMALL_LIMIT }, { classify }).catch((err: unknown) => err);
     expect(first).toBeInstanceOf(Error);
-    const second = await runCategorize(pool, { runId, budgetId: b.budgetId }, { classify });
+    const second = await runCategorize(pool, { runId, budgetId: b.budgetId, take: SMALL_LIMIT }, { classify });
 
-    expect(second.total).toBe(RUN_LIMIT);
-    expect(new Set(asked).size).toBe(RUN_LIMIT);
+    expect(second.total).toBe(SMALL_LIMIT);
+    expect(new Set(asked).size).toBe(SMALL_LIMIT);
     expect(second.done).toBeLessThanOrEqual(second.total);
   });
 
@@ -727,11 +800,11 @@ describe.skipIf(!dbReady)('the categorize run', () => {
       return answer({ categoryId: b.food, confidence: 0.9 });
     };
 
-    const first = await runCategorize(pool, { runId, budgetId: b.budgetId }, { classify }).catch((err: unknown) => err);
+    const first = await runCategorize(pool, { runId, budgetId: b.budgetId, take: SMALL_LIMIT }, { classify }).catch((err: unknown) => err);
     expect(first).toBeInstanceOf(Error);
-    await runCategorize(pool, { runId, budgetId: b.budgetId }, { classify });
+    await runCategorize(pool, { runId, budgetId: b.budgetId, take: SMALL_LIMIT }, { classify });
 
-    expect(new Set(asked).size).toBe(RUN_LIMIT);
+    expect(new Set(asked).size).toBe(SMALL_LIMIT);
     const { rows } = await pool.query(
       'select 1 from public.category_suggestions where budget_id = $1 and transaction_id in (select id from public.transactions where budget_id = $1 and category_id is not null)',
       [b.budgetId],
@@ -881,5 +954,83 @@ describe.skipIf(!dbReady)('the categorize run', () => {
     expect((await readProgress(pool, runId))!.failure).toBe('no_credits');
     await failProgress(pool, runId, other.budgetId, 'key_rejected');
     expect((await readProgress(pool, runId))!.failure).toBe('no_credits');
+  });
+});
+
+/**
+ * What a run asks about a transfer: which rows become questions, the options one
+ * row is offered, and what Jev is told. The stubbed call records what it saw.
+ */
+describe.skipIf(!dbReady)('the run’s transfer questions', () => {
+  let b: BudgetFixture;
+  const asked: JevCall[] = [];
+  const answer = (...suggestions: JevSuggestion[]): JevAnswer => ({ suggestions, model: JEV_MODEL });
+
+  beforeEach(async () => {
+    asked.length = 0;
+    configureSecretBox({ current: 1, keys: new Map([[1, new Uint8Array(32).fill(7)]]) });
+    b = await newBudget('run-transfers');
+    await saveOwnKey(pool, b.userId, KEY);
+  });
+
+  afterAll(async () => {
+    configureSecretBox(null);
+    if (jobRuns.length > 0) await pool.query('delete from jobs.job_runs where id = any($1::uuid[])', [jobRuns.splice(0)]);
+    await cleanupFixtures();
+  });
+
+  const runAsking = async () =>
+    runCategorize(
+      pool,
+      { runId: await jobRun(b.budgetId), budgetId: b.budgetId },
+      {
+        classify: async (call) => {
+          asked.push(call);
+          return answer({ categoryId: b.food, confidence: 0.9 });
+        },
+      },
+    );
+
+  test('V4: an outflow is offered its categories plus one transfer option per other open account, nothing off-budget', async () => {
+    const savings = await newAccount(b.budgetId, 'Savings');
+    const broker = await newAccount(b.budgetId, 'Broker', { onBudget: false });
+    await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-10', amount: -4200 });
+
+    await runAsking();
+
+    const options = asked[0]!.options;
+    const transferIds = options.filter((option) => option.id.startsWith(TRANSFER_OPTION)).map((option) => option.id);
+    // One account, and only the one that could really receive the money.
+    expect(transferIds).toEqual([`${TRANSFER_OPTION}${savings}`]);
+    expect(options.map((option) => option.id)).toContain(b.food);
+    expect(transferIds).not.toContain(`${TRANSFER_OPTION}${broker}`);
+    expect(transferIds).not.toContain(`${TRANSFER_OPTION}${b.accountId}`);
+    expect(options.find((option) => option.id === `${TRANSFER_OPTION}${savings}`)!.label).toBe('Transfer / Savings');
+  });
+
+  test('V3: a "manual" mark does not empty an inflow\u2019s question: it is asked with its transfer options', async () => {
+    const savings = await newAccount(b.budgetId, 'Savings');
+    // Five days apart: still one movement for the askable window (7) but beyond
+    // the matcher's own (3), so the matcher holds no opinion and the run asks.
+    const out = await newTransaction({ budgetId: b.budgetId, accountId: b.accountId, date: '2026-11-10', amount: -4400 });
+    const into = await newTransaction({ budgetId: b.budgetId, accountId: savings, date: '2026-11-15', amount: 4400 });
+    // The person undid a link before (a 'manual' mark): that only stops automatic
+    // linking, it is not the answer "not a transfer", so the question still
+    // stands and its options must not come out empty.
+    await pool.query(
+      `insert into public.transfer_marks (transaction_id, budget_id, state)
+       values ($1, $2, 'manual'), ($3, $2, 'manual')`,
+      [out, b.budgetId, into],
+    );
+
+    const result = await runAsking();
+
+    expect(result.failures).toBe(0);
+    const inflowCall = asked.find((call) => call.facts.amount === 4400);
+    expect(inflowCall).toBeDefined();
+    const ids = inflowCall!.options.map((option) => option.id);
+    expect(ids).toContain(`transfer:${b.accountId}`);
+    expect(ids).not.toContain(b.food);
+    expect(ids).toContain(NOT_TRANSFER_OPTION);
   });
 });

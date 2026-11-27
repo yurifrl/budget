@@ -43,6 +43,8 @@ describe('Categorize contracts', () => {
       'categorize_settings_get',
       'categorize_settings_set',
       'categorize_skip',
+      'categorize_transfer_refuse',
+      'categorize_transfer_suggestions',
       'categorize_undo',
     ]);
     for (const op of contracts) {

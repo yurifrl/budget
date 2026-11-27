@@ -29,7 +29,7 @@ function activityContext(): Context | null {
 
 /** What the workflow proxies: the run itself, and the failure code a crash leaves behind. */
 export interface CategorizeActivities {
-  categorizeRunWork(args: { runId: string; budgetId: string }): Promise<RunProgress>;
+  categorizeRunWork(args: { runId: string; budgetId: string; take?: number }): Promise<RunProgress>;
   /**
    * Persist "this run stopped for no named reason" after the activity's
    * retries are exhausted (a crash, a timeout, an OOM). Keeps a named code
@@ -41,7 +41,7 @@ export interface CategorizeActivities {
 export function createCategorizeActivities(db: Pool, trackedAttempt: Tracked): CategorizeActivities {
   return {
     /** The whole run: candidates, one Jev call each, suggestions and progress. */
-    async categorizeRunWork(args: { runId: string; budgetId: string }): Promise<RunProgress> {
+    async categorizeRunWork(args: { runId: string; budgetId: string; take?: number }): Promise<RunProgress> {
       return trackedAttempt(args.runId, async (ctx) => {
         try {
           return await runCategorize(db, args, {

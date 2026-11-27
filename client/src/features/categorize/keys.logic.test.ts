@@ -25,9 +25,16 @@ describe('categorizeKeyAction', () => {
     expect(categorizeKeyAction('Z', { ...base, undoAvailable: true })).toEqual({ kind: 'undo' });
   });
 
+  test('N says a focused Jev transfer answer is not a transfer, and only there', () => {
+    const transfer = { ...base, transfer: true };
+    expect(categorizeKeyAction('n', transfer)).toEqual({ kind: 'notTransfer' });
+    expect(categorizeKeyAction('N', transfer)).toEqual({ kind: 'notTransfer' });
+    expect(categorizeKeyAction('n', base)).toBeNull();
+  });
+
   test('typing in a field claims every key', () => {
     const typing = { ...base, typing: true, undoAvailable: true };
-    for (const key of ['1', '2', '3', 'Enter', 's', 'S', '/', 'z', 'Z']) {
+    for (const key of ['1', '2', '3', 'Enter', 's', 'S', 'n', 'N', '/', 'z', 'Z']) {
       expect(categorizeKeyAction(key, typing)).toBeNull();
     }
   });

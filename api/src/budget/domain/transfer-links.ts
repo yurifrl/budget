@@ -39,9 +39,6 @@ import {
   type TransferRule,
 } from './transfer-matcher';
 
-/** How far a person-picked account is searched for the other leg ("Other account..."). */
-const MANUAL_LINK_DAYS = 7;
-
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
 interface Context {
@@ -251,7 +248,7 @@ export async function linkByUser(
       if (account.id === row.account_id) throw new HttpError(400, 'cannot transfer to the same account', 'cannot_transfer_to_same_account');
       if (account.closed) throw new HttpError(409, 'account is closed', 'account_closed');
       if (!account.on_budget) throw new HttpError(400, 'only rows of on-budget accounts can be linked here', 'transfer_off_budget');
-      otherId = await store.findCounterpartInAccount(client, budgetId, account.id, -Number(row.amount), row.date, MANUAL_LINK_DAYS);
+      otherId = await store.findCounterpartInAccount(client, budgetId, account.id, -Number(row.amount), row.date, store.TRANSFER_PAIR_DAYS);
       if (otherId && used.has(otherId)) otherId = undefined;
       if (otherId) {
         const [found] = await store.getTransferRows(client, budgetId, [otherId]);
@@ -384,6 +381,40 @@ export async function unlinkTransfers(client: PoolClient, budgetId: string, ids:
   }
   if (deltas.length > 0) await applyBalanceDeltas(client, budgetId, deltas);
   return count;
+}
+
+/**
+ * The other leg an accepted transfer would pair with, by the one counterpart
+ * rule (see store.freeCounterpart). Null when that account has no free row, so
+ * an inflow's accept can refuse instead of inventing a leg.
+ */
+export async function freeTransferCounterpart(
+  db: Queryable,
+  budgetId: string,
+  accountId: string,
+  amount: number,
+  date: string,
+): Promise<string | null> {
+  const found = await store.findCounterpartInAccount(db, budgetId, accountId, amount, date, store.TRANSFER_PAIR_DAYS);
+  return found ?? null;
+}
+
+/** The transfer marks of these rows, by id; a row with no mark is null. */
+export async function transferMarksOf(
+  db: Queryable,
+  budgetId: string,
+  ids: readonly string[],
+): Promise<Record<string, string | null>> {
+  const unique = [...new Set(ids)];
+  const marks: Record<string, string | null> = {};
+  for (const id of unique) marks[id] = null;
+  if (unique.length === 0) return marks;
+  const found = await db.query<{ transaction_id: string; state: string }>(
+    'SELECT transaction_id, state FROM transfer_marks WHERE budget_id = $1 AND transaction_id = ANY($2::uuid[])',
+    [budgetId, unique],
+  );
+  for (const row of found.rows) marks[row.transaction_id] = row.state;
+  return marks;
 }
 
 /** PUT /transfers/marks: 404 unless every id is a live row of the budget. */

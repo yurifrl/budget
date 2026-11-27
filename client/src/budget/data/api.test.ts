@@ -13,7 +13,13 @@ import { Container } from '@/platform/di/container';
 import { Tokens } from '@/platform/di/tokens';
 import type { KVStore } from '@/platform/storage/types';
 
-import { budgetApi, CATEGORIZE_COUNT_LIMIT, CATEGORIZE_QUEUE_TAGS, queueProvidedTags } from './api';
+import {
+  budgetApi,
+  CATEGORIZE_COUNT_LIMIT,
+  CATEGORIZE_QUEUE_TAGS,
+  categorizePageTags,
+  queueProvidedTags,
+} from './api';
 
 const BASE = 'http://api.test:3999';
 
@@ -307,14 +313,26 @@ describe('the split slice is still one api', () => {
     expect(queueProvidedTags('b1', {}).length).toBe(CATEGORIZE_QUEUE_TAGS.length);
   });
 
+  test('a decision refreshes the queue, the transfers and the run card together', () => {
+    // Q2/Q10: Transfers (Jev's answers), the matcher's pairs (Transactions) and
+    // the run card's "waiting" all go stale on a decision unless invalidated.
+    expect(categorizePageTags('b1').map((t) => t.type)).toEqual([
+      'Categorize',
+      'Transactions',
+      'CategorizeRun',
+    ]);
+    expect(categorizePageTags('b1').every((t) => t.id === 'b1')).toBe(true);
+  });
+
   test('one reducer path, the same tag types, every endpoint reachable from budgetApi', () => {
     expect(budgetApi.reducerPath).toBe('budgetApi');
     const endpoints = Object.keys(budgetApi.endpoints);
     // Every area slice injects into the one api: base → budgets → members → plan
     // → payees → register → connections → transfers → categorize.
-    expect(endpoints).toHaveLength(107);
+    expect(endpoints).toHaveLength(109);
     for (const name of ['getBudgets', 'getCategories', 'getPayees', 'getTransactions', 'getConnections', 'getBudgetMembers', 'restoreBudget', 'getTransferSuggestions', 'setPayeeTransferRule', 'getCategorizeQueue', 'acceptCategorize', 'undoCategorize', 'skipCategorize', 'getCategorizeSettings', 'setCategorizeSettings', 'getCategorizeRun', 'startCategorizeRun']) {
       expect(endpoints).toContain(name);
     }
+    for (const name of ['getCategorizeTransfers', 'refuseCategorizeTransfer']) expect(endpoints).toContain(name);
   });
 });

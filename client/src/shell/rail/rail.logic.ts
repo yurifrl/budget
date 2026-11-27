@@ -107,13 +107,15 @@ export function shellGate(s: {
 }
 
 /**
- * Bank setup pages (Linked banks, a bank's page, Your Pluggy keys), the
- * person's own Jev key page and the transaction page: no transaction is entered
- * there, and on a phone the floating "＋ Transaction" pill sat on their bottom
- * actions ("Connect another bank", "Save key") and help text (on the
- * transaction page: the bank data).
+ * Pages whose bottom edge belongs to the page, so the floating "＋ Transaction"
+ * pill must not sit on it: bank setup (Linked banks, a bank's page, Your Pluggy
+ * keys), the person's own Jev key page, the transaction page (its bottom is the
+ * bank data), and Categorize (its accept toast, its rows and "Start run"). On a
+ * phone the pill's default place is exactly there, over an Undo the person
+ * cannot press (elementFromPoint hit the pill).
  */
 const NO_TRANSACTION_FAB_ROUTES: readonly string[] = [
+  '/categorize',
   '/connect-bank',
   '/connection',
   '/pluggy-keys',

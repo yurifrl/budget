@@ -76,7 +76,12 @@ export default {
   jev_no_credits: 'The OpenRouter account behind the Jev key has no credits left. Add credits or use another key.',
   categorize_no_categories: 'This budget has no category Jev could suggest from. Create a regular category first.',
   categorize_too_many_categories:
-    'This budget has more than {max} categories to suggest from, which is more than Jev accepts.',
+    'This budget offers more than {max} options to choose from (categories and accounts), which is more than Jev accepts.',
+  categorize_transfer_pair_gone:
+    'The other side of this transfer is no longer available. Nothing was changed.',
+  categorize_transfer_refused: 'This row was already answered "not a transfer" for that account.',
+  categorize_hourly_limit:
+    'This budget already sent {limit} transactions to Jev in the last hour. The allowance frees up in about {minutes} minutes; run again then.',
   cannot_transfer_to_same_account: 'Choose a different account: a transfer cannot go to the same account.',
   transfer_account_not_in_budget: 'The account you are transferring to is not in this budget.',
   account_closed: 'This account is closed. Reopen it to add or change transactions.',

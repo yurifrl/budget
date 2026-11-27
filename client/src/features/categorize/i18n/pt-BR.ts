@@ -18,13 +18,23 @@ const m: Translation<typeof en> = {
     one: '{count} transação sem categoria · sugestões prontas para {ready}',
     other: '{count} transações sem categoria · sugestões prontas para {ready}',
   },
+  'queue.left': {
+    one: '{count} transação sem categoria',
+    other: '{count} transações sem categoria',
+  },
+  'queue.answers': {
+    one: '{count} resposta de transferência',
+    other: '{count} respostas de transferência',
+  },
+  /** Com respostas de transferência esperando: contadas à parte da fila. */
+  'queue.subtitleMixed': '{left} · {answers} · sugestões prontas para {ready}',
 
   'bundles.acceptAllTitle': {
     one: '{count} transação em {bundles} pacote está em {percent}% ou mais',
     other: '{count} transações em {bundles} pacotes estão em {percent}% ou mais',
   },
   'bundles.acceptAllBody':
-    'Um clique categoriza todas. Você pode desfazer, e cada uma continua editável no registro.',
+    'Um clique categoriza todas. Transferências não entram: responda-as acima, em Transferências. Você pode desfazer, e cada uma continua editável no registro.',
   'bundles.acceptAll': {
     one: 'Aceitar tudo acima do limite ({count} transação)',
     other: 'Aceitar tudo acima do limite ({count} transações)',
@@ -54,6 +64,9 @@ const m: Translation<typeof en> = {
     other: '{count} transações · nada chegou a {percent}%, escolha à mão ou baixe o limite',
   },
   'noSuggestion.truncated': 'Mostrando as primeiras {shown} de {count}.',
+  'noSuggestion.showAll': 'Mostrar todas',
+  'noSuggestion.showAllLoading': 'Lendo o restante…',
+  'noSuggestion.loadFailed': 'Não foi possível ler o restante da fila.',
 
   'row.chooseCategory': 'Escolher categoria…',
   'row.chooseA11y': 'Escolher uma categoria para {payee}',
@@ -77,6 +90,8 @@ const m: Translation<typeof en> = {
 
   'one.queueTitle': 'Fila',
   'one.queueLeft': '{count} restantes',
+  /** O mesmo contador com as respostas do Jev ao lado: "12 restantes · 2 respostas". */
+  'one.queueLeftMixed': '{left} · {answers}',
   'one.queueOrder': 'Maior confiança primeiro',
   'one.progress': '{position} de {total}',
   'one.moreBelow': {
@@ -180,10 +195,17 @@ const m: Translation<typeof en> = {
   'run.button': 'Executar Jev',
   'run.confirmTitle': 'EXECUTAR JEV',
   'run.confirmBody': {
-    one: 'Perguntar ao Jev sobre {count} transação? As sugestões aparecem nesta fila para você aceitar ou pular; nada é aplicado automaticamente.',
-    other: 'Perguntar ao Jev sobre {count} transações? As sugestões aparecem nesta fila para você aceitar ou pular; nada é aplicado automaticamente.',
+    one: 'Perguntar ao Jev sobre {count} transação? As respostas aparecem nesta página para você aceitar ou pular — uma categoria nos pacotes e na fila, uma transferência em Transferências; nada é aplicado automaticamente.',
+    other: 'Perguntar ao Jev sobre {count} transações? As respostas aparecem nesta página para você aceitar ou pular — uma categoria nos pacotes e na fila, uma transferência em Transferências; nada é aplicado automaticamente.',
   },
-  'run.rest': 'Cada execução pergunta sobre até {batch} transações; execute de novo para o restante.',
+  'run.countLabel': 'Quantas enviar',
+  'run.countAll': 'Todas as que esperam ({count})',
+  'run.countInvalid': 'Digite um número inteiro a partir de 1, ou deixe o campo vazio para todas as que esperam.',
+  'run.countClamped': 'Só {max} podem ir agora: esta execução pega {max}.',
+  'run.checking': 'Verificando o que pode ser enviado agora…',
+  'run.hourSpent': 'O limite por hora acabou: em cerca de {minutes} min abre uma vaga.',
+  'run.hourTrims':
+    'O limite de {limit} transações por hora permite {count} agora; o resto espera uma vaga.',
   'run.confirmStart': 'Executar',
   'run.never': 'Nenhuma execução ainda.',
   'run.waiting': 'Na fila…',
@@ -221,8 +243,40 @@ const m: Translation<typeof en> = {
     'Nenhuma chave da API do Jev pode ser usada: o dono deste orçamento precisa salvar uma, ou a chave compartilhada precisa estar ligada.',
   'run.keyLink': 'Chave da API do Jev',
   'run.empty':
-    'Nada a perguntar agora: nenhuma transação que precisa de categoria está esperando resposta do Jev.',
+    'Nada a perguntar agora: nenhuma transação esperando resposta do Jev, precise ela de categoria ou pareça transferência.',
   'run.startFailed': 'Não foi possível iniciar a execução.',
   'run.loadFailed': 'Não foi possível ler o estado da execução.',
+
+  // Transferências: os pares do matcher e as respostas "é transferência" do Jev,
+  // acima dos bundles de categoria (as do Jev agrupadas pelo par de contas).
+  'transfer.title': 'TRANSFERÊNCIAS',
+  'transfer.jevHeading': 'O JEV DIZ TRANSFERÊNCIA',
+  'transfer.matcherHeading': 'PARECE TRANSFERÊNCIA',
+  'transfer.to': 'Transferência para {account}',
+  'transfer.from': 'Transferência de {account}',
+  'transfer.pair': '{out} → {in}',
+  'transfer.percent': '{percent}%',
+  'transfer.accept': 'Aceitar',
+  'transfer.acceptPair': 'Aceitar todas ({count})',
+  'transfer.refuse': 'Não é transferência',
+  'transfer.skip': 'Pular',
+  'transfer.subject': '{payee} · {amount}',
+  'transfer.filedTo': 'Transferência · {account}',
+  'transfer.refusedToast': 'Marcada como não sendo transferência',
+  'transfer.linkedCount': { one: '{count} transferência ligada', other: '{count} transferências ligadas' },
+  'transfer.loadFailed': 'Não foi possível ler as transferências sugeridas pelo Jev.',
+  'transfer.matcherFailed': 'Não foi possível ler os pares de transferência encontrados para você.',
+  'transfer.refuseFailed': 'Não foi possível registrar “não é transferência”.',
+  'transfer.errorRefused': 'Esta linha foi respondida como “não é transferência”; ligue no registro para torná-la uma.',
+  'transfer.errorCategorized': 'Esta linha já tem categoria, então não é mais transferência.',
+  'transfer.errorNoCategory': 'Esta linha não precisa mais de categoria: já é transferência.',
+  /** Um a um: os pares não são respondidos ali. */
+  'transfer.paneNote': {
+    one: '{count} par parece transferência: reveja em Pacotes',
+    other: '{count} pares parecem transferências: reveja em Pacotes',
+  },
+  'transfer.focusLabel': 'TRANSFERÊNCIA',
+  'transfer.focusHint': 'Aceitar liga os dois lados e não grava categoria.',
+
 };
 export default m;

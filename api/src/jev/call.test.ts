@@ -22,7 +22,8 @@ const call = (fetchImpl: typeof fetch, options = OPTIONS): JevCall => ({
     memo: 'compra da semana',
     amount: -58900,
     date: '2026-11-20',
-    account: 'Checking',
+    account: { name: 'Checking', kind: 'checking' },
+    counterpart: { found: false, account: null },
     payeeHistory: ['Food / Groceries'],
   },
   options,
@@ -52,10 +53,45 @@ describe('classifyTransaction', () => {
       ),
     );
     expect(suggestions).toEqual([
-      { categoryId: OPTIONS[0]!.id, confidence: 0.71 },
-      { categoryId: OPTIONS[1]!.id, confidence: 0.21 },
-      { categoryId: OPTIONS[3]!.id, confidence: 0.05 },
+      { categoryId: OPTIONS[0]!.id, transferAccountId: null, confidence: 0.71 },
+      { categoryId: OPTIONS[1]!.id, transferAccountId: null, confidence: 0.21 },
+      { categoryId: OPTIONS[3]!.id, transferAccountId: null, confidence: 0.05 },
     ]);
+  });
+
+  test('a transfer option answers with the account it names, never a category', async () => {
+    const account = '55555555-5555-4555-8555-555555555555';
+    const { suggestions } = await classifyTransaction(
+      call(
+        answering(
+          choice({
+            [`transfer:${account}`]: 0.8,
+            [OPTIONS[0]!.id]: 0.15,
+          }),
+        ),
+        [...OPTIONS, { id: `transfer:${account}`, label: 'Transfer / Savings' }],
+      ),
+    );
+    expect(suggestions).toEqual([
+      { categoryId: null, transferAccountId: account, confidence: 0.8 },
+      { categoryId: OPTIONS[0]!.id, transferAccountId: null, confidence: 0.15 },
+    ]);
+  });
+
+  test('"not a transfer" winning is no suggestion at all, never a target', async () => {
+    const account = '55555555-5555-4555-8555-555555555555';
+    const { suggestions } = await classifyTransaction(
+      call(
+        answering(
+          choice({
+            not_transfer: 0.7,
+            [`transfer:${account}`]: 0.3,
+          }),
+        ),
+        [{ id: `transfer:${account}`, label: 'Transfer / Savings' }, { id: 'not_transfer', label: 'Not a transfer' }],
+      ),
+    );
+    expect(suggestions).toEqual([]);
   });
 
   test('sends the payee history and milliunits converted to currency units', async () => {
@@ -157,7 +193,8 @@ test.skipIf(!process.env.JEV_API_KEY)('a real call with made-up data answers in 
       memo: null,
       amount: -1550,
       date: '2026-01-15',
-      account: 'Conta Corrente',
+      account: { name: 'Conta Corrente', kind: 'checking' },
+      counterpart: { found: false, account: null },
       payeeHistory: ['Food / Groceries'],
     },
     options: OPTIONS,
@@ -166,8 +203,39 @@ test.skipIf(!process.env.JEV_API_KEY)('a real call with made-up data answers in 
   expect(typeof model).toBe('string');
   const offered = OPTIONS.map((option) => option.id);
   for (const suggestion of suggestions) {
-    expect(offered).toContain(suggestion.categoryId);
+    const target = suggestion.categoryId ?? suggestion.transferAccountId ?? null;
+    expect(target).not.toBeNull();
+    expect(offered).toContain(target as string);
     expect(suggestion.confidence).toBeGreaterThan(0);
     expect(suggestion.confidence).toBeLessThanOrEqual(1);
   }
+});
+
+/**
+ * The one thing only the live model can prove: given a bank row that says it is
+ * a transfer between the person's own accounts, and a counterpart account to
+ * name, Jev answers with a transfer rather than a spending category. Skipped
+ * without a key, like the shape test above.
+ */
+test.skipIf(!process.env.JEV_API_KEY)('a real call answers a PIX entre contas row with a transfer', async () => {
+  const account = '55555555-5555-4555-8555-555555555555';
+  const { suggestions } = await classifyTransaction({
+    key: process.env.JEV_API_KEY!,
+    facts: {
+      payee: 'Joao Da Silva',
+      bankText: 'PIX TRANSFERENCIA ENTRE CONTAS',
+      memo: 'transferencia',
+      amount: 250000,
+      date: '2026-01-16',
+      account: { name: 'Conta Corrente', kind: 'checking' },
+      counterpart: { found: true, account: 'Poupanca' },
+      payeeHistory: [],
+    },
+    options: [
+      { id: '11111111-1111-4111-8111-111111111111', label: 'Food / Groceries' },
+      { id: `transfer:${account}`, label: 'Transfer / Poupanca' },
+      { id: 'not_transfer', label: 'Not a transfer' },
+    ],
+  });
+  expect(suggestions[0]).toMatchObject({ categoryId: null, transferAccountId: account });
 });

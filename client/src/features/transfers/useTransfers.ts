@@ -54,7 +54,9 @@ export function useTransfers({ budgetId, accountId }: { budgetId: string | null 
   const [toast, setToast] = useState<TransferToastState | null>(null);
   useEffect(() => {
     if (!toast) return;
-    const id = setTimeout(() => setToast(null), toast.undo ? 7000 : 3500);
+    // An undo has to outlive the time it takes to read the line and reach it:
+    // the same 10 s the Categorize accept toast gives.
+    const id = setTimeout(() => setToast(null), toast.undo ? 10_000 : 3500);
     return () => clearTimeout(id);
   }, [toast]);
 
@@ -141,6 +143,8 @@ export function useTransfers({ budgetId, accountId }: { budgetId: string | null 
     all,
     scoped,
     loading: query.isLoading,
+    failed: query.isError,
+    retry: () => void query.refetch(),
     popover,
     popoverItem,
     openPopover: (txnId: string, x: number, y: number) => setPopover({ txnId, x, y }),

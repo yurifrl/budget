@@ -100,14 +100,41 @@ export type JevFacts = {
   amount: number;
   /** YYYY-MM-DD. */
   date: string;
-  account: string;
+  /** The row's own account: its name and what kind of account it is. */
+  account: { name: string; kind: string };
+  /** Whether another account holds the opposite side of this row, and which. */
+  counterpart: { found: boolean; account: string | null };
   /** `Group / Category` labels this payee was categorized as before, newest first. */
   payeeHistory: string[];
 };
 
 export type JevOption = { id: string; label: string };
-export type JevSuggestion = { categoryId: string; confidence: number };
-/** What one call answered: the categories it prefers (most probable first, top three) and the model that answered. */
+
+/**
+ * A transfer option names an account, not a category: its id is this prefix
+ * plus the account id, so the answer maps back to an account without a second
+ * table to keep in step with the options sent.
+ */
+export const TRANSFER_OPTION = 'transfer:';
+
+/**
+ * The option a row asks for when the answer may be "none of these": a row that
+ * is only offered transfer options is also offered this one, so Jev can say the
+ * row is an ordinary inflow instead of naming a transfer it does not believe in.
+ * It is never a suggestion of its own.
+ */
+export const NOT_TRANSFER_OPTION = 'not_transfer';
+
+/**
+ * One suggestion: a category (`categoryId`), or a transfer to one of the
+ * budget's accounts (`transferAccountId`). Exactly one of the two is set.
+ */
+export type JevSuggestion = {
+  categoryId: string | null;
+  transferAccountId?: string | null;
+  confidence: number;
+};
+/** What one call answered: the targets it prefers (most probable first, top three) and the model that answered. */
 export type JevAnswer = { suggestions: JevSuggestion[]; model: string };
 
 export type JevCall = {
@@ -142,7 +169,7 @@ function kindOfStatus(status: number): CategorizeFailureKind {
 
 /** One call. */
 export async function classifyTransaction(call: JevCall): Promise<JevAnswer> {
-  if (call.options.length === 0) throw new JevFailure('schema_mismatch', 'jev was given no category options');
+  if (call.options.length === 0) throw new JevFailure('schema_mismatch', 'jev was given no options to choose from');
   const body = {
     model: JEV_MODEL,
     state: {
@@ -151,13 +178,15 @@ export async function classifyTransaction(call: JevCall): Promise<JevAnswer> {
       memo: call.facts.memo ?? '',
       amount: call.facts.amount / 1000,
       date: call.facts.date,
-      account: call.facts.account,
+      own_account: call.facts.account,
+      possible_transfer_counterpart: call.facts.counterpart,
       same_payee_categorized_before_as: call.facts.payeeHistory,
     },
     questions: {
       category: {
         type: 'choice',
-        instructions: 'Which budget category does this bank transaction belong to?',
+        instructions:
+          'Is this bank transaction a transfer between two of the person\u2019s own accounts, or which budget category does it belong to? An option labelled "Transfer / <account>" means the money moved to, or arrived from, that account: the two legs of one movement are a transfer and carry no category. "Not a transfer" means the money did not move between the person\u2019s accounts.',
         criteria: Object.fromEntries(call.options.map((option) => [option.id, option.label])),
       },
     },
@@ -201,11 +230,22 @@ export async function classifyTransaction(call: JevCall): Promise<JevAnswer> {
   const probabilities = probabilitiesOf(answer);
   if (!probabilities) throw new JevFailure('schema_mismatch', 'jev answered choice without probabilities');
 
-  const suggestions = Object.entries(probabilities)
+  const ranked = Object.entries(probabilities)
     .filter(([id, probability]) => offered.has(id) && probability > 0)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, JEV_TOP)
-    .map(([categoryId, confidence]) => ({ categoryId, confidence: Math.min(1, Math.max(0, confidence)) }));
+    .sort((a, b) => b[1] - a[1]);
+  // "Not a transfer" is a way to answer, not a target: when it wins, the row
+  // has no suggestion at all, and it is never written as one.
+  const suggestions =
+    ranked[0]?.[0] === NOT_TRANSFER_OPTION
+      ? []
+      : ranked
+          .filter(([id]) => id !== NOT_TRANSFER_OPTION)
+          .slice(0, JEV_TOP)
+          .map(([id, confidence]) => ({
+            categoryId: id.startsWith(TRANSFER_OPTION) ? null : id,
+            transferAccountId: id.startsWith(TRANSFER_OPTION) ? id.slice(TRANSFER_OPTION.length) : null,
+            confidence: Math.min(1, Math.max(0, confidence)),
+          }));
   // The model that actually answered (`typesafe/jev-1.13-20260917`), which a
   // later answer may differ from; falls back to the one we asked for.
   const answered = envelope.data.model;
@@ -244,7 +284,8 @@ export async function probeJevKey(key: string, fetchImpl?: typeof fetch): Promis
       amount: -1550,
       date: '2026-01-15',
       memo: null,
-      account: 'Conta Corrente',
+      account: { name: 'Conta Corrente', kind: 'checking' },
+      counterpart: { found: false, account: null },
       payeeHistory: ['Food / Groceries'],
     },
     options: [

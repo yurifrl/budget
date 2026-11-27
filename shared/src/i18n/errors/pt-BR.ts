@@ -72,7 +72,12 @@ const m: Translation<typeof en> = {
   jev_no_credits: 'A conta do OpenRouter por trás da chave do Jev está sem créditos. Adicione créditos ou use outra chave.',
   categorize_no_categories: 'Este orçamento não tem nenhuma categoria de onde o Jev possa sugerir. Crie uma categoria comum primeiro.',
   categorize_too_many_categories:
-    'Este orçamento tem mais de {max} categorias de onde sugerir, mais do que o Jev aceita.',
+    'Este orçamento oferece mais de {max} opções (categorias e contas), mais do que o Jev aceita.',
+  categorize_transfer_pair_gone:
+    'O outro lado desta transferência não está mais disponível. Nada foi alterado.',
+  categorize_transfer_refused: 'Esta linha já foi respondida como "não é transferência" para essa conta.',
+  categorize_hourly_limit:
+    'Este orçamento já enviou {limit} transações ao Jev na última hora. O limite libera em cerca de {minutes} minutos; execute de novo depois.',
   cannot_transfer_to_same_account: 'Escolha outra conta: uma transferência não pode ir para a mesma conta.',
   transfer_account_not_in_budget: 'A conta de destino da transferência não está neste orçamento.',
   account_closed: 'Esta conta está encerrada. Reabra-a para adicionar ou alterar transações.',

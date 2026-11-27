@@ -40,6 +40,8 @@ export const transfersApi = connectionsApi.injectEndpoints({
         { type: 'Transactions', id: budgetId },
         { type: 'Accounts', id: budgetId },
         { type: 'Payees', id: budgetId },
+        { type: 'Categorize', id: budgetId },
+        { type: 'CategorizeRun', id: budgetId },
       ],
     }),
 
@@ -49,6 +51,8 @@ export const transfersApi = connectionsApi.injectEndpoints({
         { type: 'Transactions', id: budgetId },
         { type: 'Accounts', id: budgetId },
         { type: 'Payees', id: budgetId },
+        { type: 'Categorize', id: budgetId },
+        { type: 'CategorizeRun', id: budgetId },
       ],
     }),
 
@@ -59,6 +63,8 @@ export const transfersApi = connectionsApi.injectEndpoints({
         { type: 'Transactions', id: budgetId },
         { type: 'Accounts', id: budgetId },
         { type: 'Payees', id: budgetId },
+        { type: 'Categorize', id: budgetId },
+        { type: 'CategorizeRun', id: budgetId },
       ],
     }),
 

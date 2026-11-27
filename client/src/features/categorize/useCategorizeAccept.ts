@@ -59,6 +59,13 @@ import {
   skipFailureKind,
   type PickedCategory,
 } from './page.logic';
+import {
+  transferAcceptError,
+  transferDecisions,
+  transferHeading,
+  transferSubject,
+  type TransferItem,
+} from './transfer.logic';
 import { undoInChunks, undoOutcome } from './undo.logic';
 
 /** How long the message toast stays; a skip in the strip does not depend on it. */
@@ -84,6 +91,26 @@ export interface CategorizeAccept {
   sendSkips: () => Promise<void>;
   acceptBundle: (bundle: ShownBundle, knownRows: readonly CategorizeQueueRow[]) => Promise<boolean>;
   acceptAll: (bundles: readonly ShownBundle[]) => Promise<boolean>;
+  /**
+   * Accept Jev's transfer answers: each row is linked to the account it names.
+   * Same toast and Undo as a category accept; a transfer files no category, so
+   * the toast names the transfer instead of a category.
+   */
+  acceptTransfers: (items: readonly TransferItem[]) => Promise<boolean>;
+  /**
+   * Move a Jev transfer answer to the same "Leaving uncategorized" strip a
+   * category row uses: nothing is sent until Done, Undo cancels it. The row is
+   * left without a category and without a transfer answer, for good.
+   */
+  skipTransfer: (item: TransferItem) => boolean;
+  /**
+   * Hide Jev's transfer answers while their refusal is on its way: the lists do
+   * not show a row already answered, and a second press cannot send it twice.
+   * They are not queue rows, so no queue count moves; `restore` puts them back.
+   */
+  refuseInFlight: (ids: readonly string[]) => { done: () => void; restore: () => void };
+  /** Say something with no stack entry behind it: no Undo. */
+  notice: (label: string) => void;
   /** Undo the most recent action; resolves to the transactions that came back to the queue. */
   undoLast: () => Promise<string[]>;
   dismissError: () => void;
@@ -146,7 +173,7 @@ export function useCategorizeAccept({
     setGoneBundleKeys(new Set());
     // A pending skip whose row has left the queue (categorized elsewhere, taken
     // by a bulk accept) is dropped, never sent: there is nothing left to skip.
-    const strip = pendingSkips(stateRef.current).filter((entry) => !entry.sending);
+    const strip = pendingSkips(stateRef.current).filter((entry) => !entry.sending && !entry.fromTransfer);
     const gone = rowsGoneFromQueue(
       strip.map((entry) => entry.item.transactionId),
       new Set(rowIdsRef.current),
@@ -240,7 +267,7 @@ export function useCategorizeAccept({
     items: CategorizeDecisionItem[],
     filed: FiledItem[],
     label: string,
-    { exclusive = false }: { exclusive?: boolean } = {},
+    { exclusive = false, transfer = false }: { exclusive?: boolean; transfer?: boolean } = {},
   ): Promise<boolean> => {
     if (!budgetId || items.length === 0) return Promise.resolve(false);
     if (exclusive && inFlight.current) return Promise.resolve(false);
@@ -250,7 +277,7 @@ export function useCategorizeAccept({
     send({
       type: 'acceptStarted',
       items: filed,
-      entry: { seq, kind: 'accept', label, transactionIds: requestIds, confirmed: false },
+      entry: { seq, kind: 'accept', label, transactionIds: requestIds, confirmed: false, fromTransfer: transfer },
     });
     const request = (async () => {
       try {
@@ -260,7 +287,8 @@ export function useCategorizeAccept({
         send({ type: 'acceptSucceeded', seq, transactionIds: ids, requestIds, label });
         return true;
       } catch (err) {
-        send({ type: 'acceptFailed', seq, requestIds, error: apiErrorMessage(err, t('error.accept')) });
+        const sentence = transfer ? transferAcceptError(err) : undefined;
+        send({ type: 'acceptFailed', seq, requestIds, error: sentence ?? apiErrorMessage(err, t('error.accept')) });
         refetch();
         return false;
       } finally {
@@ -349,6 +377,42 @@ export function useCategorizeAccept({
     };
     send({ type: 'skipStarted', entry: { seq, kind: 'skip', label: skippedLabel(item), item, meta } });
     return true;
+  };
+  /**
+   * Move a Jev transfer answer to the same "Leaving uncategorized" strip a
+   * category row uses: nothing is sent until Done, and the row can be taken
+   * back there. A skip is a standing decision, so it is never offered again.
+   */
+  const skipTransfer = (item: TransferItem): boolean => {
+    if (!budgetId) return false;
+    const entryItem: FiledItem = {
+      transactionId: item.transaction_id,
+      categoryId: '',
+      categoryName: '',
+      subject: transferSubject(item, formatMoney),
+    };
+    const seq = nextSeq();
+    const meta = { payeeId: item.payee_id, topCategoryId: null, amount: item.amount };
+    send({
+      type: 'skipStarted',
+      entry: { seq, kind: 'skip', label: skippedLabel(entryItem), item: entryItem, meta, fromTransfer: true },
+    });
+    return true;
+  };
+
+  /**
+   * Hide Jev's transfer answers while their refusal is on its way, so the lists
+   * do not show a row the person already answered and a second press cannot send
+   * it twice. They never count against the queue: it does not list them. The
+   * caller restores them when the request fails.
+   */
+  const refuseInFlight = (ids: readonly string[]): { done: () => void; restore: () => void } => {
+    const copy = [...ids];
+    send({ type: 'refuseStarted', ids: copy });
+    return {
+      done: () => send({ type: 'refuseFinished', ids: copy }),
+      restore: () => send({ type: 'refuseFailed', ids: copy }),
+    };
   };
 
   const cancelSkip = (transactionId: string): boolean => {
@@ -519,6 +583,29 @@ export function useCategorizeAccept({
     return request;
   };
 
+  /**
+   * File Jev's transfer answers. The link is the server's own (the row's payee
+   * becomes the account's transfer payee and the other side is paired), so this
+   * is the same request path as a category accept — only the target differs —
+   * and the same toast/Undo covers it.
+   */
+  const acceptTransfers = (items: readonly TransferItem[]): Promise<boolean> => {
+    if (items.length === 0) return Promise.resolve(false);
+    const filed: FiledItem[] = items.map((item) => ({
+      transactionId: item.transaction_id,
+      categoryId: item.transferAccountId,
+      categoryName: transferHeading(item),
+      subject: transferSubject(item, formatMoney),
+    }));
+    // One answer at a time: a second press while the first is in flight is dropped,
+    // and the toast says how many rows went, never just the first one.
+    const label =
+      filed.length === 1
+        ? t('toast.filed', { subject: filed[0]!.subject, category: filed[0]!.categoryName })
+        : t('transfer.linkedCount', { count: filed.length });
+    return runItems(transferDecisions(items), filed, label, { exclusive: true, transfer: true });
+  };
+
   const undoLast = async (): Promise<string[]> => {
     if (!budgetId) return [];
     // Claim the top entry NOW, in press order: a press made while this waits
@@ -565,10 +652,14 @@ export function useCategorizeAccept({
     fileRow,
     pickCategory,
     skipRow,
+    skipTransfer,
+    refuseInFlight,
     cancelSkip,
     sendSkips,
     acceptBundle,
     acceptAll,
+    acceptTransfers,
+    notice: (label: string) => send({ type: 'notice', label }),
     undoLast,
     dismissError: () => send({ type: 'clearError' }),
   };
