@@ -4,14 +4,14 @@
   "id": "budget-hr6q",
   "title": "Accounts: show a card's settled balance next to its working balance (matches the bank's figure)",
   "description": "Owner chose 'show both' 2026-11-27. Bank figure = cleared + pending installments, without pending single purchases (see docs/evidence/balance-gaps/REPORT.md).",
-  "status": "open",
+  "status": "ready-to-review",
   "priority": 1,
   "issue_type": "feature",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-27T13:35:06.829Z",
-  "updated_at": "2026-11-27T13:35:13.591Z",
+  "updated_at": "2026-11-27T14:29:28.743Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -19,7 +19,7 @@
   "parent": "budget-4u4d",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Rule: settled = cleared_balance + pending (live, uncleared, not upcoming) rows that are committed — a budget-transfer leg (card payment) or an installment per readInstallationMeta; lone authorizations excluded. api/src/budget/domain/settled-balance.ts:39, store listPendingCommitRows api/src/budget/store/accounts.ts:58, wired in api/src/budget/routes/accounts.ts:344. Contract: accountRowSchema.settled_balance (shared/src/contracts/budget/outputs.ts:326) on list + create + update. UI: BalanceFormulaRow 'Bank balance' only for a single CREDIT account whose figure differs (client/src/domain/register.ts:203). Page read: Itau Cartão working -R$ 21.448,14 / bank -R$ 21.151,16; Nubank Cartão working -R$ 2.059,02 / bank -R$ 2.050,36. Checks: api+shared+client tsc clean, eslint clean (all four), shared 232 pass, api full 1845 pass 2 skip 0 fail, client 1708 pass.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
@@ -31,9 +31,59 @@
     "changeset": {
       "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
       "baseBranch": "main"
+    },
+    "agent_session": "budget-hr6q-omp",
+    "finished_at": "2026-11-27T14:29:27.583Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 43,
+        "files": 370,
+        "additions": 18902,
+        "deletions": 1534
+      },
+      "head": "e1557f4e3a92604034e12f5b1a37208c9263b9fc",
+      "at": "2026-11-27T14:29:27.583Z"
     }
   },
-  "attachments": [],
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-84f789",
+      "name": "01-itau-1440.png",
+      "mime": "image/png",
+      "size": 276873,
+      "sha256": "6dbff52e8275b95f7ef0335471d1030a3072c99a5a7cb4f47ab6a90dd9f25c38",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-dac047",
+      "name": "02-nubank-1440.png",
+      "mime": "image/png",
+      "size": 222802,
+      "sha256": "9ee0ed35d400435372ad5b7d7b8faeb53a7d5a11727d7ae6f0bf165ff8ba1794",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-8a14ec",
+      "name": "03-itau-390.png",
+      "mime": "image/png",
+      "size": 241176,
+      "sha256": "4064cd9ea71abf6b0d22785a1ecaef2ad57836066945b76ee0d209ab8e1b64a3",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-2dd087",
+      "name": "04-nubank-390.png",
+      "mime": "image/png",
+      "size": 248974,
+      "sha256": "979e80dccebd131e1200a19dea551e28a8bdee47528cf807fdb4368ad3425e2f",
+      "metadata": {}
+    }
+  ],
   "dependencies": [],
   "dependency_count": 0,
   "dependent_count": 0,

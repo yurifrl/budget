@@ -4,22 +4,22 @@
   "id": "budget-dt00",
   "title": "Server: remove the 'outside' transfer state (owner: 'that is just a transaction'): Categorize must offer those rows, shared categoryNeed must not return transfer_outside, matcher stops producing it",
   "description": "From review-p8td.md follow-up 1 (on budget-p8td). The client no longer reads the 'outside' mark and shows such rows as needing a category, but the server still excludes them from the Categorize queue (api/src/categorize/store.ts:355) and shared/src/domain/category-needs.ts still returns transfer_outside; the matcher's waiting → outside policy and the marks endpoint still accept it. Remove the state end to end without changing balances: existing 'outside' marks are ignored (kept in the table), rows are ordinary uncategorized rows everywhere. Also decide what the 'waiting' state of old per-payee transfer rules becomes once those rules are converted.",
-  "status": "ready-to-review",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-25T16:49:52.495Z",
-  "updated_at": "2026-11-27T13:32:21.654Z",
+  "updated_at": "2026-11-27T13:58:33.985Z",
   "started_at": null,
-  "closed_at": null,
+  "closed_at": "2026-11-27T13:58:16.161Z",
   "due_at": null,
   "defer_until": null,
   "parent": "budget-e67y",
   "sprint": null,
   "labels": [],
-  "notes": "Removed the 'outside' transfer state end to end (commit 5a16aa6 on tk/budget-dt00). categoryNeed has no transfer_outside; transfer_pending is 'waiting' only; budget_transfers_mark refuses 'outside' (400 invalid_input, own sentence; released app only sends dismissed|null). Matcher: no pending outside from marks or no_match policy (past the wait an outside-policy row is an ordinary transaction); old outside marks read as 'manual' (suggested, never auto-linked). Categorize: only dismissed + refusal withhold transfer options. Old marks untouched, no migration. Balance proof tests in api transfers.test.ts and client mapping.test.ts. waiting kept as is (still exits via link or expiry). Checks green: shared/api/client tsc, eslint, bun test; src/categorize x3; 9 transfer files.",
+  "notes": "Removed the 'outside' transfer state end to end (commit 5a16aa6 on tk/budget-dt00). categoryNeed has no transfer_outside; transfer_pending is 'waiting' only; budget_transfers_mark refuses 'outside' (400 invalid_input, own sentence; released app only sends dismissed|null). Matcher: no pending outside from marks or no_match policy (past the wait an outside-policy row is an ordinary transaction); old outside marks read as 'manual' (suggested, never auto-linked). Categorize: only dismissed + refusal withhold transfer options. Old marks untouched, no migration. Balance proof tests in api transfers.test.ts and client mapping.test.ts. waiting kept as is (still exits via link or expiry). Checks green: shared/api/client tsc, eslint, bun test; src/categorize x3; 9 transfer files.\nlanded outside tk close at 3f264f1 (branch tk/budget-dt00 merged into main by hand)\nRemoved the 'outside the budget' transfer state end to end, no data migration; old marks read as manual by the matcher; no auto-link in a group that holds a manual row. Reviewed with probes, merged into local main as 3f264f1 (commits 5bb070c, c77f1b2). Not pushed.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
@@ -30,7 +30,851 @@
     "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-dt00",
     "changeset": {
       "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
-      "baseBranch": "main"
+      "head": "c77f1b2ea3c98791b001956d5125a8085db85aaf",
+      "commits": [
+        {
+          "sha": "c77f1b2",
+          "subject": "fix(transfers): no auto-link in a group that holds a manual row (budget-dt00)"
+        },
+        {
+          "sha": "5bb070c",
+          "subject": "fix(transfers): remove the \"outside the budget\" transfer state (budget-dt00)"
+        },
+        {
+          "sha": "cf56fe3",
+          "subject": "wip"
+        },
+        {
+          "sha": "10561fb",
+          "subject": "wip"
+        },
+        {
+          "sha": "96b15ea",
+          "subject": "wip"
+        },
+        {
+          "sha": "932ae92",
+          "subject": "feat(categorize): run of any size, and transfers"
+        },
+        {
+          "sha": "a7f4b84",
+          "subject": "release: app-v2026.11.26"
+        },
+        {
+          "sha": "b57d211",
+          "subject": "deploy: images 2026.11.26-01"
+        },
+        {
+          "sha": "79f0a89",
+          "subject": "deploy: images sha-8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61"
+        },
+        {
+          "sha": "fac6c1f",
+          "subject": "docs: release notes v2026.11.26-01"
+        }
+      ],
+      "files": [
+        {
+          "path": "'",
+          "status": "A"
+        },
+        {
+          "path": ".agents/plans/2026-11-27_categorize-transfers-and-run-size.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-039382-02-plan-bottom.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-039382.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-03ec89-4-december-1440.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-03ec89.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-046cb0-01-plan-before.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-046cb0.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-07c28a-import-prod-run3.txt.txt",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-07c28a.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-238375-02-plan-footer-archived-12.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-238375.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2ca457-verify-crop.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-2ca457.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-3bb41b-verify-plan-row.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-3bb41b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-429c53-03-dialog-destination.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-429c53.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-4588b7-02-row-menu.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-4588b7.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-4b3145-archived-numbers.txt.txt",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-4b3145.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-580923-08-case1-before.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-580923.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-69284a-03-archived-page.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-69284a.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6fa2d3-6-detail-390.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-6fa2d3.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7ba827-05-plan-after.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7ba827.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7fe58a-06-case2-dialog-rta.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-7fe58a.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-815aaa-import-prod-evidence.txt.txt",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-815aaa.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-879ee9-README.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-879ee9.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-990cef-01-row-menu-archive.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-990cef.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b833be-3-categorize-1440.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-b833be.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-bb9bfb-5-plan-row-390.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-bb9bfb.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-bbc65d-verify-categorize.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-bbc65d.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c34ed8-09-case1-immediate.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c34ed8.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c3b95e-04-dialog-picked.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-c3b95e.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-daca12-2-detail-1440.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-daca12.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-dd61bf-REPORT.md.md",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-dd61bf.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ee256b-07-case2-plan-after.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ee256b.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ef88d1-1-plan-row-1440.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-ef88d1.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f0d9d1-05-settings-menu-archived-row.png.png",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/attachments/ev-f0d9d1.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/cursors.json",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/events.jsonl",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/history/budget-2bqe.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-4u4d.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-9ekv.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-dt00.jsonl",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/history/budget-euff.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-gcah.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-hr6q.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-lul6.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-luql.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-oxbr.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-pzrk.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-qlog.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-tcqa.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-vyk0.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-vzyx.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-wrbk.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-wxym.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-xxpr.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-xzmp.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-zbqd.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/history/budget-zxo6.jsonl",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-2bqe.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-4u4d.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-9ekv.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-dt00.json",
+          "status": "M"
+        },
+        {
+          "path": ".tasks/issues/budget-euff.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-gcah.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-hr6q.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-lul6.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-luql.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-oxbr.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-pzrk.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-qlog.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-tcqa.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-vyk0.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-vzyx.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-wrbk.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-wxym.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-xxpr.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-xzmp.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-zbqd.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/issues/budget-zxo6.json",
+          "status": "A"
+        },
+        {
+          "path": ".tasks/runtime.json",
+          "status": "M"
+        },
+        {
+          "path": "CHANGELOG.md",
+          "status": "M"
+        },
+        {
+          "path": "TODO.md",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0129_category_suggestions_transfer_target.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0130_categorize_transfer_refusals.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/db/migrations/0131_categorize_hourly_calls.sql",
+          "status": "A"
+        },
+        {
+          "path": "api/src/access.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/app.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-links.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/domain/transfer-matcher.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/routes/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/budget/store/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/catalog-outputs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/activities.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/candidate-rule.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/decided.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/decision-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/job.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/queue-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/routes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/routes.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/run-status.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/run-store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/run.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/run.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/store-writes.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/store.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/testing/fixtures.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/categorize/transfer-store.ts",
+          "status": "A"
+        },
+        {
+          "path": "api/src/categorize/workflows.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/connections/transfer-integrity.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/migrate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/validate.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/core/validate.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jev/call.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jev/call.ts",
+          "status": "M"
+        },
+        {
+          "path": "api/src/jev/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/VERSION",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/categorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/api/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/mapping.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/budget/data/mapping.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/register.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/types.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/domain/zeroSum.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/BundlesView.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/CategorizeScreen.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/OneByOneView.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/QueuePane.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/RunCard.tsx",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/TransferFocus.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/TransferSection.tsx",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/accept.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/accept.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/i18n/pt-BR.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/keys.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/keys.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/oneByOne.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/oneByOne.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/queue.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/queue.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/run.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/run.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/transfer.logic.test.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/transfer.logic.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorize.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizeAccept.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizeKeys.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizePage.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizeRun.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/categorize/useCategorizeTransfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "client/src/features/categorize/useOneByOne.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/features/transfers/useTransfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "client/src/shell/rail/rail.logic.ts",
+          "status": "M"
+        },
+        {
+          "path": "docs/decisions.md",
+          "status": "M"
+        },
+        {
+          "path": "k8s/values.yaml",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/budget/transfers.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/contracts.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/index.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/outputs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/run.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/contracts/categorize/transfers.ts",
+          "status": "A"
+        },
+        {
+          "path": "shared/src/domain/category-needs.test.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/domain/category-needs.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/errors.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/en.ts",
+          "status": "M"
+        },
+        {
+          "path": "shared/src/i18n/errors/pt-BR.ts",
+          "status": "M"
+        }
+      ],
+      "counts": {
+        "additions": 7734,
+        "deletions": 778
+      }
     },
     "agent_session": "011e3c6b-8148-4a11-8593-8d1e761197c6",
     "finished_at": "2026-11-27T13:32:21.042Z",
@@ -44,6 +888,17 @@
       },
       "head": "5a16aa60145d0ecfec698c22a9bd3c2f6325ec2d",
       "at": "2026-11-27T13:32:21.042Z"
+    },
+    "landedOutside": {
+      "commit": "3f264f1f3aca6964a81ec042471302f9aa7004cd",
+      "branchHead": "c77f1b2ea3c98791b001956d5125a8085db85aaf",
+      "baseBranch": "main",
+      "at": "2026-11-27T13:58:16.088Z"
+    },
+    "worktreePruned": {
+      "pruned": true,
+      "removedWorktree": true,
+      "removedBranch": true
     }
   },
   "attachments": [],

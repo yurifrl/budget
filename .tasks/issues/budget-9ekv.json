@@ -4,22 +4,22 @@
   "id": "budget-9ekv",
   "title": "Audit every import path for idempotency (bank sync, statement/CSV import, backup restore, prod import): same input twice = no new rows; tests for each",
   "description": "Owner 2026-11-27: 'every import in the system should be idempotent'. One duplicate (-800,00 on Empresa) came from the statement import matching a payee by case; fixed on tk/budget-pzrk.",
-  "status": "open",
+  "status": "ready-to-review",
   "priority": 1,
   "issue_type": "task",
   "owner": null,
-  "assignee": null,
+  "assignee": "yuri",
   "created_by": "yuri",
   "created_at": "2026-11-27T13:35:07.613Z",
-  "updated_at": "2026-11-27T13:35:18.313Z",
-  "started_at": null,
+  "updated_at": "2026-11-27T14:10:40.925Z",
+  "started_at": "2026-11-27T14:10:24.154Z",
   "closed_at": null,
   "due_at": null,
   "defer_until": null,
   "parent": "budget-4u4d",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Audited all import paths. Verdicts: bank sync (import_id provider:external + connection_transactions shadow, per budget since 0106) idempotent; /bulk (generated YNAB:<milli>:<date>:<payee>:<occ> or the file's import_id, partial unique index among live rows, plus statement-text match at same amount+date under any key) idempotent; backup restore replace-in-one-transaction idempotent; prod import replace-scoped idempotent and now tested; repeat generation idempotent (unique (rule_id, occurrence_date)). One NOT idempotent case found: /bulk dedupe reads filter NOT deleted, so deleting an imported row then re-importing the same file re-adds it — bank sync skips tombstones instead. Product decision, filed as budget-z6ob under budget-4u4d; documented in docs/evidence/import-idempotency/REPORT.md. New: api/scripts/import-prod/sink.test.ts (plan run twice, identical counts+fingerprints; one changed memo moves the fingerprint; mutation-verified against users_pkey) and the snapshot fixture moved to api/scripts/import-prod/fixture.ts shared with map.test.ts.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
@@ -31,9 +31,32 @@
     "changeset": {
       "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
       "baseBranch": "main"
+    },
+    "agent_session": "claude-aae2555d-a766-4f18-b576-1d6dd582af75",
+    "finished_at": "2026-11-27T14:10:32.445Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 43,
+        "files": 354,
+        "additions": 18654,
+        "deletions": 1523
+      },
+      "head": "b2cc0e04818cbc61c136c747c5ae745f04a75618",
+      "at": "2026-11-27T14:10:32.445Z"
     }
   },
-  "attachments": [],
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-11f000",
+      "name": "REPORT.md",
+      "mime": "text/markdown",
+      "size": 8854,
+      "sha256": "12d2b146635e05393982c13f3581437468a84f456ef42744cf9761949f5bbb9f",
+      "metadata": {}
+    }
+  ],
   "dependencies": [],
   "dependency_count": 0,
   "dependent_count": 0,
