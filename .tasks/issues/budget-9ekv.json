@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-9ekv",
+  "title": "Audit every import path for idempotency (bank sync, statement/CSV import, backup restore, prod import): same input twice = no new rows; tests for each",
+  "description": "Owner 2026-11-27: 'every import in the system should be idempotent'. One duplicate (-800,00 on Empresa) came from the statement import matching a payee by case; fixed on tk/budget-pzrk.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T13:35:07.613Z",
+  "updated_at": "2026-11-27T13:35:18.313Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": null,
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-9ekv",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-9ekv",
+    "changeset": {
+      "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
+      "baseBranch": "main"
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-xxpr",
+  "title": "Engine: uncategorized CARD spending is deducted from next month's Ready to Assign, as observed in YNAB",
+  "description": "Owner chose 'next month, exactly as YNAB' 2026-11-27. Cash already does this; cardUncategorized in client/src/domain/zeroSum.ts does not (spec R5). YNAB live: Dec RTA dropped by the card R$1 too, payment category unchanged (docs/ynab-plan-parity.md section 3).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T13:35:07.205Z",
+  "updated_at": "2026-11-27T13:35:15.943Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": null,
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-xxpr",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-xxpr",
+    "changeset": {
+      "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
+      "baseBranch": "main"
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

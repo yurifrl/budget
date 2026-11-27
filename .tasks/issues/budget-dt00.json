@@ -4,14 +4,14 @@
   "id": "budget-dt00",
   "title": "Server: remove the 'outside' transfer state (owner: 'that is just a transaction'): Categorize must offer those rows, shared categoryNeed must not return transfer_outside, matcher stops producing it",
   "description": "From review-p8td.md follow-up 1 (on budget-p8td). The client no longer reads the 'outside' mark and shows such rows as needing a category, but the server still excludes them from the Categorize queue (api/src/categorize/store.ts:355) and shared/src/domain/category-needs.ts still returns transfer_outside; the matcher's waiting → outside policy and the marks endpoint still accept it. Remove the state end to end without changing balances: existing 'outside' marks are ignored (kept in the table), rows are ordinary uncategorized rows everywhere. Also decide what the 'waiting' state of old per-payee transfer rules becomes once those rules are converted.",
-  "status": "open",
+  "status": "ready-to-review",
   "priority": 2,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-25T16:49:52.495Z",
-  "updated_at": "2026-11-27T13:17:14.053Z",
+  "updated_at": "2026-11-27T13:32:21.654Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -19,7 +19,7 @@
   "parent": "budget-e67y",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Removed the 'outside' transfer state end to end (commit 5a16aa6 on tk/budget-dt00). categoryNeed has no transfer_outside; transfer_pending is 'waiting' only; budget_transfers_mark refuses 'outside' (400 invalid_input, own sentence; released app only sends dismissed|null). Matcher: no pending outside from marks or no_match policy (past the wait an outside-policy row is an ordinary transaction); old outside marks read as 'manual' (suggested, never auto-linked). Categorize: only dismissed + refusal withhold transfer options. Old marks untouched, no migration. Balance proof tests in api transfers.test.ts and client mapping.test.ts. waiting kept as is (still exits via link or expiry). Checks green: shared/api/client tsc, eslint, bun test; src/categorize x3; 9 transfer files.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
@@ -31,6 +31,19 @@
     "changeset": {
       "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
       "baseBranch": "main"
+    },
+    "agent_session": "011e3c6b-8148-4a11-8593-8d1e761197c6",
+    "finished_at": "2026-11-27T13:32:21.042Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 3,
+        "files": 92,
+        "additions": 5677,
+        "deletions": 759
+      },
+      "head": "5a16aa60145d0ecfec698c22a9bd3c2f6325ec2d",
+      "at": "2026-11-27T13:32:21.042Z"
     }
   },
   "attachments": [],

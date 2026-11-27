@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-xzmp",
+  "title": "Import: second source that reads the production read-only replica (complete copy incl. deleted rows, bank rows, matcher and categorize state)",
+  "description": "Owner approved 2026-11-27: replica only, password in a file on this Mac used only by the import command. Builds on api/scripts/import-prod (source.ts -> ProdSnapshot).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T13:35:06.437Z",
+  "updated_at": "2026-11-27T13:35:10.228Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": null,
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-xzmp",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-xzmp",
+    "changeset": {
+      "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
+      "baseBranch": "main"
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}

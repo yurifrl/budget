@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "_type": "issue",
+  "id": "budget-hr6q",
+  "title": "Accounts: show a card's settled balance next to its working balance (matches the bank's figure)",
+  "description": "Owner chose 'show both' 2026-11-27. Bank figure = cleared + pending installments, without pending single purchases (see docs/evidence/balance-gaps/REPORT.md).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": null,
+  "assignee": null,
+  "created_by": "yuri",
+  "created_at": "2026-11-27T13:35:06.829Z",
+  "updated_at": "2026-11-27T13:35:13.591Z",
+  "started_at": null,
+  "closed_at": null,
+  "due_at": null,
+  "defer_until": null,
+  "parent": "budget-4u4d",
+  "sprint": null,
+  "labels": [],
+  "notes": null,
+  "design": null,
+  "acceptance_criteria": null,
+  "estimated_minutes": null,
+  "spec_id": null,
+  "external_ref": null,
+  "branch": "tk/budget-hr6q",
+  "metadata": {
+    "worktree": "/Users/yuri/Workdir/Yuri/budget/.worktrees/budget-budget-hr6q",
+    "changeset": {
+      "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
+      "baseBranch": "main"
+    }
+  },
+  "attachments": [],
+  "dependencies": [],
+  "dependency_count": 0,
+  "dependent_count": 0,
+  "comments": [],
+  "comment_count": 0
+}
