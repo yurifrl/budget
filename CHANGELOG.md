@@ -1,5 +1,20 @@
 # Changelog
 
+## v2026.11.27 2026-11-27 release
+
+### Changed
+
+- release: v2026.11.27
+- fix(client): bumped expo-image and expo-sharing to SDK 58 patch levels
+- wip
+- fix(transfers): no auto-link in a group that holds a manual row (budget-dt00)
+- fix(transfers): remove the "outside the budget" transfer state (budget-dt00)
+- wip
+- wip
+- wip
+- feat(categorize): run of any size, and transfers
+
+
 ## v2026.11.26-01 2026-11-26 release
 
 ### Changed
