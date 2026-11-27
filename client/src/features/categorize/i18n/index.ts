@@ -11,6 +11,7 @@ export const t = defineMessages('categorize', en, { 'pt-BR': ptBR }, {
     'merchant.cnpj',
     'header.thresholdValue',
     'chip.label',
+    'chip.percent',
     'one.keys.enterKey',
     'one.noMemo',
     'one.rowA11y',
