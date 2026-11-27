@@ -326,6 +326,14 @@ describe('transfer links (spec T1)', () => {
     // The row really reaches the figures: the outflow moves Ready to Assign.
     const without = assembleBudget(casaSource());
     expect(computeBudgetMonth(plain, 202606).readyToAssign).not.toBe(computeBudgetMonth(without, 202606).readyToAssign);
+    // Hand-computed, in cents. Casa alone: no uncategorized row, 120.00 + 50.00
+    // assigned in June -> RTA -17000 (June and July). The two marked rows are
+    // uncategorized cash rows on Itau, so they count in full (R4): -3300 + 2100 =
+    // -1200 -> -18200. Treating the mark as "waiting" or "transfer" (excluded)
+    // would give -17000; counting either row twice or by sign only would not give
+    // -18200 either.
+    expect(computeBudgetMonth(without, 202606).readyToAssign).toBe(-17000);
+    for (const month of [202606, 202607]) expect(computeBudgetMonth(marked, month).readyToAssign).toBe(-18200);
   });
 
   test('the fallback never overrides a pointer', () => {

@@ -1873,6 +1873,8 @@ app. The two now ship independently.
   updates them with no invalidation logic. Stored are only decisions
   (`transfer_marks`: dismissed / outside / manual) and links with their undo
   state (`transfer_links`: previous payee, category, shadow `blocked`).
+  *Superseded (budget-dt00): `outside` is no state any more; old rows keep it
+  and the matcher reads it as `manual`; see "No transfer to an account outside the budget (budget-dt00, 2026-11-27)".*
 - A payee rule row with no other side yet is derived as `transfer_pending:
   waiting` while within `wait_days`: the client engine skips it like an
   on-budget transfer (no category, no Ready to Assign effect). After the
@@ -1882,6 +1884,8 @@ app. The two now ship independently.
   account); policy `review` turns it into a one-side suggestion. Chosen over
   a synthetic "outside" account: no fake account rows, nothing to clean up,
   and a later-arriving other side still links.
+  *Superseded (budget-dt00): past the wait, policy `outside` now leaves an
+  ordinary row that needs a category (no state, no suggestion); see "No transfer to an account outside the budget (budget-dt00, 2026-11-27)".*
 - A rule covers rows created after it was set (`transfer_rule_since`);
   "Apply to past rows" clears it. Undone links are marked `manual`: still
   suggested, never auto-linked again.
@@ -1921,7 +1925,8 @@ app. The two now ship independently.
   Refused candidates never change which allowed pair is linked, and a row that
   is linked is never offered one. They count as suspected transfers in the
   register chip and the suggestions list, and the row is then not also a
-  one-side or waiting/outside rule row. Only pairs main would have matched
+  one-side or waiting/outside rule row (*superseded, budget-dt00: there is no
+  outside rule row any more, only waiting; see "No transfer to an account outside the budget (budget-dt00, 2026-11-27)"*). Only pairs main would have matched
   are ever refused candidates (card→card, cash→card
   at another bank, checking→checking at one bank); a card outflow against a
   cash inflow (refund, cash advance) was never a transfer candidate and is
@@ -2154,7 +2159,8 @@ on a sync, an ordinary request or a budget copy.
   still refuse the same pairs; the bank's own contradicting category ("against")
   stays a veto; alone it is a one-side suggestion). The hint ends
   when the row is linked, gets a category, gets another payee, or is marked "not a
-  transfer"/"outside"; a refreshed row keeps or loses it with its text. **Rows an
+  transfer"/"outside" (*superseded, budget-dt00: "outside" can no longer be
+  set, so only "not a transfer" ends it; see "No transfer to an account outside the budget (budget-dt00, 2026-11-27)"*); a refreshed row keeps or loses it with its text. **Rows an
   earlier sync stored with the transfer payee are not touched:** the sync compares
   the bank text in both forms it has been stored in, so such a row stays
   "unchanged" and, when the bank corrects its amount or date, keeps its payee.
@@ -2558,3 +2564,39 @@ to main that can change an image is built and rolled by ArgoCD.
 - Docs-only pushes deploy nothing (path filter). Rollback is unchanged: commit
   the tag to run into `k8s/values.yaml` (`sha-<commit>` for any main commit,
   `<version>` for a release).
+
+## No transfer to an account outside the budget (budget-dt00, 2026-11-27)
+
+Owner decision: a transfer to an account outside the budget is just a
+transaction. There is no "outside the budget" transfer state any more. This
+supersedes the `outside` parts of "Transfers between own accounts
+(budget-mit6)", "Transfer account rules by bank (budget-zkts)" and "Transfer
+integrity on the server (budget-nq2f)"; those passages are marked in place.
+
+- The state is removed. Existing `outside` rows in `transfer_marks` are kept as
+  they are (no migration, the check constraint is unchanged). The matcher reads
+  an old `outside` mark as `manual` (`matcherMark()` in
+  `api/src/budget/domain/transfer-matcher.ts`): an ordinary row, never pending,
+  needs a category, offered as a transfer like any row, never linked on its own.
+- Nothing writes `outside` except a Categorize undo that restores exactly the
+  marks an accept replaced (`api/src/categorize/decision-store.ts`).
+- `budget_transfers_mark` answers 400 (`invalid_input`, its own sentence) for
+  `state: 'outside'`; it accepts `'dismissed' | null`.
+- A payee rule's stored no-match policy value `outside` now means "an ordinary
+  row after the wait": no pending state, no one-side suggestion, a category is
+  asked. `review` is unchanged (a one-side suggestion).
+- No auto-link in a group that contains a `manual` row. Within one amount
+  bucket, the rows connected by pairs that fit (a connected component of the
+  candidate graph) are one group; if any row in it reads as `manual` (an undone
+  link, or an old `outside` mark), nothing in the group is linked on its own, on
+  any basis, a payee rule included: every pairing the matcher finds there is a
+  suggestion. Without this, a `manual` row could make an ordinal order fit and
+  so get two OTHER ordinary rows auto-linked (O itau -700 on 10-03, X itau -700
+  on 10-04 with the mark, I1/I2 nubank +700 on 10-03/10-04, weak PIX evidence:
+  O-I1 was written `auto/ordinal`). The undone-link case had the same hole
+  before budget-dt00; closing it only removes automatic links. Groups without a
+  `manual` row behave as before. Pinned in `transfer-matcher.test.ts` and
+  `routes/transfers.test.ts`.
+- Client: `transfer_outside` is no longer a category need and `transferPending`
+  is `'waiting' | null`; an `outside` value from an older server maps to an
+  ordinary row (`client/src/budget/data/mapping.test.ts` pins Ready to Assign).

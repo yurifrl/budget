@@ -239,6 +239,75 @@ describe('planTransfers: edits and decisions', () => {
   });
 });
 
+describe('planTransfers: a "manual" row keeps its whole group for the person (budget-dt00)', () => {
+  // O and X: itau -700 on 10-03 / 10-04; I1 and I2: nubank +700 on 10-03 / 10-04; all
+  // untouched with weak PIX evidence. Only X may carry the mark.
+  const four = (xMark: MatchRow['mark']) => {
+    const o = out({ amount: -700_000, date: '2026-10-03', hint: PIX });
+    const x = out({ amount: -700_000, date: '2026-10-04', hint: PIX, mark: xMark });
+    const i1 = inn({ amount: 700_000, date: '2026-10-03', hint: PIX });
+    const i2 = inn({ amount: 700_000, date: '2026-10-04', hint: PIX });
+    return { o, x, i1, i2 };
+  };
+  const shape = (p: ReturnType<typeof plan>) => ({
+    links: p.links.map((l) => [l.outflowId, l.inflowId, l.method, l.basis]),
+    sugg: p.suggestions.map((s) => [s.id, s.confidence, s.basis, s.candidateIds]),
+  });
+
+  test('a row read as manual (an old `outside` mark) does not let two ordinary rows be auto-linked through it', () => {
+    const { o, x, i1, i2 } = four(matcherMark('outside'));
+    const p = plan([o, x, i1, i2]);
+    expect(p.links).toEqual([]);
+    // Every pairing the matcher finds in the group is offered instead.
+    expect(shape(p)).toEqual({
+      links: [],
+      sugg: [
+        [o.id, 'sure', 'ordinal', [i1.id]],
+        [x.id, 'sure', 'ordinal', [i2.id]],
+      ],
+    });
+  });
+  test('the same for a row marked manual after an undone link', () => {
+    const { o, x, i1, i2 } = four('manual');
+    expect(plan([o, x, i1, i2]).links).toEqual([]);
+  });
+  test('a payee rule does not link through a manual row either', () => {
+    const rules = new Map<string, TransferRule>([['pix', { mode: 'auto', accountId: null, noMatch: 'review', waitDays: 5, since: null }]]);
+    const { x, i1, i2 } = four('manual');
+    const o = out({ amount: -700_000, date: '2026-10-03', hint: PIX, payeeId: 'pix' });
+    const p = plan([o, x, i1, i2], rules);
+    expect(p.links).toEqual([]);
+    expect(p.pending.size).toBe(0);
+    expect(p.suggestions.map((s) => s.id).sort()).toEqual([o.id, x.id].sort());
+  });
+  test('control: the same four rows without the mark pair in date order and auto-link, as on 5a16aa6^', () => {
+    const { o, x, i1, i2 } = four(null);
+    expect(shape(plan([o, x, i1, i2]))).toEqual({
+      links: [
+        [o.id, i1.id, 'auto', 'ordinal'],
+        [x.id, i2.id, 'auto', 'ordinal'],
+      ],
+      sugg: [],
+    });
+  });
+  test('control: without X (how 5a16aa6^ treated an `outside` row: not considered), O is a choose between I1 and I2', () => {
+    const { o, i1, i2 } = four(null);
+    expect(shape(plan([o, i1, i2]))).toEqual({ links: [], sugg: [[o.id, 'choose', 'ambiguous', [i1.id, i2.id]]] });
+  });
+  test('a manual row elsewhere in the same amount bucket does not touch a group it is not connected to', () => {
+    const { o, x, i1, i2 } = four(null);
+    const far = out({ amount: -700_000, date: '2026-10-20', hint: PIX, mark: 'manual' });
+    const farIn = inn({ amount: 700_000, date: '2026-10-20', hint: PIX });
+    expect(shape(plan([o, x, i1, i2, far, farIn]))).toEqual({
+      links: [
+        [o.id, i1.id, 'auto', 'ordinal'],
+        [x.id, i2.id, 'auto', 'ordinal'],
+      ],
+      sugg: [[far.id, 'sure', 'unique', [farIn.id]]],
+    });
+  });
+});
+
 describe('planTransfers: payee rules', () => {
   const auto = (over: Partial<TransferRule> = {}): Map<string, TransferRule> =>
     new Map([['pix', { mode: 'auto', accountId: null, noMatch: 'outside', waitDays: 5, since: null, ...over }]]);

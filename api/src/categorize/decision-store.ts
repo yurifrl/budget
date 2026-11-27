@@ -470,7 +470,8 @@ export async function undoAccept(
         // The unlink marks both legs 'manual' so the matcher only suggests
         // them from now on; undo puts back exactly what the accept replaced.
         for (const [id, state] of Object.entries(decided.prev_marks ?? {})) {
-          // As recorded: an old `outside` mark comes back as it was (a reader ignores it), never a new one.
+          // As recorded: an old `outside` mark comes back as it was, never a new one; the
+          // matcher reads it as `manual` (matcherMark: suggested, never auto-linked).
           await setTransferMarks(client, budgetId, [id], state as StoredTransferMark | null);
         }
         await restorePendingSuggestions(client, budgetId, transactionId);

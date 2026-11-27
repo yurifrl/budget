@@ -248,6 +248,44 @@ describe.skipIf(!dbReady)('transfers between own accounts (operations)', () => {
       rows.map((r) => ({ id: r.id, amount: r.amount, category_id: r.category_id, transfer_account_id: r.transfer_account_id, transfer_pending: r.transfer_pending }));
     expect(figures(marked.txns)).toEqual(figures(unmarked.txns));
     for (const id of [out, lone, into]) expect(marked.txns.find((r: { id: string }) => r.id === id)).toMatchObject({ transfer_pending: null });
+    // The accounts equality above is trivially true (balances are stored), so pin
+    // the figure the client's Ready to Assign takes from this list (R4): the sum of
+    // the uncategorized rows that are neither a linked transfer nor waiting. By
+    // hand: -77000 + 77000 - 12300 + 45600 = 33300 (the categorized -9900 is out).
+    // A marked row read as pending, as a transfer, or dropped from the list would
+    // move it.
+    const readyToAssignFeed = (rows: Record<string, unknown>[]) =>
+      rows
+        .filter((r) => r.category_id == null && r.transfer_account_id == null && r.transfer_pending !== 'waiting')
+        .reduce((sum, r) => sum + (r.amount as number), 0);
+    expect(readyToAssignFeed(marked.txns)).toBe(33_300);
+    expect(readyToAssignFeed(unmarked.txns)).toBe(33_300);
+  });
+
+  test('a row read as manual (an old "outside" mark) keeps its group for the person: the real linker links nothing there (budget-dt00)', async () => {
+    await reset();
+    const PIX = { category: 'Transfer - PIX', operationType: 'PIX' };
+    const o = await imported(itau, -700_000, '2026-10-03', 'Pix enviado', { raw: PIX });
+    const x = await imported(itau, -700_000, '2026-10-04', 'Pix enviado', { raw: PIX });
+    const i1 = await imported(nubank, 700_000, '2026-10-03', 'Pix recebido', { raw: PIX });
+    const i2 = await imported(nubank, 700_000, '2026-10-04', 'Pix recebido', { raw: PIX });
+    await pool.query(`INSERT INTO transfer_marks (transaction_id, budget_id, state) VALUES ($1, $2, 'outside')`, [x, B]);
+    expect(await runLinker()).toBe(0);
+    for (const id of [o, x, i1, i2]) expect(await get(id)).toMatchObject({ transfer_transaction_id: null });
+    const sugg = await op('budget_transfer_suggestions_list', { budget_id: B });
+    expect(sugg.status).toBe(200);
+    expect(sugg.json.map((s: { id: string; basis: string; candidates: { transaction_id: string }[] }) => [s.id, s.basis, s.candidates.map((c) => c.transaction_id)]).sort()).toEqual(
+      [
+        [o, 'ordinal', [i1]],
+        [x, 'ordinal', [i2]],
+      ].sort(),
+    );
+
+    // Control: the same four rows without the mark pair in date order on their own.
+    await pool.query('DELETE FROM transfer_marks WHERE transaction_id = $1', [x]);
+    expect(await runLinker()).toBe(2);
+    expect(await get(o)).toMatchObject({ transfer_transaction_id: i1 });
+    expect(await get(x)).toMatchObject({ transfer_transaction_id: i2 });
   });
 
   test('link to an account with no matching row creates the other leg; Undo deletes it and its balance', async () => {

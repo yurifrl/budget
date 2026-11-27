@@ -34,7 +34,8 @@
  *    edit state: its remaining candidates are taken closest date first.
  *
  * Auto-link (no person involved) needs both rows untouched (bank text, not
- * edited) and: a unique pair, or an ordinal pair with transfer evidence on both
+ * edited), no `manual` row among the rows they could pair with (that whole
+ * group is only suggested, payee rules included), and: a unique pair, or an ordinal pair with transfer evidence on both
  * sides, or an evidence pair with strong evidence on both sides. A bank
  * category that contradicts a transfer (e.g. "Shopping") on either side vetoes
  * auto-linking, except for cash to card pairs (card payments were always linked
@@ -307,6 +308,11 @@ interface BucketResult {
   pairs: { o: Node; i: Node; basis: MatchBasis }[];
   /** Unpaired rows that still have candidates, with them. */
   open: Map<string, Set<string>>;
+  /**
+   * Rows of a candidate group (connected component of the pairs that fit) that
+   * contains a `manual` row: whatever pairs there is only suggested.
+   */
+  held: Set<string>;
 }
 
 /**
@@ -384,6 +390,13 @@ function resolveBucket(outs: Node[], ins: Node[]): BucketResult {
     }
   }
   const initialDegree = new Map([...cand].map(([id, s]) => [id, s.size]));
+  // A row the person once answered about (`manual`, also an old `outside` mark) is
+  // never linked on its own, and neither is anything it could pair with: its mere
+  // presence changes how the others resolve (e.g. it makes an ordinal order fit).
+  const held = new Set<string>();
+  for (const component of components(cand, new Set())) {
+    if (component.some((id) => byId.get(id)!.row.mark === 'manual')) for (const id of component) held.add(id);
+  }
   const evidenceEdges = new Set<string>();
   const pairs: BucketResult['pairs'] = [];
   const paired = new Set<string>();
@@ -473,7 +486,7 @@ function resolveBucket(outs: Node[], ins: Node[]): BucketResult {
 
   const open = new Map<string, Set<string>>();
   for (const [id, s] of cand) if (!paired.has(id) && s.size > 0) open.set(id, s);
-  return { pairs, open };
+  return { pairs, open, held };
 }
 
 /** Connected components of the unpaired candidate graph (ids). */
@@ -536,14 +549,15 @@ export function planTransfers(
   for (const bucket of buckets.values()) {
     const outs = bucket.filter((n) => n.row.amount < 0);
     const ins = bucket.filter((n) => n.row.amount > 0);
-    const { pairs, open } = resolveBucket(outs, ins);
+    const { pairs, open, held } = resolveBucket(outs, ins);
     const pairedIds = new Set<string>();
     const linkedIds = new Set<string>();
     const first = plan.suggestions.length;
     for (const { o, i, basis } of pairs) {
       pairedIds.add(o.row.id);
       pairedIds.add(i.row.id);
-      const manual = o.row.mark === 'manual' || i.row.mark === 'manual';
+      // Both rows of a pair share a component, so one check covers both sides.
+      const manual = held.has(o.row.id);
       if (!manual && (o.rule || i.rule)) {
         plan.links.push({ outflowId: o.row.id, inflowId: i.row.id, method: 'rule', basis });
         linkedIds.add(o.row.id).add(i.row.id);
