@@ -4,14 +4,14 @@
   "id": "budget-xxpr",
   "title": "Engine: uncategorized CARD spending is deducted from next month's Ready to Assign, as observed in YNAB",
   "description": "Owner chose 'next month, exactly as YNAB' 2026-11-27. Cash already does this; cardUncategorized in client/src/domain/zeroSum.ts does not (spec R5). YNAB live: Dec RTA dropped by the card R$1 too, payment category unchanged (docs/ynab-plan-parity.md section 3).",
-  "status": "in_progress",
+  "status": "ready-to-review",
   "priority": 1,
   "issue_type": "bug",
   "owner": null,
   "assignee": "yuri",
   "created_by": "yuri",
   "created_at": "2026-11-27T13:35:07.205Z",
-  "updated_at": "2026-11-27T13:54:16.303Z",
+  "updated_at": "2026-11-27T14:59:11.466Z",
   "started_at": "2026-11-27T13:54:16.303Z",
   "closed_at": null,
   "due_at": null,
@@ -19,7 +19,7 @@
   "parent": "budget-4u4d",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Rule (R5, cardUncategorized): per card and month, X = min(uncategorized card outflow, max(0,-balance) at month end). At the rollover X leaves NEXT month's RTA and lands on that card's payment envelope as PaymentMonth.fromUncategorized (Activity); identity I1 preserved. Debt 0 (paid off in month / card in credit) => X 0.\n\nTests (client/src/domain/zeroSum.test.ts, describe budget-xxpr): xxpr-1..8 — June never charged, July charged once and funded, per-card (card in credit beside it not charged), paid-off-in-month, July payment spends the set-aside, card in credit, categorize-later equals categorized-from-start, case 5 parity, cash+card with card refund capped by debt, plus property test over random budgets (next month carries exactly last month's per-card sweep). Updated: R5, P4/L1 (debt history), vzyx-1/2/5/6, plan fixtures (paymentRow), uncategorized.test.ts (21 tests), zeroSumFigures.\n\nCasa copy b35979ff, Nov/Dec 2026 (evidence ids attached): Nov RTA 131.409,02 -> 124.394,04 (October's 7.014,98), Itau envelope -11.850,84 -> -4.835,86; Dec RTA 59.171,74 -> 36.629,71 and envelopes Itau 0 -> 21.448,14, Nubank 0 -> 1.093,89 (Nov sweep 22.542,03 = 21.448,14 capped by debt + 1.093,89). Identity EQUAL in all four month runs.\n\nChecks: client tsc clean, eslint clean, full bun test 1722 pass / 0 fail (116 files). Only client/ and docs/ touched.\nReview fix 6f4000a on tk/budget-xxpr: X = min(month's NET uncategorized card outflow, underfunded = max(0, debt - max(0, envelope.available))). Tests xxpr-9..12 added (set-aside not charged, same-month refund nets down, assignment covers the row, refund nets row to nothing); R5 + P4/L1 expectations moved to the per-envelope cap; xxpr-8 property now asserts fromUncategorized <= underfunded and swept <= spend. Casa on budgetnew_dev (Nov/Dec 2026): Nov RTA 131409.02 before -> 124406.87 after (+12.83 vs bf01571, October's refunds no longer charged), Dec RTA 59171.74 -> 36652.88, envelopes get exactly Dec's carry (Itau 21448.14 = debt, Nubank 1070.72 of 2059.02 debt); identity EQUAL in both months. client tsc/eslint clean, full bun test 1727 pass 0 fail. Follow-ups filed: budget-myr5 (later refund strands set-aside), budget-5fsl (card-to-card debt never charged). Not merged.\n7cb923f pins one payment envelope per card (paymentEnvelopes is one-to-one in every shape: plain, two cards, duplicate live names, drifted names, deleted envelope, two cards sharing a name) so uncoveredByCard has exactly one term per card; the aggregation site in zeroSum.ts says so and points at the test. Merged into .worktrees/budget-4u4d-integration as ff7f05f (--no-ff), only docs/decisions.md conflicted (both sides appended a section; kept hr6q's then xxpr's). Checks there: shared 232 pass, api 1850 pass + 2 skip, client 1735 pass, admin 20 pass, tsc + eslint clean in all four. Not pushed, not merged to main.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
@@ -31,9 +31,59 @@
     "changeset": {
       "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
       "baseBranch": "main"
+    },
+    "agent_session": "card-uncat",
+    "finished_at": "2026-11-27T14:51:09.117Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 44,
+        "files": 351,
+        "additions": 19155,
+        "deletions": 1538
+      },
+      "head": "6f4000a4fa48c9edab94d5abb4b13760637fa65c",
+      "at": "2026-11-27T14:51:09.117Z"
     }
   },
-  "attachments": [],
+  "attachments": [
+    {
+      "kind": "evidence",
+      "id": "ev-02034b",
+      "name": "xxpr-casa-before.txt",
+      "mime": "text/plain",
+      "size": 1816,
+      "sha256": "087445eb3b9ef4645f6c225956b156eff000c4feaae05fad025e74e57cb6d5d7",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-beb013",
+      "name": "xxpr-casa-after.txt",
+      "mime": "text/plain",
+      "size": 1800,
+      "sha256": "946f109d6e122989c384795731eed6826ced489dc2b789a40866bc20ea420a27",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-4781f6",
+      "name": "xxpr-casa-before2.txt",
+      "mime": "text/plain",
+      "size": 1830,
+      "sha256": "8da4a230d5ad7e5f75cd9b178d7e282393ba2436223a6dd4081187c047ce3a0d",
+      "metadata": {}
+    },
+    {
+      "kind": "evidence",
+      "id": "ev-6d5ee6",
+      "name": "xxpr-casa-after2.txt",
+      "mime": "text/plain",
+      "size": 1814,
+      "sha256": "d84fe779f9c3e7d719fdfddd3897bfc414105efcb6dac949b1293439c2416afe",
+      "metadata": {}
+    }
+  ],
   "dependencies": [],
   "dependency_count": 0,
   "dependent_count": 0,

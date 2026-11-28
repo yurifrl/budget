@@ -1,1 +1,2 @@
 {"issue_id":"budget-vnar","action":"save","at":"2026-11-24T17:03:57.838Z","actor":null,"data":{"status":"open","title":"AI layer follow-ups after budget-ucyr: rate limit on /ai routes, Z.ai error reporting, OpenAI models that cannot do json_schema or tools, log upstream error code"}}
+{"issue_id":"budget-vnar","action":"save","at":"2026-11-27T15:43:00.887Z","actor":null,"data":{"status":"closed","title":"AI layer follow-ups after budget-ucyr: rate limit on /ai routes, Z.ai error reporting, OpenAI models that cannot do json_schema or tools, log upstream error code"}}

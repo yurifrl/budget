@@ -4,14 +4,14 @@
   "id": "budget-xzmp",
   "title": "Import: second source that reads the production read-only replica (complete copy incl. deleted rows, bank rows, matcher and categorize state)",
   "description": "Owner approved 2026-11-27: replica only, password in a file on this Mac used only by the import command. Builds on api/scripts/import-prod (source.ts -> ProdSnapshot).",
-  "status": "open",
+  "status": "ready-to-review",
   "priority": 1,
   "issue_type": "task",
   "owner": null,
   "assignee": null,
   "created_by": "yuri",
   "created_at": "2026-11-27T13:35:06.437Z",
-  "updated_at": "2026-11-27T13:35:10.228Z",
+  "updated_at": "2026-11-27T16:31:27.850Z",
   "started_at": null,
   "closed_at": null,
   "due_at": null,
@@ -19,7 +19,7 @@
   "parent": "budget-4u4d",
   "sprint": null,
   "labels": [],
-  "notes": null,
+  "notes": "Orchestrator: accepted after 3 rounds of independent security review (guards judge the server pg dials, resolved config not URL, column contract, disconnected connections). Merged into tk/budget-4u4d-integration at 745bd23 (shared 232, api 1898/2 skip/0 fail, client 1735, admin 20). Left ready-to-review for the owner.",
   "design": null,
   "acceptance_criteria": null,
   "estimated_minutes": null,
@@ -31,6 +31,19 @@
     "changeset": {
       "base": "8918558309c1f0889cec5ce3aa8b9d3d5f7a3b61",
       "baseBranch": "main"
+    },
+    "agent_session": "01a21d47-b1ec-7046-aed4-775527bf9aad",
+    "finished_at": "2026-11-27T16:28:45.607Z",
+    "agent_harness": "omp",
+    "report": {
+      "changes": {
+        "commits": 57,
+        "files": 378,
+        "additions": 23119,
+        "deletions": 1575
+      },
+      "head": "745bd238dd2e8d612724f77ad4c4881f1360bb08",
+      "at": "2026-11-27T16:28:45.607Z"
     }
   },
   "attachments": [],
