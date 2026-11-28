@@ -3,7 +3,7 @@
 # Debian (not alpine): Temporal's native core-bridge fails to load on musl
 # (ERR_DLOPEN_FAILED). The same image runs the jobs worker:
 #   docker run ... budget-api bun src/worker.ts
-FROM oven/bun:1.4.4
+FROM oven/bun:1.4.5
 
 WORKDIR /app
 
