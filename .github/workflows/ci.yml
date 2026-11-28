@@ -128,7 +128,7 @@ jobs:
         with:
           bun-version: ${{ steps.bun.outputs.version }}
       # The expo CLI is a node program.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 26
       - uses: actions/cache@v6
